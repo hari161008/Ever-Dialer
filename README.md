@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 📱 Pdialer-Optimized
 
 **Pdialer-optimized** is a high-performance, expressive dialer application built with **Jetpack Compose**. It is a specialized fork of **RevoPhone**, meticulously optimized for low-resource hardware while delivering a premium, Material 3 "Expressive" design experience.
@@ -56,3 +57,6 @@ git clone [https://github.com/MoHamed-B-M/Pdialer.git)
 
 # Enter project directory
 cd Pdialer-optimized
+=======
+Coming Soon...
+>>>>>>> 1f3fae837bf1be6bab8b9c11c80763609a3254d5
