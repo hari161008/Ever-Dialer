@@ -1,0 +1,90 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # 1. قراءة الـ Changelog بطريقة تضمن وجود نص حتى لو غاب الملف
+      - name: Read Changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: changelog
+        run: |
+          if [ -f CHANGELOGS.md ]; then
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            cat CHANGELOGS.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "body=Release version ${{ github.ref_name }} - Optimized by Hama" >> $GITHUB_OUTPUT
+          fi
+
+      # 2. بناء الـ APK (Debug و Release)
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Decode Keystore
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+
+      - name: Build Release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      # 3. تجميع ملفات الـ APK فقط (تجنب الـ Intermediates والـ Bundles)
+      - name: Collect APKs
+        run: |
+          mkdir -p outputs
+          # نلوجو على أي APK ونبعدو على مجلدات الـ cache والـ intermediates
+          find . -type f -name "*.apk" ! -path "*/build-cache/*" ! -path "*/intermediates/*" -exec cp {} outputs/ \;
+          echo "Files collected in outputs:"
+          ls outputs
+
+      # 4. رفع الـ Artifacts للـ Action (للاحتياط)
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pdialer-Build-${{ github.ref_name }}
+          path: outputs/*.apk
+
+      # 5. النشر الرسمي (هنا استعملنا النمط العام *.apk لتفادي خطأ عدم التطابق)
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "outputs/*.apk"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "Pdialer Optimized ${{ github.ref_name }}"
+          tag: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.body }}
+          allowUpdates: true
+          removeArtifacts: false

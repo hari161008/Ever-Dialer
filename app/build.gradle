@@ -1,0 +1,111 @@
+plugins {
+    id 'com.android.application' version '8.13.2'
+    id 'org.jetbrains.kotlin.android' version '2.1.0'
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.1.0'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.0'
+    id 'com.google.devtools.ksp' version '2.1.0-1.0.29'
+}
+
+android {
+    namespace = 'com.grinch.rivo4'
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.grinch.rivo4"
+        minSdk = 29
+        targetSdk = 35
+        versionCode = 4
+        versionName = "1.0.4"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            if (file("keystore.jks").exists()) {
+                storeFile = file("keystore.jks")
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+            debuggable = false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // التصليح هنا: الـ Debug يستعمل المفتاح التلقائي (Default)
+            // هكا الـ GitHub Actions يجم يخرجلك APK حتى من غير Keystore
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+
+            freeCompilerArgs.addAll(
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+            )
+        }
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    splits {
+        abi {
+            enable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            universalApk = true
+        }
+    }
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2025.12.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.material:material-icons-extended'
+
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
+
+    implementation 'androidx.navigation:navigation-compose:2.8.5'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
+
+    implementation 'io.github.raamcosta.compose-destinations:core:2.1.0'
+    ksp 'io.github.raamcosta.compose-destinations:ksp:2.1.0'
+
+    implementation "com.google.accompanist:accompanist-permissions:0.37.3"
+
+    implementation platform("io.insert-koin:koin-bom:4.1.1")
+    implementation "io.insert-koin:koin-android"
+    implementation "io.insert-koin:koin-androidx-compose"
+
+    implementation "io.coil-kt:coil-compose:2.7.0"
+    implementation 'com.google.zxing:core:3.5.4'
+
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+}
