@@ -1,19 +1,23 @@
 package com.grinch.rivo4.view.screen.settings
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.grinch.rivo4.APP_VERSION
 import com.grinch.rivo4.PATREON_URL
 import com.grinch.rivo4.controller.util.PreferenceManager
 import com.grinch.rivo4.controller.util.openLink
@@ -34,10 +38,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     val listState = rememberLazyListState()
     val prefs: PreferenceManager = koinInject()
 
-    // حالة الـ Haptic Feedback
-    var hapticEnabled by remember {
-        mutableStateOf(prefs.getBoolean("haptic_feedback", true))
-    }
+    var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_feedback", true)) }
+
+    var visible by remember { mutableStateOf(false) }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(350),
+        label = "settingsAlpha"
+    )
+    LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
         topBar = {
@@ -54,40 +63,34 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding).alpha(alpha),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp) // المسافة بين الكروت
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Support Card (Primary Color)
+            // Support card
             item {
                 RivoExpressiveCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
                     RivoListItem(
-                        headline = "Support Pdialer",
-                        supporting = "Help us keep it open source",
+                        headline = "Support Ever Dialer",
+                        supporting = "Help keep it open source & free",
                         leadingIcon = Icons.Default.Favorite,
                         onClick = { openLink(context, PATREON_URL) }
                     )
                 }
             }
 
-            // Appearance & Sound Group
+            // Personalization
             item {
-                Text(
-                    "Personalization",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                SectionLabel("Personalization")
                 RivoExpressiveCard {
                     RivoListItem(
                         headline = "Interface",
                         supporting = "Themes, colors, and layout",
                         leadingIcon = Icons.Outlined.Palette,
+                        trailingIcon = Icons.Default.ChevronRight,
                         onClick = { navigator.navigate(InterfaceScreenDestination) }
                     )
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                    // خيار الـ Haptic Feedback الجديد
+                    Divider()
                     RivoSwitchListItem(
                         headline = "Haptic Feedback",
                         supporting = "Vibrate on touch and gestures",
@@ -98,46 +101,65 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             prefs.setBoolean("haptic_feedback", it)
                         }
                     )
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
+                    Divider()
                     RivoListItem(
                         headline = "Sound & Vibration",
-                        supporting = "Ringtones and dialpad sounds",
+                        supporting = "Ringtones and dialpad tones",
                         leadingIcon = Icons.Outlined.VolumeUp,
+                        trailingIcon = Icons.Default.ChevronRight,
                         onClick = { navigator.navigate(SoundVibrationScreenDestination) }
                     )
                 }
             }
 
-            // Calls Group
+            // Calls & System
             item {
-                Text(
-                    "Calls & System",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                SectionLabel("Calls & System")
                 RivoExpressiveCard {
                     RivoListItem(
                         headline = "Call Accounts",
                         supporting = "SIM cards and calling accounts",
                         leadingIcon = Icons.Outlined.SimCard,
+                        trailingIcon = Icons.Default.ChevronRight,
                         onClick = { navigator.navigate(CallAccountsScreenDestination) }
                     )
                 }
             }
 
-            // About Group
+            // App info
             item {
-                RivoExpressiveCard(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)) {
+                RivoExpressiveCard(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                ) {
                     RivoListItem(
-                        headline = "About App",
-                        supporting = "Version and developer info",
+                        headline = "About Ever Dialer",
+                        supporting = "Version $APP_VERSION · Developer info",
                         leadingIcon = Icons.Outlined.Info,
+                        trailingIcon = Icons.Default.ChevronRight,
                         onClick = { navigator.navigate(AboutAppScreenDestination) }
                     )
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
+        color = MaterialTheme.colorScheme.primary
+    )
+}
+
+@Composable
+private fun Divider() {
+    HorizontalDivider(
+        Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    )
 }

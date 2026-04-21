@@ -5,16 +5,25 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CallLog
 import android.telecom.TelecomManager
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.CallMissed
+import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -23,24 +32,18 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.grinch.rivo4.controller.CallLogViewModel
-import com.grinch.rivo4.controller.util.formatDate
 import com.grinch.rivo4.controller.util.formatDateHeader
 import com.grinch.rivo4.controller.util.makeCall
+import com.grinch.rivo4.modal.data.CallLogFilter
 import com.grinch.rivo4.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.automirrored.filled.CallMade
-import androidx.compose.material.icons.automirrored.filled.CallMissed
-import androidx.compose.material.icons.automirrored.filled.CallReceived
-import com.grinch.rivo4.modal.data.CallLogFilter
-import java.util.Locale
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Destination<RootGraph>
@@ -49,50 +52,44 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     val permState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val showButton by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 3
-        }
-    }
+    val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
+
+    var fabVisible by remember { mutableStateOf(false) }
+    val fabScale by animateFloatAsState(
+        targetValue = if (fabVisible) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "fabScale"
+    )
+    LaunchedEffect(Unit) { fabVisible = true }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopBar(navController, navigator)
-        },
+        topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navigator.navigate(DialPadScreenDestination()) },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(20.dp),
-                elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                elevation = FloatingActionButtonDefaults.elevation(0.dp),
+                modifier = Modifier.scale(fabScale)
             ) {
                 Icon(Icons.Default.Dialpad, "Dialpad")
             }
         },
-        bottomBar = {
-            BottomBar(navController, navigator)
-        },
+        bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
-        Box(
-            modifier = Modifier.padding(innerPadding).fillMaxSize()
-        ) {
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             CallLogFullContent(
                 navigator = navigator,
                 isGranted = permState.status == PermissionStatus.Granted,
                 onRequestPermission = { permState.launchPermissionRequest() },
                 listState = listState
             )
-
             ScrollToTopButton(
                 visible = showButton,
-                onClick = {
-                    scope.launch {
-                        listState.animateScrollToItem(0)
-                    }
-                }
+                onClick = { scope.launch { listState.animateScrollToItem(0) } }
             )
         }
     }
@@ -124,10 +121,7 @@ fun CallLogFullContent(
                 CallLogFilter.Contacts -> logs.filter { it.name != null && it.name != it.number }
             }
         }
-
-        val groupedLogs = remember(filteredLogs) {
-            filteredLogs.groupBy { formatDateHeader(it.date) }
-        }
+        val groupedLogs = remember(filteredLogs) { filteredLogs.groupBy { formatDateHeader(it.date) } }
 
         if (showSimPicker && pendingNumber != null) {
             SimPickerDialog(
@@ -142,11 +136,56 @@ fun CallLogFullContent(
         if (logs.isEmpty()) {
             RivoLoadingIndicatorView()
         } else {
+            // Summary stats
+            val missedCount = remember(logs) { logs.count { it.type == CallLog.Calls.MISSED_TYPE } }
+            val totalToday = remember(logs) {
+                val todayStart = System.currentTimeMillis() - 86_400_000L
+                logs.count { it.date >= todayStart }
+            }
+
             Column(modifier = Modifier.fillMaxSize()) {
-                LazyRow(
+                // Stats row
+                var statsVisible by remember { mutableStateOf(false) }
+                val statsAlpha by animateFloatAsState(
+                    targetValue = if (statsVisible) 1f else 0f,
+                    animationSpec = tween(500),
+                    label = "statsAlpha"
+                )
+                LaunchedEffect(Unit) { statsVisible = true }
+
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .alpha(statsAlpha),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    RivoStatCard(
+                        label = "Today",
+                        value = totalToday.toString(),
+                        icon = Icons.AutoMirrored.Filled.CallReceived,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RivoStatCard(
+                        label = "Missed",
+                        value = missedCount.toString(),
+                        icon = Icons.AutoMirrored.Filled.CallMissed,
+                        modifier = Modifier.weight(1f),
+                        containerColor = if (missedCount > 0)
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                    RivoStatCard(
+                        label = "Outgoing",
+                        value = logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(),
+                        icon = Icons.AutoMirrored.Filled.CallMade,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Filter chips
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -187,23 +226,17 @@ fun CallLogFullContent(
                                                 )
                                             },
                                             onButtonClick = { log ->
-                                                val hasPermission =
-                                                    ContextCompat.checkSelfPermission(
-                                                        context,
-                                                        Manifest.permission.READ_PHONE_STATE
-                                                    ) == PackageManager.PERMISSION_GRANTED
+                                                val hasPermission = ContextCompat.checkSelfPermission(
+                                                    context, Manifest.permission.READ_PHONE_STATE
+                                                ) == PackageManager.PERMISSION_GRANTED
 
                                                 if (hasPermission) {
                                                     val accounts = telecomManager.callCapablePhoneAccounts
                                                     if (accounts.size > 1) {
                                                         pendingNumber = log.number
                                                         showSimPicker = true
-                                                    } else {
-                                                        makeCall(context, log.number)
-                                                    }
-                                                } else {
-                                                    makeCall(context, log.number)
-                                                }
+                                                    } else makeCall(context, log.number)
+                                                } else makeCall(context, log.number)
                                             }
                                         )
                                         if (index < logsInGroup.size - 1) {
@@ -225,7 +258,7 @@ fun CallLogFullContent(
         PermissionDeniedView(
             icon = Icons.Default.Call,
             title = "Call History",
-            description = "Pdialer needs access to your call logs to show your recent activity and missed calls.",
+            description = "Ever Dialer needs access to your call logs to show your recent activity and missed calls.",
             onGrantClick = onRequestPermission
         )
     }

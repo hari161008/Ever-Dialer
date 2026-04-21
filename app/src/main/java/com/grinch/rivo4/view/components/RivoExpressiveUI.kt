@@ -2,6 +2,7 @@ package com.grinch.rivo4.view.components
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -11,12 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-
 
 @Composable
 fun RivoExpressiveCard(
@@ -30,9 +31,7 @@ fun RivoExpressiveCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -46,8 +45,7 @@ fun RivoExpressiveCard(
                 ) {
                     if (icon != null) {
                         Icon(
-                            icon,
-                            null,
+                            icon, null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
@@ -58,8 +56,7 @@ fun RivoExpressiveCard(
                             text = title,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -70,10 +67,7 @@ fun RivoExpressiveCard(
 }
 
 @Composable
-fun RivoSectionHeader(
-    title: String,
-    modifier: Modifier = Modifier
-) {
+fun RivoSectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
@@ -101,14 +95,19 @@ fun RivoExpressiveButton(
 
     val cornerRadius by animateDpAsState(
         targetValue = if (isPressed) (size / 4) else (size / 2.2f),
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "ButtonShape"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.91f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "ButtonScale"
     )
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Surface(
             onClick = onClick,
-            modifier = Modifier.size(size),
+            modifier = Modifier.size(size).scale(scale),
             shape = RoundedCornerShape(cornerRadius),
             color = containerColor,
             contentColor = contentColor,
@@ -121,7 +120,49 @@ fun RivoExpressiveButton(
         }
         if (label != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+fun RivoStatCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = containerColor,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                icon, null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -137,11 +178,20 @@ fun RivoListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "ListItemScale"
+    )
+
     Surface(
         onClick = onClick,
         color = Color.Transparent,
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = 0.dp
+        modifier = modifier.fillMaxWidth().scale(scale),
+        shadowElevation = 0.dp,
+        interactionSource = interactionSource
     ) {
         Row(
             modifier = Modifier
@@ -164,35 +214,38 @@ fun RivoListItem(
                     shadowElevation = 0.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(leadingIcon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+                        Icon(
+                            leadingIcon, null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
             }
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = headline, 
-                    style = MaterialTheme.typography.bodyLarge, 
+                    text = headline,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 if (supporting != null) {
                     Text(
-                        text = supporting, 
-                        style = MaterialTheme.typography.bodyMedium, 
+                        text = supporting,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
-            
+
             if (trailingIcon != null) {
                 Icon(
-                    trailingIcon, 
-                    null, 
+                    trailingIcon, null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -230,19 +283,23 @@ fun RivoSwitchListItem(
                     shadowElevation = 0.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(leadingIcon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+                        Icon(
+                            leadingIcon, null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
             }
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                 if (supporting != null) {
                     Text(text = supporting, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            
+
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,

@@ -1,16 +1,21 @@
 package com.grinch.rivo4.view.components.tiles
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.grinch.rivo4.view.components.RivoAvatar
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun SingleTile(
@@ -24,10 +29,19 @@ fun SingleTile(
     isMissedCall: Boolean = false,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "TileScale"
+    )
+
     Surface(
         onClick = onClick,
         color = Color.Transparent,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().scale(scale),
+        interactionSource = interactionSource
     ) {
         Row(
             modifier = Modifier
@@ -42,7 +56,7 @@ fun SingleTile(
                 modifier = Modifier.size(52.dp),
                 shape = RoundedCornerShape(16.dp)
             )
-            
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -52,6 +66,7 @@ fun SingleTile(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (isMissedCall) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

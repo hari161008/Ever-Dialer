@@ -1,12 +1,17 @@
 package com.grinch.rivo4.view.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -25,18 +30,32 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
     val settingsState by prefs.settingsChanged.collectAsState()
     val iconOnly = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+
+    val isContactsSelected = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isRecentsSelected = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp
     ) {
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentDestination = navBackStackEntry?.destination
-
         NavigationBarItem(
-            icon = { Icon(Icons.Default.Person, contentDescription = "Contacts") },
+            icon = {
+                val size by animateDpAsState(
+                    targetValue = if (isContactsSelected) 26.dp else 22.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "contactsIconSize"
+                )
+                Icon(
+                    if (isContactsSelected) Icons.Filled.Person else Icons.Outlined.Person,
+                    contentDescription = "Contacts",
+                    modifier = Modifier.size(size)
+                )
+            },
             label = if (iconOnly) null else ({ Text("Contacts") }),
             alwaysShowLabel = !iconOnly,
-            selected = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
+            selected = isContactsSelected,
             onClick = {
                 navController.navigate(ContactScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) {
@@ -49,10 +68,21 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
         )
 
         NavigationBarItem(
-            icon = { Icon(Icons.Default.History, contentDescription = "Recents") },
+            icon = {
+                val size by animateDpAsState(
+                    targetValue = if (isRecentsSelected) 26.dp else 22.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "recentsIconSize"
+                )
+                Icon(
+                    if (isRecentsSelected) Icons.Filled.History else Icons.Outlined.History,
+                    contentDescription = "Recents",
+                    modifier = Modifier.size(size)
+                )
+            },
             label = if (iconOnly) null else ({ Text("Recents") }),
             alwaysShowLabel = !iconOnly,
-            selected = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
+            selected = isRecentsSelected,
             onClick = {
                 navController.navigate(RecentScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) {
