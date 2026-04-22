@@ -31,13 +31,15 @@ fun RivoAvatar(
     name: String,
     photoUri: String? = null,
     icon: ImageVector? = null,
+    /** Optional explicit tint colour for vector icon tiles. */
+    iconContainerColor: Color? = null,
     modifier: Modifier = Modifier,
     shape: Shape = CircleShape
 ) {
     val prefs = koinInject<PreferenceManager>()
     val settingsState by prefs.settingsChanged.collectAsState()
 
-    val showPicture = prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)
+    val showPicture    = prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)
     val showFirstLetter = prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)
     val colorfulAvatars = prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)
 
@@ -49,17 +51,20 @@ fun RivoAvatar(
     )
 
     val hasName = name.trim().isNotEmpty()
-    
-    val backgroundColor = if (colorfulAvatars && hasName) {
-        avatarColors[abs(name.hashCode()) % avatarColors.size]
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
 
-    val contentColor = if (colorfulAvatars && hasName) {
-        Color.White
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
+    // Determine background / foreground colours
+    val (backgroundColor, contentColor) = when {
+        iconContainerColor != null -> {
+            // Explicit: translucent tinted background, saturated icon
+            iconContainerColor.copy(alpha = 0.18f) to iconContainerColor
+        }
+        colorfulAvatars && hasName -> {
+            avatarColors[abs(name.hashCode()) % avatarColors.size] to Color.White
+        }
+        else -> {
+            MaterialTheme.colorScheme.secondaryContainer to
+                    MaterialTheme.colorScheme.onSecondaryContainer
+        }
     }
 
     Box(

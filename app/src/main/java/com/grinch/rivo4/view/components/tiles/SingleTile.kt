@@ -10,12 +10,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.grinch.rivo4.view.components.RivoAvatar
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun SingleTile(
@@ -24,6 +24,7 @@ fun SingleTile(
     subtitle: String? = null,
     photoUri: String? = null,
     icon: ImageVector? = null,
+    iconContainerColor: Color? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     supportingContent: (@Composable () -> Unit)? = null,
     isMissedCall: Boolean = false,
@@ -53,6 +54,7 @@ fun SingleTile(
                 name = title,
                 photoUri = photoUri,
                 icon = icon,
+                iconContainerColor = iconContainerColor,
                 modifier = Modifier.size(52.dp),
                 shape = RoundedCornerShape(16.dp)
             )
@@ -67,7 +69,9 @@ fun SingleTile(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isMissedCall) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    color = if (isMissedCall)
+                        MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -103,9 +107,6 @@ fun TileGroup(
         shape = RoundedCornerShape(28.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            content = content
-        )
+        Column(modifier = Modifier.padding(vertical = 8.dp), content = content)
     }
 }

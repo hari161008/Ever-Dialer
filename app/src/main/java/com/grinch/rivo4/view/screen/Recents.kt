@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -41,9 +42,15 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Locale
+
+private val ColorBlue   = Color(0xFF2196F3)
+private val ColorRed    = Color(0xFFE91E63)
+private val ColorGreen  = Color(0xFF4CAF50)
+private val ColorOrange = Color(0xFFFF9800)
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Destination<RootGraph>
@@ -95,6 +102,18 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     }
 }
 
+/** Formats seconds into "Xh Xm" or "Xm Xs". */
+private fun formatDuration(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
+    }
+}
+
 @Composable
 fun CallLogFullContent(
     navigator: DestinationsNavigator,
@@ -136,54 +155,69 @@ fun CallLogFullContent(
         if (logs.isEmpty()) {
             RivoLoadingIndicatorView()
         } else {
-            // Summary stats
             val missedCount = remember(logs) { logs.count { it.type == CallLog.Calls.MISSED_TYPE } }
-            val totalToday = remember(logs) {
-                val todayStart = System.currentTimeMillis() - 86_400_000L
-                logs.count { it.date >= todayStart }
+            val todayStart = remember { System.currentTimeMillis() - 86_400_000L }
+            val totalToday = remember(logs) { logs.count { it.date >= todayStart } }
+            val totalDurationToday = remember(logs) {
+                logs.filter { it.date >= todayStart && it.duration > 0 }.sumOf { it.duration }
             }
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // Stats row
-                var statsVisible by remember { mutableStateOf(false) }
-                val statsAlpha by animateFloatAsState(
-                    targetValue = if (statsVisible) 1f else 0f,
-                    animationSpec = tween(500),
-                    label = "statsAlpha"
-                )
-                LaunchedEffect(Unit) { statsVisible = true }
-
-                Row(
+                // ── Animated stat cards ──────────────────────────────
+                LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .alpha(statsAlpha),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    RivoStatCard(
-                        label = "Today",
-                        value = totalToday.toString(),
-                        icon = Icons.AutoMirrored.Filled.CallReceived,
-                        modifier = Modifier.weight(1f)
-                    )
-                    RivoStatCard(
-                        label = "Missed",
-                        value = missedCount.toString(),
-                        icon = Icons.AutoMirrored.Filled.CallMissed,
-                        modifier = Modifier.weight(1f),
-                        containerColor = if (missedCount > 0)
-                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-                        else MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                    RivoStatCard(
-                        label = "Outgoing",
-                        value = logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(),
-                        icon = Icons.AutoMirrored.Filled.CallMade,
-                        modifier = Modifier.weight(1f)
-                    )
+                    item {
+                        AnimatedStatCard(
+                            delayMs = 0L,
+                            label = "Today",
+                            value = totalToday.toString(),
+                            icon = Icons.AutoMirrored.Filled.CallReceived,
+                            iconTint = ColorBlue,
+                            modifier = Modifier.width(110.dp)
+                        )
+                    }
+                    item {
+                        AnimatedStatCard(
+                            delayMs = 60L,
+                            label = "Missed",
+                            value = missedCount.toString(),
+                            icon = Icons.AutoMirrored.Filled.CallMissed,
+                            iconTint = ColorRed,
+                            containerColor = if (missedCount > 0)
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                            else MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.width(110.dp)
+                        )
+                    }
+                    item {
+                        AnimatedStatCard(
+                            delayMs = 120L,
+                            label = "Outgoing",
+                            value = logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(),
+                            icon = Icons.AutoMirrored.Filled.CallMade,
+                            iconTint = ColorGreen,
+                            modifier = Modifier.width(110.dp)
+                        )
+                    }
+                    if (totalDurationToday > 0) {
+                        item {
+                            AnimatedStatCard(
+                                delayMs = 180L,
+                                label = "Call Time",
+                                value = formatDuration(totalDurationToday),
+                                icon = Icons.Default.Timer,
+                                iconTint = ColorOrange,
+                                modifier = Modifier.width(110.dp)
+                            )
+                        }
+                    }
                 }
 
-                // Filter chips
+                // ── Filter chips ─────────────────────────────────────
                 LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -193,7 +227,13 @@ fun CallLogFullContent(
                         FilterChip(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
-                            label = { Text(filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }) },
+                            label = {
+                                Text(
+                                    filter.name.replaceFirstChar {
+                                        if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                                    }
+                                )
+                            },
                             shape = RoundedCornerShape(12.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -229,7 +269,6 @@ fun CallLogFullContent(
                                                 val hasPermission = ContextCompat.checkSelfPermission(
                                                     context, Manifest.permission.READ_PHONE_STATE
                                                 ) == PackageManager.PERMISSION_GRANTED
-
                                                 if (hasPermission) {
                                                     val accounts = telecomManager.callCapablePhoneAccounts
                                                     if (accounts.size > 1) {
@@ -260,6 +299,44 @@ fun CallLogFullContent(
             title = "Call History",
             description = "Ever Dialer needs access to your call logs to show your recent activity and missed calls.",
             onGrantClick = onRequestPermission
+        )
+    }
+}
+
+/** Individual stat card with staggered entrance animation. */
+@Composable
+private fun AnimatedStatCard(
+    delayMs: Long,
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMs)
+        visible = true
+    }
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(350),
+        label = "statAlpha"
+    )
+    val cardOffset by animateDpAsState(
+        targetValue = if (visible) 0.dp else 16.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "statOffset"
+    )
+    Box(modifier = Modifier.alpha(cardAlpha).offset(y = cardOffset)) {
+        RivoStatCard(
+            label = label,
+            value = value,
+            icon = icon,
+            iconTint = iconTint,
+            containerColor = containerColor,
+            modifier = modifier
         )
     }
 }

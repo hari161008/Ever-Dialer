@@ -25,11 +25,19 @@ import com.grinch.rivo4.APP_VERSION
 import com.grinch.rivo4.DISCORD_URL
 import com.grinch.rivo4.GITHUB_URL
 import com.grinch.rivo4.controller.util.openLink
+import com.grinch.rivo4.view.components.RivoAnimatedSection
 import com.grinch.rivo4.view.components.RivoExpressiveCard
 import com.grinch.rivo4.view.components.RivoListItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+
+private val ColorBlue      = Color(0xFF2196F3)
+private val ColorGreen     = Color(0xFF4CAF50)
+private val ColorDeepPurp  = Color(0xFF7C4DFF)
+private val ColorOrange    = Color(0xFFFF9800)
+private val ColorCyan      = Color(0xFF00BCD4)
+private val ColorRed       = Color(0xFFE91E63)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -39,7 +47,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
 
     var visible by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.7f,
+        targetValue = if (visible) 1f else 0.65f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "logoScale"
     )
@@ -70,7 +78,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Modern logo container
+            // ── Logo ──────────────────────────────────────────────────
             Surface(
                 modifier = Modifier.size(110.dp).scale(scale).alpha(alpha),
                 shape = RoundedCornerShape(32.dp),
@@ -102,7 +110,6 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Version badge
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer
@@ -118,76 +125,92 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            RivoExpressiveCard {
-                RivoListItem(
-                    headline = "Developer",
-                    supporting = "Hama (MoHamed-B-M)",
-                    leadingIcon = Icons.Outlined.Person,
-                    onClick = { openLink(context, GITHUB_URL) }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                RivoListItem(
-                    headline = "Source Code",
-                    supporting = "GitHub Repository",
-                    leadingIcon = Icons.Outlined.Code,
-                    onClick = { openLink(context, GITHUB_URL) }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                RivoListItem(
-                    headline = "Community",
-                    supporting = "Join our Discord server",
-                    leadingIcon = Icons.Outlined.Groups,
-                    onClick = { openLink(context, DISCORD_URL) }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-                RivoListItem(
-                    headline = "App Version",
-                    supporting = APP_VERSION,
-                    leadingIcon = Icons.Default.Info,
-                    onClick = { }
-                )
+            // ── Links card ───────────────────────────────────────────
+            RivoAnimatedSection(delayMs = 150L) {
+                RivoExpressiveCard {
+                    RivoListItem(
+                        headline = "Developer",
+                        supporting = "Hama (MoHamed-B-M)",
+                        leadingIcon = Icons.Outlined.Person,
+                        iconContainerColor = ColorBlue,
+                        onClick = { openLink(context, GITHUB_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "Source Code",
+                        supporting = "GitHub Repository",
+                        leadingIcon = Icons.Outlined.Code,
+                        iconContainerColor = ColorGreen,
+                        onClick = { openLink(context, GITHUB_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "Community",
+                        supporting = "Join our Discord server",
+                        leadingIcon = Icons.Outlined.Groups,
+                        iconContainerColor = ColorDeepPurp,
+                        onClick = { openLink(context, DISCORD_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "App Version",
+                        supporting = APP_VERSION,
+                        leadingIcon = Icons.Default.Info,
+                        iconContainerColor = ColorOrange,
+                        onClick = { }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Open source badge
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // ── Open source badge ─────────────────────────────────────
+            RivoAnimatedSection(delayMs = 280L) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        Icons.Default.FavoriteBorder,
-                        null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Column {
-                        Text(
-                            "Free & Open Source",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                        Text(
-                            "Built with ❤ using Jetpack Compose",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                        )
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = ColorRed.copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.FavoriteBorder, null,
+                                    tint = ColorRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                "Free & Open Source",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                "Built with ❤ using Jetpack Compose",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
             }

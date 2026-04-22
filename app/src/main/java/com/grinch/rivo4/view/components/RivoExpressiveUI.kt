@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -12,12 +13,48 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+
+// ─── Animated Section ──────────────────────────────────────────────────────────
+/**
+ * Wraps content in a staggered fade+slide-up entrance animation.
+ * delayMs controls when the animation fires relative to screen entry.
+ */
+@Composable
+fun RivoAnimatedSection(
+    delayMs: Long = 0L,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMs)
+        visible = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(350),
+        label = "sectionAlpha"
+    )
+    val offset by animateDpAsState(
+        targetValue = if (visible) 0.dp else 22.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "sectionOffset"
+    )
+    Box(modifier = modifier.alpha(alpha).offset(y = offset)) {
+        content()
+    }
+}
+
+// ─── Card ──────────────────────────────────────────────────────────────────────
 
 @Composable
 fun RivoExpressiveCard(
@@ -66,6 +103,8 @@ fun RivoExpressiveCard(
     }
 }
 
+// ─── Section Header ────────────────────────────────────────────────────────────
+
 @Composable
 fun RivoSectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
@@ -78,6 +117,8 @@ fun RivoSectionHeader(title: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp, vertical = 4.dp)
     )
 }
+
+// ─── Expressive Button ─────────────────────────────────────────────────────────
 
 @Composable
 fun RivoExpressiveButton(
@@ -130,13 +171,16 @@ fun RivoExpressiveButton(
     }
 }
 
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
 @Composable
 fun RivoStatCard(
     label: String,
     value: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -144,14 +188,23 @@ fun RivoStatCard(
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(
-                icon, null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
+            // Colored icon background
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = iconTint.copy(alpha = 0.15f),
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon, null,
+                        tint = iconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
@@ -167,11 +220,59 @@ fun RivoStatCard(
     }
 }
 
+// ─── Icon Container Helper ────────────────────────────────────────────────────
+/**
+ * Renders a colored square icon box with translucent tinted background.
+ * iconContainerColor = null → falls back to secondaryContainer theming.
+ */
+@Composable
+internal fun RivoIconBox(
+    icon: ImageVector,
+    iconContainerColor: Color?,
+    modifier: Modifier = Modifier
+) {
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val iconScale by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0.5f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "iconScale"
+    )
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(250),
+        label = "iconAlpha"
+    )
+
+    val bgColor = iconContainerColor?.copy(alpha = 0.15f)
+        ?: MaterialTheme.colorScheme.secondaryContainer
+    val fgColor = iconContainerColor
+        ?: MaterialTheme.colorScheme.onSecondaryContainer
+
+    Surface(
+        modifier = modifier.size(44.dp).scale(iconScale).alpha(iconAlpha),
+        shape = RoundedCornerShape(14.dp),
+        color = bgColor,
+        shadowElevation = 0.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon, null,
+                tint = fgColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+// ─── List Item ────────────────────────────────────────────────────────────────
+
 @Composable
 fun RivoListItem(
     headline: String,
     supporting: String? = null,
     leadingIcon: ImageVector? = null,
+    iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
     avatarName: String? = null,
     photoUri: String? = null,
@@ -207,20 +308,10 @@ fun RivoListItem(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             } else if (leadingIcon != null) {
-                Surface(
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shadowElevation = 0.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            leadingIcon, null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                RivoIconBox(
+                    icon = leadingIcon,
+                    iconContainerColor = iconContainerColor
+                )
                 Spacer(modifier = Modifier.width(16.dp))
             }
 
@@ -230,7 +321,7 @@ fun RivoListItem(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (supporting != null) {
                     Text(
@@ -238,7 +329,7 @@ fun RivoListItem(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -254,20 +345,32 @@ fun RivoListItem(
     }
 }
 
+// ─── Switch List Item ─────────────────────────────────────────────────────────
+
 @Composable
 fun RivoSwitchListItem(
     headline: String,
     supporting: String? = null,
     leadingIcon: ImageVector? = null,
+    iconContainerColor: Color? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "SwitchItemScale"
+    )
+
     Surface(
         onClick = { onCheckedChange(!checked) },
         color = Color.Transparent,
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = 0.dp
+        modifier = modifier.fillMaxWidth().scale(scale),
+        shadowElevation = 0.dp,
+        interactionSource = interactionSource
     ) {
         Row(
             modifier = Modifier
@@ -276,27 +379,25 @@ fun RivoSwitchListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (leadingIcon != null) {
-                Surface(
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shadowElevation = 0.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            leadingIcon, null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                RivoIconBox(
+                    icon = leadingIcon,
+                    iconContainerColor = iconContainerColor
+                )
                 Spacer(modifier = Modifier.width(16.dp))
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
                 if (supporting != null) {
-                    Text(text = supporting, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = supporting,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

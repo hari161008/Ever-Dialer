@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,6 +22,7 @@ import com.grinch.rivo4.APP_VERSION
 import com.grinch.rivo4.PATREON_URL
 import com.grinch.rivo4.controller.util.PreferenceManager
 import com.grinch.rivo4.controller.util.openLink
+import com.grinch.rivo4.view.components.RivoAnimatedSection
 import com.grinch.rivo4.view.components.RivoExpressiveCard
 import com.grinch.rivo4.view.components.RivoListItem
 import com.grinch.rivo4.view.components.RivoSwitchListItem
@@ -29,6 +31,16 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
+
+// Semantic icon colors
+private val ColorPurple   = Color(0xFF9C27B0)
+private val ColorOrange   = Color(0xFFFF9800)
+private val ColorBlue     = Color(0xFF2196F3)
+private val ColorGreen    = Color(0xFF4CAF50)
+private val ColorRed      = Color(0xFFE91E63)
+private val ColorTeal     = Color(0xFF009688)
+private val ColorIndigo   = Color(0xFF3F51B5)
+private val ColorBluGrey  = Color(0xFF607D8B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -39,6 +51,8 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     val prefs: PreferenceManager = koinInject()
 
     var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_feedback", true)) }
+    var blockUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)) }
+    var blockHidden by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)) }
 
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(
@@ -67,77 +81,123 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Support card
+            // ── Support card ──────────────────────────────────────────
             item {
-                RivoExpressiveCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                    RivoListItem(
-                        headline = "Support Ever Dialer",
-                        supporting = "Help keep it open source & free",
-                        leadingIcon = Icons.Default.Favorite,
-                        onClick = { openLink(context, PATREON_URL) }
-                    )
+                RivoAnimatedSection(delayMs = 0L) {
+                    RivoExpressiveCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                        RivoListItem(
+                            headline = "Support Ever Dialer",
+                            supporting = "Help keep it open source & free",
+                            leadingIcon = Icons.Default.Favorite,
+                            iconContainerColor = ColorRed,
+                            onClick = { openLink(context, PATREON_URL) }
+                        )
+                    }
                 }
             }
 
-            // Personalization
+            // ── Personalization ───────────────────────────────────────
             item {
-                SectionLabel("Personalization")
-                RivoExpressiveCard {
-                    RivoListItem(
-                        headline = "Interface",
-                        supporting = "Themes, colors, and layout",
-                        leadingIcon = Icons.Outlined.Palette,
-                        trailingIcon = Icons.Default.ChevronRight,
-                        onClick = { navigator.navigate(InterfaceScreenDestination) }
-                    )
-                    Divider()
-                    RivoSwitchListItem(
-                        headline = "Haptic Feedback",
-                        supporting = "Vibrate on touch and gestures",
-                        leadingIcon = Icons.Outlined.Vibration,
-                        checked = hapticEnabled,
-                        onCheckedChange = {
-                            hapticEnabled = it
-                            prefs.setBoolean("haptic_feedback", it)
-                        }
-                    )
-                    Divider()
-                    RivoListItem(
-                        headline = "Sound & Vibration",
-                        supporting = "Ringtones and dialpad tones",
-                        leadingIcon = Icons.Outlined.VolumeUp,
-                        trailingIcon = Icons.Default.ChevronRight,
-                        onClick = { navigator.navigate(SoundVibrationScreenDestination) }
-                    )
+                RivoAnimatedSection(delayMs = 80L) {
+                    SectionLabel("Personalization")
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "Interface",
+                            supporting = "Themes, colors, and layout",
+                            leadingIcon = Icons.Outlined.Palette,
+                            iconContainerColor = ColorPurple,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(InterfaceScreenDestination) }
+                        )
+                        Divider()
+                        RivoSwitchListItem(
+                            headline = "Haptic Feedback",
+                            supporting = "Vibrate on touch and gestures",
+                            leadingIcon = Icons.Outlined.Vibration,
+                            iconContainerColor = ColorOrange,
+                            checked = hapticEnabled,
+                            onCheckedChange = {
+                                hapticEnabled = it
+                                prefs.setBoolean("haptic_feedback", it)
+                            }
+                        )
+                        Divider()
+                        RivoListItem(
+                            headline = "Sound & Vibration",
+                            supporting = "Ringtones and dialpad tones",
+                            leadingIcon = Icons.Outlined.VolumeUp,
+                            iconContainerColor = ColorBlue,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(SoundVibrationScreenDestination) }
+                        )
+                    }
                 }
             }
 
-            // Calls & System
+            // ── Calls & System ────────────────────────────────────────
             item {
-                SectionLabel("Calls & System")
-                RivoExpressiveCard {
-                    RivoListItem(
-                        headline = "Call Accounts",
-                        supporting = "SIM cards and calling accounts",
-                        leadingIcon = Icons.Outlined.SimCard,
-                        trailingIcon = Icons.Default.ChevronRight,
-                        onClick = { navigator.navigate(CallAccountsScreenDestination) }
-                    )
+                RivoAnimatedSection(delayMs = 160L) {
+                    SectionLabel("Calls & System")
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "Call Accounts",
+                            supporting = "SIM cards and calling accounts",
+                            leadingIcon = Icons.Outlined.SimCard,
+                            iconContainerColor = ColorGreen,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(CallAccountsScreenDestination) }
+                        )
+                    }
                 }
             }
 
-            // App info
+            // ── Privacy ───────────────────────────────────────────────
             item {
-                RivoExpressiveCard(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-                ) {
-                    RivoListItem(
-                        headline = "About Ever Dialer",
-                        supporting = "Version $APP_VERSION · Developer info",
-                        leadingIcon = Icons.Outlined.Info,
-                        trailingIcon = Icons.Default.ChevronRight,
-                        onClick = { navigator.navigate(AboutAppScreenDestination) }
-                    )
+                RivoAnimatedSection(delayMs = 240L) {
+                    SectionLabel("Privacy")
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Block Unknown Callers",
+                            supporting = "Silence calls from unidentified numbers",
+                            leadingIcon = Icons.Outlined.Block,
+                            iconContainerColor = ColorRed,
+                            checked = blockUnknown,
+                            onCheckedChange = {
+                                blockUnknown = it
+                                prefs.setBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, it)
+                            }
+                        )
+                        Divider()
+                        RivoSwitchListItem(
+                            headline = "Block Hidden Numbers",
+                            supporting = "Silence private or withheld numbers",
+                            leadingIcon = Icons.Outlined.VisibilityOff,
+                            iconContainerColor = ColorIndigo,
+                            checked = blockHidden,
+                            onCheckedChange = {
+                                blockHidden = it
+                                prefs.setBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, it)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ── App info ──────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 320L) {
+                    RivoExpressiveCard(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                    ) {
+                        RivoListItem(
+                            headline = "About Ever Dialer",
+                            supporting = "Version $APP_VERSION · Developer info",
+                            leadingIcon = Icons.Outlined.Info,
+                            iconContainerColor = ColorBluGrey,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(AboutAppScreenDestination) }
+                        )
+                    }
                 }
             }
 

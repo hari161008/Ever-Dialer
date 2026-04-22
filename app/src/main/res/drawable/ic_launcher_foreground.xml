@@ -1,59 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Outer glow ring -->
-    <path
-        android:fillColor="#29FFFFFF"
-        android:pathData="M54,18 A36,36 0 1,1 53.99,18 Z" />
-
-    <!-- Inner circle background -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z" />
-
-    <!-- Modern phone handset shape -->
-    <path
-        android:fillColor="#6750A4"
-        android:pathData="M44.5,38.5
-            C42.3,38.5 40.5,40.3 40.5,42.5
-            L40.5,46.5
-            C40.5,57.0 48.9,65.4 59.4,65.5
-            C60.0,65.5 60.5,65.5 61.0,65.5
-            L65.5,65.5
-            C67.7,65.5 69.5,63.7 69.5,61.5
-            L69.5,57.5
-            C69.5,56.0 68.6,54.7 67.3,54.1
-            L63.3,52.3
-            C61.8,51.7 60.1,52.1 59.0,53.2
-            L57.5,54.7
-            C55.5,53.5 53.7,51.9 52.3,50.1
-            L53.8,48.6
-            C54.9,47.5 55.3,45.8 54.7,44.3
-            L52.9,40.3
-            C52.3,39.0 51.0,38.1 49.5,38.1
-            L44.5,38.5 Z" />
-
-    <!-- Signal arc 1 -->
-    <path
-        android:fillColor="#6750A4"
-        android:strokeWidth="2.2"
-        android:strokeColor="#6750A4"
-        android:pathData="M66,36 A15,15 0 0,1 66,50" />
-
-    <!-- Signal arc 2 -->
-    <path
-        android:fillColor="#6750A4"
-        android:strokeWidth="2.2"
-        android:strokeColor="#6750A4"
-        android:pathData="M70,32 A21,21 0 0,1 70,54" />
-
-    <!-- Signal dot -->
-    <path
-        android:fillColor="#6750A4"
-        android:pathData="M62,43 A2,2 0 1,1 61.99,43 Z" />
-
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- cols 42,54,66  rows 38,48,58  key-0 at 54,68  radius 3.6 -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42,38 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,38 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M66,38 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42,48 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,48 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M66,48 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42,58 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,58 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M66,58 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,68 m-3.6,0 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0Z"/>
 </vector>

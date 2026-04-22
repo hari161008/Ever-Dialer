@@ -33,17 +33,22 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val isContactsSelected = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
-    val isRecentsSelected = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+    val isContactsSelected = currentDestination?.hierarchy?.any {
+        it.route == ContactScreenDestination.route
+    } == true
+    val isRecentsSelected = currentDestination?.hierarchy?.any {
+        it.route == RecentScreenDestination.route
+    } == true
 
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp
     ) {
+        // ── Contacts tab ────────────────────────────────────────────
         NavigationBarItem(
             icon = {
                 val size by animateDpAsState(
-                    targetValue = if (isContactsSelected) 26.dp else 22.dp,
+                    targetValue = if (isContactsSelected) 27.dp else 22.dp,
                     animationSpec = spring(stiffness = Spring.StiffnessMedium),
                     label = "contactsIconSize"
                 )
@@ -56,21 +61,24 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
             label = if (iconOnly) null else ({ Text("Contacts") }),
             alwaysShowLabel = !iconOnly,
             selected = isContactsSelected,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+            ),
             onClick = {
                 navController.navigate(ContactScreenDestination.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
                 }
             }
         )
 
+        // ── Recents tab ─────────────────────────────────────────────
         NavigationBarItem(
             icon = {
                 val size by animateDpAsState(
-                    targetValue = if (isRecentsSelected) 26.dp else 22.dp,
+                    targetValue = if (isRecentsSelected) 27.dp else 22.dp,
                     animationSpec = spring(stiffness = Spring.StiffnessMedium),
                     label = "recentsIconSize"
                 )
@@ -83,11 +91,13 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
             label = if (iconOnly) null else ({ Text("Recents") }),
             alwaysShowLabel = !iconOnly,
             selected = isRecentsSelected,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+            ),
             onClick = {
                 navController.navigate(RecentScreenDestination.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
                 }
