@@ -62,6 +62,16 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
   <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/12.png" width="32%"/>
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/13.png" width="32%"/>
+  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/14.png" width="32%"/>
+  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/15.png" width="32%"/>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/16.png" width="32%"/>
+</p>
+
 <br>
 
 ---
