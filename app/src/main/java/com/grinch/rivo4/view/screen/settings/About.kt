@@ -22,8 +22,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.grinch.rivo4.APP_VERSION
-import com.grinch.rivo4.DISCORD_URL
+import com.grinch.rivo4.EVERLASTING_TWEAK_URL
 import com.grinch.rivo4.GITHUB_URL
+import com.grinch.rivo4.TELEGRAM_CHANNEL_URL
+import com.grinch.rivo4.TELEGRAM_DEV_URL
+import com.grinch.rivo4.TELEGRAM_SUPPORT_URL
 import com.grinch.rivo4.controller.util.openLink
 import com.grinch.rivo4.view.components.RivoAnimatedSection
 import com.grinch.rivo4.view.components.RivoExpressiveCard
@@ -38,6 +41,8 @@ private val ColorDeepPurp  = Color(0xFF7C4DFF)
 private val ColorOrange    = Color(0xFFFF9800)
 private val ColorCyan      = Color(0xFF00BCD4)
 private val ColorRed       = Color(0xFFE91E63)
+private val ColorTeal      = Color(0xFF009688)
+private val ColorIndigo    = Color(0xFF3F51B5)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -125,15 +130,15 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // ── Links card ───────────────────────────────────────────
+            // ── Developer & Source Code card ──────────────────────────
             RivoAnimatedSection(delayMs = 150L) {
                 RivoExpressiveCard {
                     RivoListItem(
                         headline = "Developer",
-                        supporting = "Hama (MoHamed-B-M)",
+                        supporting = "Hari !",
                         leadingIcon = Icons.Outlined.Person,
                         iconContainerColor = ColorBlue,
-                        onClick = { openLink(context, GITHUB_URL) }
+                        onClick = { openLink(context, TELEGRAM_DEV_URL) }
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -151,17 +156,6 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
                     RivoListItem(
-                        headline = "Community",
-                        supporting = "Join our Discord server",
-                        leadingIcon = Icons.Outlined.Groups,
-                        iconContainerColor = ColorDeepPurp,
-                        onClick = { openLink(context, DISCORD_URL) }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    RivoListItem(
                         headline = "App Version",
                         supporting = APP_VERSION,
                         leadingIcon = Icons.Default.Info,
@@ -171,10 +165,47 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Community links card ──────────────────────────────────
+            RivoAnimatedSection(delayMs = 220L) {
+                RivoExpressiveCard {
+                    RivoListItem(
+                        headline = "Telegram App Support Group",
+                        supporting = "Bug Reports | Feature request | Announcements | Support",
+                        leadingIcon = Icons.Outlined.Groups,
+                        iconContainerColor = ColorDeepPurp,
+                        onClick = { openLink(context, TELEGRAM_SUPPORT_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "App Recommending Channel in Telegram",
+                        supporting = "Discover | Explore | Cool Apps | Support",
+                        leadingIcon = Icons.Default.Star,
+                        iconContainerColor = ColorCyan,
+                        onClick = { openLink(context, TELEGRAM_CHANNEL_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "My Other App (Everlasting Android Tweak)",
+                        supporting = "Tweaks | Tools | Modify | Customize",
+                        leadingIcon = Icons.Default.Build,
+                        iconContainerColor = ColorTeal,
+                        onClick = { openLink(context, EVERLASTING_TWEAK_URL) }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Open source badge ─────────────────────────────────────
-            RivoAnimatedSection(delayMs = 280L) {
+            RivoAnimatedSection(delayMs = 300L) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),

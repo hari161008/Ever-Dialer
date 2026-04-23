@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -32,14 +33,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.grinch.rivo4.controller.CallLogViewModel
 import com.grinch.rivo4.controller.ContactsViewModel
+import com.grinch.rivo4.controller.util.NoteManager
 import com.grinch.rivo4.controller.util.QrCodeUtils
 import com.grinch.rivo4.controller.util.makeCall
 import com.grinch.rivo4.view.components.*
@@ -58,7 +65,6 @@ fun ContactDetailsScreen(
     phoneNumber: String? = null,
     navigator: DestinationsNavigator
 ) {
-    val scrollState = rememberLazyListState()
     val contactsViewModel: ContactsViewModel = koinActivityViewModel()
     val callLogViewModel: CallLogViewModel = koinActivityViewModel()
 
@@ -66,16 +72,13 @@ fun ContactDetailsScreen(
     val allLogs by callLogViewModel.allCallLogs.collectAsState()
 
     val contact = remember(contactId, phoneNumber, contacts) {
-        if (contactId != null && contactId != "null") {
-            contacts.find { it.id == contactId }
-        } else if (phoneNumber != null) {
-            contacts.find { it.phoneNumbers.any { num -> num.replace(" ", "").contains(phoneNumber.replace(" ", "")) } }
-        } else null
+        if (contactId != null && contactId != "null") contacts.find { it.id == contactId }
+        else if (phoneNumber != null) contacts.find { c -> c.phoneNumbers.any { n -> n.replace(" ", "").contains(phoneNumber.replace(" ", "")) } }
+        else null
     }
 
     val displayPhone = phoneNumber ?: contact?.phoneNumbers?.firstOrNull() ?: "Unknown"
     val displayName = contact?.name ?: phoneNumber ?: "Unknown"
-
     val context = LocalContext.current
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
 
@@ -83,10 +86,11 @@ fun ContactDetailsScreen(
     var showNumberPicker by remember { mutableStateOf(false) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var showQrDialog by remember { mutableStateOf(false) }
+    var showNoteEditor by remember { mutableStateOf(false) }
 
     val contactLogs = remember(contact, phoneNumber, allLogs) {
         allLogs.filter { log ->
-            (contact != null && (log.contactId == contact.id || contact.phoneNumbers.any { num -> log.number.replace(" ", "").contains(num.replace(" ", "")) })) ||
+            (contact != null && (log.contactId == contact.id || contact.phoneNumbers.any { n -> log.number.replace(" ", "").contains(n.replace(" ", "")) })) ||
             (phoneNumber != null && log.number.replace(" ", "").contains(phoneNumber.replace(" ", "")))
         }
     }
@@ -94,133 +98,62 @@ fun ContactDetailsScreen(
     val isFavorite = contact?.isFavorite ?: false
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val showButton by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 2
-        }
-    }
+    val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
     val initiateCall = { number: String ->
         val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
             val accounts = try { telecomManager.callCapablePhoneAccounts } catch (e: SecurityException) { emptyList() }
-            if (accounts.size > 1) {
-                pendingNumber = number
-                showSimPicker = true
-            } else {
-                makeCall(context, number)
-            }
-        } else {
-            makeCall(context, number)
-        }
+            if (accounts.size > 1) { pendingNumber = number; showSimPicker = true }
+            else makeCall(context, number)
+        } else makeCall(context, number)
     }
 
     if (showNumberPicker && contact != null) {
-        NumberPickerDialog(
-            numbers = contact.phoneNumbers,
-            onDismissRequest = { showNumberPicker = false },
-            onNumberSelected = { selectedNumber ->
-                showNumberPicker = false
-                initiateCall(selectedNumber)
-            }
-        )
+        NumberPickerDialog(numbers = contact.phoneNumbers, onDismissRequest = { showNumberPicker = false }, onNumberSelected = { showNumberPicker = false; initiateCall(it) })
     }
-
     if (showSimPicker && pendingNumber != null) {
-        SimPickerDialog(
-            onDismissRequest = { showSimPicker = false },
-            onSimSelected = { handle ->
-                makeCall(context, pendingNumber!!, handle)
-                showSimPicker = false
-            }
-        )
+        SimPickerDialog(onDismissRequest = { showSimPicker = false }, onSimSelected = { handle -> makeCall(context, pendingNumber!!, handle); showSimPicker = false })
     }
-
     if (showQrDialog) {
-        QrCodeDialog(
-            name = displayName,
-            phone = displayPhone,
-            email = contact?.emails?.firstOrNull(),
-            onDismiss = { showQrDialog = false }
-        )
+        QrCodeDialog(name = displayName, phone = displayPhone, email = contact?.emails?.firstOrNull(), onDismiss = { showQrDialog = false })
+    }
+    if (showNoteEditor) {
+        NoteEditorDialog(contactName = displayName, phoneNumber = displayPhone, onDismiss = { showNoteEditor = false })
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
-                },
+                title = {},
+                navigationIcon = { IconButton(onClick = { navigator.navigateUp() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 actions = {
-                    IconButton(onClick = { showQrDialog = true }) {
-                        Icon(Icons.Outlined.QrCode2, contentDescription = "QR Code")
-                    }
+                    IconButton(onClick = { showQrDialog = true }) { Icon(Icons.Outlined.QrCode2, "QR Code") }
                     if (contact != null) {
                         IconButton(onClick = { contactsViewModel.toggleFavorite(contact) }) {
-                            Icon(
-                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (isFavorite) Color.Red else LocalContentColor.current
-                            )
+                            Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = if (isFavorite) Color.Red else LocalContentColor.current)
                         }
                         IconButton(onClick = {
-                            val intent = Intent(Intent.ACTION_EDIT).apply {
-                                data = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contact.id.toLong())
-                            }
+                            val intent = Intent(Intent.ACTION_EDIT).apply { data = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contact.id.toLong()) }
                             context.startActivity(intent)
-                        }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit")
-                        }
+                        }) { Icon(Icons.Default.Edit, "Edit") }
                     } else if (phoneNumber != null && phoneNumber != "Unknown") {
                         IconButton(onClick = {
-                            val intent = Intent(Intent.ACTION_INSERT).apply {
-                                type = ContactsContract.RawContacts.CONTENT_TYPE
-                                putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber)
-                            }
+                            val intent = Intent(Intent.ACTION_INSERT).apply { type = ContactsContract.RawContacts.CONTENT_TYPE; putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber) }
                             context.startActivity(intent)
-                        }) {
-                            Icon(Icons.Default.PersonAdd, contentDescription = "Add Contact")
-                        }
+                        }) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-
-            // Background blurred image
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(340.dp)
-            ) {
-                AsyncImage(
-                    model = contact?.photoUri,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(50.dp),
-                    contentScale = ContentScale.Crop
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface)
-                            )
-                        )
-                )
+            Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
+                AsyncImage(model = contact?.photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(50.dp), contentScale = ContentScale.Crop)
+                Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))
             }
 
-            // Main content
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -229,152 +162,105 @@ fun ContactDetailsScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // ✅ Fixed: Wrapped glow + avatar in a Box with contentAlignment
-                        Box(
-                            modifier = Modifier.size(300.dp),   // Container size for glow
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // 🔥 Soft Circular Glow (Aura)
-                            Box(
-                                modifier = Modifier
-                                    .size(240.dp)   // Slightly smaller for soft fade
-                                    .background(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                                Color.Transparent
-                                            )
-                                        )
-                                    )
-                                    .blur(60.dp)
-                            )
-
-                            // Original Avatar on top
-                            RivoAvatar(
-                                name = displayName,
-                                photoUri = contact?.photoUri,
-                                modifier = Modifier.size(140.dp),
-                                shape = CircleShape
-                            )
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(modifier = Modifier.size(300.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.size(240.dp).background(brush = Brush.radialGradient(colors = listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f), Color.Transparent))).blur(60.dp))
+                            RivoAvatar(name = displayName, photoUri = contact?.photoUri, modifier = Modifier.size(140.dp), shape = CircleShape)
                         }
-
                         Spacer(modifier = Modifier.height(20.dp))
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text(text = displayName, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // All your original items below remain completely unchanged
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        RivoExpressiveButton(
-                            icon = Icons.Default.Call,
-                            label = "Call",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            onClick = {
-                                if (contact != null && contact.phoneNumbers.size > 1) {
-                                    showNumberPicker = true
-                                } else if (displayPhone != "Unknown") {
-                                    initiateCall(displayPhone)
-                                }
-                            }
-                        )
-                        RivoExpressiveButton(
-                            icon = Icons.AutoMirrored.Filled.Message,
-                            label = "Text",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            onClick = {
-                                if (displayPhone != "Unknown") {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone"))
-                                    context.startActivity(intent)
-                                }
-                            }
-                        )
-                        RivoExpressiveButton(
-                            icon = Icons.Default.VideoCall,
-                            label = "Video",
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            onClick = { }
-                        )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        RivoExpressiveButton(icon = Icons.Default.Call, label = "Call", containerColor = MaterialTheme.colorScheme.primaryContainer, onClick = {
+                            if (contact != null && contact.phoneNumbers.size > 1) showNumberPicker = true
+                            else if (displayPhone != "Unknown") initiateCall(displayPhone)
+                        })
+                        RivoExpressiveButton(icon = Icons.AutoMirrored.Filled.Message, label = "Text", containerColor = MaterialTheme.colorScheme.secondaryContainer, onClick = {
+                            if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
+                        })
+                        RivoExpressiveButton(icon = Icons.Default.VideoCall, label = "Video", containerColor = MaterialTheme.colorScheme.tertiaryContainer, onClick = {})
                     }
                 }
 
+                // Contact Info
                 item {
                     RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
                         if (contact != null) {
                             contact.phoneNumbers.forEachIndexed { index, number ->
-                                RivoListItem(
-                                    headline = number,
-                                    supporting = "Mobile",
-                                    leadingIcon = Icons.Default.Phone,
-                                    onClick = { initiateCall(number) }
-                                )
+                                RivoListItem(headline = number, supporting = "Mobile", leadingIcon = Icons.Default.Phone, onClick = { initiateCall(number) })
                                 if (index < contact.phoneNumbers.size - 1 || contact.emails.isNotEmpty()) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
                             contact.emails.forEachIndexed { index, email ->
-                                RivoListItem(
-                                    headline = email,
-                                    supporting = "Email",
-                                    leadingIcon = Icons.Default.Email,
-                                    onClick = {
-                                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
-                                        context.startActivity(intent)
-                                    }
-                                )
+                                RivoListItem(headline = email, supporting = "Email", leadingIcon = Icons.Default.Email, onClick = {
+                                    context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
+                                })
                                 if (index < contact.emails.size - 1) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
                         } else if (phoneNumber != null && phoneNumber != "Unknown") {
-                            RivoListItem(
-                                headline = phoneNumber,
-                                supporting = "Unknown Number",
-                                leadingIcon = Icons.Default.Phone,
-                                onClick = { initiateCall(phoneNumber) }
-                            )
+                            RivoListItem(headline = phoneNumber, supporting = "Unknown Number", leadingIcon = Icons.Default.Phone, onClick = { initiateCall(phoneNumber) })
                         }
                     }
                 }
 
+                // Notes section (between Contact Info and Recent Activity)
+                item {
+                    var currentNote by remember(displayName, displayPhone) {
+                        mutableStateOf(NoteManager.readNote(context, displayName, displayPhone))
+                    }
+                    LaunchedEffect(showNoteEditor) {
+                        if (!showNoteEditor) currentNote = NoteManager.readNote(context, displayName, displayPhone)
+                    }
+
+                    RivoExpressiveCard(title = "Notes", icon = Icons.Default.Note) {
+                        if (currentNote.isNotBlank()) {
+                            // Inline preview with clickable links
+                            val annotated = buildClickableAnnotatedString(currentNote)
+                            ClickableText(
+                                text = annotated,
+                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                onClick = { offset ->
+                                    annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
+                                        val url = if (ann.item.startsWith("http")) ann.item else "https://${ann.item}"
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }
+                                }
+                            )
+                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        }
+                        TextButton(
+                            onClick = { showNoteEditor = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (currentNote.isBlank()) "Add note..." else "Edit note")
+                        }
+                    }
+                }
+
+                // Events & More
                 if (contact != null && (contact.events.isNotEmpty() || contact.addresses.isNotEmpty())) {
                     item {
                         RivoExpressiveCard(title = "Events & More", icon = Icons.Default.Event) {
                             contact.events.forEachIndexed { index, event ->
                                 val isBirthday = event.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY
-                                RivoListItem(
-                                    headline = event.date,
-                                    supporting = event.label ?: if (isBirthday) "Birthday" else "Event",
-                                    leadingIcon = if (isBirthday) Icons.Outlined.Cake else Icons.Outlined.Event,
-                                    onClick = { }
-                                )
+                                RivoListItem(headline = event.date, supporting = event.label ?: if (isBirthday) "Birthday" else "Event", leadingIcon = if (isBirthday) Icons.Outlined.Cake else Icons.Outlined.Event, onClick = {})
                                 if (index < contact.events.size - 1 || contact.addresses.isNotEmpty()) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
                             contact.addresses.forEachIndexed { index, address ->
-                                RivoListItem(
-                                    headline = address,
-                                    supporting = "Address",
-                                    leadingIcon = Icons.Default.LocationOn,
-                                    onClick = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address"))
-                                        context.startActivity(intent)
-                                    }
-                                )
+                                RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
+                                })
                                 if (index < contact.addresses.size - 1) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
@@ -383,6 +269,7 @@ fun ContactDetailsScreen(
                     }
                 }
 
+                // Recent Activity
                 if (contactLogs.isNotEmpty()) {
                     item {
                         RivoExpressiveCard(title = "Recent Activity", icon = Icons.Default.History) {
@@ -393,17 +280,8 @@ fun ContactDetailsScreen(
                                         HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                     }
                                 }
-
                                 if (contactLogs.size > 3) {
-                                    TextButton(
-                                        onClick = {
-                                            navigator.navigate(CallLogFullScreenDestination(
-                                                contactId = contactId,
-                                                phoneNumber = phoneNumber
-                                            ))
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
+                                    TextButton(onClick = { navigator.navigate(CallLogFullScreenDestination(contactId = contactId, phoneNumber = phoneNumber)) }, modifier = Modifier.fillMaxWidth()) {
                                         Text("Show full history")
                                     }
                                 }
@@ -411,81 +289,53 @@ fun ContactDetailsScreen(
                         }
                     }
                 }
+
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
 
-            ScrollToTopButton(
-                visible = showButton,
-                onClick = {
-                    scope.launch {
-                        listState.animateScrollToItem(0)
-                    }
-                }
-            )
+            ScrollToTopButton(visible = showButton, onClick = { scope.launch { listState.animateScrollToItem(0) } })
         }
     }
 }
 
-// QrCodeDialog remains unchanged
 @Composable
-fun QrCodeDialog(
-    name: String,
-    phone: String?,
-    email: String?,
-    onDismiss: () -> Unit
-) {
+fun QrCodeDialog(name: String, phone: String?, email: String?, onDismiss: () -> Unit) {
     val vCard = remember(name, phone, email) { QrCodeUtils.generateVCard(name, phone, email) }
     val qrBitmap = remember(vCard) { QrCodeUtils.generateQrCode(vCard, 600) }
-
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Contact QR",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+        Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Contact QR", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
-
                 qrBitmap?.let {
-                    Image(
-                        bitmap = it.asImageBitmap(),
-                        contentDescription = "QR Code",
-                        modifier = Modifier
-                            .size(240.dp)
-                            .background(Color.White, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    )
+                    Image(bitmap = it.asImageBitmap(), contentDescription = "QR Code", modifier = Modifier.size(240.dp).background(Color.White, RoundedCornerShape(12.dp)).padding(12.dp))
                 }
-
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    phone ?: "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
+                Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                Text(phone ?: "", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Close")
-                }
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("Close") }
             }
         }
+    }
+}
+
+private fun buildClickableAnnotatedString(text: String): AnnotatedString {
+    val urlPattern = android.util.Patterns.WEB_URL
+    return buildAnnotatedString {
+        var lastIdx = 0
+        val matcher = urlPattern.matcher(text)
+        while (matcher.find()) {
+            val start = matcher.start()
+            val end = matcher.end()
+            append(text.substring(lastIdx, start))
+            pushStringAnnotation("URL", matcher.group())
+            withStyle(SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF1E88E5), textDecoration = TextDecoration.Underline)) {
+                append(text.substring(start, end))
+            }
+            pop()
+            lastIdx = end
+        }
+        append(text.substring(lastIdx))
     }
 }

@@ -39,7 +39,7 @@ fun RivoAvatar(
     val prefs = koinInject<PreferenceManager>()
     val settingsState by prefs.settingsChanged.collectAsState()
 
-    val showPicture    = prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)
+    val showPicture     = prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)
     val showFirstLetter = prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)
     val colorfulAvatars = prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)
 
@@ -52,14 +52,16 @@ fun RivoAvatar(
 
     val hasName = name.trim().isNotEmpty()
 
-    // Determine background / foreground colours
+    // For unknown/empty names, use a consistent color derived from a fallback key
+    val colorKey = if (hasName) name else "unknown_caller"
+
     val (backgroundColor, contentColor) = when {
         iconContainerColor != null -> {
-            // Explicit: translucent tinted background, saturated icon
             iconContainerColor.copy(alpha = 0.18f) to iconContainerColor
         }
-        colorfulAvatars && hasName -> {
-            avatarColors[abs(name.hashCode()) % avatarColors.size] to Color.White
+        colorfulAvatars -> {
+            // Always colorful — even for unknown callers
+            avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         }
         else -> {
             MaterialTheme.colorScheme.secondaryContainer to

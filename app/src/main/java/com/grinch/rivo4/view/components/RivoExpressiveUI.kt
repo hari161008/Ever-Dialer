@@ -1,5 +1,13 @@
 package com.grinch.rivo4.view.components
 
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
+import androidx.compose.material3.ripple
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,11 +25,42 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.grinch.rivo4.controller.util.PreferenceManager
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
+
+// ─── App Haptics Helper ────────────────────────────────────────────────────────
+
+internal fun performAppHaptic(context: android.content.Context, strength: String) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(VibratorManager::class.java)
+            val vibrator = vm?.defaultVibrator
+            val effect = if (strength == "strong")
+                VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE)
+            else
+                VibrationEffect.createOneShot(20, 80)
+            vibrator?.vibrate(effect)
+        } else {
+            val vibrator = context.getSystemService(Vibrator::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = if (strength == "strong")
+                    VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE)
+                else
+                    VibrationEffect.createOneShot(20, 80)
+                vibrator?.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(if (strength == "strong") 40L else 20L)
+            }
+        }
+    } catch (_: Exception) {}
+}
 
 // ─── Animated Section ──────────────────────────────────────────────────────────
 /**
@@ -267,6 +306,7 @@ internal fun RivoIconBox(
 
 // ─── List Item ────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RivoListItem(
     headline: String,
@@ -277,8 +317,11 @@ fun RivoListItem(
     avatarName: String? = null,
     photoUri: String? = null,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -288,16 +331,25 @@ fun RivoListItem(
     )
 
     Surface(
-        onClick = onClick,
         color = Color.Transparent,
         modifier = modifier.fillMaxWidth().scale(scale),
-        shadowElevation = 0.dp,
-        interactionSource = interactionSource
+        shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(),
+                    onClick = {
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                            performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+                        }
+                        onClick()
+                    },
+                    onLongClick = onLongClick
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (avatarName != null || photoUri != null) {
@@ -357,6 +409,8 @@ fun RivoSwitchListItem(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -366,7 +420,12 @@ fun RivoSwitchListItem(
     )
 
     Surface(
-        onClick = { onCheckedChange(!checked) },
+        onClick = {
+            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+            }
+            onCheckedChange(!checked)
+        },
         color = Color.Transparent,
         modifier = modifier.fillMaxWidth().scale(scale),
         shadowElevation = 0.dp,

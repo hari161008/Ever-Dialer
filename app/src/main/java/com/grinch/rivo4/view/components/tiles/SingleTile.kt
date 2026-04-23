@@ -1,8 +1,18 @@
 package com.grinch.rivo4.view.components.tiles
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,13 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.grinch.rivo4.view.components.RivoAvatar
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SingleTile(
     title: String,
@@ -28,26 +40,38 @@ fun SingleTile(
     trailingContent: (@Composable () -> Unit)? = null,
     supportingContent: (@Composable () -> Unit)? = null,
     isMissedCall: Boolean = false,
+    phoneNumber: String? = null,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    var showMenu by remember { mutableStateOf(false) }
+    var isPressed by remember { mutableStateOf(false) }
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "TileScale"
     )
 
-    Surface(
-        onClick = onClick,
-        color = Color.Transparent,
-        modifier = modifier.fillMaxWidth().scale(scale),
-        interactionSource = interactionSource
-    ) {
+    val numberForMenu = phoneNumber ?: subtitle?.filter { it.isDigit() || it == '+' }
+        ?.takeIf { it.length >= 5 } ?: subtitle
+
+    Box(modifier = modifier.fillMaxWidth().scale(scale)) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        isPressed = false
+                        onClick()
+                    },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showMenu = true
+                    }
+                )
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RivoAvatar(
@@ -55,8 +79,8 @@ fun SingleTile(
                 photoUri = photoUri,
                 icon = icon,
                 iconContainerColor = iconContainerColor,
-                modifier = Modifier.size(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(14.dp)
             )
 
             Column(
@@ -67,7 +91,7 @@ fun SingleTile(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isMissedCall)
                         MaterialTheme.colorScheme.error
@@ -92,6 +116,55 @@ fun SingleTile(
                 Box(modifier = Modifier.padding(start = 8.dp)) {
                     trailingContent()
                 }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Call") },
+                leadingIcon = { Icon(Icons.Default.Call, null) },
+                onClick = {
+                    showMenu = false
+                    onClick()
+                }
+            )
+            if (!numberForMenu.isNullOrEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Copy number") },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                    onClick = {
+                        showMenu = false
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", numberForMenu))
+                        Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Add to contacts") },
+                    leadingIcon = { Icon(Icons.Default.PersonAdd, null) },
+                    onClick = {
+                        showMenu = false
+                        val intent = Intent(Intent.ACTION_INSERT).apply {
+                            type = ContactsContract.RawContacts.CONTENT_TYPE
+                            putExtra(ContactsContract.Intents.Insert.PHONE, numberForMenu)
+                        }
+                        context.startActivity(intent)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Send SMS") },
+                    leadingIcon = { Icon(Icons.Default.Message, null) },
+                    onClick = {
+                        showMenu = false
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = android.net.Uri.parse("sms:$numberForMenu")
+                        }
+                        context.startActivity(intent)
+                    }
+                )
             }
         }
     }

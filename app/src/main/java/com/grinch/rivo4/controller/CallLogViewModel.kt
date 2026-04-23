@@ -29,6 +29,10 @@ class CallLogViewModel(
         _selectedFilter.value = newFilter;
     }
 
+    fun refreshLogs() {
+        fetchLogs()
+    }
+
     private fun fetchLogs() {
         viewModelScope.launch(Dispatchers.IO) {
             val result = callLogRepo.getCallLogs()

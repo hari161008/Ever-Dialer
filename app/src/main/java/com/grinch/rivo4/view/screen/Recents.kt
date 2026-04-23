@@ -7,6 +7,7 @@ import android.provider.CallLog
 import android.telecom.TelecomManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -25,10 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
@@ -40,10 +43,13 @@ import com.grinch.rivo4.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Locale
 
@@ -52,37 +58,81 @@ private val ColorRed    = Color(0xFFE91E63)
 private val ColorGreen  = Color(0xFF4CAF50)
 private val ColorOrange = Color(0xFFFF9800)
 
-@OptIn(ExperimentalPermissionsApi::class)
-@Destination<RootGraph>
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
+@Destination<RootGraph>(start = true)
 @Composable
 fun RecentScreen(navController: NavController, navigator: DestinationsNavigator) {
     val permState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
+    val prefs = koinInject<com.grinch.rivo4.controller.util.PreferenceManager>()
 
+    var showDialpad by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(false) }
     val fabScale by animateFloatAsState(
         targetValue = if (fabVisible) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "fabScale"
     )
-    LaunchedEffect(Unit) { fabVisible = true }
+    LaunchedEffect(Unit) {
+        fabVisible = true
+        if (prefs.getBoolean(com.grinch.rivo4.controller.util.PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, true)) {
+            showDialpad = true
+        }
+    }
 
+    if (showDialpad) {
+        ModalBottomSheet(
+            onDismissRequest = { showDialpad = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                    Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
+                }
+            }
+        ) {
+            DialPadContent(navigator = navigator, onDismiss = { showDialpad = false })
+        }
+    }
+
+    // Tab order: 0=Favourites, 1=Calls(current), 2=Contacts
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    if (dragAmount > 60f) {
+                        // swipe right → go to Favourites
+                        scope.launch {
+                            navController.navigate(FavoritesScreenDestination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true; restoreState = true
+                            }
+                        }
+                    } else if (dragAmount < -60f) {
+                        // swipe left → go to Contacts
+                        scope.launch {
+                            navController.navigate(ContactScreenDestination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true; restoreState = true
+                            }
+                        }
+                    }
+                }
+            },
         topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navigator.navigate(DialPadScreenDestination()) },
+                onClick = { showDialpad = true },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(20.dp),
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
                 modifier = Modifier.scale(fabScale)
-            ) {
-                Icon(Icons.Default.Dialpad, "Dialpad")
-            }
+            ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
         bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface
@@ -94,15 +144,11 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 onRequestPermission = { permState.launchPermissionRequest() },
                 listState = listState
             )
-            ScrollToTopButton(
-                visible = showButton,
-                onClick = { scope.launch { listState.animateScrollToItem(0) } }
-            )
+            ScrollToTopButton(visible = showButton, onClick = { scope.launch { listState.animateScrollToItem(0) } })
         }
     }
 }
 
-/** Formats seconds into "Xh Xm" or "Xm Xs". */
 private fun formatDuration(totalSeconds: Long): String {
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
@@ -163,61 +209,22 @@ fun CallLogFullContent(
             }
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // ── Animated stat cards ──────────────────────────────
+                // Stat cards
                 LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    item {
-                        AnimatedStatCard(
-                            delayMs = 0L,
-                            label = "Today",
-                            value = totalToday.toString(),
-                            icon = Icons.AutoMirrored.Filled.CallReceived,
-                            iconTint = ColorBlue,
-                            modifier = Modifier.width(110.dp)
-                        )
-                    }
-                    item {
-                        AnimatedStatCard(
-                            delayMs = 60L,
-                            label = "Missed",
-                            value = missedCount.toString(),
-                            icon = Icons.AutoMirrored.Filled.CallMissed,
-                            iconTint = ColorRed,
-                            containerColor = if (missedCount > 0)
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-                            else MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.width(110.dp)
-                        )
-                    }
-                    item {
-                        AnimatedStatCard(
-                            delayMs = 120L,
-                            label = "Outgoing",
-                            value = logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(),
-                            icon = Icons.AutoMirrored.Filled.CallMade,
-                            iconTint = ColorGreen,
-                            modifier = Modifier.width(110.dp)
-                        )
-                    }
+                    item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
+                    item { AnimatedStatCard(60L, "Missed", missedCount.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
+                        if (missedCount > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                    ) { viewModel.setFilter(CallLogFilter.Missed) } }
+                    item { AnimatedStatCard(120L, "Outgoing", logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
                     if (totalDurationToday > 0) {
-                        item {
-                            AnimatedStatCard(
-                                delayMs = 180L,
-                                label = "Call Time",
-                                value = formatDuration(totalDurationToday),
-                                icon = Icons.Default.Timer,
-                                iconTint = ColorOrange,
-                                modifier = Modifier.width(110.dp)
-                            )
-                        }
+                        item { AnimatedStatCard(180L, "Call Time", formatDuration(totalDurationToday), Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
                     }
                 }
 
-                // ── Filter chips ─────────────────────────────────────
+                // ── Filter pills (cylindrical) ──────────────────────────
                 LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -228,13 +235,9 @@ fun CallLogFullContent(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
                             label = {
-                                Text(
-                                    filter.name.replaceFirstChar {
-                                        if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-                                    }
-                                )
+                                Text(filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(50.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -258,31 +261,20 @@ fun CallLogFullContent(
                                         CallLogTile(
                                             log = lg,
                                             onTileClick = { log ->
-                                                navigator.navigate(
-                                                    ContactDetailsScreenDestination(
-                                                        contactId = log.contactId ?: "null",
-                                                        phoneNumber = log.number
-                                                    )
-                                                )
+                                                navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                             },
                                             onButtonClick = { log ->
-                                                val hasPermission = ContextCompat.checkSelfPermission(
-                                                    context, Manifest.permission.READ_PHONE_STATE
-                                                ) == PackageManager.PERMISSION_GRANTED
+                                                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
                                                 if (hasPermission) {
                                                     val accounts = telecomManager.callCapablePhoneAccounts
-                                                    if (accounts.size > 1) {
-                                                        pendingNumber = log.number
-                                                        showSimPicker = true
-                                                    } else makeCall(context, log.number)
+                                                    if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
+                                                    else makeCall(context, log.number)
                                                 } else makeCall(context, log.number)
-                                            }
+                                            },
+                                            onDelete = { viewModel.refreshLogs() }
                                         )
                                         if (index < logsInGroup.size - 1) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(horizontal = 16.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                                            )
+                                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                                         }
                                     }
                                 }
@@ -303,7 +295,6 @@ fun CallLogFullContent(
     }
 }
 
-/** Individual stat card with staggered entrance animation. */
 @Composable
 private fun AnimatedStatCard(
     delayMs: Long,
@@ -312,31 +303,16 @@ private fun AnimatedStatCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     iconTint: Color,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    onClick: () -> Unit = {}
 ) {
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMs)
-        visible = true
-    }
-    val cardAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "statAlpha"
-    )
-    val cardOffset by animateDpAsState(
-        targetValue = if (visible) 0.dp else 16.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "statOffset"
-    )
+    LaunchedEffect(Unit) { delay(delayMs); visible = true }
+    val cardAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "statAlpha")
+    val cardOffset by animateDpAsState(if (visible) 0.dp else 16.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "statOffset")
     Box(modifier = Modifier.alpha(cardAlpha).offset(y = cardOffset)) {
-        RivoStatCard(
-            label = label,
-            value = value,
-            icon = icon,
-            iconTint = iconTint,
-            containerColor = containerColor,
-            modifier = modifier
-        )
+        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = containerColor, modifier = modifier) {
+            RivoStatCard(label = label, value = value, icon = icon, iconTint = iconTint, containerColor = Color.Transparent, modifier = Modifier.fillMaxWidth())
+        }
     }
 }

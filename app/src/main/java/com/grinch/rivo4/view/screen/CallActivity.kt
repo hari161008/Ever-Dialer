@@ -7,8 +7,6 @@ import android.os.*
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.VideoProfile
-import android.view.HapticFeedbackConstants
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.grinch.rivo4.controller.CallService
+import com.grinch.rivo4.controller.util.NoteManager
 import com.grinch.rivo4.modal.`interface`.IContactsRepository
 import com.grinch.rivo4.view.theme.Rivo4Theme
 import kotlinx.coroutines.delay
@@ -54,7 +54,6 @@ import org.koin.android.ext.android.inject
 import java.util.*
 import kotlin.math.roundToInt
 import com.grinch.rivo4.controller.ContactsViewModel
-import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class CallActivity : ComponentActivity() {
 
@@ -80,7 +79,6 @@ class CallActivity : ComponentActivity() {
                         Call.STATE_ACTIVE, Call.STATE_DIALING -> acquireProximityLock()
                         else -> releaseProximityLock()
                     }
-
                     if (session == null || callState == Call.STATE_DISCONNECTED) {
                         delay(800)
                         finish()
@@ -107,6 +105,7 @@ class CallActivity : ComponentActivity() {
                         call = call,
                         callState = session?.state ?: Call.STATE_ACTIVE,
                         contactName = contactName,
+                        phoneNumber = number,
                         photoUri = photoUri,
                         audioState = audioState
                     )
@@ -136,6 +135,7 @@ fun ExpressiveCallScreen(
     call: Call,
     callState: Int,
     contactName: String,
+    phoneNumber: String = "",
     photoUri: String?,
     audioState: CallAudioState?
 ) {
@@ -144,46 +144,89 @@ fun ExpressiveCallScreen(
     val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
     var isOnHold by remember { mutableStateOf(false) }
     var callDuration by remember { mutableLongStateOf(0L) }
+    val isDark = isSystemInDarkTheme()
+    var showNoteWindow by remember { mutableStateOf(false) }
+
+    // Note state - syncs to file while typing
+    var noteText by remember {
+        mutableStateOf(
+            if (phoneNumber.isNotEmpty()) NoteManager.readNote(context, contactName, phoneNumber) else ""
+        )
+    }
+    val scope = rememberCoroutineScope()
+
+    // Auto-save on note text change
+    LaunchedEffect(noteText) {
+        if (phoneNumber.isNotEmpty() && noteText.isNotBlank()) {
+            NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+        }
+    }
+
+    // Save note when call ends
+    LaunchedEffect(callState) {
+        if ((callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) && noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
+            NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+        }
+    }
+
+    var isDisconnecting by remember { mutableStateOf(false) }
+    val screenAlpha by animateFloatAsState(if (isDisconnecting) 0f else 1f, tween(700), label = "screenFade")
+    var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
+    var showAcceptAnim by remember { mutableStateOf(false) }
+    val acceptScale by animateFloatAsState(if (showAcceptAnim) 1f else 0.85f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "acceptScale")
+    val acceptAlpha by animateFloatAsState(if (showAcceptAnim) 1f else 0f, tween(400), label = "acceptAlpha")
+
+    LaunchedEffect(callState) {
+        if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
+        if (wasRinging && callState == Call.STATE_ACTIVE) showAcceptAnim = true
+        if (callState == Call.STATE_RINGING) wasRinging = true
+    }
+
+    LaunchedEffect(callState) {
+        if (callState == Call.STATE_ACTIVE) {
+            val start = System.currentTimeMillis()
+            while (true) { callDuration = (System.currentTimeMillis() - start) / 1000; delay(1000) }
+        }
+    }
+
+    val bgColor = MaterialTheme.colorScheme.surface
+    val onBgColor = MaterialTheme.colorScheme.onSurface
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val overlayColor = if (isDark) Color.White.copy(0.08f) else Color.Black.copy(0.06f)
+    val controlBtnColor = if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f)
+    val controlBtnActiveColor = if (isDark) Color.White else Color.Black
+    val controlBtnActiveFg = if (isDark) Color.Black else Color.White
+    val controlBtnFg = onBgColor
 
     val infiniteTransition = rememberInfiniteTransition(label = "bg")
     val driftX by infiniteTransition.animateFloat(-35f, 35f, infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Reverse), label = "x")
     val driftY by infiniteTransition.animateFloat(-25f, 25f, infiniteRepeatable(tween(25000, easing = LinearEasing), RepeatMode.Reverse), label = "y")
 
-    LaunchedEffect(callState) {
-        if (callState == Call.STATE_ACTIVE) {
-            val start = System.currentTimeMillis()
-            while (true) {
-                callDuration = (System.currentTimeMillis() - start) / 1000
-                delay(1000)
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // Animated Background
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
-            if (!photoUri.isNullOrEmpty()) {
-                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(100.dp).alpha(0.45f), contentScale = ContentScale.Crop)
-            } else {
-                Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1A1A1A), Color.Black))))
+    Box(modifier = Modifier.fillMaxSize().alpha(screenAlpha).background(bgColor)) {
+        if (!photoUri.isNullOrEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
+                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(if (isDark) 0.35f else 0.2f), contentScale = ContentScale.Crop)
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Profile Area
-            Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(Color.White.copy(0.1f))) {
+        Column(
+            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 80.dp)
+                .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
                 if (!photoUri.isNullOrEmpty()) {
                     AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else {
-                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = Color.White.copy(0.6f))
+                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = Color.White)
+            Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
             Text(
                 text = if (isOnHold) "On Hold" else if (callState == Call.STATE_ACTIVE) formatDuration(callDuration) else "Incoming Call...",
-                color = if (isOnHold) Color(0xFFFFB74D) else Color.White.copy(0.6f),
+                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 8.dp)
             )
@@ -191,37 +234,98 @@ fun ExpressiveCallScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             if (callState != Call.STATE_RINGING) {
-                // Ongoing Call Controls (Frosted Glass)
-                Surface(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)),
-                    color = Color.White.copy(alpha = 0.08f)
-                ) {
+                Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)), color = overlayColor) {
                     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted) {
-                                CallService.setMuted(!isMuted)
-                            }
-                            AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold) {
+                            AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
+                            AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                 isOnHold = !isOnHold
                                 if (isOnHold) call.hold() else call.unhold()
                             }
-                            AnimatedCallButton(icon = Icons.Default.EditNote, label = "Note") {
-                                val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "Note for $contactName: ") }
-                                context.startActivity(Intent.createChooser(intent, "Save Note"))
-                            }
-                            AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn) {
+                            AnimatedCallButton(
+                                icon = Icons.Default.EditNote,
+                                label = "Note",
+                                isActive = showNoteWindow,
+                                btnColor = controlBtnColor,
+                                activeBtnColor = controlBtnActiveColor,
+                                fgColor = controlBtnFg,
+                                activeFgColor = controlBtnActiveFg
+                            ) { showNoteWindow = !showNoteWindow }
+                            AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                 CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
                             }
                         }
+
+                        // Floating note window
+                        AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "Note — $contactName",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Row {
+                                                IconButton(onClick = {
+                                                    if (phoneNumber.isNotEmpty()) {
+                                                        NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                                    }
+                                                    showNoteWindow = false
+                                                }, modifier = Modifier.size(32.dp)) {
+                                                    Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        OutlinedTextField(
+                                            value = noteText,
+                                            onValueChange = { noteText = it },
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
+                                            placeholder = { Text("Type your note...") },
+                                            shape = RoundedCornerShape(12.dp),
+                                            minLines = 4,
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                            )
+                                        )
+                                        if (noteText.isNotBlank()) {
+                                            Text(
+                                                "Syncing...",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(48.dp))
 
-                        // End Call Button with Shape Animation
                         val endInteraction = remember { MutableInteractionSource() }
                         val endPressed by endInteraction.collectIsPressedAsState()
-                        val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium))
+                        val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius")
 
                         Surface(
-                            onClick = { try { call.disconnect() } catch (e: Exception) {} },
+                            onClick = {
+                                if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
+                                    NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                }
+                                try { call.disconnect() } catch (e: Exception) {}
+                            },
                             modifier = Modifier.fillMaxWidth().height(76.dp).scale(if (endPressed) 0.96f else 1f),
                             shape = RoundedCornerShape(endRadius),
                             color = Color(0xFFD32F2F),
@@ -234,10 +338,11 @@ fun ExpressiveCallScreen(
                     }
                 }
             } else {
-                // Incoming Call - New Swipe Design
                 NewSwipeToAnswer(
                     onAnswer = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (e: Exception) {} },
-                    onDecline = { try { call.disconnect() } catch (e: Exception) {} }
+                    onDecline = { try { call.disconnect() } catch (e: Exception) {} },
+                    labelColor = subtleColor,
+                    bgColor = overlayColor
                 )
             }
         }
@@ -245,91 +350,62 @@ fun ExpressiveCallScreen(
 }
 
 @Composable
-fun AnimatedCallButton(icon: ImageVector, label: String, isActive: Boolean = false, onClick: () -> Unit) {
+fun AnimatedCallButton(
+    icon: ImageVector,
+    label: String,
+    isActive: Boolean = false,
+    btnColor: Color = Color.White.copy(0.12f),
+    activeBtnColor: Color = Color.White,
+    fgColor: Color = Color.White,
+    activeFgColor: Color = Color.Black,
+    onClick: () -> Unit
+) {
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
-    val radius by animateDpAsState(if (isPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium))
-
+    val radius by animateDpAsState(if (isPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "btnRadius")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(
-            onClick = onClick,
-            modifier = Modifier.size(68.dp).scale(if (isPressed) 0.9f else 1f),
-            shape = RoundedCornerShape(radius),
-            color = if (isActive) Color.White else Color.White.copy(0.12f),
-            interactionSource = interaction
-        ) {
+        Surface(onClick = onClick, modifier = Modifier.size(68.dp).scale(if (isPressed) 0.9f else 1f), shape = RoundedCornerShape(radius), color = if (isActive) activeBtnColor else btnColor, interactionSource = interaction) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = if (isActive) Color.Black else Color.White, modifier = Modifier.size(26.dp))
+                Icon(icon, null, tint = if (isActive) activeFgColor else fgColor, modifier = Modifier.size(26.dp))
             }
         }
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(0.7f), modifier = Modifier.padding(top = 8.dp))
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = fgColor.copy(0.7f), modifier = Modifier.padding(top = 8.dp))
     }
 }
 
 @Composable
-fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit) {
+fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Color = Color.White.copy(0.6f), bgColor: Color = Color.White.copy(0.08f)) {
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
     val maxDrag = with(density) { 100.dp.toPx() }
-
-    // --- حساب التأثيرات بناءً على السحب ---
-    val progress by remember {
-        derivedStateOf { (kotlin.math.abs(offsetX.value) / maxDrag).coerceIn(0f, 1f) }
-    }
-
-    // يتلاشى الزر كلما اقترب من الحافة (Answer أو Decline)
+    val progress by remember { derivedStateOf { (kotlin.math.abs(offsetX.value) / maxDrag).coerceIn(0f, 1f) } }
     val fadeAlpha = 1f - progress
-    // يصغر الزر قليلاً عند السحب ليعطي طابع Android 16
     val scaleFactor = 1f - (progress * 0.2f)
+    val isDark = isSystemInDarkTheme()
+    val handleColor = if (isDark) Color.White else Color.Black.copy(0.85f)
+    val handleFg = if (isDark) Color.Black else Color.White
 
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // Message Button
-        Surface(
-            onClick = { /* Handle message */ },
-            shape = CircleShape,
-            color = Color.White.copy(0.1f),
-            modifier = Modifier.height(45.dp).width(140.dp)
-        ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Surface(onClick = {}, shape = CircleShape, color = bgColor, modifier = Modifier.height(45.dp).width(140.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                Icon(Icons.Default.ChatBubbleOutline, null, tint = Color.White.copy(0.8f), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.ChatBubbleOutline, null, tint = labelColor, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Message", color = Color.White.copy(0.8f), style = MaterialTheme.typography.labelLarge)
+                Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge)
             }
         }
-
-        // Main Swipe Pill
-        Box(
-            modifier = Modifier
-                .height(90.dp)
-                .fillMaxWidth(0.85f)
-                .clip(CircleShape)
-                .background(Color.White.copy(0.08f)),
-            contentAlignment = Alignment.Center
-        ) {
-            // Background Labels
+        Box(modifier = Modifier.height(90.dp).fillMaxWidth(0.85f).clip(CircleShape).background(bgColor), contentAlignment = Alignment.Center) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Decline", color = Color.White.copy(0.6f), style = MaterialTheme.typography.bodyLarge)
-                Text("Answer", color = Color.White.copy(0.6f), style = MaterialTheme.typography.bodyLarge)
+                Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge)
+                Text("Answer", color = labelColor, style = MaterialTheme.typography.bodyLarge)
             }
-
-            // Draggable Handle with FADE EFFECT
             Box(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .size(72.dp)
-                    // تطبيق التأثيرات هنا
-                    .graphicsLayer {
-                        alpha = fadeAlpha
-                        scaleX = scaleFactor
-                        scaleY = scaleFactor
-                    }
+                    .graphicsLayer { alpha = fadeAlpha; scaleX = scaleFactor; scaleY = scaleFactor }
                     .clip(CircleShape)
-                    .background(Color.White)
+                    .background(handleColor)
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
@@ -352,7 +428,7 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit) {
                 Icon(
                     imageVector = Icons.Default.Call,
                     contentDescription = null,
-                    tint = if (offsetX.value > 10) Color(0xFF4CAF50) else if (offsetX.value < -10) Color(0xFFF44336) else Color.DarkGray,
+                    tint = when { offsetX.value > 10 -> Color(0xFF4CAF50); offsetX.value < -10 -> Color(0xFFF44336); else -> handleFg },
                     modifier = Modifier.size(30.dp)
                 )
             }

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.grinch.rivo4.controller.util.PreferenceManager
@@ -22,6 +23,12 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+
+private val ColorOrange  = Color(0xFFFF9800)
+private val ColorBlue    = Color(0xFF2196F3)
+private val ColorPurple  = Color(0xFF9C27B0)
+private val ColorGreen   = Color(0xFF4CAF50)
+private val ColorTeal    = Color(0xFF009688)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -37,11 +44,11 @@ fun CallAccountsScreen(
             listState.firstVisibleItemIndex > 0
         }
     }
-    
+
     var speedDial by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SPEED_DIAL, true)) }
     var t9Dialing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_T9_DIALING, true)) }
     var defaultSim by remember { mutableStateOf(prefs.getInt("default_sim", 0)) }
-    
+
     var showSimDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -80,6 +87,7 @@ fun CallAccountsScreen(
                         headline = "Speed dial",
                         supporting = "Directly call someone by holding a dialpad key",
                         leadingIcon = Icons.Outlined.Speed,
+                        iconContainerColor = ColorOrange,
                         checked = speedDial,
                         onCheckedChange = {
                             speedDial = it
@@ -96,6 +104,7 @@ fun CallAccountsScreen(
                             else -> "Ask every time"
                         },
                         leadingIcon = Icons.Outlined.SimCard,
+                        iconContainerColor = ColorBlue,
                         onClick = { showSimDialog = true }
                     )
                 }
@@ -107,6 +116,7 @@ fun CallAccountsScreen(
                         headline = "T9 Dialing",
                         supporting = "Predicts words from numeric keypad inputs",
                         leadingIcon = Icons.Outlined.Dialpad,
+                        iconContainerColor = ColorPurple,
                         checked = t9Dialing,
                         onCheckedChange = {
                             t9Dialing = it
@@ -115,7 +125,7 @@ fun CallAccountsScreen(
                     )
                 }
             }
-            
+
             item {
                 Spacer(modifier = Modifier.height(100.dp))
             }

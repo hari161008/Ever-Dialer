@@ -1,32 +1,28 @@
 package com.grinch.rivo4.view.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
-import android.content.pm.PackageManager
+import android.content.Intent
 import android.provider.CallLog
-import android.telecom.TelecomManager
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.grinch.rivo4.controller.util.formatDate
 import com.grinch.rivo4.modal.data.CallLogEntry
-import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
-import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import com.grinch.rivo4.controller.util.makeCall
-import android.Manifest
+
 @Composable
 fun CallLogTileSimple(log: CallLogEntry) {
     val icon = when (log.type) {
@@ -35,7 +31,6 @@ fun CallLogTileSimple(log: CallLogEntry) {
         CallLog.Calls.MISSED_TYPE -> Icons.AutoMirrored.Filled.CallMissed
         else -> Icons.Default.Call
     }
-
     RivoListItem(
         headline = when (log.type) {
             CallLog.Calls.INCOMING_TYPE -> "Incoming"
@@ -53,36 +48,98 @@ fun CallLogTileSimple(log: CallLogEntry) {
 fun CallLogTile(
     log: CallLogEntry,
     onTileClick: (CallLogEntry) -> Unit,
-    onButtonClick: (CallLogEntry) -> Unit
+    onButtonClick: (CallLogEntry) -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
-    val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+    val context = LocalContext.current
+    val isContact = log.name != null && log.name != log.number
+    var showMenu by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // pointerInput on the modifier is applied to Surface inside RivoListItem,
+        // so long-press fires even though Surface has its own click handler.
+        RivoListItem(
+            headline = buildString {
+                append(log.name ?: log.number)
+                if (log.count > 1) append(" (${log.count})")
+            },
+            supporting = buildString {
+                if (log.name != null && log.name != log.number) append(log.number)
+            },
+            avatarName = log.name ?: log.number,
+            photoUri = log.photoUri,
+            trailingIcon = when (log.type) {
+                CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
+                CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
+                CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
+                else                        -> Icons.Default.Call
+            },
+            modifier = Modifier.pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { showMenu = true }
+                )
+            },
+            onClick = { onTileClick(log) }
+        )
 
-        Box(modifier = Modifier.weight(1f)) {
-            RivoListItem(
-                headline = buildString {
-                    append(log.name ?: log.number)
-                    if (log.count > 1) append(" (${log.count})")
-                },
-                supporting = buildString {
-                    if (log.name != null && log.name != log.number) {
-                        append(log.number)
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Call back") },
+                leadingIcon = { Icon(Icons.Default.Call, null) },
+                onClick = { showMenu = false; onButtonClick(log) }
+            )
+            DropdownMenuItem(
+                text = { Text("Copy number") },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                onClick = {
+                    showMenu = false
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
+                    Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                }
+            )
+            if (!isContact) {
+                DropdownMenuItem(
+                    text = { Text("Add to contacts") },
+                    leadingIcon = { Icon(Icons.Default.PersonAdd, null) },
+                    onClick = {
+                        showMenu = false
+                        val intent = Intent(Intent.ACTION_INSERT).apply {
+                            type = ContactsContract.RawContacts.CONTENT_TYPE
+                            putExtra(ContactsContract.Intents.Insert.PHONE, log.number)
+                        }
+                        context.startActivity(intent)
                     }
-                },
-                avatarName = log.name ?: log.number,
-                photoUri = log.photoUri,
-                trailingIcon = when (log.type) {
-                    CallLog.Calls.MISSED_TYPE -> Icons.AutoMirrored.Filled.CallMissed
-                    CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
-                    CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
-                    else -> Icons.Default.Call
-                },
-                onClick = {onTileClick(log)}
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Block number") },
+                leadingIcon = { Icon(Icons.Default.Block, null) },
+                onClick = {
+                    showMenu = false
+                    Toast.makeText(context, "Number blocked", Toast.LENGTH_SHORT).show()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Delete from call log", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                onClick = {
+                    showMenu = false
+                    try {
+                        context.contentResolver.delete(
+                            CallLog.Calls.CONTENT_URI,
+                            "${CallLog.Calls.NUMBER} = ?",
+                            arrayOf(log.number)
+                        )
+                        onDelete?.invoke()
+                        Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
+                    }
+                }
             )
         }
     }

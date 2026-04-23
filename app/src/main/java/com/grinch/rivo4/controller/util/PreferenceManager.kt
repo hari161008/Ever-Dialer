@@ -40,5 +40,12 @@ class PreferenceManager(context: Context) {
         // Privacy
         const val KEY_BLOCK_UNKNOWN     = "block_unknown_callers"
         const val KEY_BLOCK_HIDDEN      = "block_hidden_callers"
+        // Dialpad
+        const val KEY_OPEN_DIALPAD_DEFAULT = "open_dialpad_default"
+        // Haptics
+        const val KEY_APP_HAPTICS        = "app_haptics_enabled"
+        const val KEY_APP_HAPTICS_STRENGTH = "app_haptics_strength"  // "strong" or "light"
+        // Notes
+        const val KEY_NOTES_ENABLED      = "notes_enabled"
     }
 }

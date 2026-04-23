@@ -1,7 +1,16 @@
 package com.grinch.rivo4.view.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,22 +18,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.grinch.rivo4.controller.util.PreferenceManager
 import com.grinch.rivo4.modal.data.Contact
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -35,25 +51,17 @@ fun AZListScroll(
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
 ) {
     val grouped = remember(contacts) {
-        val favorites = contacts.filter { it.isFavorite }
-        val nonFavs = contacts.filter { !it.isFavorite }
-
-        val mainGroups = nonFavs.groupBy {
+        val mainGroups = contacts.groupBy {
             val firstChar = it.name.firstOrNull()?.uppercaseChar() ?: '#'
             if (firstChar.isLetter()) firstChar else '#'
         }.toMutableMap()
 
         val finalMap = linkedMapOf<Char, List<Contact>>()
-
-        if (favorites.isNotEmpty()) finalMap['❤'] = favorites
-
         mainGroups.keys.filter { it.isLetter() }.sorted().forEach { char ->
             finalMap[char] = mainGroups[char]!!
         }
-
         val hashGroup = mainGroups['#']
         if (hashGroup != null) finalMap['#'] = hashGroup
-
         finalMap
     }
 
@@ -62,7 +70,7 @@ fun AZListScroll(
         var currentIndex = 0
         grouped.forEach { (char, _) ->
             map[char] = currentIndex
-            currentIndex += 2 
+            currentIndex += 2
         }
         map
     }
@@ -95,7 +103,7 @@ fun AZListScroll(
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (initial == '❤') "Favorites" else initial.toString(),
+                            text = initial.toString(),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
@@ -108,16 +116,9 @@ fun AZListScroll(
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         RivoExpressiveCard {
                             contactsForChar.forEachIndexed { index, contact ->
-                                RivoListItem(
-                                    headline = contact.name.ifEmpty {
-                                        contact.phoneNumbers.firstOrNull() ?: "Unknown"
-                                    },
-                                    supporting = contact.phoneNumbers.firstOrNull(),
-                                    avatarName = contact.name,
-                                    photoUri = contact.photoUri,
-                                    onClick = {
-                                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
-                                    }
+                                ContactListItem(
+                                    contact = contact,
+                                    navigator = navigator
                                 )
                                 if (index < contactsForChar.size - 1) {
                                     HorizontalDivider(
@@ -168,6 +169,121 @@ fun AZListScroll(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ContactListItem(
+    contact: Contact,
+    navigator: DestinationsNavigator
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = koinInject<PreferenceManager>()
+    var showMenu by remember { mutableStateOf(false) }
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "contactItemScale"
+    )
+
+    val headline = contact.name.ifEmpty {
+        contact.phoneNumbers.firstOrNull() ?: "Unknown"
+    }
+
+    Box(modifier = Modifier.fillMaxWidth().scale(scale)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                            performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+                        }
+                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                    },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showMenu = true
+                    }
+                )
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RivoAvatar(
+                name = headline,
+                photoUri = contact.photoUri,
+                modifier = Modifier.size(38.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                if (!contact.phoneNumbers.firstOrNull().isNullOrEmpty()) {
+                    Text(
+                        text = contact.phoneNumbers.first(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("View contact") },
+                leadingIcon = { Icon(Icons.Default.Person, null) },
+                onClick = {
+                    showMenu = false
+                    navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Edit contact") },
+                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                onClick = {
+                    showMenu = false
+                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                }
+            )
+            if (!contact.phoneNumbers.firstOrNull().isNullOrEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Copy number") },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                    onClick = {
+                        showMenu = false
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", contact.phoneNumbers.first()))
+                        Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Share contact") },
+                leadingIcon = { Icon(Icons.Default.Share, null) },
+                onClick = {
+                    showMenu = false
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${contact.phoneNumbers.joinToString(", ")}")
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share contact"))
+                }
+            )
+        }
+    }
+}
+
 @Composable
 fun AlphabetSideBar(
     alphabet: List<Char>,
@@ -177,7 +293,7 @@ fun AlphabetSideBar(
     onDragEnd: () -> Unit
 ) {
     var columnHeight by remember { mutableStateOf(0) }
-    
+
     Surface(
         modifier = modifier
             .width(24.dp)
@@ -214,7 +330,6 @@ fun AlphabetSideBar(
         ) {
             alphabet.forEach { char ->
                 val isSelected = char == selectedChar
-
                 Box(
                     modifier = Modifier
                         .size(18.dp)

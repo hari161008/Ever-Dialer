@@ -113,7 +113,7 @@ fun CallLogFullScreen(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
                             label = { Text(filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }) },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(50.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer

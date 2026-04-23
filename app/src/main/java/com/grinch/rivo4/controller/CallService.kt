@@ -185,8 +185,7 @@ class CallService : InCallService() {
                     NotificationCompat.CallStyle.forOngoingCall(person, declinePendingIntent)
                 }
             )
-            .setColor(Color.parseColor("#6750A4"))
-            .setColorized(true)
+            .setColorized(false)
 
         val notification = builder.build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

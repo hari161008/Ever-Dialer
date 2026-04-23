@@ -49,41 +49,20 @@ fun CallLogTile(
                         else -> Icons.Rounded.Call
                     }
                     val tint = if (type == CallLog.Calls.MISSED_TYPE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = tint
-                    )
+                    Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = tint)
                 }
 
                 if (remaining > 0) {
-                    Text(
-                        text = "+$remaining",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = "+$remaining", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = formatDate(log.date),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(text = formatDate(log.date), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         trailingContent = {
-            IconButton(
-                onClick = onCallClick,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Call,
-                    contentDescription = "Call",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            IconButton(onClick = onCallClick, modifier = Modifier.size(48.dp)) {
+                Icon(imageVector = Icons.Rounded.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.primary)
             }
         },
         onClick = onClick
