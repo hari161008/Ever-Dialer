@@ -2,7 +2,7 @@
 <br>
 
 <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Assets/Banner%20and%20Icon/Ever%20Dialer%20Banner.png" width="100%" />
-Ever Dialer is the best replacement of google dialer which has Material You design with dynamic theme, open source, customizable with some extra features like taking notes of each contacts and it has a quick note window when you are on the call to take notes quickly
+Ever Dialer is the best replacement of Google dialer which has Material You design with dynamic colours, asthetic, open source, customizable, some extra features like taking notes of each contacts and it has a quick note taking window when you are on the call to take notes quickly.
 
 <br>
 <br>
