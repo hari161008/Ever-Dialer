@@ -64,9 +64,6 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 <br>
 
-Got it—you want a clean, dialer-focused feature list in your exact style. Here you go 👇
-
-
 ---
 
 Features of Ever Dialer .✦ ݁˖
@@ -78,7 +75,6 @@ Features of Ever Dialer .✦ ݁˖
 • 🔁 Call Waiting – Manage multiple calls at once <br>
 • 🔊 Speaker & Mute – Quick in-call controls <br>
 • 🎧 Bluetooth Support – Seamless headset & car connectivity <br>
-• ⏺️ Call Recording – Record calls when needed <br>
 
 <br>
 <br>┈➤ Contacts
@@ -87,7 +83,6 @@ Features of Ever Dialer .✦ ݁˖
 • 🔍 Search Contacts – Find anyone in seconds <br>
 • ⭐ Favorites – Pin important contacts for quick access <br>
 • 🖼️ Contact Photos – Assign images to contacts <br>
-• 🔗 Merge Contacts – Remove duplicates effortlessly <br>
 
 <br>
 <br>┈➤ Call History
@@ -95,34 +90,24 @@ Features of Ever Dialer .✦ ݁˖
 • 🕘 Recent Calls – View incoming, outgoing & missed calls <br>
 • ❌ Missed Call Alerts – Never miss important calls <br>
 • 📊 Call Details – Duration, time & frequency insights <br>
-• 🧹 Clear Logs – Delete individual or all call history <br>
 
 <br>
 <br>┈➤ Messaging (Basic Integration)
 
 • 💬 Quick Message – Send SMS directly from call screen <br>
-• 📩 Reply to Missed Calls – Message with one tap <br>
+
 
 <br>
 <br>┈➤ Customization
 
-• 🎨 Dialer Themes – Light, dark & custom color options <br>
-• 🔢 Keypad Styles – Different dial pad layouts <br>
-• 🔤 Font Options – Customize text appearance <br>
-• 📱 Default Dialer – Set as your primary calling app <br>
+• Soon :) <br>
 
 <br>
 <br>┈➤ Blocking & Security
 
 • 🚫 Call Blocking – Block spam & unwanted numbers <br>
-• ⚠️ Spam Detection – Identify potential spam callers <br>
 • 🔒 Private Contacts – Hide sensitive contacts <br>
 
-<br>
-<br>┈➤ Voicemail
-
-• 📬 Voicemail Access – Listen to saved voice messages <br>
-• 🔔 Voicemail Alerts – Get notified instantly <br>
 
 <br>
 <br>┈➤ Advanced Calling
@@ -130,7 +115,6 @@ Features of Ever Dialer .✦ ݁˖
 • 🌍 International Calling – Easy dialing with country codes <br>
 • ⏱️ Speed Dial – Assign contacts to quick dial numbers <br>
 • 🔢 T9 Dialing – Smart contact search via keypad <br>
-• 🔄 Redial – Quickly call last dialed number <br>
 
 <br>
 <br>
