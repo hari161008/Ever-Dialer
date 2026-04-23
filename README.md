@@ -80,7 +80,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 # Features of Ever Dialer .✦ ݁˖
 
-┈➤ Calling
+┈➤ Calling <br><br>
 
 • 📞 Make & Receive Calls – Fast, reliable calling experience <br>
 • ⚡ Smart Dialer – Search contacts instantly as you type <br>
@@ -89,7 +89,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 • 🎧 Bluetooth Support – Seamless headset & car connectivity <br>
 
 <br>
-<br>┈➤ Contacts
+<br>┈➤ Contacts <br><br>
 
 • 👤 Contact Management – Add, edit, delete contacts easily <br>
 • 🔍 Search Contacts – Find anyone in seconds <br>
@@ -97,32 +97,32 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 • 🖼️ Contact Photos – Assign images to contacts <br>
 
 <br>
-<br>┈➤ Call History
+<br>┈➤ Call History <br><br>
 
 • 🕘 Recent Calls – View incoming, outgoing & missed calls <br>
 • ❌ Missed Call Alerts – Never miss important calls <br>
 • 📊 Call Details – Duration, time & frequency insights <br>
 
 <br>
-<br>┈➤ Messaging (Basic Integration)
+<br>┈➤ Messaging (Basic Integration) <br><br>
 
 • 💬 Quick Message – Send SMS directly from call screen <br>
 
 
 <br>
-<br>┈➤ Customization
+<br>┈➤ Customization <br><br>
 
 • Soon :) <br>
 
 <br>
-<br>┈➤ Blocking & Security
+<br>┈➤ Blocking & Security <br><br>
 
 • 🚫 Call Blocking – Block spam & unwanted numbers <br>
 • 🔒 Private Contacts – Hide sensitive contacts <br>
 
 
 <br>
-<br>┈➤ Advanced Calling
+<br>┈➤ Advanced Calling <br><br>
 
 • 🌍 International Calling – Easy dialing with country codes <br>
 • ⏱️ Speed Dial – Assign contacts to quick dial numbers <br>
