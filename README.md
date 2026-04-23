@@ -66,7 +66,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-Features of Ever Dialer .✦ ݁˖
+# Features of Ever Dialer .✦ ݁˖
 
 ┈➤ Calling
 
