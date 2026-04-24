@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -26,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
-import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.ramcosta.composedestinations.annotation.Destination
@@ -41,7 +41,17 @@ private val ColorTeal   = Color(0xFF009688)
 private val ColorAmber  = Color(0xFFFFC107)
 private val ColorBlue   = Color(0xFF2196F3)
 private val ColorGreen  = Color(0xFF4CAF50)
-private val ColorOrange = Color(0xFFFF9800)
+
+data class ThemeOption(val key: String, val label: String)
+
+private val themeOptions = listOf(
+    ThemeOption("auto",    "Auto"),
+    ThemeOption("light",   "Light"),
+    ThemeOption("dark",    "Dark"),
+    ThemeOption("white",   "White"),
+    ThemeOption("black",   "Black"),
+    ThemeOption("auto_bw", "Auto B/W")
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -55,12 +65,13 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
 
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
-    var dynamicColors by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
-    var amoledMode by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AMOLED_MODE, false)) }
+    var themeMode       by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
+    var dynamicColors   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
+    var amoledMode      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AMOLED_MODE, false)) }
     var showFirstLetter by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
-    var showPicture by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
-    var iconOnlyNav by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
+    var showPicture     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
+    var iconOnlyNav     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var customPrimaryColor by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
 
     val presetColors = listOf(
@@ -102,138 +113,212 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // ── Theme ───────────────────────────────────────────
+
+                // ── App Theme ────────────────────────────────────────
                 item {
                     RivoAnimatedSection(delayMs = 0L) {
-                        RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline = "Material You Theming",
-                                supporting = "Wallpaper based app color theming",
-                                leadingIcon = Icons.Outlined.Palette,
-                                iconContainerColor = ColorPurple,
-                                checked = dynamicColors,
-                                onCheckedChange = {
-                                    dynamicColors = it
-                                    prefs.setBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, it)
-                                    showRestartPrompt()
-                                }
+                        Column {
+                            Text(
+                                "App Theme",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                             )
-
-                            if (!dynamicColors) {
-                                HorizontalDivider(
-                                    Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
+                            RivoExpressiveCard {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("Primary Color", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        "Color Mode",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                     Spacer(Modifier.height(12.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        items(presetColors) { color ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(color)
-                                                    .border(
-                                                        width = if (customPrimaryColor == color.toArgb()) 3.dp else 0.dp,
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                        shape = CircleShape
-                                                    )
-                                                    .clickable {
-                                                        customPrimaryColor = color.toArgb()
-                                                        prefs.setInt("custom_primary_color", color.toArgb())
+                                    // Pill row — wraps into two rows via FlowRow-style approach
+                                    val rows = themeOptions.chunked(3)
+                                    rows.forEach { rowItems ->
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                        ) {
+                                            rowItems.forEach { option ->
+                                                val selected = themeMode == option.key
+                                                Surface(
+                                                    onClick = {
+                                                        themeMode = option.key
+                                                        prefs.setString(PreferenceManager.KEY_THEME_MODE, option.key)
                                                         showRestartPrompt()
+                                                    },
+                                                    shape = RoundedCornerShape(50),
+                                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(38.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text(
+                                                            text = option.label,
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (selected) MaterialTheme.colorScheme.onPrimary
+                                                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
                                                     }
-                                            )
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
+                    }
+                }
 
-                            HorizontalDivider(
-                                Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                // ── Theme Colours ─────────────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 60L) {
+                        Column {
+                            Text(
+                                "Theme Colors",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                             )
-                            RivoSwitchListItem(
-                                headline = "Amoled Dark Mode",
-                                supporting = "Uses pitch black for UI elements",
-                                leadingIcon = Icons.Outlined.DarkMode,
-                                iconContainerColor = ColorIndigo,
-                                checked = amoledMode,
-                                onCheckedChange = {
-                                    amoledMode = it
-                                    prefs.setBoolean(PreferenceManager.KEY_AMOLED_MODE, it)
-                                    showRestartPrompt()
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Material You Theming",
+                                    supporting = "Wallpaper based app color theming",
+                                    leadingIcon = Icons.Outlined.Palette,
+                                    iconContainerColor = ColorPurple,
+                                    checked = dynamicColors,
+                                    onCheckedChange = {
+                                        dynamicColors = it
+                                        prefs.setBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, it)
+                                        showRestartPrompt()
+                                    }
+                                )
+                                if (!dynamicColors) {
+                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("Primary Color", style = MaterialTheme.typography.labelLarge)
+                                        Spacer(Modifier.height(12.dp))
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            items(presetColors) { color ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .clip(CircleShape)
+                                                        .background(color)
+                                                        .border(
+                                                            width = if (customPrimaryColor == color.toArgb()) 3.dp else 0.dp,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            shape = CircleShape
+                                                        )
+                                                        .clickable {
+                                                            customPrimaryColor = color.toArgb()
+                                                            prefs.setInt("custom_primary_color", color.toArgb())
+                                                            showRestartPrompt()
+                                                        }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                            )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Amoled Dark Mode",
+                                    supporting = "Uses pitch black for UI elements",
+                                    leadingIcon = Icons.Outlined.DarkMode,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = amoledMode,
+                                    onCheckedChange = {
+                                        amoledMode = it
+                                        prefs.setBoolean(PreferenceManager.KEY_AMOLED_MODE, it)
+                                        showRestartPrompt()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
                 // ── Avatars ──────────────────────────────────────────
                 item {
-                    RivoAnimatedSection(delayMs = 100L) {
-                        RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline = "Show First Letter in Avatar",
-                                supporting = "Displays letter when picture is missing",
-                                leadingIcon = Icons.Outlined.TextFields,
-                                iconContainerColor = ColorAmber,
-                                checked = showFirstLetter,
-                                onCheckedChange = {
-                                    showFirstLetter = it
-                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it)
-                                }
+                    RivoAnimatedSection(delayMs = 140L) {
+                        Column {
+                            Text(
+                                "Avatars",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                             )
-                            HorizontalDivider(
-                                Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoSwitchListItem(
-                                headline = "Use Colorful Avatars",
-                                supporting = "Random colors based on contact name",
-                                leadingIcon = Icons.Outlined.ColorLens,
-                                iconContainerColor = ColorBlue,
-                                checked = colorfulAvatars,
-                                onCheckedChange = {
-                                    colorfulAvatars = it
-                                    prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it)
-                                }
-                            )
-                            HorizontalDivider(
-                                Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoSwitchListItem(
-                                headline = "Show Picture in Avatar",
-                                supporting = "Shows the contact picture if available",
-                                leadingIcon = Icons.Outlined.AccountCircle,
-                                iconContainerColor = ColorGreen,
-                                checked = showPicture,
-                                onCheckedChange = {
-                                    showPicture = it
-                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it)
-                                }
-                            )
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Show First Letter in Avatar",
+                                    supporting = "Displays letter when picture is missing",
+                                    leadingIcon = Icons.Outlined.TextFields,
+                                    iconContainerColor = ColorAmber,
+                                    checked = showFirstLetter,
+                                    onCheckedChange = {
+                                        showFirstLetter = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Use Colorful Avatars",
+                                    supporting = "Random colors based on contact name",
+                                    leadingIcon = Icons.Outlined.ColorLens,
+                                    iconContainerColor = ColorBlue,
+                                    checked = colorfulAvatars,
+                                    onCheckedChange = {
+                                        colorfulAvatars = it
+                                        prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show Picture in Avatar",
+                                    supporting = "Shows the contact picture if available",
+                                    leadingIcon = Icons.Outlined.AccountCircle,
+                                    iconContainerColor = ColorGreen,
+                                    checked = showPicture,
+                                    onCheckedChange = {
+                                        showPicture = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
                 // ── Navigation ───────────────────────────────────────
                 item {
-                    RivoAnimatedSection(delayMs = 200L) {
-                        RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline = "Icon-Only Bottom Bar",
-                                supporting = "Removes text labels from navigation",
-                                leadingIcon = Icons.Outlined.ViewStream,
-                                iconContainerColor = ColorTeal,
-                                checked = iconOnlyNav,
-                                onCheckedChange = {
-                                    iconOnlyNav = it
-                                    prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it)
-                                }
+                    RivoAnimatedSection(delayMs = 220L) {
+                        Column {
+                            Text(
+                                "Navigation",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                             )
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Icon-Only Bottom Bar",
+                                    supporting = "Removes text labels from navigation",
+                                    leadingIcon = Icons.Outlined.ViewStream,
+                                    iconContainerColor = ColorTeal,
+                                    checked = iconOnlyNav,
+                                    onCheckedChange = {
+                                        iconOnlyNav = it
+                                        prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

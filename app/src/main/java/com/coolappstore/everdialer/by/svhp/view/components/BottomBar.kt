@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -33,16 +34,19 @@ import org.koin.compose.koinInject
 fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
     val settingsState by prefs.settingsChanged.collectAsState()
-    val iconOnly = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
-    val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+    val iconOnly      = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
+    val notesEnabled  = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+
+    // Inherit font family + size from the current MaterialTheme typography
+    val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
     val isFavoritesSelected = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
-    val isRecentsSelected = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
-    val isContactsSelected = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
-    val isNotesSelected = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    val isRecentsSelected   = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+    val isContactsSelected  = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isNotesSelected     = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
 
     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp) {
         NavigationBarItem(
@@ -50,7 +54,7 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                 val size by animateDpAsState(if (isFavoritesSelected) 27.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "favSize")
                 Icon(if (isFavoritesSelected) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites", Modifier.size(size))
             },
-            label = if (iconOnly) null else ({ Text("Favourites") }),
+            label = if (iconOnly) null else ({ Text("Favourites", style = labelStyle) }),
             alwaysShowLabel = !iconOnly,
             selected = isFavoritesSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
@@ -66,7 +70,7 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                 val size by animateDpAsState(if (isRecentsSelected) 27.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "callSize")
                 Icon(if (isRecentsSelected) Icons.Filled.History else Icons.Outlined.History, "Calls", Modifier.size(size))
             },
-            label = if (iconOnly) null else ({ Text("Calls") }),
+            label = if (iconOnly) null else ({ Text("Calls", style = labelStyle) }),
             alwaysShowLabel = !iconOnly,
             selected = isRecentsSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
@@ -82,7 +86,7 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                 val size by animateDpAsState(if (isContactsSelected) 27.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "contactSize")
                 Icon(if (isContactsSelected) Icons.Filled.Person else Icons.Outlined.Person, "Contacts", Modifier.size(size))
             },
-            label = if (iconOnly) null else ({ Text("Contacts") }),
+            label = if (iconOnly) null else ({ Text("Contacts", style = labelStyle) }),
             alwaysShowLabel = !iconOnly,
             selected = isContactsSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
@@ -99,7 +103,7 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                     val size by animateDpAsState(if (isNotesSelected) 27.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "notesSize")
                     Icon(if (isNotesSelected) Icons.Filled.Note else Icons.Outlined.Note, "Notes", Modifier.size(size))
                 },
-                label = if (iconOnly) null else ({ Text("Notes") }),
+                label = if (iconOnly) null else ({ Text("Notes", style = labelStyle) }),
                 alwaysShowLabel = !iconOnly,
                 selected = isNotesSelected,
                 colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),

@@ -25,27 +25,34 @@ class PreferenceManager(context: Context) {
     fun setString(key: String, value: String?)         { prefs.edit().putString(key, value).apply() }
     fun getInt(key: String, defaultValue: Int)         = prefs.getInt(key, defaultValue)
     fun setInt(key: String, value: Int)                { prefs.edit().putInt(key, value).apply() }
+    fun getFloat(key: String, defaultValue: Float)     = prefs.getFloat(key, defaultValue)
+    fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply() }
 
     companion object {
-        const val KEY_DYNAMIC_COLORS   = "dynamic_colors"
-        const val KEY_AMOLED_MODE      = "amoled_mode"
-        const val KEY_SHOW_FIRST_LETTER = "show_first_letter"
-        const val KEY_COLORFUL_AVATARS  = "colorful_avatars"
-        const val KEY_SHOW_PICTURE      = "show_picture"
-        const val KEY_ICON_ONLY_NAV     = "icon_only_nav"
-        const val KEY_DTMF_TONE         = "dtmf_tone"
-        const val KEY_DIALPAD_VIBRATION = "dialpad_vibration"
-        const val KEY_SPEED_DIAL        = "speed_dial"
-        const val KEY_T9_DIALING        = "t9_dialing"
+        const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
+        const val KEY_AMOLED_MODE           = "amoled_mode"
+        const val KEY_SHOW_FIRST_LETTER     = "show_first_letter"
+        const val KEY_COLORFUL_AVATARS      = "colorful_avatars"
+        const val KEY_SHOW_PICTURE          = "show_picture"
+        const val KEY_ICON_ONLY_NAV         = "icon_only_nav"
+        const val KEY_DTMF_TONE             = "dtmf_tone"
+        const val KEY_DIALPAD_VIBRATION     = "dialpad_vibration"
+        const val KEY_SPEED_DIAL            = "speed_dial"
+        const val KEY_T9_DIALING            = "t9_dialing"
         // Privacy
-        const val KEY_BLOCK_UNKNOWN     = "block_unknown_callers"
-        const val KEY_BLOCK_HIDDEN      = "block_hidden_callers"
+        const val KEY_BLOCK_UNKNOWN         = "block_unknown_callers"
+        const val KEY_BLOCK_HIDDEN          = "block_hidden_callers"
         // Dialpad
-        const val KEY_OPEN_DIALPAD_DEFAULT = "open_dialpad_default"
+        const val KEY_OPEN_DIALPAD_DEFAULT  = "open_dialpad_default"
         // Haptics
-        const val KEY_APP_HAPTICS        = "app_haptics_enabled"
-        const val KEY_APP_HAPTICS_STRENGTH = "app_haptics_strength"  // "strong" or "light"
+        const val KEY_APP_HAPTICS           = "app_haptics_enabled"
+        const val KEY_APP_HAPTICS_STRENGTH  = "app_haptics_strength"
         // Notes
-        const val KEY_NOTES_ENABLED      = "notes_enabled"
+        const val KEY_NOTES_ENABLED         = "notes_enabled"
+        // Custom Font
+        const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
+        const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"   // Float, default 1.0f
+        // Theme mode: "auto" | "light" | "dark" | "white" | "black" | "auto_bw"
+        const val KEY_THEME_MODE            = "theme_mode"
     }
 }

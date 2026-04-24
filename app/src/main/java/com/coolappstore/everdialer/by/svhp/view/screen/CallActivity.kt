@@ -381,7 +381,13 @@ fun AnimatedCallButton(
                 Icon(icon, null, tint = if (isActive) activeFgColor else fgColor, modifier = Modifier.size(26.dp))
             }
         }
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = fgColor.copy(0.7f), modifier = Modifier.padding(top = 8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = MaterialTheme.typography.labelMedium.fontFamily,
+            color = fgColor.copy(0.7f),
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }
 

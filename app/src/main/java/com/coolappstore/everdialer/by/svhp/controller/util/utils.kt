@@ -46,8 +46,7 @@ fun formatDateHeader(timestamp: Long): String {
 fun formatDate(timestamp: Long): String {
     val relative = getRelativeDay(timestamp)
     val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
-
-    return if (relative != null) "$relative, $time" else formatDateHeader(timestamp)
+    return if (relative != null) "$relative, $time" else "${formatDateHeader(timestamp)}, $time"
 }
 
 fun formatDuration(durationSeconds: Long): String {
