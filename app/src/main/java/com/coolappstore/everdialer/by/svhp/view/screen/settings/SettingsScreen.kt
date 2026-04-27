@@ -13,6 +13,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +40,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.downloadAndInstallApk
 import com.coolappstore.everdialer.by.svhp.controller.util.fetchLatestRelease
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
@@ -72,13 +76,16 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     val prefs: PreferenceManager = koinInject()
     val scope = rememberCoroutineScope()
 
-    var blockUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)) }
-    var blockHidden  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)) }
+    var silenceUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)) }
     var notesEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)) }
+    var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
+    var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
+    var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
 
-    // Blocked contacts list dialog
-    var showBlockedContactsDialog by remember { mutableStateOf(false) }
-    var blockedContactsInput by remember { mutableStateOf("") }
+    // Blocked numbers dialog state
+    var showBlockedNumbersDialog by remember { mutableStateOf(false) }
+    var blockedNumbersTab by remember { mutableStateOf(0) } // 0=Call logs, 1=Contacts, 2=Enter Number
+    var blockedNumberInput by remember { mutableStateOf("") }
     var blockedContactsList by remember {
         mutableStateOf(
             prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
@@ -162,68 +169,172 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
 
-    // ── Blocked Contacts Dialog ───────────────────────────────────────────────
-    if (showBlockedContactsDialog) {
+    // ── Blocked Numbers Dialog ────────────────────────────────────────────────
+    if (showBlockedNumbersDialog) {
+        val callLogRepo: ICallLogRepository = koinInject()
+        val contactsRepo: IContactsRepository = koinInject()
+
+        var recentNumbers by remember { mutableStateOf<List<String>>(emptyList()) }
+        var contactNumbers by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // name to number
+
+        LaunchedEffect(Unit) {
+            try {
+                recentNumbers = callLogRepo.getCallLogs()
+                    .map { it.number }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .take(30)
+            } catch (_: Exception) {}
+            try {
+                contactNumbers = contactsRepo.getContacts()
+                    .filter { it.phoneNumbers.isNotEmpty() }
+                    .map { it.name to it.phoneNumbers.first() }
+                    .take(50)
+            } catch (_: Exception) {}
+        }
+
         AlertDialog(
-            onDismissRequest = { showBlockedContactsDialog = false },
+            onDismissRequest = { showBlockedNumbersDialog = false },
             icon = { Icon(Icons.Outlined.Block, null, tint = ColorRed) },
-            title = { Text("Blocked Contacts") },
+            title = { Text("Blocked Numbers") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (blockedContactsList.isEmpty()) {
-                        Text("No contacts blocked.", style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        blockedContactsList.forEachIndexed { index, number ->
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Pill tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Call logs", "Contacts", "Enter Number").forEachIndexed { index, label ->
+                            val selected = blockedNumbersTab == index
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
+                                onClick = { blockedNumbersTab = index },
+                                shape = RoundedCornerShape(50.dp),
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(number, modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.bodyMedium)
-                                    IconButton(onClick = {
-                                        val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
-                                        blockedContactsList = updated
-                                        prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                    }) {
-                                        Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(18.dp))
-                                    }
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = blockedContactsInput,
-                        onValueChange = { blockedContactsInput = it },
-                        label = { Text("Add number") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            if (blockedContactsInput.isNotBlank()) {
-                                IconButton(onClick = {
-                                    val num = blockedContactsInput.trim()
-                                    if (num.isNotBlank() && !blockedContactsList.contains(num)) {
-                                        val updated = blockedContactsList + num
-                                        blockedContactsList = updated
-                                        prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    when (blockedNumbersTab) {
+                        0 -> {
+                            // Call logs tab
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.heightIn(max = 200.dp)) {
+                                if (recentNumbers.isEmpty()) {
+                                    Text("No recent call logs.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    recentNumbers.forEach { number ->
+                                        val alreadyBlocked = blockedContactsList.contains(number)
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            Row(
+                                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.Call, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(number, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                                TextButton(
+                                                    onClick = {
+                                                        if (!alreadyBlocked) {
+                                                            val updated = blockedContactsList + number
+                                                            blockedContactsList = updated
+                                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                                        }
+                                                    },
+                                                    enabled = !alreadyBlocked
+                                                ) {
+                                                    Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
                                     }
-                                    blockedContactsInput = ""
-                                }) {
-                                    Icon(Icons.Default.Add, "Add")
                                 }
                             }
                         }
-                    )
+                        1 -> {
+                            // Contacts tab
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.heightIn(max = 200.dp)) {
+                                if (contactNumbers.isEmpty()) {
+                                    Text("No contacts found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    contactNumbers.forEach { (name, number) ->
+                                        val alreadyBlocked = blockedContactsList.contains(number)
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            Row(
+                                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Spacer(Modifier.width(8.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                                    Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                TextButton(
+                                                    onClick = {
+                                                        if (!alreadyBlocked) {
+                                                            val updated = blockedContactsList + number
+                                                            blockedContactsList = updated
+                                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                                        }
+                                                    },
+                                                    enabled = !alreadyBlocked
+                                                ) {
+                                                    Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        2 -> {
+                            // Enter Number tab
+                            OutlinedTextField(
+                                value = blockedNumberInput,
+                                onValueChange = { blockedNumberInput = it },
+                                label = { Text("Enter number to block") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                trailingIcon = {
+                                    if (blockedNumberInput.isNotBlank()) {
+                                        IconButton(onClick = {
+                                            val num = blockedNumberInput.trim()
+                                            if (num.isNotBlank() && !blockedContactsList.contains(num)) {
+                                                val updated = blockedContactsList + num
+                                                blockedContactsList = updated
+                                                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                            }
+                                            blockedNumberInput = ""
+                                        }) {
+                                            Icon(Icons.Default.Add, "Add")
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showBlockedContactsDialog = false }) { Text("Done") }
+                TextButton(onClick = { showBlockedNumbersDialog = false }) { Text("Done") }
             }
         )
     }
@@ -403,19 +514,34 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Call Recording ───────────────────────────────────────────────
+            // ── Haptics Across App ───────────────────────────────────────────
             item {
-                RivoAnimatedSection(delayMs = 90L) {
+                RivoAnimatedSection(delayMs = 80L) {
                     Column {
-                        SectionLabel("Call Recording")
+                        SectionLabel("Haptics Across App")
                         RivoExpressiveCard {
-                            RivoListItem(
-                                headline = "Call Recording",
-                                supporting = "Record incoming and outgoing calls",
-                                leadingIcon = Icons.Outlined.Mic,
-                                iconContainerColor = ColorRed,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {}
+                            RivoSwitchListItem(
+                                headline   = "Tap Haptics",
+                                supporting = "Vibrate on taps and interactions throughout the app",
+                                leadingIcon = Icons.Outlined.Vibration,
+                                iconContainerColor = ColorPurple,
+                                checked = tapHapticsEnabled,
+                                onCheckedChange = {
+                                    tapHapticsEnabled = it
+                                    prefs.setBoolean(PreferenceManager.KEY_APP_HAPTICS, it)
+                                }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Scroll Haptics",
+                                supporting = "Vibrate on scroll gestures across the app",
+                                leadingIcon = Icons.Outlined.SwipeVertical,
+                                iconContainerColor = ColorIndigo,
+                                checked = scrollHapticsEnabled,
+                                onCheckedChange = {
+                                    scrollHapticsEnabled = it
+                                    prefs.setBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, it)
+                                }
                             )
                         }
                     }
@@ -466,6 +592,18 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             )
                             CardDivider()
                             RivoListItem(headline = "Call Accounts", supporting = "SIM cards and calling accounts", leadingIcon = Icons.Outlined.SimCard, iconContainerColor = ColorGreen, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(CallAccountsScreenDestination) })
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Proximity Sensor on in background",
+                                supporting = "Turn off screen when phone is near ear during a call",
+                                leadingIcon = Icons.Outlined.Sensors,
+                                iconContainerColor = ColorTeal,
+                                checked = proximityBg,
+                                onCheckedChange = {
+                                    proximityBg = it
+                                    prefs.setBoolean(PreferenceManager.KEY_PROXIMITY_BG, it)
+                                }
+                            )
                         }
                     }
                 }
@@ -477,18 +615,75 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         SectionLabel("Privacy")
                         RivoExpressiveCard {
-                            RivoSwitchListItem(headline = "Block Unknown Callers", supporting = "Silence calls from unidentified numbers", leadingIcon = Icons.Outlined.Block, iconContainerColor = ColorRed, checked = blockUnknown, onCheckedChange = { blockUnknown = it; prefs.setBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, it) })
-                            CardDivider()
-                            RivoSwitchListItem(headline = "Block Hidden Numbers", supporting = "Silence private or withheld numbers", leadingIcon = Icons.Outlined.VisibilityOff, iconContainerColor = ColorIndigo, checked = blockHidden, onCheckedChange = { blockHidden = it; prefs.setBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, it) })
+                            RivoSwitchListItem(
+                                headline   = "Silence Unknown Callers",
+                                supporting = "Automatically decline calls from unknown numbers",
+                                leadingIcon = Icons.Outlined.PhoneDisabled,
+                                iconContainerColor = ColorRed,
+                                checked = silenceUnknown,
+                                onCheckedChange = {
+                                    silenceUnknown = it
+                                    prefs.setBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, it)
+                                }
+                            )
                             CardDivider()
                             RivoListItem(
-                                headline = "Blocked Contacts",
+                                headline = "Blocked Numbers",
                                 supporting = "${blockedContactsList.size} number(s) blocked",
                                 leadingIcon = Icons.Outlined.PersonOff,
                                 iconContainerColor = ColorBluGrey,
                                 trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { showBlockedContactsDialog = true }
+                                onClick = { showBlockedNumbersDialog = true }
                             )
+                        }
+                    }
+                }
+            }
+
+            // ── Block List ───────────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 200L) {
+                    Column {
+                        SectionLabel("Block List")
+                        RivoExpressiveCard {
+                            if (blockedContactsList.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(Icons.Outlined.Block, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f), modifier = Modifier.size(40.dp))
+                                        Text("No numbers blocked", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            } else {
+                                blockedContactsList.forEachIndexed { index, number ->
+                                    if (index > 0) CardDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = ColorRed.copy(alpha = 0.12f),
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(number, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                        IconButton(onClick = {
+                                            val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
+                                            blockedContactsList = updated
+                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                        }) {
+                                            Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(20.dp))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

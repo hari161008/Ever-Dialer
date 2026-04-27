@@ -37,6 +37,9 @@ class CallService : InCallService() {
         private val _currentCallSession = MutableStateFlow<CallSession?>(null)
         val currentCallSession = _currentCallSession.asStateFlow()
 
+        private val _heldCallSession = MutableStateFlow<CallSession?>(null)
+        val heldCallSession = _heldCallSession.asStateFlow()
+
         private val _audioState = MutableStateFlow<CallAudioState?>(null)
         val audioState = _audioState.asStateFlow()
 
@@ -57,16 +60,60 @@ class CallService : InCallService() {
         fun declineCall() {
             _currentCallSession.value?.call?.disconnect()
         }
+
+        fun mergeCalls() {
+            val primary = _currentCallSession.value?.call ?: return
+            val secondary = _heldCallSession.value?.call ?: return
+            try {
+                primary.conference(secondary)
+            } catch (_: Exception) {}
+        }
+
+        fun hasHeldCall(): Boolean = _heldCallSession.value != null
     }
 
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
-            _currentCallSession.value = CallSession(call, state)
+            when {
+                _currentCallSession.value?.call == call -> {
+                    _currentCallSession.value = CallSession(call, state)
+                    if (state == Call.STATE_HOLDING) {
+                        _heldCallSession.value = CallSession(call, state)
+                    }
+                }
+                _heldCallSession.value?.call == call -> {
+                    _heldCallSession.value = CallSession(call, state)
+                }
+            }
 
             if (state == Call.STATE_DISCONNECTED) {
-                removeForeground()
-                cancelNotification()
+                if (_currentCallSession.value?.call == call) {
+                    _currentCallSession.value = null
+                    // promote held call to current if any
+                    _heldCallSession.value?.let { held ->
+                        _currentCallSession.value = held
+                        _heldCallSession.value = null
+                    }
+                } else if (_heldCallSession.value?.call == call) {
+                    _heldCallSession.value = null
+                }
+                if (_currentCallSession.value == null) {
+                    removeForeground()
+                    cancelNotification()
+                }
+            } else {
+                updateNotification(call)
+            }
+        }
+    }
+
+    private val heldCallCallback = object : Call.Callback() {
+        override fun onStateChanged(call: Call, state: Int) {
+            super.onStateChanged(call, state)
+            _heldCallSession.value = CallSession(call, state)
+            if (state == Call.STATE_DISCONNECTED) {
+                _heldCallSession.value = null
             } else {
                 updateNotification(call)
             }
@@ -83,14 +130,6 @@ class CallService : InCallService() {
     }
 
     private fun isNumberBlocked(number: String): Boolean {
-        // Check block unknown callers
-        val blockUnknown = prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)
-        if (blockUnknown && number.isBlank()) return true
-
-        // Check block hidden numbers
-        val blockHidden = prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)
-        if (blockHidden && number.isBlank()) return true
-
         // Check blocked contacts list
         val blockedList = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
             ?.split(",")
@@ -113,16 +152,9 @@ class CallService : InCallService() {
         val handle = call.details.handle
         val number = handle?.schemeSpecificPart ?: ""
 
-        // Block unknown callers
-        val blockUnknown = prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)
-        if (blockUnknown && number.isBlank()) {
-            call.disconnect()
-            return
-        }
-
-        // Block hidden numbers
-        val blockHidden = prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)
-        if (blockHidden && (number.isBlank() || handle == null)) {
+        // Silence unknown callers
+        val silenceUnknown = prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)
+        if (silenceUnknown && number.isBlank()) {
             call.disconnect()
             return
         }
@@ -130,6 +162,20 @@ class CallService : InCallService() {
         // Block specific contacts
         if (number.isNotBlank() && isNumberBlocked(number)) {
             call.disconnect()
+            return
+        }
+
+        // If there is already a current call, this is a second call (held or incoming)
+        if (_currentCallSession.value != null && _currentCallSession.value?.state != Call.STATE_DISCONNECTED) {
+            call.registerCallback(heldCallCallback)
+            _heldCallSession.value = CallSession(call, call.state)
+            updateNotification(call)
+            if (call.state != Call.STATE_RINGING) {
+                val intent = Intent(this, CallActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                startActivity(intent)
+            }
             return
         }
 
@@ -148,12 +194,22 @@ class CallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         call.unregisterCallback(callCallback)
+        call.unregisterCallback(heldCallCallback)
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
+            // promote held
+            _heldCallSession.value?.let { held ->
+                _currentCallSession.value = held
+                _heldCallSession.value = null
+            }
+        } else if (_heldCallSession.value?.call == call) {
+            _heldCallSession.value = null
         }
-        instance = null
-        removeForeground()
-        cancelNotification()
+        if (_currentCallSession.value == null) {
+            instance = null
+            removeForeground()
+            cancelNotification()
+        }
     }
 
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {

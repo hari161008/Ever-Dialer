@@ -59,5 +59,11 @@ class PreferenceManager(context: Context) {
         // UI element visibility
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
+        // Privacy
+        const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
+        // Proximity sensor in background
+        const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
+        // Scroll haptics
+        const val KEY_SCROLL_HAPTICS        = "scroll_haptics_enabled"
     }
 }

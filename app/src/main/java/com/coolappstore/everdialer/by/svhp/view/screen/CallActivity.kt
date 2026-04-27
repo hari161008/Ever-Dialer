@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import kotlinx.coroutines.delay
@@ -58,6 +59,7 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 class CallActivity : ComponentActivity() {
 
     private val contactsRepo: IContactsRepository by inject()
+    private val prefs: PreferenceManager by inject()
     private var proximityWakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,14 +71,25 @@ class CallActivity : ComponentActivity() {
         setContent {
             Rivo4Theme {
                 val session by CallService.currentCallSession.collectAsState()
+                val heldSession by CallService.heldCallSession.collectAsState()
                 val audioState by CallService.audioState.collectAsState()
 
                 val call = session?.call
                 val callState = session?.state
 
-                LaunchedEffect(callState) {
+                val proximityBgEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)
+                val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
+
+                LaunchedEffect(callState, isSpeakerOn, proximityBgEnabled) {
                     when (callState) {
-                        Call.STATE_ACTIVE, Call.STATE_DIALING -> acquireProximityLock()
+                        Call.STATE_ACTIVE, Call.STATE_DIALING -> {
+                            // Only acquire proximity lock if not on speaker and pref is enabled
+                            if (proximityBgEnabled && !isSpeakerOn) {
+                                acquireProximityLock()
+                            } else {
+                                releaseProximityLock()
+                            }
+                        }
                         else -> releaseProximityLock()
                     }
                     if (session == null || callState == Call.STATE_DISCONNECTED) {
@@ -107,7 +120,9 @@ class CallActivity : ComponentActivity() {
                         contactName = contactName,
                         phoneNumber = number,
                         photoUri = photoUri,
-                        audioState = audioState
+                        audioState = audioState,
+                        hasHeldCall = heldSession != null,
+                        heldCallName = heldSession?.call?.details?.handle?.schemeSpecificPart ?: ""
                     )
                 }
             }
@@ -137,7 +152,9 @@ fun ExpressiveCallScreen(
     contactName: String,
     phoneNumber: String = "",
     photoUri: String?,
-    audioState: CallAudioState?
+    audioState: CallAudioState?,
+    hasHeldCall: Boolean = false,
+    heldCallName: String = ""
 ) {
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
@@ -146,6 +163,7 @@ fun ExpressiveCallScreen(
     var callDuration by remember { mutableLongStateOf(0L) }
     val isDark = isSystemInDarkTheme()
     var showNoteWindow by remember { mutableStateOf(false) }
+    var showMergeConfirm by remember { mutableStateOf(false) }
 
     // Note state - syncs to file while typing
     var noteText by remember { mutableStateOf("") }
@@ -214,6 +232,30 @@ fun ExpressiveCallScreen(
     val driftX by infiniteTransition.animateFloat(-35f, 35f, infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Reverse), label = "x")
     val driftY by infiniteTransition.animateFloat(-25f, 25f, infiniteRepeatable(tween(25000, easing = LinearEasing), RepeatMode.Reverse), label = "y")
 
+    // Merge confirm dialog
+    if (showMergeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showMergeConfirm = false },
+            icon = { Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50)) },
+            title = { Text("Merge Calls") },
+            text = {
+                Text(
+                    "This will merge your current call with ${heldCallName.ifBlank { "the held call" }} into a conference call.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showMergeConfirm = false
+                    CallService.mergeCalls()
+                }) { Text("Merge") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMergeConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize().alpha(screenAlpha).background(bgColor)) {
         if (!photoUri.isNullOrEmpty()) {
             Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
@@ -243,6 +285,29 @@ fun ExpressiveCallScreen(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
+            // Show held call banner if there's a second call
+            if (hasHeldCall) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                        Text(
+                            text = if (heldCallName.isBlank()) "1 call on hold" else "${heldCallName} on hold",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             if (callState != Call.STATE_RINGING) {
@@ -254,6 +319,20 @@ fun ExpressiveCallScreen(
                                 isOnHold = !isOnHold
                                 if (isOnHold) call.hold() else call.unhold()
                             }
+                            AnimatedCallButton(
+                                icon = Icons.Default.CallMerge,
+                                label = "Merge",
+                                isActive = hasHeldCall,
+                                btnColor = controlBtnColor,
+                                activeBtnColor = Color(0xFF4CAF50),
+                                fgColor = controlBtnFg,
+                                activeFgColor = Color.White,
+                                onClick = {
+                                    if (hasHeldCall) {
+                                        showMergeConfirm = true
+                                    }
+                                }
+                            )
                             AnimatedCallButton(
                                 icon = Icons.Default.EditNote,
                                 label = "Note",

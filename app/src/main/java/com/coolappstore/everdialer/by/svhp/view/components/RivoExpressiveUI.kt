@@ -15,6 +15,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -60,6 +61,47 @@ internal fun performAppHaptic(context: android.content.Context, strength: String
             }
         }
     } catch (_: Exception) {}
+}
+
+internal fun performScrollHaptic(context: android.content.Context) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(VibratorManager::class.java)
+            val vibrator = vm?.defaultVibrator
+            val effect = VibrationEffect.createOneShot(12, 60)
+            vibrator?.vibrate(effect)
+        } else {
+            val vibrator = context.getSystemService(Vibrator::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = VibrationEffect.createOneShot(12, 60)
+                vibrator?.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(12L)
+            }
+        }
+    } catch (_: Exception) {}
+}
+
+/**
+ * A composable effect that triggers scroll haptics whenever the first visible item
+ * of a LazyListState changes, if scroll haptics are enabled.
+ */
+@Composable
+fun ScrollHapticsEffect(listState: LazyListState) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
+    val tapHapticsEnabled = prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)
+    val scrollHapticsEnabled = prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)
+    var prevFirstVisibleItem by remember { mutableIntStateOf(listState.firstVisibleItemIndex) }
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        if (scrollHapticsEnabled && tapHapticsEnabled) {
+            if (listState.firstVisibleItemIndex != prevFirstVisibleItem) {
+                performScrollHaptic(context)
+                prevFirstVisibleItem = listState.firstVisibleItemIndex
+            }
+        }
+    }
 }
 
 // ─── Animated Section ──────────────────────────────────────────────────────────
