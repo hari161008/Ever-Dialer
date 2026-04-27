@@ -141,6 +141,5 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 6. Then in the website form, click file > share > publish it on web > publish it as CSV > Publish.
 7. Now the Link form the website works a backend raw data
 8. If you want to have replies to your website, create a new column in the Website form as replies and type your replies to the respective people who you wanted to.
-# 📱 Features
-
+<br><br>
 The source code of Rate and Review are open, Check it out: [Click Here](https://github.com/hari161008/Website-For-Everlasting-Android-Tweak)
