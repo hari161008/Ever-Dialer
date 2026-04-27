@@ -61,6 +61,7 @@ private val ColorIndigo  = Color(0xFF3F51B5)
 private val ColorBluGrey = Color(0xFF607D8B)
 private val ColorAmber   = Color(0xFFFFC107)
 private val ColorBrown   = Color(0xFF795548)
+private val ColorCyan    = Color(0xFF00BCD4)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -75,6 +76,18 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     var blockHidden  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)) }
     var notesEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)) }
 
+    // Blocked contacts list dialog
+    var showBlockedContactsDialog by remember { mutableStateOf(false) }
+    var blockedContactsInput by remember { mutableStateOf("") }
+    var blockedContactsList by remember {
+        mutableStateOf(
+            prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+        )
+    }
+
     // Font state
     val savedFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     var hasFontSet   by remember { mutableStateOf(savedFontPath != null) }
@@ -87,7 +100,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "settingsAlpha")
     LaunchedEffect(Unit) { visible = true }
 
-    // Font picker (.ttf) → copy → save → restart
+    // Font picker
     val fontPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -100,7 +113,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     }
                     prefs.setString(PreferenceManager.KEY_CUSTOM_FONT_PATH, fontFile.absolutePath)
                     hasFontSet = true
-                    // Restart to apply font everywhere
                     (context as? Activity)?.let { activity ->
                         val intent = activity.intent
                         activity.finish()
@@ -150,8 +162,73 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
 
-    // ── Dialogs ───────────────────────────────────────────────────────────────
+    // ── Blocked Contacts Dialog ───────────────────────────────────────────────
+    if (showBlockedContactsDialog) {
+        AlertDialog(
+            onDismissRequest = { showBlockedContactsDialog = false },
+            icon = { Icon(Icons.Outlined.Block, null, tint = ColorRed) },
+            title = { Text("Blocked Contacts") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (blockedContactsList.isEmpty()) {
+                        Text("No contacts blocked.", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        blockedContactsList.forEachIndexed { index, number ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(number, modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    IconButton(onClick = {
+                                        val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
+                                        blockedContactsList = updated
+                                        prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                    }) {
+                                        Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = blockedContactsInput,
+                        onValueChange = { blockedContactsInput = it },
+                        label = { Text("Add number") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            if (blockedContactsInput.isNotBlank()) {
+                                IconButton(onClick = {
+                                    val num = blockedContactsInput.trim()
+                                    if (num.isNotBlank() && !blockedContactsList.contains(num)) {
+                                        val updated = blockedContactsList + num
+                                        blockedContactsList = updated
+                                        prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                    }
+                                    blockedContactsInput = ""
+                                }) {
+                                    Icon(Icons.Default.Add, "Add")
+                                }
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBlockedContactsDialog = false }) { Text("Done") }
+            }
+        )
+    }
 
+    // ── Update Dialogs ────────────────────────────────────────────────────────
     when (val state = updateDialogState) {
         is UpdateDialogState.Checking -> Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -169,6 +246,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         else -> {}
     }
 
+    // ── Backup Dialogs ────────────────────────────────────────────────────────
     when (val state = backupState) {
         is BackupDialogState.Restoring -> Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -185,7 +263,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     }
 
     // ── Screen ────────────────────────────────────────────────────────────────
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -226,6 +303,18 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
                             )
+                            CardDivider()
+                            RivoListItem(
+                                headline = "Rate and Review",
+                                supporting = "Share your feedback about Ever Dialer",
+                                leadingIcon = Icons.Default.Star,
+                                iconContainerColor = ColorCyan,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.google.com/forms/d/e/1FAIpQLSdY2WYWDFfvLScsBBxfCWzozyA_4sHUCzfR1JycfzJKASvbfQ/viewform?usp=header"))
+                                    context.startActivity(intent)
+                                }
+                            )
                         }
                     }
                 }
@@ -239,10 +328,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         RivoExpressiveCard {
                             RivoListItem(headline = "Interface", supporting = "Themes, colors, and layout", leadingIcon = Icons.Outlined.Palette, iconContainerColor = ColorPurple, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(InterfaceScreenDestination) })
                             CardDivider()
-                            RivoListItem(headline = "Incoming Call UI", supporting = "Customize the incoming call screen appearance", leadingIcon = Icons.Outlined.CallReceived, iconContainerColor = ColorGreen, trailingIcon = Icons.Default.ChevronRight, onClick = {})
-                            CardDivider()
-                            RivoListItem(headline = "Caller UI", supporting = "Customize the in-call screen layout and controls", leadingIcon = Icons.Outlined.Person, iconContainerColor = ColorBlue, trailingIcon = Icons.Default.ChevronRight, onClick = {})
-                            CardDivider()
                             // Custom Font row + inline slider
                             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                                 Row(
@@ -251,11 +336,11 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
-                                        color = ColorPurple,
+                                        color = ColorPurple.copy(alpha = 0.18f),
                                         modifier = Modifier.size(40.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Outlined.TextFormat, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                            Icon(Icons.Outlined.TextFormat, null, tint = ColorPurple, modifier = Modifier.size(20.dp))
                                         }
                                     }
                                     Spacer(Modifier.width(16.dp))
@@ -268,7 +353,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                         )
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    // Revert button (only when font is set)
                                     if (hasFontSet) {
                                         IconButton(
                                             onClick = {
@@ -292,7 +376,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                         Icon(Icons.Default.FolderOpen, "Pick font", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
-                                // Font size slider (only when font is set)
                                 if (hasFontSet) {
                                     Spacer(Modifier.height(12.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -315,6 +398,25 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // ── Call Recording ───────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 90L) {
+                    Column {
+                        SectionLabel("Call Recording")
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Call Recording",
+                                supporting = "Record incoming and outgoing calls",
+                                leadingIcon = Icons.Outlined.Mic,
+                                iconContainerColor = ColorRed,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {}
+                            )
                         }
                     }
                 }
@@ -378,6 +480,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             RivoSwitchListItem(headline = "Block Unknown Callers", supporting = "Silence calls from unidentified numbers", leadingIcon = Icons.Outlined.Block, iconContainerColor = ColorRed, checked = blockUnknown, onCheckedChange = { blockUnknown = it; prefs.setBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, it) })
                             CardDivider()
                             RivoSwitchListItem(headline = "Block Hidden Numbers", supporting = "Silence private or withheld numbers", leadingIcon = Icons.Outlined.VisibilityOff, iconContainerColor = ColorIndigo, checked = blockHidden, onCheckedChange = { blockHidden = it; prefs.setBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, it) })
+                            CardDivider()
+                            RivoListItem(
+                                headline = "Blocked Contacts",
+                                supporting = "${blockedContactsList.size} number(s) blocked",
+                                leadingIcon = Icons.Outlined.PersonOff,
+                                iconContainerColor = ColorBluGrey,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { showBlockedContactsDialog = true }
+                            )
                         }
                     }
                 }
@@ -403,7 +514,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         RivoExpressiveCard {
                             RivoListItem(
                                 headline   = "Create Backup",
-                                supporting = "Save call logs, notes, favourites and settings",
+                                supporting = "Save app configuration and notes",
                                 leadingIcon = Icons.Default.Backup,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
@@ -426,7 +537,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 }
                             )
                             CardDivider()
-                            RivoListItem(headline = "Restore Backup", supporting = "Restore from a .everdialer backup file", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, onClick = { restoreLauncher.launch("*/*") })
+                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration and notes", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, onClick = { restoreLauncher.launch("*/*") })
                         }
                     }
                 }

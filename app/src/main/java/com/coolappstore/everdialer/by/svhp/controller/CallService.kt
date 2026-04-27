@@ -6,13 +6,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import androidx.core.app.NotificationCompat
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +28,7 @@ data class CallSession(
 class CallService : InCallService() {
 
     private val contactsRepository: IContactsRepository by inject()
+    private val prefs: PreferenceManager by inject()
 
     companion object {
         private const val CHANNEL_ID = "call_channel"
@@ -41,12 +42,10 @@ class CallService : InCallService() {
 
         private var instance: CallService? = null
 
-        // تم تغيير الاسم ليتوافق مع استدعاء CallActivity
         fun setMuted(muted: Boolean) {
             instance?.setMuted(muted)
         }
 
-        // تم تغيير الاسم ليتوافق مع استدعاء CallActivity
         fun setAudioRoute(route: Int) {
             instance?.setAudioRoute(route)
         }
@@ -64,7 +63,7 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
             _currentCallSession.value = CallSession(call, state)
-            
+
             if (state == Call.STATE_DISCONNECTED) {
                 removeForeground()
                 cancelNotification()
@@ -83,9 +82,57 @@ class CallService : InCallService() {
         }
     }
 
+    private fun isNumberBlocked(number: String): Boolean {
+        // Check block unknown callers
+        val blockUnknown = prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)
+        if (blockUnknown && number.isBlank()) return true
+
+        // Check block hidden numbers
+        val blockHidden = prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)
+        if (blockHidden && number.isBlank()) return true
+
+        // Check blocked contacts list
+        val blockedList = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
+            ?.split(",")
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+        if (blockedList.any { blocked ->
+            val cleanBlocked = blocked.replace(" ", "").replace("-", "")
+            val cleanNumber = number.replace(" ", "").replace("-", "")
+            cleanNumber.endsWith(cleanBlocked) || cleanBlocked.endsWith(cleanNumber)
+        }) return true
+
+        return false
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         instance = this
+
+        val handle = call.details.handle
+        val number = handle?.schemeSpecificPart ?: ""
+
+        // Block unknown callers
+        val blockUnknown = prefs.getBoolean(PreferenceManager.KEY_BLOCK_UNKNOWN, false)
+        if (blockUnknown && number.isBlank()) {
+            call.disconnect()
+            return
+        }
+
+        // Block hidden numbers
+        val blockHidden = prefs.getBoolean(PreferenceManager.KEY_BLOCK_HIDDEN, false)
+        if (blockHidden && (number.isBlank() || handle == null)) {
+            call.disconnect()
+            return
+        }
+
+        // Block specific contacts
+        if (number.isNotBlank() && isNumberBlocked(number)) {
+            call.disconnect()
+            return
+        }
+
         call.registerCallback(callCallback)
         _currentCallSession.value = CallSession(call, call.state)
         updateNotification(call)
@@ -104,7 +151,7 @@ class CallService : InCallService() {
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
         }
-        instance = null // تنظيف الـ instance عند انتهاء المكالمة
+        instance = null
         removeForeground()
         cancelNotification()
     }
@@ -124,7 +171,7 @@ class CallService : InCallService() {
 
     private fun updateNotification(call: Call) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -136,19 +183,19 @@ class CallService : InCallService() {
 
         val handle = call.details.handle
         val number = handle?.schemeSpecificPart ?: ""
-        
+
         val contact = if (number.isNotEmpty()) {
             try {
                 contactsRepository.getContactByNumber(number)
             } catch (e: Exception) { null }
         } else null
-        
+
         val contactName = when {
             contact != null -> contact.name
             number.isNotEmpty() -> number
             else -> "Unknown Number"
         }
-        
+
         val fullScreenIntent = Intent(this, CallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }

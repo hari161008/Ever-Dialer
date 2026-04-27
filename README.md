@@ -75,7 +75,6 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 </p>
 
 <br>
-A fast, lightweight Android dialer focused on simplicity and smooth performance.
 
 ---
 

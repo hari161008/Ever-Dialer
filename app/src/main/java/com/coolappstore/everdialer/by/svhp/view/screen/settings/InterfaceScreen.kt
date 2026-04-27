@@ -11,8 +11,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,16 +25,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -41,6 +48,7 @@ private val ColorTeal   = Color(0xFF009688)
 private val ColorAmber  = Color(0xFFFFC107)
 private val ColorBlue   = Color(0xFF2196F3)
 private val ColorGreen  = Color(0xFF4CAF50)
+private val ColorOrange = Color(0xFFFF9800)
 
 data class ThemeOption(val key: String, val label: String)
 
@@ -53,6 +61,23 @@ private val themeOptions = listOf(
     ThemeOption("auto_bw", "Auto B/W")
 )
 
+private fun triggerRestartPrompt(
+    scope: CoroutineScope,
+    snackbarHostState: SnackbarHostState,
+    context: android.content.Context
+) {
+    scope.launch {
+        val result = snackbarHostState.showSnackbar(
+            message = "Restart required to apply theme changes fully.",
+            actionLabel = "Restart",
+            duration = SnackbarDuration.Short
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            (context as? Activity)?.recreate()
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
@@ -62,33 +87,41 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
-    var themeMode       by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
-    var dynamicColors   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
-    var amoledMode      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AMOLED_MODE, false)) }
-    var showFirstLetter by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
-    var colorfulAvatars by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
-    var showPicture     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
-    var iconOnlyNav     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
-    var customPrimaryColor by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
+    var themeMode           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
+    var dynamicColors       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
+    var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
+    var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
+    var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
+    var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
+    var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
+    var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
+    var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
+
+    var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
+    var hexError by remember { mutableStateOf(false) }
 
     val presetColors = listOf(
         Color(0xFF6750A4), Color(0xFF0061A4), Color(0xFF006A60), Color(0xFF436916),
-        Color(0xFF984061), Color(0xFF006874), Color(0xFF705D00), Color(0xFFBF0031)
+        Color(0xFF984061), Color(0xFF006874), Color(0xFF705D00), Color(0xFFBF0031),
+        Color(0xFFE91E63), Color(0xFFFF5722), Color(0xFF795548), Color(0xFF607D8B)
     )
 
-    fun showRestartPrompt() {
-        scope.launch {
-            val result = snackbarHostState.showSnackbar(
-                message = "Restart required to apply theme changes fully.",
-                actionLabel = "Restart",
-                duration = SnackbarDuration.Short
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                (context as? Activity)?.recreate()
-            }
+    fun applyHexColor(hex: String) {
+        val cleaned = hex.trimStart('#').uppercase()
+        if (cleaned.length == 6) {
+            try {
+                val colorInt = android.graphics.Color.parseColor("#$cleaned")
+                customPrimaryColor = colorInt
+                prefs.setInt("custom_primary_color", colorInt)
+                hexError = false
+                triggerRestartPrompt(scope, snackbarHostState, context)
+            } catch (_: Exception) { hexError = true }
+        } else {
+            hexError = true
         }
     }
 
@@ -118,50 +151,34 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                 item {
                     RivoAnimatedSection(delayMs = 0L) {
                         Column {
-                            Text(
-                                "App Theme",
-                                style = MaterialTheme.typography.labelLarge,
+                            Text("App Theme", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                            )
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        "Color Mode",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Text("Color Mode", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                     Spacer(Modifier.height(12.dp))
-                                    // Pill row — wraps into two rows via FlowRow-style approach
-                                    val rows = themeOptions.chunked(3)
-                                    rows.forEach { rowItems ->
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                        ) {
+                                    themeOptions.chunked(3).forEach { rowItems ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                                             rowItems.forEach { option ->
                                                 val selected = themeMode == option.key
                                                 Surface(
                                                     onClick = {
                                                         themeMode = option.key
                                                         prefs.setString(PreferenceManager.KEY_THEME_MODE, option.key)
-                                                        showRestartPrompt()
+                                                        triggerRestartPrompt(scope, snackbarHostState, context)
                                                     },
                                                     shape = RoundedCornerShape(50),
                                                     color = if (selected) MaterialTheme.colorScheme.primary
                                                             else MaterialTheme.colorScheme.surfaceVariant,
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .height(38.dp)
+                                                    modifier = Modifier.weight(1f).height(38.dp)
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
-                                                        Text(
-                                                            text = option.label,
-                                                            style = MaterialTheme.typography.labelMedium,
+                                                        Text(option.label, style = MaterialTheme.typography.labelMedium,
                                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                                             color = if (selected) MaterialTheme.colorScheme.onPrimary
-                                                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
+                                                                    else MaterialTheme.colorScheme.onSurfaceVariant)
                                                     }
                                                 }
                                             }
@@ -173,19 +190,16 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                     }
                 }
 
-                // ── Theme Colours ─────────────────────────────────────
+                // ── Theme Colors ──────────────────────────────────────
                 item {
                     RivoAnimatedSection(delayMs = 60L) {
                         Column {
-                            Text(
-                                "Theme Colors",
-                                style = MaterialTheme.typography.labelLarge,
+                            Text("Theme Colors", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                            )
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
-                                    headline = "Material You Theming",
+                                    headline = "Dynamic Colors",
                                     supporting = "Wallpaper based app color theming",
                                     leadingIcon = Icons.Outlined.Palette,
                                     iconContainerColor = ColorPurple,
@@ -193,14 +207,14 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     onCheckedChange = {
                                         dynamicColors = it
                                         prefs.setBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, it)
-                                        showRestartPrompt()
+                                        triggerRestartPrompt(scope, snackbarHostState, context)
                                     }
                                 )
                                 if (!dynamicColors) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                     Column(modifier = Modifier.padding(16.dp)) {
-                                        Text("Primary Color", style = MaterialTheme.typography.labelLarge)
+                                        Text("Primary Color", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                         Spacer(Modifier.height(12.dp))
                                         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             items(presetColors) { color ->
@@ -217,25 +231,117 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                                         .clickable {
                                                             customPrimaryColor = color.toArgb()
                                                             prefs.setInt("custom_primary_color", color.toArgb())
-                                                            showRestartPrompt()
+                                                            hexInput = String.format("%06X", 0xFFFFFF and color.toArgb())
+                                                            hexError = false
+                                                            triggerRestartPrompt(scope, snackbarHostState, context)
                                                         }
                                                 )
                                             }
                                         }
+                                        Spacer(Modifier.height(16.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth()) {
+                                            Box(
+                                                modifier = Modifier.size(40.dp).clip(CircleShape).background(
+                                                    try { Color(android.graphics.Color.parseColor("#${hexInput.trimStart('#')}")) }
+                                                    catch (_: Exception) { Color.Gray }
+                                                )
+                                            )
+                                            OutlinedTextField(
+                                                value = hexInput,
+                                                onValueChange = { v ->
+                                                    hexInput = v.trimStart('#').uppercase().take(6)
+                                                    hexError = false
+                                                },
+                                                label = { Text("Hex Color") },
+                                                prefix = { Text("#") },
+                                                isError = hexError,
+                                                singleLine = true,
+                                                modifier = Modifier.weight(1f),
+                                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                                keyboardActions = KeyboardActions(onDone = {
+                                                    applyHexColor(hexInput)
+                                                    keyboardController?.hide()
+                                                }),
+                                                shape = RoundedCornerShape(12.dp),
+                                                supportingText = if (hexError) {{ Text("Enter a valid 6-digit hex code") }} else null
+                                            )
+                                            Button(onClick = {
+                                                applyHexColor(hexInput)
+                                                keyboardController?.hide()
+                                            }, shape = RoundedCornerShape(12.dp)) {
+                                                Text("Apply")
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── Incoming Call & Caller UI ─────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 100L) {
+                        Column {
+                            Text("Call UI", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "Incoming Call UI",
+                                    supporting = "Customize the incoming call screen appearance",
+                                    leadingIcon = Icons.Outlined.CallReceived,
+                                    iconContainerColor = ColorGreen,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = {}
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Caller UI",
+                                    supporting = "Customize the in-call screen layout and controls",
+                                    leadingIcon = Icons.Outlined.Person,
+                                    iconContainerColor = ColorBlue,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = {}
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── UI Element Visibility ────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 130L) {
+                        Column {
+                            Text("UI Elements", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Show Incoming Call UI",
+                                    supporting = "Display custom UI for incoming calls",
+                                    leadingIcon = Icons.Outlined.CallReceived,
+                                    iconContainerColor = ColorOrange,
+                                    checked = showIncomingCallUI,
+                                    onCheckedChange = {
+                                        showIncomingCallUI = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, it)
+                                    }
+                                )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(
-                                    headline = "Amoled Dark Mode",
-                                    supporting = "Uses pitch black for UI elements",
-                                    leadingIcon = Icons.Outlined.DarkMode,
+                                    headline = "Show Caller UI",
+                                    supporting = "Display custom UI during active calls",
+                                    leadingIcon = Icons.Outlined.Person,
                                     iconContainerColor = ColorIndigo,
-                                    checked = amoledMode,
+                                    checked = showCallerUI,
                                     onCheckedChange = {
-                                        amoledMode = it
-                                        prefs.setBoolean(PreferenceManager.KEY_AMOLED_MODE, it)
-                                        showRestartPrompt()
+                                        showCallerUI = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, it)
                                     }
                                 )
                             }
@@ -245,14 +351,11 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
 
                 // ── Avatars ──────────────────────────────────────────
                 item {
-                    RivoAnimatedSection(delayMs = 140L) {
+                    RivoAnimatedSection(delayMs = 160L) {
                         Column {
-                            Text(
-                                "Avatars",
-                                style = MaterialTheme.typography.labelLarge,
+                            Text("Avatars", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                            )
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
                                     headline = "Show First Letter in Avatar",
@@ -260,10 +363,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     leadingIcon = Icons.Outlined.TextFields,
                                     iconContainerColor = ColorAmber,
                                     checked = showFirstLetter,
-                                    onCheckedChange = {
-                                        showFirstLetter = it
-                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it)
-                                    }
+                                    onCheckedChange = { showFirstLetter = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -273,10 +373,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     leadingIcon = Icons.Outlined.ColorLens,
                                     iconContainerColor = ColorBlue,
                                     checked = colorfulAvatars,
-                                    onCheckedChange = {
-                                        colorfulAvatars = it
-                                        prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it)
-                                    }
+                                    onCheckedChange = { colorfulAvatars = it; prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -286,10 +383,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     leadingIcon = Icons.Outlined.AccountCircle,
                                     iconContainerColor = ColorGreen,
                                     checked = showPicture,
-                                    onCheckedChange = {
-                                        showPicture = it
-                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it)
-                                    }
+                                    onCheckedChange = { showPicture = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it) }
                                 )
                             }
                         }
@@ -300,12 +394,9 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                 item {
                     RivoAnimatedSection(delayMs = 220L) {
                         Column {
-                            Text(
-                                "Navigation",
-                                style = MaterialTheme.typography.labelLarge,
+                            Text("Navigation", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                            )
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
                                     headline = "Icon-Only Bottom Bar",
@@ -313,10 +404,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     leadingIcon = Icons.Outlined.ViewStream,
                                     iconContainerColor = ColorTeal,
                                     checked = iconOnlyNav,
-                                    onCheckedChange = {
-                                        iconOnlyNav = it
-                                        prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it)
-                                    }
+                                    onCheckedChange = { iconOnlyNav = it; prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it) }
                                 )
                             }
                         }

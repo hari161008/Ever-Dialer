@@ -36,7 +36,7 @@ fun Rivo4Theme(
 
     val themeMode      = prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto"
     val dynamicColor   = prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)
-    val customPrimary  = prefs.getInt("custom_primary_color", -1)
+    val customPrimaryInt = prefs.getInt("custom_primary_color", 0)
     val customFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     val fontSizeScale  = prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
 
@@ -50,20 +50,41 @@ fun Rivo4Theme(
 
     val context = LocalContext.current
 
+    // Default primary when none set
+    val defaultPrimary = Color(0xFF6750A4)
+
     // Build colour scheme
-    val baseScheme = when {
+    var colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> DarkColorScheme
-        else      -> LightColorScheme
-    }
-
-    var colorScheme = baseScheme
-
-    // Custom primary when dynamic colours off
-    if (!dynamicColor && customPrimary != -1) {
-        val primary = Color(customPrimary)
-        colorScheme = if (darkTheme) darkColorScheme(primary = primary) else lightColorScheme(primary = primary)
+        else -> {
+            // When dynamic colors is OFF, use user-selected primary with neutral surfaces
+            val primary = if (customPrimaryInt != 0) Color(customPrimaryInt.toLong() and 0xFFFFFFFFL)
+                          else defaultPrimary
+            if (darkTheme) {
+                darkColorScheme(primary = primary).copy(
+                    background           = Color(0xFF1C1B1F),
+                    surface              = Color(0xFF1C1B1F),
+                    surfaceVariant       = Color(0xFF49454F),
+                    surfaceContainer     = Color(0xFF211F26),
+                    surfaceContainerLow  = Color(0xFF1D1B20),
+                    surfaceContainerHigh = Color(0xFF2B2930),
+                    surfaceContainerHighest = Color(0xFF36343B),
+                    surfaceContainerLowest  = Color(0xFF0F0D13)
+                )
+            } else {
+                lightColorScheme(primary = primary).copy(
+                    background           = Color(0xFFFFFBFE),
+                    surface              = Color(0xFFFFFBFE),
+                    surfaceVariant       = Color(0xFFE7E0EC),
+                    surfaceContainer     = Color(0xFFF3EDF7),
+                    surfaceContainerLow  = Color(0xFFF7F2FA),
+                    surfaceContainerHigh = Color(0xFFECE6F0),
+                    surfaceContainerHighest = Color(0xFFE6E0E9),
+                    surfaceContainerLowest  = Color(0xFFFFFFFF)
+                )
+            }
+        }
     }
 
     // Apply pure-white / pure-black overrides
@@ -91,25 +112,6 @@ fun Rivo4Theme(
             surfaceContainerHigh = Color(0xFFEEEEEE), surfaceContainerHighest = Color(0xFFE8E8E8),
             surfaceContainerLowest = Color.White, surfaceVariant = Color(0xFFF0F0F0)
         )
-        "dark" -> {
-            // Legacy amoled support via separate pref
-            val amoled = prefs.getBoolean(PreferenceManager.KEY_AMOLED_MODE, false)
-            if (amoled) colorScheme.copy(
-                background = Color.Black, surface = Color.Black,
-                surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
-                surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
-                surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
-            ) else colorScheme
-        }
-        "auto" -> {
-            val amoled = prefs.getBoolean(PreferenceManager.KEY_AMOLED_MODE, false)
-            if (darkTheme && amoled) colorScheme.copy(
-                background = Color.Black, surface = Color.Black,
-                surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
-                surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
-                surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
-            ) else colorScheme
-        }
         else -> colorScheme
     }
 

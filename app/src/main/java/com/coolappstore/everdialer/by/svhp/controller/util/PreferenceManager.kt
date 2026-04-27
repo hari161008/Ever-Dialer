@@ -54,5 +54,10 @@ class PreferenceManager(context: Context) {
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"   // Float, default 1.0f
         // Theme mode: "auto" | "light" | "dark" | "white" | "black" | "auto_bw"
         const val KEY_THEME_MODE            = "theme_mode"
+        // Blocked contacts (comma-separated numbers)
+        const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
+        // UI element visibility
+        const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
+        const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
     }
 }

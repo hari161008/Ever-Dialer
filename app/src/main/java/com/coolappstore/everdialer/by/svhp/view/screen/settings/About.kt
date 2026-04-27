@@ -40,9 +40,7 @@ private val ColorGreen     = Color(0xFF4CAF50)
 private val ColorDeepPurp  = Color(0xFF7C4DFF)
 private val ColorOrange    = Color(0xFFFF9800)
 private val ColorCyan      = Color(0xFF00BCD4)
-private val ColorRed       = Color(0xFFE91E63)
 private val ColorTeal      = Color(0xFF009688)
-private val ColorIndigo    = Color(0xFF3F51B5)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -203,48 +201,6 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Open source badge ─────────────────────────────────────
-            RivoAnimatedSection(delayMs = 300L) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = ColorRed.copy(alpha = 0.15f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.FavoriteBorder, null,
-                                    tint = ColorRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                "Free & Open Source",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Text(
-                                "Built with ❤ using Jetpack Compose",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
