@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.app.Activity
+import android.app.DownloadManager
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -9,7 +10,6 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.telecom.TelecomManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
@@ -48,8 +48,10 @@ import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.GITHUB_API_RELEASES
 import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
-import com.coolappstore.everdialer.by.svhp.controller.util.downloadAndInstallApk
+import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
 import com.coolappstore.everdialer.by.svhp.controller.util.fetchLatestRelease
+import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
+import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndScheduleDelete
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
@@ -62,6 +64,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.io.File
@@ -93,6 +96,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
+    var autoUpdateEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true)) }
 
     // Haptics popup state
     var showHapticsDialog by remember { mutableStateOf(false) }
@@ -166,7 +170,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     }
 
     // Default dialer
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
     var isDefaultDialer by remember { mutableStateOf(telecomManager.defaultDialerPackage == context.packageName) }
     val defaultDialerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefaultDialer = telecomManager.defaultDialerPackage == context.packageName
@@ -208,7 +212,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             title = { Text("Tap Haptics") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    // Enable toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -227,7 +230,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     if (tapHapticsEnabled) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
-                        // Strength pill selector
                         Text("Strength", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         Row(
                             modifier = Modifier
@@ -262,7 +264,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             }
                         }
 
-                        // Intensity pill toggle → reveals slider
                         Surface(
                             onClick = { showIntensitySlider = !showIntensitySlider },
                             shape = RoundedCornerShape(50),
@@ -321,7 +322,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             }
                         }
 
-                        // Preview button
                         Button(
                             onClick = { triggerPreviewVibration(hapticsStrength) },
                             modifier = Modifier.fillMaxWidth(),
@@ -353,7 +353,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         LaunchedEffect(Unit) {
             isLoading = true
             try {
-                // Load ALL call logs (no limit)
                 val logs = callLogRepo.getCallLogs()
                 val seen = mutableSetOf<String>()
                 val result = mutableListOf<Triple<String, String, String?>>()
@@ -366,7 +365,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 recentNumbers = result
             } catch (_: Exception) {}
             try {
-                // Load ALL contacts
                 contactNumbers = contactsRepo.getContacts()
                     .filter { it.phoneNumbers.isNotEmpty() }
                     .flatMap { c -> c.phoneNumbers.map { num -> Triple(num, c.name, c.photoUri) } }
@@ -376,7 +374,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             isLoading = false
         }
 
-        // Filtered lists based on search query
         val filteredRecents = remember(recentNumbers, searchQuery) {
             if (searchQuery.isBlank()) recentNumbers
             else recentNumbers.filter { (num, name, _) ->
@@ -405,13 +402,11 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Header
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
                         Text("Blocked Numbers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
 
-                    // Search field
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -426,7 +421,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
                     )
 
-                    // Tab row
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Call Logs", "Contacts", "Manual").forEachIndexed { index, label ->
                             val selected = blockedNumbersTab == index
@@ -450,7 +444,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
-                    // Content
                     Box(modifier = Modifier.heightIn(min = 80.dp, max = 320.dp)) {
                         when (blockedNumbersTab) {
                             0 -> {
@@ -547,7 +540,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         }
                     }
 
-                    // Done button
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showBlockedNumbersDialog = false }) { Text("Done") }
                     }
@@ -574,21 +566,11 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Header
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
                         Text("Block List", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = ColorRed.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                "${blockedContactsList.size}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = ColorRed,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
+                        Surface(shape = RoundedCornerShape(50), color = ColorRed.copy(alpha = 0.12f)) {
+                            Text("${blockedContactsList.size}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ColorRed, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                         }
                     }
 
@@ -602,34 +584,21 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             }
                         }
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.heightIn(max = 340.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             itemsIndexed(blockedWithInfo) { index, (number, name, photoUri) ->
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                         RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(46.dp))
                                         Spacer(Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                             if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                         }
-                                        IconButton(
-                                            onClick = {
-                                                val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
-                                                blockedContactsList = updated
-                                                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
+                                        IconButton(onClick = {
+                                            val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
+                                            blockedContactsList = updated
+                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                        }, modifier = Modifier.size(36.dp)) {
                                             Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(18.dp))
                                         }
                                     }
@@ -648,6 +617,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
     // ── Update Dialogs ────────────────────────────────────────────────────────
     when (val state = updateDialogState) {
+
         is UpdateDialogState.Checking -> Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -656,11 +626,110 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
         }
-        is UpdateDialogState.UpToDate -> AlertDialog(onDismissRequest = { updateDialogState = UpdateDialogState.Idle }, icon = { Icon(Icons.Default.CheckCircle, null, tint = ColorGreen) }, title = { Text("Up to date") }, text = { Text("The app is running the latest version (v$APP_VERSION).") }, confirmButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("OK") } })
-        is UpdateDialogState.UpdateAvailable -> AlertDialog(onDismissRequest = { updateDialogState = UpdateDialogState.Idle }, icon = { Icon(Icons.Default.SystemUpdate, null, tint = ColorBlue) }, title = { Text("Update available") }, text = { Text("A new version v${state.latestVersion} is available. Download and install now?") },
-            confirmButton = { Button(onClick = { updateDialogState = UpdateDialogState.Idle; state.apkUrl?.let { downloadAndInstallApk(context, it) } }) { Text("Download & Install") } },
-            dismissButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("Later") } })
-        is UpdateDialogState.Error -> AlertDialog(onDismissRequest = { updateDialogState = UpdateDialogState.Idle }, icon = { Icon(Icons.Default.Error, null, tint = ColorRed) }, title = { Text("Check failed") }, text = { Text("Could not check for updates. Please try again later.") }, confirmButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("OK") } })
+
+        is UpdateDialogState.UpToDate -> AlertDialog(
+            onDismissRequest = { updateDialogState = UpdateDialogState.Idle },
+            icon = { Icon(Icons.Default.CheckCircle, null, tint = ColorGreen) },
+            title = { Text("Up to date") },
+            text = { Text("The app is running the latest version (v$APP_VERSION).") },
+            confirmButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("OK") } }
+        )
+
+        // ── Confirmation popup before downloading ──
+        is UpdateDialogState.ConfirmUpdate -> AlertDialog(
+            onDismissRequest = { updateDialogState = UpdateDialogState.Idle },
+            icon = { Icon(Icons.Default.SystemUpdate, null, tint = ColorBlue) },
+            title = { Text("Update Available") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Version v${state.latestVersion} is available.")
+                    Text("Would you like to download and install it now?", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val url = state.apkUrl
+                    if (url != null) {
+                        val downloadId = enqueueApkDownload(context, url)
+                        if (downloadId != null) {
+                            updateDialogState = UpdateDialogState.Downloading(state.latestVersion, url, downloadId, 0f)
+                        } else {
+                            updateDialogState = UpdateDialogState.Error
+                        }
+                    } else {
+                        updateDialogState = UpdateDialogState.Error
+                    }
+                }) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("Not Now") }
+            }
+        )
+
+        // ── Accurate download progress ──
+        is UpdateDialogState.Downloading -> {
+            // Poll DownloadManager for real progress
+            LaunchedEffect(state.downloadId) {
+                val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                while (true) {
+                    delay(300)
+                    val query = DownloadManager.Query().setFilterById(state.downloadId)
+                    val cursor = dm.query(query)
+                    if (!cursor.moveToFirst()) { cursor.close(); break }
+
+                    val dmStatus = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    cursor.close()
+
+                    when (dmStatus) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            updateDialogState = UpdateDialogState.Idle
+                            val file = getApkDestinationFile()
+                            installApkAndScheduleDelete(context, file)
+                            break
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            updateDialogState = UpdateDialogState.Error
+                            break
+                        }
+                        else -> {
+                            val progress = if (total > 0L) (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+                            updateDialogState = state.copy(progress = progress)
+                        }
+                    }
+                }
+            }
+
+            Dialog(onDismissRequest = {}) {
+                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Default.SystemUpdate, null, tint = ColorBlue, modifier = Modifier.size(36.dp))
+                        Text("Downloading Update", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("v${state.latestVersion}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${(state.progress * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Please wait…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        is UpdateDialogState.Error -> AlertDialog(
+            onDismissRequest = { updateDialogState = UpdateDialogState.Idle },
+            icon = { Icon(Icons.Default.Error, null, tint = ColorRed) },
+            title = { Text("Check failed") },
+            text = { Text("Could not check for updates. Please try again later.") },
+            confirmButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("OK") } }
+        )
+
         else -> {}
     }
 
@@ -715,7 +784,8 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                         val release = fetchLatestRelease(GITHUB_API_RELEASES)
                                         updateDialogState = when {
                                             release == null -> UpdateDialogState.Error
-                                            isNewerVersion(release.tagName, APP_VERSION) -> UpdateDialogState.UpdateAvailable(release.tagName, release.apkUrl)
+                                            isNewerVersion(release.tagName, APP_VERSION) ->
+                                                UpdateDialogState.ConfirmUpdate(release.tagName, release.apkUrl)
                                             else -> UpdateDialogState.UpToDate
                                         }
                                     }
@@ -809,7 +879,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         SectionLabel("Haptics Across App")
                         RivoExpressiveCard {
-                            // Tap Haptics – click to open popup
                             RivoListItem(
                                 headline   = "Tap Haptics",
                                 supporting = if (tapHapticsEnabled) "On · ${hapticsStrength.replaceFirstChar { it.uppercase() }}" else "Off",
@@ -954,6 +1023,18 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         SectionLabel("Sound & Vibration")
                         RivoExpressiveCard {
                             RivoListItem(headline = "Sound & Vibration", supporting = "Ringtones and dialpad tones", leadingIcon = Icons.Outlined.VolumeUp, iconContainerColor = ColorBlue, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(SoundVibrationScreenDestination) })
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Auto Update Checker",
+                                supporting = "Automatically check for updates when the app opens",
+                                leadingIcon = Icons.Default.Autorenew,
+                                iconContainerColor = ColorAmber,
+                                checked = autoUpdateEnabled,
+                                onCheckedChange = {
+                                    autoUpdateEnabled = it
+                                    prefs.setBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, it)
+                                }
+                            )
                         }
                     }
                 }
@@ -1017,7 +1098,8 @@ private sealed class UpdateDialogState {
     object Idle : UpdateDialogState()
     object Checking : UpdateDialogState()
     object UpToDate : UpdateDialogState()
-    data class UpdateAvailable(val latestVersion: String, val apkUrl: String?) : UpdateDialogState()
+    data class ConfirmUpdate(val latestVersion: String, val apkUrl: String?) : UpdateDialogState()
+    data class Downloading(val latestVersion: String, val apkUrl: String?, val downloadId: Long, val progress: Float) : UpdateDialogState()
     object Error : UpdateDialogState()
 }
 

@@ -72,5 +72,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_MISSED   = "call_ui_show_missed"
         const val KEY_CALL_UI_SHOW_OUTGOING = "call_ui_show_outgoing"
         const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
+        // Auto update check on app launch
+        const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
     }
 }
