@@ -205,6 +205,7 @@ fun ContactContent(
                     }
                 }
 
+                ScrollHapticsEffect(listState = listState)
                 AZListScroll(contacts, navigator, listState = listState)
             }
         } else {

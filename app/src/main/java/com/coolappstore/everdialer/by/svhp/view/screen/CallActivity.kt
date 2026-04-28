@@ -143,13 +143,18 @@ class CallActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Re-acquire proximity lock when resuming (e.g. after accepting from notification)
+        // Always re-check proximity lock state when activity resumes
+        // This covers the case of accepting call from notification with screen already on
         val session = CallService.currentCallSession.value
         val audioState = CallService.audioState.value
         val proximityBgEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)
         val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
-        if ((session?.state == Call.STATE_ACTIVE || session?.state == Call.STATE_DIALING) && proximityBgEnabled && !isSpeakerOn) {
+        val callState = session?.state
+        if (proximityBgEnabled && !isSpeakerOn &&
+            (callState == Call.STATE_ACTIVE || callState == Call.STATE_DIALING)) {
             acquireProximityLock()
+        } else if (!proximityBgEnabled || isSpeakerOn) {
+            releaseProximityLock()
         }
     }
 

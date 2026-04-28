@@ -14,15 +14,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -38,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.APP_VERSION
@@ -180,9 +184,9 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
     // ── Haptics Dialog ────────────────────────────────────────────────────────
     if (showHapticsDialog) {
-        fun triggerPreviewVibration() {
-            val duration = if (hapticsStrength == "strong") 80L else 40L
-            val amplitude = if (hapticsStrength == "strong") 255 else 80
+        fun triggerPreviewVibration(strength: String) {
+            val duration = if (strength == "strong") 80L else 40L
+            val amplitude = if (strength == "strong") 255 else 80
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -195,13 +199,16 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             } catch (_: Exception) {}
         }
 
+        var showIntensitySlider by remember { mutableStateOf(false) }
+        var sliderValue by remember { mutableFloatStateOf(if (hapticsStrength == "strong") 1f else 0.4f) }
+
         AlertDialog(
             onDismissRequest = { showHapticsDialog = false },
             icon = { Icon(Icons.Outlined.Vibration, null, tint = ColorPurple) },
             title = { Text("Tap Haptics") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Enable/disable toggle
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Enable toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -217,54 +224,108 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         )
                     }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
-
                     if (tapHapticsEnabled) {
-                        // Strength selector
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
+
+                        // Strength pill selector
                         Text("Strength", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        ) {
                             listOf("light" to "Light", "strong" to "Strong").forEach { (key, label) ->
                                 val selected = hapticsStrength == key
                                 Surface(
                                     onClick = {
                                         hapticsStrength = key
+                                        sliderValue = if (key == "strong") 1f else 0.4f
                                         prefs.setString(PreferenceManager.KEY_HAPTICS_STRENGTH, key)
+                                        triggerPreviewVibration(key)
                                     },
                                     shape = RoundedCornerShape(50),
-                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.weight(1f).height(44.dp)
+                                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    modifier = Modifier.weight(1f).height(42.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
                                             label,
                                             style = MaterialTheme.typography.labelLarge,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                            color = if (selected) MaterialTheme.colorScheme.onPrimary
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // Haptic intensity slider (visual representation)
-                        var sliderValue by remember { mutableFloatStateOf(if (hapticsStrength == "strong") 1f else 0.4f) }
-                        Text("Intensity", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Slider(
-                            value = sliderValue,
-                            onValueChange = {
-                                sliderValue = it
-                                hapticsStrength = if (it > 0.6f) "strong" else "light"
-                                prefs.setString(PreferenceManager.KEY_HAPTICS_STRENGTH, hapticsStrength)
-                            },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Intensity pill toggle → reveals slider
+                        Surface(
+                            onClick = { showIntensitySlider = !showIntensitySlider },
+                            shape = RoundedCornerShape(50),
+                            color = if (showIntensitySlider) MaterialTheme.colorScheme.secondaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Intensity",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (showIntensitySlider) MaterialTheme.colorScheme.onSecondaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Icon(
+                                    imageVector = if (showIntensitySlider) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = if (showIntensitySlider) MaterialTheme.colorScheme.onSecondaryContainer
+                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showIntensitySlider,
+                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Slider(
+                                    value = sliderValue,
+                                    onValueChange = {
+                                        sliderValue = it
+                                        val newStr = if (it > 0.6f) "strong" else "light"
+                                        if (newStr != hapticsStrength) {
+                                            hapticsStrength = newStr
+                                            prefs.setString(PreferenceManager.KEY_HAPTICS_STRENGTH, newStr)
+                                        }
+                                    },
+                                    onValueChangeFinished = { triggerPreviewVibration(hapticsStrength) },
+                                    valueRange = 0f..1f,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Light", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Strong", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
 
                         // Preview button
                         Button(
-                            onClick = { triggerPreviewVibration() },
+                            onClick = { triggerPreviewVibration(hapticsStrength) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(50)
                         ) {
                             Icon(Icons.Default.Vibration, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
@@ -279,17 +340,20 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         )
     }
 
-    // ── Blocked Numbers Dialog (with avatars + all contacts/logs) ─────────────
+    // ── Blocked Numbers Dialog ────────────────────────────────────────────────
     if (showBlockedNumbersDialog) {
         val callLogRepo: ICallLogRepository = koinInject()
         val contactsRepo: IContactsRepository = koinInject()
 
-        // Data: number → (name, photoUri)
         var recentNumbers by remember { mutableStateOf<List<Triple<String, String, String?>>>(emptyList()) }
         var contactNumbers by remember { mutableStateOf<List<Triple<String, String, String?>>>(emptyList()) }
+        var searchQuery by remember { mutableStateOf("") }
+        var isLoading by remember { mutableStateOf(true) }
 
         LaunchedEffect(Unit) {
+            isLoading = true
             try {
+                // Load ALL call logs (no limit)
                 val logs = callLogRepo.getCallLogs()
                 val seen = mutableSetOf<String>()
                 val result = mutableListOf<Triple<String, String, String?>>()
@@ -298,151 +362,203 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     if (num.isBlank() || !seen.add(num)) continue
                     val contact = try { contactsRepo.getContactByNumber(num) } catch (_: Exception) { null }
                     result.add(Triple(num, contact?.name ?: num, contact?.photoUri))
-                    if (result.size >= 50) break
                 }
                 recentNumbers = result
             } catch (_: Exception) {}
             try {
+                // Load ALL contacts
                 contactNumbers = contactsRepo.getContacts()
                     .filter { it.phoneNumbers.isNotEmpty() }
-                    .map { c -> Triple(c.phoneNumbers.first(), c.name, c.photoUri) }
+                    .flatMap { c -> c.phoneNumbers.map { num -> Triple(num, c.name, c.photoUri) } }
+                    .distinctBy { it.first }
+                    .sortedBy { it.second }
             } catch (_: Exception) {}
+            isLoading = false
         }
 
-        AlertDialog(
-            onDismissRequest = { showBlockedNumbersDialog = false },
-            icon = { Icon(Icons.Outlined.Block, null, tint = ColorRed) },
-            title = { Text("Blocked Numbers") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Filtered lists based on search query
+        val filteredRecents = remember(recentNumbers, searchQuery) {
+            if (searchQuery.isBlank()) recentNumbers
+            else recentNumbers.filter { (num, name, _) ->
+                name.contains(searchQuery, ignoreCase = true) || num.contains(searchQuery)
+            }
+        }
+        val filteredContacts = remember(contactNumbers, searchQuery) {
+            if (searchQuery.isBlank()) contactNumbers
+            else contactNumbers.filter { (num, name, _) ->
+                name.contains(searchQuery, ignoreCase = true) || num.contains(searchQuery)
+            }
+        }
+
+        fun blockNumber(number: String) {
+            if (!blockedContactsList.contains(number)) {
+                val updated = blockedContactsList + number
+                blockedContactsList = updated
+                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+            }
+        }
+
+        Dialog(onDismissRequest = { showBlockedNumbersDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Header
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
+                        Text("Blocked Numbers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Search field
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search name or number…") },
+                        leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(20.dp)) },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp)) }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(50),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                    )
+
+                    // Tab row
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Call logs", "Contacts", "Enter Number").forEachIndexed { index, label ->
+                        listOf("Call Logs", "Contacts", "Manual").forEachIndexed { index, label ->
                             val selected = blockedNumbersTab == index
                             Surface(
                                 onClick = { blockedNumbersTab = index },
-                                shape = RoundedCornerShape(50.dp),
+                                shape = RoundedCornerShape(50),
                                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).height(36.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
                                     Text(
                                         label,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         }
                     }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
-                    when (blockedNumbersTab) {
-                        0 -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.heightIn(max = 240.dp)) {
-                                if (recentNumbers.isEmpty()) {
-                                    Text("No recent call logs.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Content
+                    Box(modifier = Modifier.heightIn(min = 80.dp, max = 320.dp)) {
+                        when (blockedNumbersTab) {
+                            0 -> {
+                                if (isLoading) {
+                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                    }
+                                } else if (filteredRecents.isEmpty()) {
+                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                        Text(if (searchQuery.isBlank()) "No call logs found." else "No results for \"$searchQuery\"",
+                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 } else {
-                                    recentNumbers.forEach { (number, name, photoUri) ->
-                                        val alreadyBlocked = blockedContactsList.contains(number)
-                                        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                                            Row(
-                                                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(36.dp))
-                                                Spacer(Modifier.width(10.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                                    if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        items(filteredRecents, key = { it.first }) { (number, name, photoUri) ->
+                                            val alreadyBlocked = blockedContactsList.contains(number)
+                                            Surface(shape = RoundedCornerShape(10.dp), color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant) {
+                                                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(38.dp))
+                                                    Spacer(Modifier.width(10.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+                                                        if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                                    }
+                                                    TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                                                        Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                                    }
                                                 }
-                                                TextButton(
-                                                    onClick = {
-                                                        if (!alreadyBlocked) {
-                                                            val updated = blockedContactsList + number
-                                                            blockedContactsList = updated
-                                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                                        }
-                                                    },
-                                                    enabled = !alreadyBlocked
-                                                ) { Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall) }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        1 -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.heightIn(max = 240.dp)) {
-                                if (contactNumbers.isEmpty()) {
-                                    Text("No contacts found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            1 -> {
+                                if (isLoading) {
+                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                    }
+                                } else if (filteredContacts.isEmpty()) {
+                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                        Text(if (searchQuery.isBlank()) "No contacts found." else "No results for \"$searchQuery\"",
+                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 } else {
-                                    contactNumbers.forEach { (number, name, photoUri) ->
-                                        val alreadyBlocked = blockedContactsList.contains(number)
-                                        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                                            Row(
-                                                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(36.dp))
-                                                Spacer(Modifier.width(10.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                                    Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        items(filteredContacts, key = { it.first }) { (number, name, photoUri) ->
+                                            val alreadyBlocked = blockedContactsList.contains(number)
+                                            Surface(shape = RoundedCornerShape(10.dp), color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant) {
+                                                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(38.dp))
+                                                    Spacer(Modifier.width(10.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+                                                        if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                                    }
+                                                    TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                                                        Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                                    }
                                                 }
-                                                TextButton(
-                                                    onClick = {
-                                                        if (!alreadyBlocked) {
-                                                            val updated = blockedContactsList + number
-                                                            blockedContactsList = updated
-                                                            prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                                        }
-                                                    },
-                                                    enabled = !alreadyBlocked
-                                                ) { Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall) }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        2 -> {
-                            OutlinedTextField(
-                                value = blockedNumberInput,
-                                onValueChange = { blockedNumberInput = it },
-                                label = { Text("Enter number to block") },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                trailingIcon = {
-                                    if (blockedNumberInput.isNotBlank()) {
-                                        IconButton(onClick = {
-                                            val num = blockedNumberInput.trim()
-                                            if (num.isNotBlank() && !blockedContactsList.contains(num)) {
-                                                val updated = blockedContactsList + num
-                                                blockedContactsList = updated
-                                                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                            2 -> {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = blockedNumberInput,
+                                        onValueChange = { blockedNumberInput = it },
+                                        label = { Text("Enter number to block") },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                        trailingIcon = {
+                                            if (blockedNumberInput.isNotBlank()) {
+                                                IconButton(onClick = {
+                                                    val num = blockedNumberInput.trim()
+                                                    if (num.isNotBlank()) blockNumber(num)
+                                                    blockedNumberInput = ""
+                                                }) { Icon(Icons.Default.Add, "Add", tint = MaterialTheme.colorScheme.primary) }
                                             }
-                                            blockedNumberInput = ""
-                                        }) { Icon(Icons.Default.Add, "Add") }
+                                        }
+                                    )
+                                    if (searchQuery.isNotBlank()) {
+                                        Button(
+                                            onClick = { blockNumber(searchQuery.trim()); searchQuery = "" },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(50)
+                                        ) { Text("Block \"${searchQuery.trim()}\"") }
                                     }
                                 }
-                            )
+                            }
                         }
                     }
+
+                    // Done button
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showBlockedNumbersDialog = false }) { Text("Done") }
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showBlockedNumbersDialog = false }) { Text("Done") }
             }
-        )
+        }
     }
 
     // ── Block List Detail Dialog ───────────────────────────────────────────────
     if (showBlockListDialog) {
         val contactsRepo: IContactsRepository = koinInject()
-        // Resolve contact info for each blocked number
         var blockedWithInfo by remember { mutableStateOf<List<Triple<String, String, String?>>>(emptyList()) }
         LaunchedEffect(blockedContactsList) {
             blockedWithInfo = blockedContactsList.map { number ->
@@ -451,52 +567,83 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             }
         }
 
-        AlertDialog(
-            onDismissRequest = { showBlockListDialog = false },
-            icon = { Icon(Icons.Outlined.Block, null, tint = ColorRed) },
-            title = { Text("Block List") },
-            text = {
-                if (blockedContactsList.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Outlined.Block, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f), modifier = Modifier.size(40.dp))
-                            Text("No numbers blocked", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Dialog(onDismissRequest = { showBlockListDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Header
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
+                        Text("Block List", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = ColorRed.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                "${blockedContactsList.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorRed,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
                         }
                     }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 320.dp)) {
-                        blockedWithInfo.forEachIndexed { index, (number, name, photoUri) ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
+
+                    if (blockedContactsList.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Outlined.Block, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f), modifier = Modifier.size(44.dp))
+                                Text("No numbers blocked", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 340.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(blockedWithInfo) { index, (number, name, photoUri) ->
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(44.dp))
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                        if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    IconButton(onClick = {
-                                        val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
-                                        blockedContactsList = updated
-                                        prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                    }) {
-                                        Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(20.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(46.dp))
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                            if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
+                                                blockedContactsList = updated
+                                                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(18.dp))
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showBlockListDialog = false }) { Text("Close") }
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showBlockListDialog = false }) { Text("Close") }
             }
-        )
+        }
     }
 
     // ── Update Dialogs ────────────────────────────────────────────────────────
@@ -786,36 +933,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         SectionLabel("Block List")
                         RivoExpressiveCard {
-                            Surface(
-                                onClick = { showBlockListDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.surface
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = ColorRed.copy(alpha = 0.12f),
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(18.dp))
-                                        }
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Tap to see the Block list", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                        Text(
-                                            if (blockedContactsList.isEmpty()) "No numbers blocked" else "${blockedContactsList.size} number(s) in block list",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
+                            RivoListItem(
+                                headline = "Tap to see the Block list",
+                                supporting = if (blockedContactsList.isEmpty()) "No numbers blocked"
+                                             else "${blockedContactsList.size} number(s) blocked",
+                                leadingIcon = Icons.Outlined.Block,
+                                iconContainerColor = ColorRed,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { showBlockListDialog = true }
+                            )
                         }
                     }
                 }

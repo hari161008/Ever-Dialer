@@ -326,6 +326,7 @@ fun CallLogFullContent(
                         },
                     label = "filterSlide"
                 ) { (_, currentGroupedLogs) ->
+                    ScrollHapticsEffect(listState = listState)
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),

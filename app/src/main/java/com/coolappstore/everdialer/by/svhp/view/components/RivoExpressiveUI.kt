@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -91,14 +92,20 @@ internal fun performScrollHaptic(context: android.content.Context) {
 fun ScrollHapticsEffect(listState: LazyListState) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
-    val tapHapticsEnabled = prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)
-    val scrollHapticsEnabled = prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+    val scrollHapticsEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false) }
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
     var prevFirstVisibleItem by remember { mutableIntStateOf(listState.firstVisibleItemIndex) }
     LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (scrollHapticsEnabled && tapHapticsEnabled) {
-            if (listState.firstVisibleItemIndex != prevFirstVisibleItem) {
-                performScrollHaptic(context)
-                prevFirstVisibleItem = listState.firstVisibleItemIndex
+        if (scrollHapticsEnabled) {
+            val current = listState.firstVisibleItemIndex
+            if (current != prevFirstVisibleItem) {
+                prevFirstVisibleItem = current
+                try {
+                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                } catch (_: Exception) {
+                    performScrollHaptic(context)
+                }
             }
         }
     }
