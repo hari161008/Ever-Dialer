@@ -45,6 +45,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -76,7 +77,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     )
     LaunchedEffect(Unit) {
         fabVisible = true
-        if (prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, true)) {
+        if (prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) {
             showDialpad = true
         }
     }
@@ -145,6 +146,9 @@ fun CallLogFullContent(
     onRequestPermission: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
+    val prefs = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+
     if (isGranted) {
         val viewModel: CallLogViewModel = koinActivityViewModel()
         val logs by viewModel.allCallLogs.collectAsState()
@@ -197,18 +201,24 @@ fun CallLogFullContent(
             val swipeThreshold = 80f
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // Stat cards
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
-                    item { AnimatedStatCard(60L, "Missed", missedCount.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
-                        if (missedCount > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
-                    ) { viewModel.setFilter(CallLogFilter.Missed) } }
-                    item { AnimatedStatCard(120L, "Outgoing", logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
-                    if (totalDurationToday > 0) {
-                        item { AnimatedStatCard(180L, "Call Time", formatDuration(totalDurationToday), Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                // Stat cards – visibility controlled by Call UI settings
+                val showToday    = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true) }
+                val showMissed   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true) }
+                val showOutgoing = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true) }
+                val showCallTime = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true) }
+                if (showToday || showMissed || showOutgoing || (showCallTime && totalDurationToday > 0)) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
+                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedCount.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
+                            if (missedCount > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                        ) { viewModel.setFilter(CallLogFilter.Missed) } }
+                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
+                        if (showCallTime && totalDurationToday > 0) {
+                            item { AnimatedStatCard(180L, "Call Time", formatDuration(totalDurationToday), Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                        }
                     }
                 }
 

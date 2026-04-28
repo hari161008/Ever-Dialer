@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
@@ -100,6 +101,14 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
+    var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
+
+    // Call UI section checkboxes dialog
+    var showCallUIDialog by remember { mutableStateOf(false) }
+    var callUIShowToday    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true)) }
+    var callUIShowMissed   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true)) }
+    var callUIShowOutgoing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)) }
+    var callUIShowCallTime by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true)) }
 
     var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
     var hexError by remember { mutableStateOf(false) }
@@ -123,6 +132,67 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
         } else {
             hexError = true
         }
+    }
+
+    // ── Call UI Dialog ────────────────────────────────────────────────────────
+    if (showCallUIDialog) {
+        AlertDialog(
+            onDismissRequest = { showCallUIDialog = false },
+            icon = { Icon(Icons.Default.Dashboard, null, tint = ColorBlue) },
+            title = { Text("Call UI Elements") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Toggle which stat cards appear in the Calls home screen.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    listOf(
+                        Triple("Today", callUIShowToday) { v: Boolean ->
+                            callUIShowToday = v
+                            prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_TODAY, v)
+                        },
+                        Triple("Missed", callUIShowMissed) { v: Boolean ->
+                            callUIShowMissed = v
+                            prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_MISSED, v)
+                        },
+                        Triple("Outgoing", callUIShowOutgoing) { v: Boolean ->
+                            callUIShowOutgoing = v
+                            prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, v)
+                        },
+                        Triple("Call Time", callUIShowCallTime) { v: Boolean ->
+                            callUIShowCallTime = v
+                            prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, v)
+                        }
+                    ).forEach { (label, checked, onChange) ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = onChange,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCallUIDialog = false }) { Text("Done") }
+            }
+        )
     }
 
     Scaffold(
@@ -281,7 +351,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                     }
                 }
 
-                // ── Incoming Call & Caller UI ─────────────────────────
+                // ── Call UI ───────────────────────────────────────────
                 item {
                     RivoAnimatedSection(delayMs = 100L) {
                         Column {
@@ -306,6 +376,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorBlue,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = {}
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                // Calls section toggles
+                                RivoListItem(
+                                    headline = "Calls Section Elements",
+                                    supporting = "Toggle Today, Missed, Outgoing, Call Time cards",
+                                    leadingIcon = Icons.Default.Dashboard,
+                                    iconContainerColor = ColorOrange,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showCallUIDialog = true }
                                 )
                             }
                         }
@@ -384,6 +465,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorGreen,
                                     checked = showPicture,
                                     onCheckedChange = { showPicture = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                // Dialpad by default toggle (below Avatars as requested)
+                                RivoSwitchListItem(
+                                    headline = "Open Dialpad by Default",
+                                    supporting = "Show dialpad automatically when app starts",
+                                    leadingIcon = Icons.Outlined.Dialpad,
+                                    iconContainerColor = ColorTeal,
+                                    checked = openDialpadDefault,
+                                    onCheckedChange = {
+                                        openDialpadDefault = it
+                                        prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, it)
+                                    }
                                 )
                             }
                         }

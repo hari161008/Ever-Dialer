@@ -18,12 +18,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
@@ -33,6 +38,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -96,7 +103,49 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
         )
     }
 
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull() ?: continue
+                        if (!down.pressed) continue
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        var triggered = false
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val change = event.changes.firstOrNull() ?: break
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+                            if (!triggered && abs(dx) > 120f && abs(dx) > abs(dy) * 2f) {
+                                triggered = true
+                                if (dx > 0) {
+                                    // swipe right from Notes → Contacts
+                                    coroutineScope.launch {
+                                        navController.navigate(ContactScreenDestination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true; restoreState = true
+                                        }
+                                    }
+                                } else {
+                                    // swipe left from Notes → Favorites (wrap)
+                                    coroutineScope.launch {
+                                        navController.navigate(FavoritesScreenDestination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true; restoreState = true
+                                        }
+                                    }
+                                }
+                            }
+                            if (!change.pressed) break
+                        }
+                    }
+                }
+            },
         topBar = {
             TopAppBar(
                 title = { Text("Notes", fontWeight = FontWeight.Bold) },

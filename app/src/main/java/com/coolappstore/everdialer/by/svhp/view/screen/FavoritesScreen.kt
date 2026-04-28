@@ -31,6 +31,9 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import org.koin.compose.koinInject
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -43,6 +46,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val allContacts by contactsVM.allContacts.collectAsState()
     val favorites = remember(allContacts) { allContacts.filter { it.isFavorite } }
     val scope = rememberCoroutineScope()
+    val prefs = koinInject<PreferenceManager>()
+    val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
 
     Scaffold(
         modifier = Modifier
@@ -63,10 +68,21 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                             if (!triggered && abs(dx) > 120f && abs(dx) > abs(dy) * 2f) {
                                 triggered = true
                                 if (dx < 0) {
+                                    // swipe left → Recents
                                     scope.launch {
                                         navController.navigate(RecentScreenDestination.route) {
                                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                             launchSingleTop = true; restoreState = true
+                                        }
+                                    }
+                                } else {
+                                    // swipe right from Favorites (leftmost) → Notes (rightmost, wrap around)
+                                    if (notesEnabled) {
+                                        scope.launch {
+                                            navController.navigate(NotesScreenDestination.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true; restoreState = true
+                                            }
                                         }
                                     }
                                 }

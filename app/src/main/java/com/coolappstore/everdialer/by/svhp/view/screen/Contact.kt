@@ -33,6 +33,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -76,6 +77,14 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                                 if (dx > 0) {
                                     scope.launch {
                                         navController.navigate(RecentScreenDestination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true; restoreState = true
+                                        }
+                                    }
+                                } else {
+                                    // swipe left from Contacts → Notes (wrap around)
+                                    scope.launch {
+                                        navController.navigate(NotesScreenDestination.route) {
                                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                             launchSingleTop = true; restoreState = true
                                         }

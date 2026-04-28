@@ -45,6 +45,9 @@ class CallService : InCallService() {
 
         private var instance: CallService? = null
 
+        // Flag to suppress cleanup during conference merge
+        @Volatile private var isMerging = false
+
         fun setMuted(muted: Boolean) {
             instance?.setMuted(muted)
         }
@@ -64,9 +67,12 @@ class CallService : InCallService() {
         fun mergeCalls() {
             val primary = _currentCallSession.value?.call ?: return
             val secondary = _heldCallSession.value?.call ?: return
+            isMerging = true
             try {
                 primary.conference(secondary)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                isMerging = false
+            }
         }
 
         fun hasHeldCall(): Boolean = _heldCallSession.value != null
@@ -78,9 +84,8 @@ class CallService : InCallService() {
             when {
                 _currentCallSession.value?.call == call -> {
                     _currentCallSession.value = CallSession(call, state)
-                    if (state == Call.STATE_HOLDING) {
-                        _heldCallSession.value = CallSession(call, state)
-                    }
+                    // Do NOT automatically move to heldCallSession here when holding;
+                    // that is managed explicitly in onCallAdded / mergeCalls
                 }
                 _heldCallSession.value?.call == call -> {
                     _heldCallSession.value = CallSession(call, state)
@@ -130,7 +135,6 @@ class CallService : InCallService() {
     }
 
     private fun isNumberBlocked(number: String): Boolean {
-        // Check blocked contacts list
         val blockedList = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
             ?.split(",")
             ?.filter { it.isNotBlank() }
@@ -165,10 +169,33 @@ class CallService : InCallService() {
             return
         }
 
-        // If there is already a current call, this is a second call (held or incoming)
+        // If a conference merge just finished, this is the conference call
+        if (isMerging) {
+            isMerging = false
+            call.registerCallback(callCallback)
+            _currentCallSession.value = CallSession(call, call.state)
+            _heldCallSession.value = null
+            updateNotification(call)
+            return
+        }
+
+        // If there is already a current call, this is a second call
         if (_currentCallSession.value != null && _currentCallSession.value?.state != Call.STATE_DISCONNECTED) {
-            call.registerCallback(heldCallCallback)
-            _heldCallSession.value = CallSession(call, call.state)
+            if (call.state != Call.STATE_RINGING) {
+                // Outgoing second call: new call becomes current, previous call becomes held
+                val previousSession = _currentCallSession.value
+                previousSession?.call?.unregisterCallback(callCallback)
+                if (previousSession != null) {
+                    previousSession.call.registerCallback(heldCallCallback)
+                    _heldCallSession.value = previousSession
+                }
+                call.registerCallback(callCallback)
+                _currentCallSession.value = CallSession(call, call.state)
+            } else {
+                // Incoming second call: goes to held
+                call.registerCallback(heldCallCallback)
+                _heldCallSession.value = CallSession(call, call.state)
+            }
             updateNotification(call)
             if (call.state != Call.STATE_RINGING) {
                 val intent = Intent(this, CallActivity::class.java).apply {
@@ -195,6 +222,11 @@ class CallService : InCallService() {
         super.onCallRemoved(call)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
+
+        // If we are in the middle of a merge, suppress cleanup
+        // (the conference call will arrive via onCallAdded shortly)
+        if (isMerging) return
+
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
             // promote held

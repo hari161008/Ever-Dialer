@@ -13,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -25,6 +26,93 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = Purple40, secondary = PurpleGrey40, tertiary = Pink40
 )
+
+/**
+ * Derive a Material3-coherent color scheme from a single seed/primary color.
+ * We blend the user-chosen color into secondary and tertiary to avoid
+ * the residual purple from the default scheme.
+ */
+private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
+    // Harmonise companion roles from the primary
+    val argb = primary.toArgb()
+    val r = android.graphics.Color.red(argb)
+    val g = android.graphics.Color.green(argb)
+    val b = android.graphics.Color.blue(argb)
+
+    // Build desaturated / tinted variants
+    fun blend(a: Int, b2: Int, ratio: Float) = (a + (b2 - a) * ratio).toInt().coerceIn(0, 255)
+
+    // Secondary: slightly desaturated version of primary
+    val secR = blend(r, 128, 0.4f)
+    val secG = blend(g, 128, 0.4f)
+    val secB = blend(b, 128, 0.4f)
+    val secondary = Color(secR, secG, secB)
+
+    // Tertiary: complementary hue shift (rotate ~180° in simplified RGB space)
+    val terR = blend(b, r, 0.3f)
+    val terG = blend(r, g, 0.3f)
+    val terB = blend(g, b, 0.3f)
+    val tertiary = Color(terR, terG, terB)
+
+    return if (dark) {
+        // Dark container colours: lighter/more vibrant
+        val primaryContainer = Color(
+            blend(r, 255, 0.55f),
+            blend(g, 255, 0.55f),
+            blend(b, 255, 0.55f)
+        )
+        val onPrimaryContainer = Color(
+            blend(r, 0, 0.7f),
+            blend(g, 0, 0.7f),
+            blend(b, 0, 0.7f)
+        )
+        darkColorScheme(
+            primary = primaryContainer, // In dark mode primary is the "light" version
+            onPrimary = onPrimaryContainer,
+            primaryContainer = Color(blend(r, 40, 0.7f), blend(g, 40, 0.7f), blend(b, 40, 0.7f)),
+            onPrimaryContainer = primaryContainer,
+            secondary = Color(blend(secR, 200, 0.5f), blend(secG, 200, 0.5f), blend(secB, 200, 0.5f)),
+            tertiary = Color(blend(terR, 200, 0.5f), blend(terG, 200, 0.5f), blend(terB, 200, 0.5f))
+        ).copy(
+            background           = Color(0xFF1C1B1F),
+            surface              = Color(0xFF1C1B1F),
+            surfaceVariant       = Color(0xFF49454F),
+            surfaceContainer     = Color(0xFF211F26),
+            surfaceContainerLow  = Color(0xFF1D1B20),
+            surfaceContainerHigh = Color(0xFF2B2930),
+            surfaceContainerHighest = Color(0xFF36343B),
+            surfaceContainerLowest  = Color(0xFF0F0D13)
+        )
+    } else {
+        val primaryContainer = Color(
+            blend(r, 255, 0.75f),
+            blend(g, 255, 0.75f),
+            blend(b, 255, 0.75f)
+        )
+        val onPrimaryContainer = Color(
+            blend(r, 0, 0.7f),
+            blend(g, 0, 0.7f),
+            blend(b, 0, 0.7f)
+        )
+        lightColorScheme(
+            primary = primary,
+            onPrimary = Color.White,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary,
+            tertiary = tertiary
+        ).copy(
+            background           = Color(0xFFFFFBFE),
+            surface              = Color(0xFFFFFBFE),
+            surfaceVariant       = Color(0xFFE7E0EC),
+            surfaceContainer     = Color(0xFFF3EDF7),
+            surfaceContainerLow  = Color(0xFFF7F2FA),
+            surfaceContainerHigh = Color(0xFFECE6F0),
+            surfaceContainerHighest = Color(0xFFE6E0E9),
+            surfaceContainerLowest  = Color(0xFFFFFFFF)
+        )
+    }
+}
 
 @Composable
 fun Rivo4Theme(
@@ -58,32 +146,9 @@ fun Rivo4Theme(
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         else -> {
-            // When dynamic colors is OFF, use user-selected primary with neutral surfaces
             val primary = if (customPrimaryInt != 0) Color(customPrimaryInt.toLong() and 0xFFFFFFFFL)
                           else defaultPrimary
-            if (darkTheme) {
-                darkColorScheme(primary = primary).copy(
-                    background           = Color(0xFF1C1B1F),
-                    surface              = Color(0xFF1C1B1F),
-                    surfaceVariant       = Color(0xFF49454F),
-                    surfaceContainer     = Color(0xFF211F26),
-                    surfaceContainerLow  = Color(0xFF1D1B20),
-                    surfaceContainerHigh = Color(0xFF2B2930),
-                    surfaceContainerHighest = Color(0xFF36343B),
-                    surfaceContainerLowest  = Color(0xFF0F0D13)
-                )
-            } else {
-                lightColorScheme(primary = primary).copy(
-                    background           = Color(0xFFFFFBFE),
-                    surface              = Color(0xFFFFFBFE),
-                    surfaceVariant       = Color(0xFFE7E0EC),
-                    surfaceContainer     = Color(0xFFF3EDF7),
-                    surfaceContainerLow  = Color(0xFFF7F2FA),
-                    surfaceContainerHigh = Color(0xFFECE6F0),
-                    surfaceContainerHighest = Color(0xFFE6E0E9),
-                    surfaceContainerLowest  = Color(0xFFFFFFFF)
-                )
-            }
+            buildCustomColorScheme(primary, darkTheme)
         }
     }
 

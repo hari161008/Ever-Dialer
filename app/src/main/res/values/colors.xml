@@ -8,4 +8,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Splash background matches Material3 surface (light) -->
+    <color name="splash_bg">#FFFBFE</color>
 </resources>

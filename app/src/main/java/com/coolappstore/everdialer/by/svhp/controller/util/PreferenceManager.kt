@@ -65,5 +65,12 @@ class PreferenceManager(context: Context) {
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
         // Scroll haptics
         const val KEY_SCROLL_HAPTICS        = "scroll_haptics_enabled"
+        // Haptics strength: "light" or "strong"
+        const val KEY_HAPTICS_STRENGTH      = "app_haptics_strength"
+        // Call UI element visibility (home screen stat cards)
+        const val KEY_CALL_UI_SHOW_TODAY    = "call_ui_show_today"
+        const val KEY_CALL_UI_SHOW_MISSED   = "call_ui_show_missed"
+        const val KEY_CALL_UI_SHOW_OUTGOING = "call_ui_show_outgoing"
+        const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
     }
 }
