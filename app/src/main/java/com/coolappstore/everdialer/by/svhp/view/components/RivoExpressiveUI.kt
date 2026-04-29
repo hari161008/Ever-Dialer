@@ -38,33 +38,42 @@ import org.koin.compose.koinInject
 
 // ─── App Haptics Helper ────────────────────────────────────────────────────────
 
-internal fun performAppHaptic(context: android.content.Context, strength: String) {
+/**
+ * strength: "light" | "strong" | "custom"
+ * customIntensity: 0f..1f, only used when strength == "custom"
+ */
+fun performAppHaptic(
+    context: android.content.Context,
+    strength: String,
+    customIntensity: Float = 0.5f
+) {
     try {
+        val durationMs: Long
+        val amplitude: Int
+        when (strength) {
+            "strong" -> { durationMs = 40; amplitude = VibrationEffect.DEFAULT_AMPLITUDE }
+            "custom" -> {
+                durationMs = (10 + customIntensity * 70).toLong().coerceIn(10, 80)
+                amplitude  = (40  + (customIntensity * 215)).toInt().coerceIn(40, 255)
+            }
+            else -> { durationMs = 20; amplitude = 80 } // light
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(VibratorManager::class.java)
-            val vibrator = vm?.defaultVibrator
-            val effect = if (strength == "strong")
-                VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE)
-            else
-                VibrationEffect.createOneShot(20, 80)
-            vibrator?.vibrate(effect)
+            vm?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
         } else {
             val vibrator = context.getSystemService(Vibrator::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val effect = if (strength == "strong")
-                    VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE)
-                else
-                    VibrationEffect.createOneShot(20, 80)
-                vibrator?.vibrate(effect)
+                vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(if (strength == "strong") 40L else 20L)
+                vibrator?.vibrate(durationMs)
             }
         }
     } catch (_: Exception) {}
 }
 
-internal fun performScrollHaptic(context: android.content.Context) {
+fun performScrollHaptic(context: android.content.Context) {
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(VibratorManager::class.java)
@@ -392,7 +401,11 @@ fun RivoListItem(
                     indication = ripple(),
                     onClick = {
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                            performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+                            performAppHaptic(
+                                context,
+                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                            )
                         }
                         onClick()
                     },
@@ -471,7 +484,11 @@ fun RivoSwitchListItem(
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+                performAppHaptic(
+                    context,
+                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                )
             }
             onCheckedChange(!checked)
         },

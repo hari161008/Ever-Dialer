@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp.view.screen
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.*
 import android.telecom.Call
 import android.telecom.CallAudioState
@@ -18,6 +19,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,10 +51,17 @@ import coil.compose.AsyncImage
 import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
+import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
+import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.util.*
 import kotlin.math.roundToInt
@@ -58,6 +69,7 @@ import kotlin.math.roundToInt
 class CallActivity : ComponentActivity() {
 
     private val contactsRepo: IContactsRepository by inject()
+    private val callLogRepo: ICallLogRepository by inject()
     private val prefs: PreferenceManager by inject()
     private var proximityWakeLock: PowerManager.WakeLock? = null
 
@@ -104,7 +116,6 @@ class CallActivity : ComponentActivity() {
                     var contactName by remember { mutableStateOf(number.ifEmpty { "Unknown" }) }
                     var photoUri by remember { mutableStateOf<String?>(null) }
 
-                    // Resolve held call info for merge banner
                     val heldCall = heldSession?.call
                     val heldNumber = heldCall?.details?.handle?.schemeSpecificPart ?: ""
                     var heldContactName by remember(heldNumber) { mutableStateOf(heldNumber.ifEmpty { "Unknown" }) }
@@ -134,7 +145,9 @@ class CallActivity : ComponentActivity() {
                         photoUri = photoUri,
                         audioState = audioState,
                         hasHeldCall = heldSession != null,
-                        heldCallName = heldContactName
+                        heldCallName = heldContactName,
+                        contactsRepo = contactsRepo,
+                        callLogRepo = callLogRepo
                     )
                 }
             }
@@ -143,8 +156,6 @@ class CallActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Always re-check proximity lock state when activity resumes
-        // This covers the case of accepting call from notification with screen already on
         val session = CallService.currentCallSession.value
         val audioState = CallService.audioState.value
         val proximityBgEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)
@@ -174,6 +185,7 @@ class CallActivity : ComponentActivity() {
     private fun releaseProximityLock() { if (proximityWakeLock?.isHeld == true) proximityWakeLock?.release() }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressiveCallScreen(
     call: Call,
@@ -183,7 +195,9 @@ fun ExpressiveCallScreen(
     photoUri: String?,
     audioState: CallAudioState?,
     hasHeldCall: Boolean = false,
-    heldCallName: String = ""
+    heldCallName: String = "",
+    contactsRepo: IContactsRepository? = null,
+    callLogRepo: ICallLogRepository? = null
 ) {
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
@@ -193,6 +207,7 @@ fun ExpressiveCallScreen(
     val isDark = isSystemInDarkTheme()
     var showNoteWindow by remember { mutableStateOf(false) }
     var showMergeConfirm by remember { mutableStateOf(false) }
+    var showAddPersonSheet by remember { mutableStateOf(false) }
 
     var noteText by remember { mutableStateOf("") }
 
@@ -224,7 +239,6 @@ fun ExpressiveCallScreen(
     }
 
     var isDisconnecting by remember { mutableStateOf(false) }
-    // Slide-down + fade out instead of going transparent (avoids white screen)
     val disconnectOffset by animateDpAsState(
         if (isDisconnecting) 120.dp else 0.dp,
         tween(600),
@@ -290,7 +304,20 @@ fun ExpressiveCallScreen(
         )
     }
 
-    // Solid background always visible — content slides/fades on disconnect
+    // Add Person bottom sheet
+    if (showAddPersonSheet) {
+        AddPersonSheet(
+            context = context,
+            contactsRepo = contactsRepo,
+            callLogRepo = callLogRepo,
+            onDismiss = { showAddPersonSheet = false },
+            onPersonSelected = { number ->
+                showAddPersonSheet = false
+                makeCall(context, number)
+            }
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
         Box(
             modifier = Modifier
@@ -365,20 +392,32 @@ fun ExpressiveCallScreen(
                                     isOnHold = !isOnHold
                                     if (isOnHold) call.hold() else call.unhold()
                                 }
-                                AnimatedCallButton(
-                                    icon = Icons.Default.CallMerge,
-                                    label = "Merge",
-                                    isActive = hasHeldCall,
-                                    btnColor = controlBtnColor,
-                                    activeBtnColor = Color(0xFF4CAF50),
-                                    fgColor = controlBtnFg,
-                                    activeFgColor = Color.White,
-                                    onClick = {
-                                        if (hasHeldCall) {
-                                            showMergeConfirm = true
-                                        }
-                                    }
-                                )
+
+                                // Show "Add Person" when no held call, "Merge" when there is one
+                                if (hasHeldCall) {
+                                    AnimatedCallButton(
+                                        icon = Icons.Default.CallMerge,
+                                        label = "Merge",
+                                        isActive = true,
+                                        btnColor = controlBtnColor,
+                                        activeBtnColor = Color(0xFF4CAF50),
+                                        fgColor = controlBtnFg,
+                                        activeFgColor = Color.White,
+                                        onClick = { showMergeConfirm = true }
+                                    )
+                                } else {
+                                    AnimatedCallButton(
+                                        icon = Icons.Default.PersonAdd,
+                                        label = "Add Person",
+                                        isActive = false,
+                                        btnColor = controlBtnColor,
+                                        activeBtnColor = controlBtnActiveColor,
+                                        fgColor = controlBtnFg,
+                                        activeFgColor = controlBtnActiveFg,
+                                        onClick = { showAddPersonSheet = true }
+                                    )
+                                }
+
                                 AnimatedCallButton(
                                     icon = Icons.Default.EditNote,
                                     label = "Note",
@@ -486,6 +525,278 @@ fun ExpressiveCallScreen(
     }
 }
 
+// ─── Add Person Bottom Sheet ───────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddPersonSheet(
+    context: android.content.Context,
+    contactsRepo: IContactsRepository?,
+    callLogRepo: ICallLogRepository?,
+    onDismiss: () -> Unit,
+    onPersonSelected: (String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    var contacts by remember { mutableStateOf<List<Contact>>(emptyList()) }
+    var callLogs by remember { mutableStateOf<List<CallLogEntry>>(emptyList()) }
+    var dialNumber by remember { mutableStateOf("") }
+
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            contacts = contactsRepo?.getContacts() ?: emptyList()
+            callLogs = callLogRepo?.getCallLogs()?.distinctBy { it.number } ?: emptyList()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
+                Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
+            }
+        }
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+            // Title row
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Add Person", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+            }
+
+            // Search bar (hidden for Dial tab)
+            if (selectedTab != 2) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    placeholder = { Text(if (selectedTab == 0) "Search call logs..." else "Search contacts...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    )
+                )
+            }
+
+            // Pill tabs
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val tabs = listOf("Call Logs" to Icons.Default.History, "Contacts" to Icons.Default.Person, "Dial Pad" to Icons.Default.Dialpad)
+                tabs.forEachIndexed { index, (label, icon) ->
+                    val selected = selectedTab == index
+                    val tabColor by animateColorAsState(
+                        if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                        spring(stiffness = Spring.StiffnessMediumLow), label = "tabColor"
+                    )
+                    Surface(
+                        onClick = { selectedTab = index; searchQuery = "" },
+                        shape = RoundedCornerShape(50.dp),
+                        color = tabColor,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, null, modifier = Modifier.size(16.dp),
+                                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(4.dp))
+                            Text(label, style = MaterialTheme.typography.labelMedium, fontSize = 11.sp,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+            // Tab content
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 420.dp)) {
+                when (selectedTab) {
+                    0 -> {
+                        val filtered = remember(callLogs, searchQuery) {
+                            if (searchQuery.isBlank()) callLogs.take(50)
+                            else callLogs.filter {
+                                val name = it.name ?: ""
+                                name.contains(searchQuery, ignoreCase = true) || it.number.contains(searchQuery)
+                            }.take(50)
+                        }
+                        LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                            items(filtered, key = { it.number }) { log ->
+                                AddPersonRow(
+                                    name = log.name?.takeIf { it != log.number } ?: log.number,
+                                    subtitle = if (log.name != null && log.name != log.number) log.number else null,
+                                    photoUri = log.photoUri,
+                                    onClick = { onPersonSelected(log.number) }
+                                )
+                            }
+                        }
+                    }
+                    1 -> {
+                        val filtered = remember(contacts, searchQuery) {
+                            if (searchQuery.isBlank()) contacts.take(100)
+                            else contacts.filter { it.name.contains(searchQuery, ignoreCase = true) || it.phoneNumbers.any { n -> n.contains(searchQuery) } }.take(100)
+                        }
+                        LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                            items(filtered, key = { it.id }) { contact ->
+                                AddPersonRow(
+                                    name = contact.name,
+                                    subtitle = contact.phoneNumbers.firstOrNull(),
+                                    photoUri = contact.photoUri,
+                                    onClick = { contact.phoneNumbers.firstOrNull()?.let { onPersonSelected(it) } }
+                                )
+                            }
+                        }
+                    }
+                    2 -> {
+                        // Compact dial pad
+                        CompactDialPad(
+                            number = dialNumber,
+                            onNumberChange = { dialNumber = it },
+                            onCall = { if (dialNumber.isNotEmpty()) onPersonSelected(dialNumber) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddPersonRow(
+    name: String,
+    subtitle: String?,
+    photoUri: String?,
+    onClick: () -> Unit
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, spring(stiffness = Spring.StiffnessMedium), label = "rowScale")
+
+    Surface(
+        onClick = { isPressed = false; onClick() },
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth().scale(scale)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(44.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null) {
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Icon(Icons.Default.Call, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun CompactDialPad(
+    number: String,
+    onNumberChange: (String) -> Unit,
+    onCall: () -> Unit
+) {
+    val keys = listOf(
+        listOf("1" to "", "2" to "ABC", "3" to "DEF"),
+        listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
+        listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
+        listOf("*" to "", "0" to "+", "#" to "")
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Number display
+        Text(
+            text = number.ifEmpty { "Enter number" },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Light,
+            color = if (number.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f) else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        keys.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                row.forEach { (digit, letters) ->
+                    val interaction = remember { MutableInteractionSource() }
+                    val isPressed by interaction.collectIsPressedAsState()
+                    val keyRadius by animateDpAsState(if (isPressed) 14.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "keyR")
+                    Surface(
+                        onClick = { onNumberChange(number + digit) },
+                        shape = RoundedCornerShape(keyRadius),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.weight(1f).height(52.dp).scale(if (isPressed) 0.92f else 1f),
+                        interactionSource = interaction
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(digit, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                            if (letters.isNotEmpty()) {
+                                Text(letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bottom row: backspace + call
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                onClick = { if (number.isNotEmpty()) onNumberChange(number.dropLast(1)) },
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.weight(1f).height(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Backspace, null, modifier = Modifier.size(22.dp))
+                }
+            }
+            Surface(
+                onClick = onCall,
+                shape = RoundedCornerShape(22.dp),
+                color = if (number.isNotEmpty()) Color(0xFF4CAF50) else MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.weight(2f).height(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Call, null, tint = if (number.isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+    }
+}
+
+// ─── Animated Call Button ───────────────────────────────────────────────────────
+
 @Composable
 fun AnimatedCallButton(
     icon: ImageVector,
@@ -511,7 +822,9 @@ fun AnimatedCallButton(
             style = MaterialTheme.typography.labelMedium,
             fontFamily = MaterialTheme.typography.labelMedium.fontFamily,
             color = fgColor.copy(0.7f),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 8.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

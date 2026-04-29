@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import android.content.Context
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -23,6 +25,7 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
@@ -33,6 +36,7 @@ import org.koin.compose.koinInject
 @Composable
 fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
+    val context = LocalContext.current
     val settingsState by prefs.settingsChanged.collectAsState()
     val iconOnly      = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
     val notesEnabled  = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
@@ -59,6 +63,13 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
             selected = isFavoritesSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
             onClick = {
+                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                    performAppHaptic(
+                        context,
+                        prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                        prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                    )
+                }
                 navController.navigate(FavoritesScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true; restoreState = true
@@ -75,6 +86,13 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
             selected = isRecentsSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
             onClick = {
+                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                    performAppHaptic(
+                        context,
+                        prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                        prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                    )
+                }
                 navController.navigate(RecentScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true; restoreState = true
@@ -91,6 +109,13 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
             selected = isContactsSelected,
             colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
             onClick = {
+                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                    performAppHaptic(
+                        context,
+                        prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                        prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                    )
+                }
                 navController.navigate(ContactScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true; restoreState = true
@@ -108,6 +133,13 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                 selected = isNotesSelected,
                 colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                 onClick = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(
+                            context,
+                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                        )
+                    }
                     navController.navigate(NotesScreenDestination.route) {
                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                         launchSingleTop = true; restoreState = true

@@ -66,13 +66,15 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         if (!down.pressed) continue
                         val startX = down.position.x
                         val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
                         var triggered = false
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Final)
                             val change = event.changes.firstOrNull() ?: break
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
-                            if (!triggered && kotlin.math.abs(dx) > 120f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 2f) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            if (!triggered && elapsed >= 80L && !change.isConsumed && kotlin.math.abs(dx) > 450f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 4.5f) {
                                 triggered = true
                                 if (dx > 0) {
                                     scope.launch {

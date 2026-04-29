@@ -7,7 +7,6 @@ import android.provider.CallLog
 import android.telecom.TelecomManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,6 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -51,6 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import java.util.Calendar
 import java.util.Locale
 
 private val ColorBlue   = Color(0xFF2196F3)
@@ -98,8 +103,75 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         }
     }
 
+    var childHScrolling by remember { mutableStateOf(false) }
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // A child LazyRow is consuming horizontal scroll – block our swipe nav
+                if (kotlin.math.abs(available.x) > kotlin.math.abs(available.y)) {
+                    childHScrolling = true
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection)
+            .pointerInput(Unit) {
+                // Use PointerEventPass.Final so children (LazyColumn) get events first.
+                // Only trigger navigation when the horizontal movement clearly dominates
+                // vertical movement, preventing accidental swipes during scrolling.
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull() ?: continue
+                        if (!down.pressed) continue
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
+                        var triggered = false
+                        childHScrolling = false // reset at start of each gesture
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val change = event.changes.firstOrNull() ?: break
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+                            val elapsed = System.currentTimeMillis() - startTime
+                            if (!triggered &&
+                                !childHScrolling &&
+                                elapsed >= 80L &&
+                                kotlin.math.abs(dx) > 450f &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 4.5f
+                            ) {
+                                triggered = true
+                                if (dx < 0) {
+                                    scope.launch {
+                                        navController.navigate(ContactScreenDestination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                } else {
+                                    scope.launch {
+                                        navController.navigate(FavoritesScreenDestination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                }
+                            }
+                            if (!change.pressed) {
+                                childHScrolling = false
+                                break
+                            }
+                        }
+                    }
+                }
+            },
         topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
             FloatingActionButton(
@@ -138,6 +210,15 @@ private fun formatDuration(totalSeconds: Long): String {
     }
 }
 
+private fun todayStartMillis(): Long {
+    val cal = Calendar.getInstance()
+    cal.set(Calendar.HOUR_OF_DAY, 0)
+    cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}
+
 @Composable
 fun CallLogFullContent(
     navController: NavController,
@@ -162,8 +243,6 @@ fun CallLogFullContent(
         // Track previous filter index for slide direction
         val filterEntries = CallLogFilter.entries
         var previousFilterIndex by remember { mutableIntStateOf(filterEntries.indexOf(selectedFilter)) }
-        val currentFilterIndex = filterEntries.indexOf(selectedFilter)
-        val slideForward = currentFilterIndex >= previousFilterIndex
 
         val filteredLogs = remember(logs, selectedFilter) {
             when (selectedFilter) {
@@ -189,16 +268,17 @@ fun CallLogFullContent(
         if (logs.isEmpty()) {
             RivoLoadingIndicatorView()
         } else {
-            val missedCount = remember(logs) { logs.count { it.type == CallLog.Calls.MISSED_TYPE } }
-            val todayStart = remember { System.currentTimeMillis() - 86_400_000L }
-            val totalToday = remember(logs) { logs.count { it.date >= todayStart } }
-            val totalDurationToday = remember(logs) {
-                logs.filter { it.date >= todayStart && it.duration > 0 }.sumOf { it.duration }
-            }
+            // Use start-of-day (midnight) for "today" so all four stat cards
+            // consistently reflect the current calendar day.
+            val todayStart = remember { todayStartMillis() }
+            val todayLogs  = remember(logs) { logs.filter { it.date >= todayStart } }
 
-            // Swipe drag state
-            var dragAccumulator by remember { mutableFloatStateOf(0f) }
-            val swipeThreshold = 80f
+            val totalToday        = remember(todayLogs) { todayLogs.size }
+            val missedToday       = remember(todayLogs) { todayLogs.count { it.type == CallLog.Calls.MISSED_TYPE } }
+            val outgoingToday     = remember(todayLogs) { todayLogs.count { it.type == CallLog.Calls.OUTGOING_TYPE } }
+            val totalDurationToday = remember(todayLogs) {
+                todayLogs.filter { it.duration > 0 }.sumOf { it.duration }
+            }
 
             Column(modifier = Modifier.fillMaxSize()) {
                 // Stat cards – visibility controlled by Call UI settings
@@ -212,17 +292,17 @@ fun CallLogFullContent(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
-                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedCount.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
-                            if (missedCount > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
+                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
                         ) { viewModel.setFilter(CallLogFilter.Missed) } }
-                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", logs.count { it.type == CallLog.Calls.OUTGOING_TYPE }.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
+                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
                         if (showCallTime && totalDurationToday > 0) {
                             item { AnimatedStatCard(180L, "Call Time", formatDuration(totalDurationToday), Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
                         }
                     }
                 }
 
-                // ── Filter pills (fixed, do not move) ──────────────────────────
+                // ── Filter pills ──────────────────────────────────────────────
                 LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -296,34 +376,7 @@ fun CallLogFullContent(
                             )
                         }
                     },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { dragAccumulator = 0f },
-                                onHorizontalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragAccumulator += dragAmount
-                                },
-                                onDragEnd = {
-                                    if (dragAccumulator < -swipeThreshold) {
-                                        navController.navigate(ContactScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    } else if (dragAccumulator > swipeThreshold) {
-                                        navController.navigate(FavoritesScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                    dragAccumulator = 0f
-                                },
-                                onDragCancel = { dragAccumulator = 0f }
-                            )
-                        },
+                    modifier = Modifier.fillMaxSize(),
                     label = "filterSlide"
                 ) { (_, currentGroupedLogs) ->
                     ScrollHapticsEffect(listState = listState)
@@ -334,7 +387,7 @@ fun CallLogFullContent(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
-                            item {
+                            item(key = "group_$header", contentType = "logGroup") {
                                 RivoSectionHeader(title = header)
                                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                                     RivoExpressiveCard {

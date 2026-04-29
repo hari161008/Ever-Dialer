@@ -182,7 +182,6 @@ fun ContactDetailsScreen(
                         RivoExpressiveButton(icon = Icons.AutoMirrored.Filled.Message, label = "Text", containerColor = MaterialTheme.colorScheme.secondaryContainer, onClick = {
                             if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
                         })
-                        RivoExpressiveButton(icon = Icons.Default.VideoCall, label = "Video", containerColor = MaterialTheme.colorScheme.tertiaryContainer, onClick = {})
                     }
                 }
 

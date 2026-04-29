@@ -121,7 +121,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                             val change = event.changes.firstOrNull() ?: break
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
-                            if (!triggered && abs(dx) > 120f && abs(dx) > abs(dy) * 2f) {
+                            if (!triggered && !change.isConsumed && abs(dx) > 250f && abs(dx) > abs(dy) * 3.5f) {
                                 triggered = true
                                 if (dx > 0) {
                                     // swipe right from Notes → Contacts

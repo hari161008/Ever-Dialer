@@ -11,9 +11,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +45,9 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+private val CARD_RADIUS = 28.dp
+private val INNER_RADIUS = 4.dp
+
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun AZListScroll(
@@ -65,12 +71,13 @@ fun AZListScroll(
         finalMap
     }
 
+    // Map each letter to its first LazyColumn item index for sidebar jump
     val alphabetIndices = remember(grouped) {
         val map = mutableMapOf<Char, Int>()
         var currentIndex = 0
-        grouped.forEach { (char, _) ->
-            map[char] = currentIndex
-            currentIndex += 2
+        grouped.forEach { (char, group) ->
+            map[char] = currentIndex          // stickyHeader index
+            currentIndex += 1 + group.size   // header + N contact items
         }
         map
     }
@@ -95,7 +102,8 @@ fun AZListScroll(
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             grouped.forEach { (initial, contactsForChar) ->
-                stickyHeader {
+                // ── Letter header ──────────────────────────────────────────
+                stickyHeader(key = "header_$initial", contentType = "letterHeader") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -112,15 +120,38 @@ fun AZListScroll(
                     }
                 }
 
-                item {
+                // ── One lazy item per contact for smooth scrolling ─────────
+                itemsIndexed(
+                    items = contactsForChar,
+                    key = { _, contact -> "${initial}_${contact.id}" },
+                    contentType = { _, _ -> "contact" }
+                ) { index, contact ->
+                    val isOnly   = contactsForChar.size == 1
+                    val isFirst  = index == 0
+                    val isLast   = index == contactsForChar.lastIndex
+
+                    val shape = when {
+                        isOnly  -> RoundedCornerShape(CARD_RADIUS)
+                        isFirst -> RoundedCornerShape(
+                            topStart = CARD_RADIUS, topEnd = CARD_RADIUS,
+                            bottomStart = INNER_RADIUS, bottomEnd = INNER_RADIUS
+                        )
+                        isLast  -> RoundedCornerShape(
+                            topStart = INNER_RADIUS, topEnd = INNER_RADIUS,
+                            bottomStart = CARD_RADIUS, bottomEnd = CARD_RADIUS
+                        )
+                        else    -> RoundedCornerShape(INNER_RADIUS)
+                    }
+
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        RivoExpressiveCard {
-                            contactsForChar.forEachIndexed { index, contact ->
-                                ContactListItem(
-                                    contact = contact,
-                                    navigator = navigator
-                                )
-                                if (index < contactsForChar.size - 1) {
+                        Surface(
+                            shape = shape,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column {
+                                ContactListItem(contact = contact, navigator = navigator)
+                                if (!isLast) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 16.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
@@ -129,7 +160,11 @@ fun AZListScroll(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Gap between letter groups
+                    if (isLast) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
             }
         }
@@ -180,6 +215,7 @@ private fun ContactListItem(
     val prefs = koinInject<PreferenceManager>()
     var showMenu by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
+    var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -197,8 +233,13 @@ private fun ContactListItem(
                 .fillMaxWidth()
                 .combinedClickable(
                     onClick = {
+                        if (horizontalDragDetected) return@combinedClickable
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                            performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "strong") ?: "strong")
+                            performAppHaptic(
+                                context,
+                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                            )
                         }
                         navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                     },
@@ -207,19 +248,36 @@ private fun ContactListItem(
                         showMenu = true
                     }
                 )
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        horizontalDragDetected = false
+                        val downPos = down.position
+                        do {
+                            val event = awaitPointerEvent()
+                            val current = event.changes.firstOrNull() ?: break
+                            val dx = kotlin.math.abs(current.position.x - downPos.x)
+                            val dy = kotlin.math.abs(current.position.y - downPos.y)
+                            if (dx > 28.dp.toPx() && dx > dy * 1.3f) horizontalDragDetected = true
+                            if (!current.pressed) break
+                        } while (true)
+                        isPressed = false
+                    }
+                }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RivoAvatar(
                 name = headline,
                 photoUri = contact.photoUri,
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = headline,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis

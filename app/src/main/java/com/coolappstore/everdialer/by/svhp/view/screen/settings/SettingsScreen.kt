@@ -203,8 +203,10 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             } catch (_: Exception) {}
         }
 
-        var showIntensitySlider by remember { mutableStateOf(false) }
-        var sliderValue by remember { mutableFloatStateOf(if (hapticsStrength == "strong") 1f else 0.4f) }
+        // Custom intensity: 0f..1f stored in prefs
+        var customIntensity by remember {
+            mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+        }
 
         AlertDialog(
             onDismissRequest = { showHapticsDialog = false },
@@ -231,6 +233,8 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
                         Text("Strength", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+
+                        // Three-way segmented control: Light / Strong / Custom
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -238,14 +242,28 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             horizontalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            listOf("light" to "Light", "strong" to "Strong").forEach { (key, label) ->
+                            listOf("light" to "Light", "strong" to "Strong", "custom" to "Custom").forEach { (key, label) ->
                                 val selected = hapticsStrength == key
                                 Surface(
                                     onClick = {
                                         hapticsStrength = key
-                                        sliderValue = if (key == "strong") 1f else 0.4f
                                         prefs.setString(PreferenceManager.KEY_HAPTICS_STRENGTH, key)
-                                        triggerPreviewVibration(key)
+                                        if (key != "custom") triggerPreviewVibration(key)
+                                        else {
+                                            // preview with current custom intensity
+                                            val dur = (10 + customIntensity * 70).toLong().coerceIn(10, 80)
+                                            val amp = (40  + (customIntensity * 215)).toInt().coerceIn(40, 255)
+                                            try {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                    val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                                    vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                                } else {
+                                                    @Suppress("DEPRECATION")
+                                                    val v = context.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                                    v.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
                                     },
                                     shape = RoundedCornerShape(50),
                                     color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -264,66 +282,96 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             }
                         }
 
-                        Surface(
-                            onClick = { showIntensitySlider = !showIntensitySlider },
-                            shape = RoundedCornerShape(50),
-                            color = if (showIntensitySlider) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.fillMaxWidth().height(42.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "Intensity",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (showIntensitySlider) MaterialTheme.colorScheme.onSecondaryContainer
-                                            else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Icon(
-                                    imageVector = if (showIntensitySlider) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                    tint = if (showIntensitySlider) MaterialTheme.colorScheme.onSecondaryContainer
-                                           else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
+                        // Custom intensity slider — only shown when "Custom" is selected
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = showIntensitySlider,
+                            visible = hapticsStrength == "custom",
                             enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                         ) {
+                            var lastVibratedSegment by remember { mutableIntStateOf(-1) }
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "Custom Intensity",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Slider(
-                                    value = sliderValue,
-                                    onValueChange = {
-                                        sliderValue = it
-                                        val newStr = if (it > 0.6f) "strong" else "light"
-                                        if (newStr != hapticsStrength) {
-                                            hapticsStrength = newStr
-                                            prefs.setString(PreferenceManager.KEY_HAPTICS_STRENGTH, newStr)
+                                    value = customIntensity,
+                                    onValueChange = { v ->
+                                        customIntensity = v
+                                        prefs.setFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, v)
+                                        // Vibrate every ~6% of range change for continuous multi-level feedback
+                                        val segment = (v * 16).toInt()
+                                        if (segment != lastVibratedSegment) {
+                                            lastVibratedSegment = segment
+                                            val dur = (8 + v * 55).toLong().coerceIn(8, 63)
+                                            val amp = (30 + (v * 180)).toInt().coerceIn(30, 210)
+                                            try {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                    val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                                    vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                                } else {
+                                                    @Suppress("DEPRECATION")
+                                                    val v2 = context.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                        v2.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                                    } else {
+                                                        @Suppress("DEPRECATION")
+                                                        v2.vibrate(dur)
+                                                    }
+                                                }
+                                            } catch (_: Exception) {}
                                         }
                                     },
-                                    onValueChangeFinished = { triggerPreviewVibration(hapticsStrength) },
+                                    onValueChangeFinished = {
+                                        // Final vibration at full saved intensity
+                                        val dur = (10 + customIntensity * 70).toLong().coerceIn(10, 80)
+                                        val amp = (40  + (customIntensity * 215)).toInt().coerceIn(40, 255)
+                                        try {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                                vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                            } else {
+                                                @Suppress("DEPRECATION")
+                                                val v2 = context.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                                v2.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                            }
+                                        } catch (_: Exception) {}
+                                        lastVibratedSegment = -1
+                                    },
                                     valueRange = 0f..1f,
+                                    steps = 15,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("Light", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Strong", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Softer", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Stronger", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
 
                         Button(
-                            onClick = { triggerPreviewVibration(hapticsStrength) },
+                            onClick = {
+                                if (hapticsStrength == "custom") {
+                                    val dur = (10 + customIntensity * 70).toLong().coerceIn(10, 80)
+                                    val amp = (40  + (customIntensity * 215)).toInt().coerceIn(40, 255)
+                                    try {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                            vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                        } else {
+                                            @Suppress("DEPRECATION")
+                                            val v = context.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                            v.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                        }
+                                    } catch (_: Exception) {}
+                                } else {
+                                    triggerPreviewVibration(hapticsStrength)
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(50)
                         ) {
@@ -1023,9 +1071,19 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         SectionLabel("Sound & Vibration")
                         RivoExpressiveCard {
                             RivoListItem(headline = "Sound & Vibration", supporting = "Ringtones and dialpad tones", leadingIcon = Icons.Outlined.VolumeUp, iconContainerColor = ColorBlue, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(SoundVibrationScreenDestination) })
-                            CardDivider()
+                        }
+                    }
+                }
+            }
+
+            // ── Auto Check For Updates ────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 240L) {
+                    Column {
+                        SectionLabel("Auto Check For Updates")
+                        RivoExpressiveCard {
                             RivoSwitchListItem(
-                                headline   = "Auto Update Checker",
+                                headline   = "Auto Check For Updates",
                                 supporting = "Automatically check for updates when the app opens",
                                 leadingIcon = Icons.Default.Autorenew,
                                 iconContainerColor = ColorAmber,

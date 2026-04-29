@@ -45,8 +45,9 @@ class PreferenceManager(context: Context) {
         // Dialpad
         const val KEY_OPEN_DIALPAD_DEFAULT  = "open_dialpad_default"
         // Haptics
-        const val KEY_APP_HAPTICS           = "app_haptics_enabled"
-        const val KEY_APP_HAPTICS_STRENGTH  = "app_haptics_strength"
+        const val KEY_APP_HAPTICS              = "app_haptics_enabled"
+        const val KEY_APP_HAPTICS_STRENGTH     = "app_haptics_strength"
+        const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"  // Float 0f..1f
         // Notes
         const val KEY_NOTES_ENABLED         = "notes_enabled"
         // Custom Font

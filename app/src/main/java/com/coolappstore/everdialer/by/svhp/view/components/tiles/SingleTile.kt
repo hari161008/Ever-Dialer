@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,12 +23,16 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -45,8 +51,10 @@ fun SingleTile(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val prefs = koinInject<PreferenceManager>()
     var showMenu by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
+    var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -63,7 +71,15 @@ fun SingleTile(
                 .fillMaxWidth()
                 .combinedClickable(
                     onClick = {
+                        if (horizontalDragDetected) return@combinedClickable
                         isPressed = false
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                            performAppHaptic(
+                                context,
+                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                            )
+                        }
                         onClick()
                     },
                     onLongClick = {
@@ -71,6 +87,23 @@ fun SingleTile(
                         showMenu = true
                     }
                 )
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        horizontalDragDetected = false
+                        val downPos = down.position
+                        do {
+                            val event = awaitPointerEvent()
+                            val current = event.changes.firstOrNull() ?: break
+                            val dx = kotlin.math.abs(current.position.x - downPos.x)
+                            val dy = kotlin.math.abs(current.position.y - downPos.y)
+                            if (dx > 28.dp.toPx() && dx > dy * 1.3f) horizontalDragDetected = true
+                            if (!current.pressed) break
+                        } while (true)
+                        isPressed = false
+                    }
+                }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

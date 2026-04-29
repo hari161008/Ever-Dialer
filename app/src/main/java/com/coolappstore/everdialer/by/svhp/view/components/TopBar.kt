@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -20,12 +21,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import org.koin.compose.koinInject
 
 @Composable
 fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -65,7 +70,12 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
         ) {
             // Search bar
             Surface(
-                onClick = { navigator.navigate(SearchScreenDestination) },
+                onClick = {
+                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                    performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                }
+                navigator.navigate(SearchScreenDestination)
+            },
                 modifier = Modifier.weight(1f).height(52.dp),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -91,7 +101,12 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
 
             // Settings button – coloured icon background
             Surface(
-                onClick = { navigator.navigate(SettingsScreenDestination) },
+                onClick = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                    }
+                    navigator.navigate(SettingsScreenDestination)
+                },
                 modifier = Modifier.size(52.dp).scale(settingsScale),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,

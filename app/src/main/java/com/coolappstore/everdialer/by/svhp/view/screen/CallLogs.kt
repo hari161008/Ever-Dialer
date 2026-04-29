@@ -45,9 +45,7 @@ fun CallLogFullScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showButton by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 2
-        }
+        derivedStateOf { listState.firstVisibleItemIndex > 2 }
     }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
 
@@ -57,7 +55,7 @@ fun CallLogFullScreen(
     val filteredLogsByContact = remember(allLogs, contactId, phoneNumber) {
         if (contactId == null && phoneNumber == null) allLogs
         else allLogs.filter { log ->
-            (contactId != null && contactId != "null" && log.contactId == contactId) || 
+            (contactId != null && contactId != "null" && log.contactId == contactId) ||
             (phoneNumber != null && log.number.replace(" ", "").contains(phoneNumber.replace(" ", "")))
         }
     }
@@ -79,12 +77,12 @@ fun CallLogFullScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
-                        if (contactName != null) "History with $contactName" else "Call History", 
+                        if (contactName != null) "History with $contactName" else "Call History",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium
-                    ) 
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navigator.navigateUp() }) {
@@ -108,7 +106,7 @@ fun CallLogFullScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(CallLogFilter.entries) { filter ->
+                    items(CallLogFilter.entries, key = { it.name }) { filter ->
                         FilterChip(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
@@ -127,15 +125,17 @@ fun CallLogFullScreen(
                         Text("No call history found", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    val finalLogs = when (selectedFilter) {
-                        CallLogFilter.All -> filteredLogsByContact
-                        CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
-                        CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
-                        CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
-                        CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number }
+                    val finalLogs = remember(filteredLogsByContact, selectedFilter) {
+                        when (selectedFilter) {
+                            CallLogFilter.All -> filteredLogsByContact
+                            CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
+                            CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
+                            CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number }
+                        }
                     }
 
-                    val groupedLogs = finalLogs.groupBy { formatDateHeader(it.date) }
+                    val groupedLogs = remember(finalLogs) { finalLogs.groupBy { formatDateHeader(it.date) } }
 
                     LazyColumn(
                         state = listState,
@@ -144,13 +144,12 @@ fun CallLogFullScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         groupedLogs.forEach { (header, logsInGroup) ->
-                            item {
+                            item(key = "group_$header", contentType = "logGroup") {
                                 RivoSectionHeader(title = header)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 RivoExpressiveCard {
                                     logsInGroup.forEachIndexed { index, lg ->
                                         CallLogTileSimple(lg)
-                                        
                                         if (index < logsInGroup.size - 1) {
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -161,18 +160,16 @@ fun CallLogFullScreen(
                                 }
                             }
                         }
-                        item { Spacer(modifier = Modifier.height(100.dp)) }
+                        item(key = "bottom_spacer", contentType = "spacer") {
+                            Spacer(modifier = Modifier.height(100.dp))
+                        }
                     }
                 }
             }
 
             ScrollToTopButton(
                 visible = showButton,
-                onClick = {
-                    scope.launch {
-                        listState.animateScrollToItem(0)
-                    }
-                }
+                onClick = { scope.launch { listState.animateScrollToItem(0) } }
             )
         }
     }

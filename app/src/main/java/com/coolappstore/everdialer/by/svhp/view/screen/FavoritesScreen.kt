@@ -1,10 +1,13 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -13,13 +16,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
@@ -59,16 +63,21 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                         if (!down.pressed) continue
                         val startX = down.position.x
                         val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
                         var triggered = false
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Final)
                             val change = event.changes.firstOrNull() ?: break
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
-                            if (!triggered && abs(dx) > 120f && abs(dx) > abs(dy) * 2f) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            // Require: large horizontal distance, strongly horizontal, minimum 80ms gesture
+                            if (!triggered && elapsed >= 80L &&
+                                abs(dx) > 450f &&
+                                abs(dx) > abs(dy) * 4.5f
+                            ) {
                                 triggered = true
                                 if (dx < 0) {
-                                    // swipe left → Recents
                                     scope.launch {
                                         navController.navigate(RecentScreenDestination.route) {
                                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -76,7 +85,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                         }
                                     }
                                 } else {
-                                    // swipe right from Favorites (leftmost) → Notes (rightmost, wrap around)
                                     if (notesEnabled) {
                                         scope.launch {
                                             navController.navigate(NotesScreenDestination.route) {
@@ -105,9 +113,18 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     Text("Star a contact to add them here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
                 }
             } else {
-                LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     items(favorites) { contact ->
-                        FavoriteContactCard(contact = contact, onClick = { navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id)) })
+                        FavoriteContactCard(
+                            contact = contact,
+                            onClick = { navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id)) }
+                        )
                     }
                 }
             }
@@ -120,12 +137,65 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(300), label = "cardAlpha")
     LaunchedEffect(Unit) { visible = true }
-    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().alpha(alpha)) {
+
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "cardScale"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(alpha)
+            .scale(scale)
+            .pointerInput(onClick) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    isPressed = true
+                    val downPos = down.position
+                    var horizontalMoved = false
+                    do {
+                        val event = awaitPointerEvent()
+                        val current = event.changes.firstOrNull() ?: break
+                        val deltaX = abs(current.position.x - downPos.x)
+                        val deltaY = abs(current.position.y - downPos.y)
+                        // If horizontal movement exceeds 30dp, mark as scroll – suppress click
+                        if (deltaX > 30.dp.toPx() && deltaX > deltaY * 1.2f) {
+                            horizontalMoved = true
+                        }
+                        if (!current.pressed) break
+                    } while (true)
+                    isPressed = false
+                    if (!horizontalMoved) {
+                        onClick()
+                    }
+                }
+            }
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
-                RivoAvatar(name = contact.name, photoUri = contact.photoUri, modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                RivoAvatar(
+                    name = contact.name,
+                    photoUri = contact.photoUri,
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+                )
             }
-            Text(text = contact.name, modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            Text(
+                text = contact.name,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
