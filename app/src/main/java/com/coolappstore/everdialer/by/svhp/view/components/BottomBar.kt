@@ -77,24 +77,32 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
     }
 
     if (pillNav) {
-        // ── Pill floating bar – rendered directly in the Scaffold bottomBar slot ──
-        // fillMaxWidth + contentAlignment = Center guarantees true horizontal centering.
+        // height(0.dp) tells Scaffold this bar takes no space (no blank gap).
+        // wrapContentHeight(unbounded=true, align=Bottom) lets the pill render
+        // upward from that 0-height baseline, floating above the content.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp),
+                .height(0.dp)
+                .wrapContentHeight(align = Alignment.Bottom, unbounded = true),
             contentAlignment = Alignment.Center
         ) {
-            Surface(
-                shape         = RoundedCornerShape(50.dp),
-                color         = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 12.dp,
-                tonalElevation  = 6.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
+                Surface(
+                    shape           = RoundedCornerShape(50.dp),
+                    color           = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shadowElevation = 8.dp,
+                    tonalElevation  = 4.dp
+                ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
                     PillNavItem(
@@ -133,6 +141,7 @@ fun BottomBar(navController: NavController, navigator: DestinationsNavigator) {
                     }
                 }
             }
+        }
         }
     } else {
         // ── Standard bottom navigation bar ──────────────────────────────────────

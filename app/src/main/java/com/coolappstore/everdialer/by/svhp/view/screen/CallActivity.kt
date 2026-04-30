@@ -218,7 +218,6 @@ fun ExpressiveCallScreen(
     val hangupWidthFraction = remember(settingsVersion) {
         prefs?.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f) ?: 1.0f
     }
-
     var noteText by remember { mutableStateOf("") }
 
     LaunchedEffect(phoneNumber) {
@@ -322,9 +321,17 @@ fun ExpressiveCallScreen(
             onDismiss = { showAddPersonSheet = false },
             onPersonSelected = { number ->
                 showAddPersonSheet = false
-                // Hold current call before placing second call
-                try { call.hold() } catch (_: Exception) {}
-                makeCall(context, number)
+                scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    // Hold current call first and give telecom stack time to settle
+                    try { call.hold() } catch (_: Exception) {}
+                    delay(800)
+                    try { makeCall(context, number) } catch (_: Exception) {
+                        // Fallback: launch via ACTION_CALL intent
+                        val intent = android.content.Intent(android.content.Intent.ACTION_CALL, Uri.parse("tel:$number"))
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    }
+                }
             }
         )
     }
@@ -448,8 +455,8 @@ fun ExpressiveCallScreen(
                 if (callState != Call.STATE_RINGING) {
                     Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)), color = overlayColor) {
                         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            // Top row: Hold, Add Person, Dialpad
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
                                 AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                     isOnHold = !isOnHold
                                     if (isOnHold) call.hold() else call.unhold()
@@ -488,7 +495,12 @@ fun ExpressiveCallScreen(
                                     fgColor = controlBtnFg,
                                     activeFgColor = controlBtnActiveFg
                                 ) { showDialpad = !showDialpad }
+                            }
 
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Bottom row: Note, Mute, Speaker
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 AnimatedCallButton(
                                     icon = Icons.Default.EditNote,
                                     label = "Note",
@@ -498,6 +510,7 @@ fun ExpressiveCallScreen(
                                     fgColor = controlBtnFg,
                                     activeFgColor = controlBtnActiveFg
                                 ) { showNoteWindow = !showNoteWindow }
+                                AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
                                 AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                     CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
                                 }
@@ -575,7 +588,7 @@ fun ExpressiveCallScreen(
                                         try { call.disconnect() } catch (e: Exception) {}
                                     },
                                     modifier = Modifier
-                                        .fillMaxWidth(hangupWidthFraction.coerceIn(0.4f, 1.0f))
+                                        .fillMaxWidth(hangupWidthFraction.coerceIn(0.2f, 1.0f))
                                         .height(76.dp)
                                         .scale(if (endPressed) 0.96f else 1f),
                                     shape = RoundedCornerShape(endRadius),

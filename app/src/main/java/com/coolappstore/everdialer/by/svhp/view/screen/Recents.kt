@@ -182,12 +182,14 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(20.dp),
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                modifier = Modifier.scale(fabScale)
+                modifier = Modifier
+                    .scale(fabScale)
+                    .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 76.dp) else Modifier)
             ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
         bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
+        contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             CallLogFullContent(
@@ -289,7 +291,7 @@ fun CallLogFullContent(
                 val showMissed   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true) }
                 val showOutgoing = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true) }
                 val showCallTime = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true) }
-                if (showToday || showMissed || showOutgoing || (showCallTime && totalDurationToday > 0)) {
+                if (showToday || showMissed || showOutgoing || showCallTime) {
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -299,8 +301,8 @@ fun CallLogFullContent(
                             if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
                         ) { viewModel.setFilter(CallLogFilter.Missed) } }
                         if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
-                        if (showCallTime && totalDurationToday > 0) {
-                            item { AnimatedStatCard(180L, "Call Time", formatDuration(totalDurationToday), Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                        if (showCallTime) {
+                            item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
                         }
                     }
                 }

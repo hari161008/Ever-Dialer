@@ -105,7 +105,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         topBar = { TopBar(navController, navigator) },
         bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
+        contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (favorites.isEmpty()) {

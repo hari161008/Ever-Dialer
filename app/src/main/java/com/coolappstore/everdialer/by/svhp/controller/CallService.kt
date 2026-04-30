@@ -72,6 +72,18 @@ class CallService : InCallService() {
             } catch (_: Exception) {
                 isMerging = false
             }
+            // Safety: reset isMerging after 5 seconds if no conference call was added
+            // (some carriers merge in-place without creating a new conference call object)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (isMerging) {
+                    isMerging = false
+                    // If calls are still tracked, keep the primary as current
+                    if (_currentCallSession.value == null && _heldCallSession.value != null) {
+                        _currentCallSession.value = _heldCallSession.value
+                        _heldCallSession.value = null
+                    }
+                }
+            }, 4000)
         }
 
         fun hasHeldCall(): Boolean = _heldCallSession.value != null
@@ -95,6 +107,8 @@ class CallService : InCallService() {
                     _heldCallSession.value?.let { held ->
                         _currentCallSession.value = held
                         _heldCallSession.value = null
+                        // Resume the previously held call
+                        try { held.call.unhold() } catch (_: Exception) {}
                     }
                 } else if (_heldCallSession.value?.call == call) {
                     _heldCallSession.value = null
@@ -218,13 +232,20 @@ class CallService : InCallService() {
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
 
-        if (isMerging) return
+        if (isMerging) {
+            // During a merge both original calls get removed; don't promote held to current
+            if (_currentCallSession.value?.call == call) _currentCallSession.value = null
+            if (_heldCallSession.value?.call == call) _heldCallSession.value = null
+            return
+        }
 
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
             _heldCallSession.value?.let { held ->
                 _currentCallSession.value = held
                 _heldCallSession.value = null
+                // Resume the previously held call automatically
+                try { held.call.unhold() } catch (_: Exception) {}
             }
         } else if (_heldCallSession.value?.call == call) {
             _heldCallSession.value = null

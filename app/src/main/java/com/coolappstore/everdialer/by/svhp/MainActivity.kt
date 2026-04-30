@@ -305,24 +305,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // ── Main nav host ─────────────────────────────────────────────
-                Box(modifier = Modifier.fillMaxSize()) {
-                    DestinationsNavHost(
-                        navGraph = NavGraphs.root,
-                        navController = navController
-                    )
+                // ── Ongoing Call Banner + Main nav host ───────────────────────
+                val callSession by CallService.currentCallSession.collectAsState()
+                val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
 
-                    // ── Ongoing Call Banner ──────────────────────────────────
-                    val callSession by CallService.currentCallSession.collectAsState()
-                    val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
-
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // ── Ongoing Call Banner (above all content) ────────────
                     AnimatedVisibility(
                         visible = hasOngoingCall,
                         enter = slideInVertically { -it } + fadeIn(),
-                        exit = slideOutVertically { -it } + fadeOut(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopCenter)
+                        exit = slideOutVertically { -it } + fadeOut()
                     ) {
                         Box(
                             modifier = Modifier
@@ -357,6 +349,23 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
+                    }
+
+                    // ── Main nav host ──────────────────────────────────────
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(
+                                if (hasOngoingCall)
+                                    Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars)
+                                else
+                                    Modifier
+                            )
+                    ) {
+                        DestinationsNavHost(
+                            navGraph = NavGraphs.root,
+                            navController = navController
+                        )
                     }
                 }
 

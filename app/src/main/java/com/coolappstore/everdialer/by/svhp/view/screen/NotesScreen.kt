@@ -177,7 +177,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
         },
         bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
+        contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (notes.isEmpty()) {

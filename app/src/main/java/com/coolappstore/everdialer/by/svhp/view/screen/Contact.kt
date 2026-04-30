@@ -114,14 +114,16 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = RoundedCornerShape(20.dp),
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                modifier = Modifier.scale(fabScale)
+                modifier = Modifier
+                    .scale(fabScale)
+                    .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 76.dp) else Modifier)
             ) {
                 Icon(Icons.Default.PersonAdd, "Add Contact")
             }
         },
         bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
+        contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             ContactContent(
