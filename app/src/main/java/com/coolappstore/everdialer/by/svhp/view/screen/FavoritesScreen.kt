@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -53,6 +54,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val prefs = koinInject<PreferenceManager>()
     val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
 
+    val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -102,7 +104,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
             },
         topBar = { TopBar(navController, navigator) },
         bottomBar = { BottomBar(navController, navigator) },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (favorites.isEmpty()) {

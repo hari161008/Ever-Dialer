@@ -29,7 +29,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
@@ -98,13 +97,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
+    var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
     var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
     var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
 
+    // Caller UI – Hang Up Button width (0.4 .. 1.0)
+    var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f)) }
+    var showCallerUIExpanded by remember { mutableStateOf(false) }
+
     // Call UI section checkboxes dialog
-    var showCallUIDialog by remember { mutableStateOf(false) }
+    var showCallUIDialog   by remember { mutableStateOf(false) }
     var callUIShowToday    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true)) }
     var callUIShowMissed   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true)) }
     var callUIShowOutgoing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)) }
@@ -369,17 +373,140 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoListItem(
-                                    headline = "Caller UI",
-                                    supporting = "Customize the in-call screen layout and controls",
-                                    leadingIcon = Icons.Outlined.Person,
-                                    iconContainerColor = ColorBlue,
-                                    trailingIcon = Icons.Default.ChevronRight,
-                                    onClick = {}
-                                )
+
+                                // ── Caller UI expandable section ──────────────────────
+                                Column {
+                                    RivoListItem(
+                                        headline = "Caller UI",
+                                        supporting = "Customize the in-call screen layout and controls",
+                                        leadingIcon = Icons.Outlined.Person,
+                                        iconContainerColor = ColorBlue,
+                                        trailingIcon = if (showCallerUIExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        onClick = { showCallerUIExpanded = !showCallerUIExpanded }
+                                    )
+
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = showCallerUIExpanded,
+                                        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                                        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                                    ) {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            HorizontalDivider(
+                                                Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                            )
+                                            // ── Customise Hang Up Button ─────────────────────
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(16.dp)) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        Surface(
+                                                            shape = RoundedCornerShape(10.dp),
+                                                            color = Color(0xFFD32F2F).copy(alpha = 0.15f),
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    Icons.Default.CallEnd,
+                                                                    contentDescription = null,
+                                                                    tint = Color(0xFFD32F2F),
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        Column {
+                                                            Text(
+                                                                "Customise Hang Up Button",
+                                                                style = MaterialTheme.typography.titleSmall,
+                                                                fontWeight = FontWeight.SemiBold
+                                                            )
+                                                            Text(
+                                                                "Adjust the width of the hang up button",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Spacer(Modifier.height(16.dp))
+
+                                                    // Live preview of hangup button
+                                                    Box(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Surface(
+                                                            shape = RoundedCornerShape(28.dp),
+                                                            color = Color(0xFFD32F2F),
+                                                            modifier = Modifier
+                                                                .fillMaxWidth(hangupWidth.coerceIn(0.4f, 1.0f))
+                                                                .height(56.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Row(
+                                                                    verticalAlignment = Alignment.CenterVertically,
+                                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                                ) {
+                                                                    Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                                                    if (hangupWidth > 0.6f) {
+                                                                        Text("End Call", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Spacer(Modifier.height(12.dp))
+
+                                                    // Slider
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Remove, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                        Slider(
+                                                            value = hangupWidth,
+                                                            onValueChange = { hangupWidth = it },
+                                                            onValueChangeFinished = {
+                                                                prefs.setFloat(PreferenceManager.KEY_HANGUP_WIDTH, hangupWidth)
+                                                            },
+                                                            valueRange = 0.4f..1.0f,
+                                                            steps = 11,
+                                                            modifier = Modifier.weight(1f),
+                                                            colors = SliderDefaults.colors(
+                                                                thumbColor = Color(0xFFD32F2F),
+                                                                activeTrackColor = Color(0xFFD32F2F),
+                                                                inactiveTrackColor = Color(0xFFD32F2F).copy(alpha = 0.3f)
+                                                            )
+                                                        )
+                                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text("Narrow", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                        Text("${(hangupWidth * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                                        Text("Full Width", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                // Calls section toggles
                                 RivoListItem(
                                     headline = "Calls Section Elements",
                                     supporting = "Toggle Today, Missed, Outgoing, Call Time cards",
@@ -425,6 +552,19 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, it)
                                     }
                                 )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Pill Style Navigation",
+                                    supporting = "Show a floating pill-style nav bar instead of the standard bottom bar",
+                                    leadingIcon = Icons.Outlined.ViewStream,
+                                    iconContainerColor = ColorTeal,
+                                    checked = pillNav,
+                                    onCheckedChange = {
+                                        pillNav = it
+                                        prefs.setBoolean(PreferenceManager.KEY_PILL_NAV, it)
+                                    }
+                                )
                             }
                         }
                     }
@@ -468,7 +608,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                // Dialpad by default toggle (below Avatars as requested)
                                 RivoSwitchListItem(
                                     headline = "Open Dialpad by Default",
                                     supporting = "Show dialpad automatically when app starts",

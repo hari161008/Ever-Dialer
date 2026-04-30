@@ -1,3 +1,19 @@
+# 🚀 Ever Dialer - Release v3.0.0
+
+## 🎨 Pill Style Navigation Bar
+* **Floating Pill Nav:** Added a new pill-style floating navigation bar as the default navigation experience.
+* **Settings Toggle:** Added "Pill Style Navigation" toggle under Settings > User Interface > UI Elements to switch between the pill bar and the classic bottom navigation.
+* The pill bar dynamically expands the active tab label and highlights with the primary container color.
+
+## 👋 First Launch Welcome Dialog
+* Added a welcome popup shown on first install explaining how to allow restricted settings on Android 14+ for setting Ever Dialer as the default dialer.
+* Includes pill-style "App Info" and "Continue" action buttons.
+
+## 🔢 Version Bump
+* App version updated to v3.0.0.
+
+---
+
 # 🚀 Pdialer Optimized - Release v1.0.3
 
 ## 💎 Material 3 Expressive UI (Android 16 Style)

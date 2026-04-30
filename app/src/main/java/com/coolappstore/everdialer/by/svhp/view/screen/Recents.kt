@@ -8,6 +8,7 @@ import android.telecom.TelecomManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -72,6 +73,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     val scope = rememberCoroutineScope()
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
     val prefs = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
+    val pillNav = remember { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_PILL_NAV, true) }
 
     var showDialpad by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(false) }
@@ -184,7 +186,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
         bottomBar = { BottomBar(navController, navigator) },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             CallLogFullContent(

@@ -147,7 +147,8 @@ class CallActivity : ComponentActivity() {
                         hasHeldCall = heldSession != null,
                         heldCallName = heldContactName,
                         contactsRepo = contactsRepo,
-                        callLogRepo = callLogRepo
+                        callLogRepo = callLogRepo,
+                        prefs = prefs
                     )
                 }
             }
@@ -197,7 +198,8 @@ fun ExpressiveCallScreen(
     hasHeldCall: Boolean = false,
     heldCallName: String = "",
     contactsRepo: IContactsRepository? = null,
-    callLogRepo: ICallLogRepository? = null
+    callLogRepo: ICallLogRepository? = null,
+    prefs: PreferenceManager? = null
 ) {
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
@@ -208,6 +210,14 @@ fun ExpressiveCallScreen(
     var showNoteWindow by remember { mutableStateOf(false) }
     var showMergeConfirm by remember { mutableStateOf(false) }
     var showAddPersonSheet by remember { mutableStateOf(false) }
+    var showDialpad by remember { mutableStateOf(false) }
+    var dtmfInput by remember { mutableStateOf("") }
+
+    // Hangup button width from prefs (0.4f .. 1.0f)
+    val settingsVersion by (prefs?.settingsChanged ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
+    val hangupWidthFraction = remember(settingsVersion) {
+        prefs?.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f) ?: 1.0f
+    }
 
     var noteText by remember { mutableStateOf("") }
 
@@ -304,7 +314,6 @@ fun ExpressiveCallScreen(
         )
     }
 
-    // Add Person bottom sheet
     if (showAddPersonSheet) {
         AddPersonSheet(
             context = context,
@@ -313,9 +322,62 @@ fun ExpressiveCallScreen(
             onDismiss = { showAddPersonSheet = false },
             onPersonSelected = { number ->
                 showAddPersonSheet = false
+                // Hold current call before placing second call
+                try { call.hold() } catch (_: Exception) {}
                 makeCall(context, number)
             }
         )
+    }
+
+    // In-call Dialpad sheet
+    if (showDialpad) {
+        ModalBottomSheet(
+            onDismissRequest = { showDialpad = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
+                    Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
+                }
+            }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Dialpad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { showDialpad = false }) { Icon(Icons.Default.Close, null) }
+                }
+
+                if (dtmfInput.isNotEmpty()) {
+                    Text(
+                        text = dtmfInput,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Light,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+
+                InCallDialPad(
+                    onDigit = { digit ->
+                        dtmfInput += digit
+                        // Send DTMF tone
+                        try {
+                            call.playDtmfTone(digit[0])
+                            call.stopDtmfTone()
+                        } catch (_: Exception) {}
+                    },
+                    onBackspace = {
+                        if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1)
+                    }
+                )
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
@@ -393,7 +455,6 @@ fun ExpressiveCallScreen(
                                     if (isOnHold) call.hold() else call.unhold()
                                 }
 
-                                // Show "Add Person" when no held call, "Merge" when there is one
                                 if (hasHeldCall) {
                                     AnimatedCallButton(
                                         icon = Icons.Default.CallMerge,
@@ -417,6 +478,16 @@ fun ExpressiveCallScreen(
                                         onClick = { showAddPersonSheet = true }
                                     )
                                 }
+
+                                AnimatedCallButton(
+                                    icon = Icons.Default.Dialpad,
+                                    label = "Dialpad",
+                                    isActive = showDialpad,
+                                    btnColor = controlBtnColor,
+                                    activeBtnColor = controlBtnActiveColor,
+                                    fgColor = controlBtnFg,
+                                    activeFgColor = controlBtnActiveFg
+                                ) { showDialpad = !showDialpad }
 
                                 AnimatedCallButton(
                                     icon = Icons.Default.EditNote,
@@ -490,24 +561,30 @@ fun ExpressiveCallScreen(
 
                             Spacer(modifier = Modifier.height(48.dp))
 
+                            // ── Hangup Button with configurable width ──────────────
                             val endInteraction = remember { MutableInteractionSource() }
                             val endPressed by endInteraction.collectIsPressedAsState()
                             val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius")
 
-                            Surface(
-                                onClick = {
-                                    if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
-                                        NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Surface(
+                                    onClick = {
+                                        if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
+                                            NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                        }
+                                        try { call.disconnect() } catch (e: Exception) {}
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth(hangupWidthFraction.coerceIn(0.4f, 1.0f))
+                                        .height(76.dp)
+                                        .scale(if (endPressed) 0.96f else 1f),
+                                    shape = RoundedCornerShape(endRadius),
+                                    color = Color(0xFFD32F2F),
+                                    interactionSource = endInteraction
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
                                     }
-                                    try { call.disconnect() } catch (e: Exception) {}
-                                },
-                                modifier = Modifier.fillMaxWidth().height(76.dp).scale(if (endPressed) 0.96f else 1f),
-                                shape = RoundedCornerShape(endRadius),
-                                color = Color(0xFFD32F2F),
-                                interactionSource = endInteraction
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
                                 }
                             }
                         }
@@ -522,6 +599,70 @@ fun ExpressiveCallScreen(
                 }
             }
         }
+    }
+}
+
+// ─── In-Call Dial Pad ──────────────────────────────────────────────────────────
+
+@Composable
+private fun InCallDialPad(
+    onDigit: (String) -> Unit,
+    onBackspace: () -> Unit
+) {
+    val keys = listOf(
+        listOf("1" to "", "2" to "ABC", "3" to "DEF"),
+        listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
+        listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
+        listOf("*" to "", "0" to "+", "#" to "")
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        keys.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                row.forEach { (digit, letters) ->
+                    val interaction = remember { MutableInteractionSource() }
+                    val isPressed by interaction.collectIsPressedAsState()
+                    val keyRadius by animateDpAsState(if (isPressed) 14.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "keyR")
+                    Surface(
+                        onClick = { onDigit(digit) },
+                        shape = RoundedCornerShape(keyRadius),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.weight(1f).height(58.dp).scale(if (isPressed) 0.92f else 1f),
+                        interactionSource = interaction
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(digit, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                            if (letters.isNotEmpty()) {
+                                Text(letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Backspace row
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
+            Surface(
+                onClick = onBackspace,
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(0.5f).height(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Backspace, null, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -565,7 +706,6 @@ private fun AddPersonSheet(
         }
     ) {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
-            // Title row
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -575,7 +715,6 @@ private fun AddPersonSheet(
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
             }
 
-            // Search bar (hidden for Dial tab)
             if (selectedTab != 2) {
                 OutlinedTextField(
                     value = searchQuery,
@@ -592,7 +731,6 @@ private fun AddPersonSheet(
                 )
             }
 
-            // Pill tabs
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -628,7 +766,6 @@ private fun AddPersonSheet(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-            // Tab content
             Box(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 420.dp)) {
                 when (selectedTab) {
                     0 -> {
@@ -667,7 +804,6 @@ private fun AddPersonSheet(
                         }
                     }
                     2 -> {
-                        // Compact dial pad
                         CompactDialPad(
                             number = dialNumber,
                             onNumberChange = { dialNumber = it },
@@ -730,7 +866,6 @@ private fun CompactDialPad(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Number display
         Text(
             text = number.ifEmpty { "Enter number" },
             style = MaterialTheme.typography.headlineMedium,
@@ -766,7 +901,6 @@ private fun CompactDialPad(
             }
         }
 
-        // Bottom row: backspace + call
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)

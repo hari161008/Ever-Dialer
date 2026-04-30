@@ -7,6 +7,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -105,6 +106,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
 
     val coroutineScope = rememberCoroutineScope()
 
+    val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -174,7 +176,8 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
             )
         },
         bottomBar = { BottomBar(navController, navigator) },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (notes.isEmpty()) {

@@ -39,41 +39,33 @@ class PreferenceManager(context: Context) {
         const val KEY_DIALPAD_VIBRATION     = "dialpad_vibration"
         const val KEY_SPEED_DIAL            = "speed_dial"
         const val KEY_T9_DIALING            = "t9_dialing"
-        // Privacy
         const val KEY_BLOCK_UNKNOWN         = "block_unknown_callers"
         const val KEY_BLOCK_HIDDEN          = "block_hidden_callers"
-        // Dialpad
         const val KEY_OPEN_DIALPAD_DEFAULT  = "open_dialpad_default"
-        // Haptics
         const val KEY_APP_HAPTICS              = "app_haptics_enabled"
         const val KEY_APP_HAPTICS_STRENGTH     = "app_haptics_strength"
-        const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"  // Float 0f..1f
-        // Notes
+        const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"
         const val KEY_NOTES_ENABLED         = "notes_enabled"
-        // Custom Font
         const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
-        const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"   // Float, default 1.0f
-        // Theme mode: "auto" | "light" | "dark" | "white" | "black" | "auto_bw"
+        const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
         const val KEY_THEME_MODE            = "theme_mode"
-        // Blocked contacts (comma-separated numbers)
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
-        // UI element visibility
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
-        // Privacy
         const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
-        // Proximity sensor in background
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
-        // Scroll haptics
         const val KEY_SCROLL_HAPTICS        = "scroll_haptics_enabled"
-        // Haptics strength: "light" or "strong"
         const val KEY_HAPTICS_STRENGTH      = "app_haptics_strength"
-        // Call UI element visibility (home screen stat cards)
         const val KEY_CALL_UI_SHOW_TODAY    = "call_ui_show_today"
         const val KEY_CALL_UI_SHOW_MISSED   = "call_ui_show_missed"
         const val KEY_CALL_UI_SHOW_OUTGOING = "call_ui_show_outgoing"
         const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
-        // Auto update check on app launch
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
+        const val KEY_PILL_NAV              = "pill_style_nav"
+        const val KEY_FIRST_LAUNCH_DONE     = "first_launch_done"
+        // Hangup button width fraction (0.4f .. 1.0f)
+        const val KEY_HANGUP_WIDTH          = "hangup_button_width"
+        // Dialer role popup shown after welcome
+        const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
     }
 }

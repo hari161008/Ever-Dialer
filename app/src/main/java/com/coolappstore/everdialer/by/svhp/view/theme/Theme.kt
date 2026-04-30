@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.theme
 
+import android.app.Activity
 import android.graphics.Typeface
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -9,13 +10,16 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.core.view.WindowCompat
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import org.koin.compose.koinInject
 import java.io.File
@@ -27,35 +31,25 @@ private val LightColorScheme = lightColorScheme(
     primary = Purple40, secondary = PurpleGrey40, tertiary = Pink40
 )
 
-/**
- * Derive a Material3-coherent color scheme from a single seed/primary color.
- * We blend the user-chosen color into secondary and tertiary to avoid
- * the residual purple from the default scheme.
- */
 private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
-    // Harmonise companion roles from the primary
     val argb = primary.toArgb()
     val r = android.graphics.Color.red(argb)
     val g = android.graphics.Color.green(argb)
     val b = android.graphics.Color.blue(argb)
 
-    // Build desaturated / tinted variants
     fun blend(a: Int, b2: Int, ratio: Float) = (a + (b2 - a) * ratio).toInt().coerceIn(0, 255)
 
-    // Secondary: slightly desaturated version of primary
     val secR = blend(r, 128, 0.4f)
     val secG = blend(g, 128, 0.4f)
     val secB = blend(b, 128, 0.4f)
     val secondary = Color(secR, secG, secB)
 
-    // Tertiary: complementary hue shift (rotate ~180° in simplified RGB space)
     val terR = blend(b, r, 0.3f)
     val terG = blend(r, g, 0.3f)
     val terB = blend(g, b, 0.3f)
     val tertiary = Color(terR, terG, terB)
 
     return if (dark) {
-        // Dark container colours: lighter/more vibrant
         val primaryContainer = Color(
             blend(r, 255, 0.55f),
             blend(g, 255, 0.55f),
@@ -67,7 +61,7 @@ private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.comp
             blend(b, 0, 0.7f)
         )
         darkColorScheme(
-            primary = primaryContainer, // In dark mode primary is the "light" version
+            primary = primaryContainer,
             onPrimary = onPrimaryContainer,
             primaryContainer = Color(blend(r, 40, 0.7f), blend(g, 40, 0.7f), blend(b, 40, 0.7f)),
             onPrimaryContainer = primaryContainer,
@@ -128,20 +122,17 @@ fun Rivo4Theme(
     val customFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     val fontSizeScale  = prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
 
-    // Resolve dark flag from theme mode
     val darkTheme = when (themeMode) {
         "light", "white"  -> false
         "dark",  "black"  -> true
         "auto_bw"         -> systemDark
-        else              -> systemDark   // "auto"
+        else              -> systemDark
     }
 
     val context = LocalContext.current
 
-    // Default primary when none set
     val defaultPrimary = Color(0xFF6750A4)
 
-    // Build colour scheme
     var colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -152,7 +143,6 @@ fun Rivo4Theme(
         }
     }
 
-    // Apply pure-white / pure-black overrides
     colorScheme = when (themeMode) {
         "black" -> colorScheme.copy(
             background = Color.Black, surface = Color.Black,
@@ -180,7 +170,18 @@ fun Rivo4Theme(
         else -> colorScheme
     }
 
-    // Custom font
+    // ── Sync status bar / nav bar with theme ──────────────────────────────────
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            val controller = WindowCompat.getInsetsController(window, view)
+            // Light icons on dark theme, dark icons on light theme
+            controller.isAppearanceLightStatusBars = !darkTheme
+            controller.isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+
     val customFontFamily: FontFamily = remember(customFontPath, settingsState) {
         if (customFontPath != null) {
             val file = File(customFontPath)

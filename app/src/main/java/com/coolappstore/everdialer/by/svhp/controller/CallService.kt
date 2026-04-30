@@ -45,7 +45,6 @@ class CallService : InCallService() {
 
         private var instance: CallService? = null
 
-        // Flag to suppress cleanup during conference merge
         @Volatile private var isMerging = false
 
         fun setMuted(muted: Boolean) {
@@ -84,8 +83,6 @@ class CallService : InCallService() {
             when {
                 _currentCallSession.value?.call == call -> {
                     _currentCallSession.value = CallSession(call, state)
-                    // Do NOT automatically move to heldCallSession here when holding;
-                    // that is managed explicitly in onCallAdded / mergeCalls
                 }
                 _heldCallSession.value?.call == call -> {
                     _heldCallSession.value = CallSession(call, state)
@@ -95,7 +92,6 @@ class CallService : InCallService() {
             if (state == Call.STATE_DISCONNECTED) {
                 if (_currentCallSession.value?.call == call) {
                     _currentCallSession.value = null
-                    // promote held call to current if any
                     _heldCallSession.value?.let { held ->
                         _currentCallSession.value = held
                         _heldCallSession.value = null
@@ -149,6 +145,13 @@ class CallService : InCallService() {
         return false
     }
 
+    private fun launchCallActivity() {
+        val intent = Intent(this, CallActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        }
+        startActivity(intent)
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         instance = this
@@ -156,20 +159,17 @@ class CallService : InCallService() {
         val handle = call.details.handle
         val number = handle?.schemeSpecificPart ?: ""
 
-        // Silence unknown callers
         val silenceUnknown = prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)
         if (silenceUnknown && number.isBlank()) {
             call.disconnect()
             return
         }
 
-        // Block specific contacts
         if (number.isNotBlank() && isNumberBlocked(number)) {
             call.disconnect()
             return
         }
 
-        // If a conference merge just finished, this is the conference call
         if (isMerging) {
             isMerging = false
             call.registerCallback(callCallback)
@@ -179,15 +179,16 @@ class CallService : InCallService() {
             return
         }
 
-        // If there is already a current call, this is a second call
         if (_currentCallSession.value != null && _currentCallSession.value?.state != Call.STATE_DISCONNECTED) {
             if (call.state != Call.STATE_RINGING) {
-                // Outgoing second call: new call becomes current, previous call becomes held
+                // Outgoing second call: hold first, new becomes current
                 val previousSession = _currentCallSession.value
                 previousSession?.call?.unregisterCallback(callCallback)
                 if (previousSession != null) {
                     previousSession.call.registerCallback(heldCallCallback)
-                    _heldCallSession.value = previousSession
+                    // Explicitly hold the first call in the telecom stack
+                    try { previousSession.call.hold() } catch (_: Exception) {}
+                    _heldCallSession.value = CallSession(previousSession.call, Call.STATE_HOLDING)
                 }
                 call.registerCallback(callCallback)
                 _currentCallSession.value = CallSession(call, call.state)
@@ -198,10 +199,7 @@ class CallService : InCallService() {
             }
             updateNotification(call)
             if (call.state != Call.STATE_RINGING) {
-                val intent = Intent(this, CallActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                }
-                startActivity(intent)
+                launchCallActivity()
             }
             return
         }
@@ -211,10 +209,7 @@ class CallService : InCallService() {
         updateNotification(call)
 
         if (call.state != Call.STATE_RINGING) {
-            val intent = Intent(this, CallActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            }
-            startActivity(intent)
+            launchCallActivity()
         }
     }
 
@@ -223,13 +218,10 @@ class CallService : InCallService() {
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
 
-        // If we are in the middle of a merge, suppress cleanup
-        // (the conference call will arrive via onCallAdded shortly)
         if (isMerging) return
 
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
-            // promote held
             _heldCallSession.value?.let { held ->
                 _currentCallSession.value = held
                 _heldCallSession.value = null
@@ -251,7 +243,11 @@ class CallService : InCallService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "ANSWER_CALL" -> answerCall()
+            "ANSWER_CALL" -> {
+                answerCall()
+                // Open CallActivity when answering from notification
+                launchCallActivity()
+            }
             "DECLINE_CALL" -> declineCall()
         }
         return super.onStartCommand(intent, flags, startId)

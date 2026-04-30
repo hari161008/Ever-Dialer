@@ -5,44 +5,43 @@ import android.app.DownloadManager
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
+import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
 import com.coolappstore.everdialer.by.svhp.controller.util.fetchLatestRelease
 import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
 import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndScheduleDelete
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
+import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.generated.NavGraphs
@@ -62,9 +61,7 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
-        requestDefaultDialer()
-    }
+    ) { _ -> /* permissions result; dialer popup now shown after welcome */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,16 +76,113 @@ class MainActivity : ComponentActivity() {
         }
 
         requestRequiredPermissions()
-        requestDefaultDialer()
+        // NOTE: requestDefaultDialer() is now triggered AFTER the welcome dialog is dismissed
+        // on first launch. On subsequent launches it is called directly.
 
         setContent {
             Rivo4Theme {
                 val navController = rememberNavController()
 
-                // ── Auto update check on launch ───────────────────────────────
                 val prefs = remember {
                     GlobalContext.get().get<PreferenceManager>()
                 }
+
+                val isFirstLaunch = remember {
+                    !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
+                }
+
+                // ── First Launch Welcome Dialog ─────────────────────────────
+                var showWelcomeDialog by remember { mutableStateOf(isFirstLaunch) }
+
+                if (showWelcomeDialog) {
+                    Dialog(onDismissRequest = {}) {
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 6.dp
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                Text(
+                                    text = "Welcome to Ever Dialer",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "Since this app isn't installed from Playstore, In Android 14+ it is not possible to set as a default dialer without allowing \"Allow restricted settings\"\n\nSo to enable this settings, you have to long press the Ever Dialer App icon in your launcher, Click App info (which opens App info) > On top right corner > Click \"Allow restricted settings\"\n\nThen come back to the app and Enjoy :)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Start
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Surface(
+                                        onClick = {
+                                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts("package", packageName, null)
+                                            }
+                                            startActivity(intent)
+                                        },
+                                        shape = RoundedCornerShape(50.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "App Info",
+                                            modifier = Modifier.padding(vertical = 12.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Surface(
+                                        onClick = {
+                                            prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
+                                            showWelcomeDialog = false
+                                            // Show "Set as Default Dialer" popup AFTER welcome is dismissed
+                                            requestDefaultDialer()
+                                        },
+                                        shape = RoundedCornerShape(50.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "Continue",
+                                            modifier = Modifier.padding(vertical = 12.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // On subsequent launches (not first), call requestDefaultDialer directly
+                LaunchedEffect(Unit) {
+                    if (!isFirstLaunch) {
+                        requestDefaultDialer()
+                    }
+                }
+
                 var autoUpdateVersion by remember { mutableStateOf<String?>(null) }
                 var autoUpdateApkUrl by remember { mutableStateOf<String?>(null) }
                 var showAutoUpdateDialog by remember { mutableStateOf(false) }
@@ -108,7 +202,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Poll download progress for auto-update
                 if (showAutoDownloadProgress) {
                     val dlId = autoDownloadId
                     if (dlId != null) {
@@ -146,21 +239,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // ── Auto update confirmation popup ────────────────────────────
                 if (showAutoUpdateDialog) {
                     AlertDialog(
                         onDismissRequest = { showAutoUpdateDialog = false },
                         icon = { Icon(Icons.Default.SystemUpdate, null, tint = Color(0xFF2196F3)) },
                         title = { Text("Update Available") },
                         text = {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("Version v${autoUpdateVersion} is available.")
                                 Text(
                                     "Would you like to download and install it now?",
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
@@ -184,41 +274,30 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // ── Auto-update download progress dialog ──────────────────────
                 if (showAutoDownloadProgress) {
                     Dialog(onDismissRequest = {}) {
-                        androidx.compose.material3.Surface(
+                        Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             Column(
                                 modifier = Modifier.padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Icon(Icons.Default.SystemUpdate, null, tint = Color(0xFF2196F3),
-                                    modifier = Modifier.size(36.dp))
-                                Text("Downloading Update", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                                Text("v${autoUpdateVersion ?: ""}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    androidx.compose.material3.LinearProgressIndicator(
-                                        progress = { autoDownloadProgress },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
+                                Icon(Icons.Default.SystemUpdate, null, tint = Color(0xFF2196F3), modifier = Modifier.size(36.dp))
+                                Text("Downloading Update", style = MaterialTheme.typography.titleMedium)
+                                Text("v${autoUpdateVersion ?: ""}", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                    LinearProgressIndicator(progress = { autoDownloadProgress }, modifier = Modifier.fillMaxWidth())
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text("${(autoDownloadProgress * 100).toInt()}%",
-                                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text("Please wait…",
-                                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -226,10 +305,60 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                DestinationsNavHost(
-                    navGraph = NavGraphs.root,
-                    navController = navController
-                )
+                // ── Main nav host ─────────────────────────────────────────────
+                Box(modifier = Modifier.fillMaxSize()) {
+                    DestinationsNavHost(
+                        navGraph = NavGraphs.root,
+                        navController = navController
+                    )
+
+                    // ── Ongoing Call Banner ──────────────────────────────────
+                    val callSession by CallService.currentCallSession.collectAsState()
+                    val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
+
+                    AnimatedVisibility(
+                        visible = hasOngoingCall,
+                        enter = slideInVertically { -it } + fadeIn(),
+                        exit = slideOutVertically { -it } + fadeOut(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1B5E20))
+                                .statusBarsPadding()
+                                .clickable {
+                                    startActivity(
+                                        Intent(this@MainActivity, CallActivity::class.java).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                                        }
+                                    )
+                                }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Call,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Call is Ongoing — Tap to return",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
 
                 LaunchedEffect(intent) {
                     handleIntent(intent, navController)

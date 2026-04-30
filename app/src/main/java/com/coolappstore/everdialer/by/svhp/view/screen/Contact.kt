@@ -6,6 +6,7 @@ import android.provider.ContactsContract
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
@@ -36,6 +38,7 @@ import com.ramcosta.composedestinations.generated.destinations.RecentScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
@@ -56,6 +59,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
     )
     LaunchedEffect(Unit) { visible = true }
 
+    val prefs_ui = koinInject<PreferenceManager>()
+    val pillNav = remember { prefs_ui.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -115,7 +120,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             }
         },
         bottomBar = { BottomBar(navController, navigator) },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = if (pillNav) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             ContactContent(
