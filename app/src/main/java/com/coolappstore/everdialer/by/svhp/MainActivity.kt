@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.coolappstore.everdialer.by.svhp.controller.CallService
@@ -42,6 +43,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
 import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndScheduleDelete
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
+import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.generated.NavGraphs
@@ -351,21 +353,30 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // ── Main nav host ──────────────────────────────────────
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .then(
-                                if (hasOngoingCall)
-                                    Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars)
-                                else
-                                    Modifier
+                    // ── Main nav host + static bottom bar ─────────────────
+                    // BottomBar is placed HERE (outside NavHost's AnimatedContent)
+                    // so it never participates in tab-switch transitions.
+                    Scaffold(
+                        bottomBar = { BottomBar(navController) },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentWindowInsets = WindowInsets(0)
+                    ) { scaffoldPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(scaffoldPadding)
+                                .then(
+                                    if (hasOngoingCall)
+                                        Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                    else
+                                        Modifier
+                                )
+                        ) {
+                            DestinationsNavHost(
+                                navGraph    = NavGraphs.root,
+                                navController = navController
                             )
-                    ) {
-                        DestinationsNavHost(
-                            navGraph = NavGraphs.root,
-                            navController = navController
-                        )
+                        }
                     }
                 }
 

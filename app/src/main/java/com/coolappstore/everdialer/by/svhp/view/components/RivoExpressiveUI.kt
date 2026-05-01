@@ -3,6 +3,11 @@ package com.coolappstore.everdialer.by.svhp.view.components
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpSize
 import android.os.VibratorManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -535,6 +540,121 @@ fun RivoSwitchListItem(
                     uncheckedThumbColor = MaterialTheme.colorScheme.outline,
                     uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
+            )
+        }
+    }
+}
+
+// ─── Scroll Animated Item ─────────────────────────────────────────────────────
+
+/**
+ * Wraps a list item with a scroll-in fade+slide animation, controlled by the
+ * scroll animation preference. Safe to use inside LazyColumn items since
+ * LazyColumn removes items from composition when off-screen, allowing the
+ * animation to replay each time an item scrolls into view.
+ */
+@Composable
+fun RivoScrollAnimatedItem(
+    delayMs: Long = 0L,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val prefs = koinInject<PreferenceManager>()
+    val scrollAnimEnabled = remember { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
+
+    if (scrollAnimEnabled) {
+        RivoAnimatedSection(delayMs = delayMs, modifier = modifier, content = content)
+    } else {
+        Box(modifier = modifier) { content() }
+    }
+}
+
+// ─── Rivo Dropdown Menu ───────────────────────────────────────────────────────
+
+/**
+ * Styled context menu that matches Ever Dialer's card-based design.
+ * Uses large rounded corners, surfaceContainerHigh colour, and elevated shadow.
+ * Replaces the stock Material3 DropdownMenu across the app.
+ */
+@Composable
+fun RivoDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = modifier.widthIn(min = 220.dp),
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 12.dp,
+        tonalElevation = 4.dp,
+        content = content
+    )
+}
+
+/**
+ * A single styled item for [RivoDropdownMenu].
+ * Icons are rendered inside a tinted rounded box matching the app's icon containers.
+ * Supports destructive (error-coloured) styling.
+ */
+@Composable
+fun RivoDropdownMenuItem(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    isDestructive: Boolean = false
+) {
+    val textColor  = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val tintColor  = if (isDestructive) MaterialTheme.colorScheme.error else iconTint
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "rMenuItemScale"
+    )
+
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(12.dp),
+        interactionSource = interactionSource
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = tintColor.copy(alpha = 0.13f),
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector        = icon,
+                            contentDescription = null,
+                            tint               = tintColor,
+                            modifier           = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+            Text(
+                text       = text,
+                style      = MaterialTheme.typography.bodyLarge,
+                color      = textColor,
+                fontWeight = FontWeight.Medium
             )
         }
     }

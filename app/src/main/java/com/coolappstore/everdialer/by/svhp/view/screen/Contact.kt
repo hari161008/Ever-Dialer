@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import android.Manifest
+import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Intent
 import android.provider.ContactsContract
 import androidx.compose.animation.*
@@ -42,7 +43,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = TabTransitionStyle::class)
 @Composable
 fun ContactScreen(navController: NavController, navigator: DestinationsNavigator) {
     val permState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
@@ -121,7 +122,6 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 Icon(Icons.Default.PersonAdd, "Add Contact")
             }
         },
-        bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->

@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import androidx.compose.animation.core.*
+import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -29,8 +30,8 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
-import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedItem
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -44,7 +45,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import kotlin.math.abs
 
-@Destination<RootGraph>
+@Destination<RootGraph>(style = TabTransitionStyle::class)
 @Composable
 fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigator) {
     val contactsVM: ContactsViewModel = koinActivityViewModel()
@@ -103,7 +104,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                 }
             },
         topBar = { TopBar(navController, navigator) },
-        bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
@@ -124,10 +124,12 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(favorites) { contact ->
+                        RivoScrollAnimatedItem {
                         FavoriteContactCard(
                             contact = contact,
                             onClick = { navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id)) }
                         )
+                        }
                     }
                 }
             }

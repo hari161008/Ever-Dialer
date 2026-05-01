@@ -45,6 +45,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.SingleTile
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.TileGroup
 import com.ramcosta.composedestinations.annotation.Destination
@@ -359,15 +361,12 @@ fun DialPadContent(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Checkbox(checked = openDialpadDefault, onCheckedChange = null, modifier = Modifier.size(20.dp))
-                                        Text("Open dialpad by default")
-                                    }
-                                },
-                                onClick = {
+                        RivoDropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                            RivoDropdownMenuItem(
+                                text     = if (openDialpadDefault) "✓  Open dialpad by default" else "Open dialpad by default",
+                                icon     = Icons.Default.Dialpad,
+                                iconTint = MaterialTheme.colorScheme.primary,
+                                onClick  = {
                                     openDialpadDefault = !openDialpadDefault
                                     prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, openDialpadDefault)
                                 }

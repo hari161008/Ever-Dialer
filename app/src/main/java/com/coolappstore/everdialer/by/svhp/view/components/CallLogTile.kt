@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
@@ -26,15 +27,15 @@ fun CallLogTileSimple(log: CallLogEntry) {
     val icon = when (log.type) {
         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
         CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
-        CallLog.Calls.MISSED_TYPE -> Icons.AutoMirrored.Filled.CallMissed
-        else -> Icons.Default.Call
+        CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
+        else                        -> Icons.Default.Call
     }
     RivoListItem(
         headline = when (log.type) {
             CallLog.Calls.INCOMING_TYPE -> "Incoming"
             CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-            CallLog.Calls.MISSED_TYPE -> "Missed"
-            else -> "Call"
+            CallLog.Calls.MISSED_TYPE   -> "Missed"
+            else                        -> "Call"
         },
         supporting = "${formatDate(log.date)}${if (log.duration > 0) " • ${android.text.format.DateUtils.formatElapsedTime(log.duration)}" else ""}",
         leadingIcon = icon,
@@ -49,9 +50,9 @@ fun CallLogTile(
     onButtonClick: (CallLogEntry) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
+    val context   = LocalContext.current
     val isContact = log.name != null && log.name != log.number
-    var showMenu by remember { mutableStateOf(false) }
+    var showMenu  by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         RivoListItem(
@@ -62,8 +63,8 @@ fun CallLogTile(
             supporting = buildString {
                 if (log.name != null && log.name != log.number) append(log.number)
             },
-            avatarName = log.name ?: log.number,
-            photoUri = log.photoUri,
+            avatarName  = log.name ?: log.number,
+            photoUri    = log.photoUri,
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
@@ -71,22 +72,24 @@ fun CallLogTile(
                 else                        -> Icons.Default.Call
             },
             onLongClick = { showMenu = true },
-            onClick = { onTileClick(log) }
+            onClick     = { onTileClick(log) }
         )
 
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false }
+        RivoDropdownMenu(
+            expanded          = showMenu,
+            onDismissRequest  = { showMenu = false }
         ) {
-            DropdownMenuItem(
-                text = { Text("Call back") },
-                leadingIcon = { Icon(Icons.Default.Call, null) },
-                onClick = { showMenu = false; onButtonClick(log) }
+            RivoDropdownMenuItem(
+                text     = "Call back",
+                icon     = Icons.Default.Call,
+                iconTint = Color(0xFF4CAF50),
+                onClick  = { showMenu = false; onButtonClick(log) }
             )
-            DropdownMenuItem(
-                text = { Text("Copy number") },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "Copy number",
+                icon     = Icons.Default.ContentCopy,
+                iconTint = Color(0xFF2196F3),
+                onClick  = {
                     showMenu = false
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
@@ -94,10 +97,11 @@ fun CallLogTile(
                 }
             )
             if (!isContact) {
-                DropdownMenuItem(
-                    text = { Text("Add to contacts") },
-                    leadingIcon = { Icon(Icons.Default.PersonAdd, null) },
-                    onClick = {
+                RivoDropdownMenuItem(
+                    text     = "Add to contacts",
+                    icon     = Icons.Default.PersonAdd,
+                    iconTint = Color(0xFF9C27B0),
+                    onClick  = {
                         showMenu = false
                         val intent = Intent(Intent.ACTION_INSERT).apply {
                             type = ContactsContract.RawContacts.CONTENT_TYPE
@@ -107,18 +111,24 @@ fun CallLogTile(
                     }
                 )
             }
-            DropdownMenuItem(
-                text = { Text("Block number") },
-                leadingIcon = { Icon(Icons.Default.Block, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "Block number",
+                icon     = Icons.Default.Block,
+                iconTint = Color(0xFFFF9800),
+                onClick  = {
                     showMenu = false
                     Toast.makeText(context, "Number blocked", Toast.LENGTH_SHORT).show()
                 }
             )
-            DropdownMenuItem(
-                text = { Text("Delete from call log", color = MaterialTheme.colorScheme.error) },
-                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                onClick = {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            RivoDropdownMenuItem(
+                text          = "Delete from call log",
+                icon          = Icons.Default.Delete,
+                isDestructive = true,
+                onClick       = {
                     showMenu = false
                     try {
                         context.contentResolver.delete(

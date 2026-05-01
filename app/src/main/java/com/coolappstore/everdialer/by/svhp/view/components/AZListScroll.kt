@@ -44,7 +44,6 @@ import com.ramcosta.composedestinations.generated.destinations.ContactEditScreen
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
 private val CARD_RADIUS = 28.dp
 private val INNER_RADIUS = 4.dp
 
@@ -144,6 +143,7 @@ fun AZListScroll(
                     }
 
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        RivoScrollAnimatedItem(delayMs = (index * 25L).coerceAtMost(250L)) {
                         Surface(
                             shape = shape,
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -158,6 +158,7 @@ fun AZListScroll(
                                     )
                                 }
                             }
+                        }
                         }
                     }
 
@@ -294,31 +295,34 @@ private fun ContactListItem(
             }
         }
 
-        DropdownMenu(
-            expanded = showMenu,
+        RivoDropdownMenu(
+            expanded         = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
-            DropdownMenuItem(
-                text = { Text("View contact") },
-                leadingIcon = { Icon(Icons.Default.Person, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "View contact",
+                icon     = Icons.Default.Person,
+                iconTint = Color(0xFF2196F3),
+                onClick  = {
                     showMenu = false
                     navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                 }
             )
-            DropdownMenuItem(
-                text = { Text("Edit contact") },
-                leadingIcon = { Icon(Icons.Default.Edit, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "Edit contact",
+                icon     = Icons.Default.Edit,
+                iconTint = Color(0xFF9C27B0),
+                onClick  = {
                     showMenu = false
                     navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
                 }
             )
             if (!contact.phoneNumbers.firstOrNull().isNullOrEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Copy number") },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                    onClick = {
+                RivoDropdownMenuItem(
+                    text     = "Copy number",
+                    icon     = Icons.Default.ContentCopy,
+                    iconTint = Color(0xFF009688),
+                    onClick  = {
                         showMenu = false
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", contact.phoneNumbers.first()))
@@ -326,10 +330,11 @@ private fun ContactListItem(
                     }
                 )
             }
-            DropdownMenuItem(
-                text = { Text("Share contact") },
-                leadingIcon = { Icon(Icons.Default.Share, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "Share contact",
+                icon     = Icons.Default.Share,
+                iconTint = Color(0xFFFF9800),
+                onClick  = {
                     showMenu = false
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"

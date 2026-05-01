@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import android.Manifest
+import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CallLog
@@ -65,7 +66,7 @@ private val ColorGreen  = Color(0xFF4CAF50)
 private val ColorOrange = Color(0xFFFF9800)
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
-@Destination<RootGraph>(start = true)
+@Destination<RootGraph>(start = true, style = TabTransitionStyle::class)
 @Composable
 fun RecentScreen(navController: NavController, navigator: DestinationsNavigator) {
     val permState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
@@ -187,7 +188,6 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                     .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 76.dp) else Modifier)
             ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
-        bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
@@ -394,6 +394,7 @@ fun CallLogFullContent(
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
                             item(key = "group_$header", contentType = "logGroup") {
                                 RivoSectionHeader(title = header)
+                                RivoScrollAnimatedItem {
                                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                                     RivoExpressiveCard {
                                         logsInGroup.forEachIndexed { index, lg ->
@@ -417,6 +418,7 @@ fun CallLogFullContent(
                                             }
                                         }
                                     }
+                                }
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
                             }

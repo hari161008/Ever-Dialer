@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import android.content.Intent
+import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -34,8 +35,10 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
-import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
+import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedItem
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -48,7 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = TabTransitionStyle::class)
 @Composable
 fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) {
     val context = LocalContext.current
@@ -156,26 +159,25 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                         IconButton(onClick = { showOverflow = true }) {
                             Icon(Icons.Default.MoreVert, "More")
                         }
-                        DropdownMenu(
+                        RivoDropdownMenu(
                             expanded = showOverflow,
                             onDismissRequest = { showOverflow = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Hide Notes") },
-                                leadingIcon = { Icon(Icons.Default.VisibilityOff, null) },
-                                onClick = {
+                            RivoDropdownMenuItem(
+                                text     = "Hide Notes",
+                                icon     = Icons.Default.VisibilityOff,
+                                iconTint = androidx.compose.ui.graphics.Color(0xFF607D8B),
+                                onClick  = {
                                     showOverflow = false
                                     prefs.setBoolean(PreferenceManager.KEY_NOTES_ENABLED, false)
                                     navigator.navigateUp()
                                 }
                             )
-                        }
-                    }
+                        }                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        bottomBar = { BottomBar(navController, navigator) },
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
@@ -215,6 +217,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                     items(notes, key = { it.file.absolutePath }) { note ->
                         val safePhone = note.phoneNumber.filter { it.isDigit() || it == '+' }
                         val photoUri = phoneToPhotoUri[safePhone]
+                        RivoScrollAnimatedItem {
                         NoteCard(
                             note = note,
                             photoUri = photoUri,
@@ -227,6 +230,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                                 selectedNote = note
                             }
                         )
+                        }
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }
@@ -234,23 +238,15 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
 
             // Long-press context menu
             if (selectedNote != null) {
-                DropdownMenu(
-                    expanded = true,
+                RivoDropdownMenu(
+                    expanded         = true,
                     onDismissRequest = { selectedNote = null }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                        onClick = {
-                            noteToDelete = selectedNote
-                            selectedNote = null
-                            showDeleteConfirm = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Share") },
-                        leadingIcon = { Icon(Icons.Default.Share, null) },
-                        onClick = {
+                    RivoDropdownMenuItem(
+                        text     = "Share",
+                        icon     = Icons.Default.Share,
+                        iconTint = androidx.compose.ui.graphics.Color(0xFF2196F3),
+                        onClick  = {
                             val note = selectedNote!!
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -259,6 +255,16 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                             }
                             context.startActivity(Intent.createChooser(intent, "Share Note"))
                             selectedNote = null
+                        }
+                    )
+                    RivoDropdownMenuItem(
+                        text          = "Delete",
+                        icon          = Icons.Default.Delete,
+                        isDestructive = true,
+                        onClick       = {
+                            noteToDelete = selectedNote
+                            selectedNote = null
+                            showDeleteConfirm = true
                         }
                     )
                 }

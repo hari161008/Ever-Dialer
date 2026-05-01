@@ -67,5 +67,6 @@ class PreferenceManager(context: Context) {
         const val KEY_HANGUP_WIDTH          = "hangup_button_width"
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
+        const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"
     }
 }

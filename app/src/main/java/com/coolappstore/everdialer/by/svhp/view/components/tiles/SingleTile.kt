@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
 import org.koin.compose.koinInject
 
@@ -50,16 +52,16 @@ fun SingleTile(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-    val prefs = koinInject<PreferenceManager>()
-    var showMenu by remember { mutableStateOf(false) }
-    var isPressed by remember { mutableStateOf(false) }
+    val haptic  = LocalHapticFeedback.current
+    val prefs   = koinInject<PreferenceManager>()
+    var showMenu              by remember { mutableStateOf(false) }
+    var isPressed             by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "TileScale"
+        targetValue    = if (isPressed) 0.97f else 1f,
+        animationSpec  = spring(stiffness = Spring.StiffnessMedium),
+        label          = "TileScale"
     )
 
     val numberForMenu = phoneNumber ?: subtitle?.filter { it.isDigit() || it == '+' }
@@ -94,7 +96,7 @@ fun SingleTile(
                         horizontalDragDetected = false
                         val downPos = down.position
                         do {
-                            val event = awaitPointerEvent()
+                            val event   = awaitPointerEvent()
                             val current = event.changes.firstOrNull() ?: break
                             val dx = kotlin.math.abs(current.position.x - downPos.x)
                             val dy = kotlin.math.abs(current.position.y - downPos.y)
@@ -108,27 +110,24 @@ fun SingleTile(
             verticalAlignment = Alignment.CenterVertically
         ) {
             RivoAvatar(
-                name = title,
-                photoUri = photoUri,
-                icon = icon,
+                name               = title,
+                photoUri           = photoUri,
+                icon               = icon,
                 iconContainerColor = iconContainerColor,
-                modifier = Modifier.size(42.dp),
-                shape = RoundedCornerShape(14.dp)
+                modifier           = Modifier.size(42.dp),
+                shape              = RoundedCornerShape(14.dp)
             )
 
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
+                modifier            = Modifier.weight(1f).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text     = title,
+                    style    = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isMissedCall)
-                        MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurface,
+                    color    = if (isMissedCall) MaterialTheme.colorScheme.error
+                               else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -136,9 +135,9 @@ fun SingleTile(
                     supportingContent()
                 } else if (subtitle != null) {
                     Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text     = subtitle,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -152,33 +151,36 @@ fun SingleTile(
             }
         }
 
-        DropdownMenu(
-            expanded = showMenu,
+        RivoDropdownMenu(
+            expanded         = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
-            DropdownMenuItem(
-                text = { Text("Call") },
-                leadingIcon = { Icon(Icons.Default.Call, null) },
-                onClick = {
+            RivoDropdownMenuItem(
+                text     = "Call",
+                icon     = Icons.Default.Call,
+                iconTint = Color(0xFF4CAF50),
+                onClick  = {
                     showMenu = false
                     onClick()
                 }
             )
             if (!numberForMenu.isNullOrEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Copy number") },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                    onClick = {
+                RivoDropdownMenuItem(
+                    text     = "Copy number",
+                    icon     = Icons.Default.ContentCopy,
+                    iconTint = Color(0xFF2196F3),
+                    onClick  = {
                         showMenu = false
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", numberForMenu))
                         Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
                     }
                 )
-                DropdownMenuItem(
-                    text = { Text("Add to contacts") },
-                    leadingIcon = { Icon(Icons.Default.PersonAdd, null) },
-                    onClick = {
+                RivoDropdownMenuItem(
+                    text     = "Add to contacts",
+                    icon     = Icons.Default.PersonAdd,
+                    iconTint = Color(0xFF9C27B0),
+                    onClick  = {
                         showMenu = false
                         val intent = Intent(Intent.ACTION_INSERT).apply {
                             type = ContactsContract.RawContacts.CONTENT_TYPE
@@ -187,10 +189,11 @@ fun SingleTile(
                         context.startActivity(intent)
                     }
                 )
-                DropdownMenuItem(
-                    text = { Text("Send SMS") },
-                    leadingIcon = { Icon(Icons.Default.Message, null) },
-                    onClick = {
+                RivoDropdownMenuItem(
+                    text     = "Send SMS",
+                    icon     = Icons.Default.Message,
+                    iconTint = Color(0xFF009688),
+                    onClick  = {
                         showMenu = false
                         val intent = Intent(Intent.ACTION_VIEW).apply {
                             data = android.net.Uri.parse("sms:$numberForMenu")
@@ -209,8 +212,8 @@ fun TileGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(28.dp),
+        color    = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape    = RoundedCornerShape(28.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(vertical = 8.dp), content = content)

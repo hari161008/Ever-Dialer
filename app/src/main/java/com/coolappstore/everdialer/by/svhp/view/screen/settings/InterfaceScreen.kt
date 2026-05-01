@@ -102,6 +102,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
     var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
+    var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
 
     // Call UI section checkboxes dialog
     var showCallUIDialog   by remember { mutableStateOf(false) }
@@ -389,6 +390,30 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorOrange,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showCallUIDialog = true }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Animations ───────────────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 115L) {
+                        Column {
+                            Text("Animations", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Scroll Animation",
+                                    supporting = "Fade-in animation for list items as you scroll",
+                                    leadingIcon = Icons.Outlined.Animation,
+                                    iconContainerColor = ColorBlue,
+                                    checked = scrollAnimation,
+                                    onCheckedChange = {
+                                        scrollAnimation = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, it)
+                                    }
                                 )
                             }
                         }
