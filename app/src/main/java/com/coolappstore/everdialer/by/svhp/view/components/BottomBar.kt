@@ -140,7 +140,9 @@ fun BottomBar(navController: NavController) {
     }
 
     fun navigate(route: String) {
-        if (isNavigating) return          // drop rapid double-taps
+        // If already on this route, do nothing (prevents double-tap freeze)
+        if (currentDestination?.hierarchy?.any { it.route == route } == true) return
+        if (isNavigating) return          // drop rapid double-taps to different tabs
         isNavigating = true
         pendingRoute = route
         navController.navigate(route) {
@@ -329,10 +331,10 @@ private fun PillNavItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
-    val bgColor by animateColorAsState(
-        targetValue   = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-        label         = "${label}BgColor"
+    val bgAlpha by animateFloatAsState(
+        targetValue   = if (selected) 1f else 0f,
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+        label         = "${label}BgAlpha"
     )
     val iconTint by animateColorAsState(
         targetValue   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -352,7 +354,7 @@ private fun PillNavItem(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50.dp))
-            .background(bgColor)
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = bgAlpha))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center

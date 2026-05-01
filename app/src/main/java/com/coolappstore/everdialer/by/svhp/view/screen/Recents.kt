@@ -72,7 +72,6 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     val permState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
     val prefs = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
     val pillNav = remember { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_PILL_NAV, true) }
 
@@ -199,7 +198,6 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 onRequestPermission = { permState.launchPermissionRequest() },
                 listState = listState
             )
-            ScrollToTopButton(visible = showButton, onClick = { scope.launch { listState.animateScrollToItem(0) } })
         }
     }
 }
