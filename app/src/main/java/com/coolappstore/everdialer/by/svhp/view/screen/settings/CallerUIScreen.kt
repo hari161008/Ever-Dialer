@@ -30,8 +30,6 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
 
     var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f).coerceIn(0.2f, 1.0f)) }
-    var showCallerUI by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
-    var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
 
     Scaffold(
         topBar = {
@@ -53,48 +51,6 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-
-            // ── General ───────────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 0L) {
-                    Column {
-                        Text(
-                            "General",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
-                        RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline = "Show Caller UI",
-                                supporting = "Display custom in-call screen during active calls",
-                                leadingIcon = Icons.Outlined.Person,
-                                iconContainerColor = Color(0xFF3F51B5),
-                                checked = showCallerUI,
-                                onCheckedChange = {
-                                    showCallerUI = it
-                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, it)
-                                }
-                            )
-                            HorizontalDivider(
-                                Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoSwitchListItem(
-                                headline = "Proximity Screen Off",
-                                supporting = "Turn screen off when held to ear during a call",
-                                leadingIcon = Icons.Outlined.Sensors,
-                                iconContainerColor = Color(0xFF009688),
-                                checked = proximityBg,
-                                onCheckedChange = {
-                                    proximityBg = it
-                                    prefs.setBoolean(PreferenceManager.KEY_PROXIMITY_BG, it)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
 
             // ── Hang Up Button ────────────────────────────────────────
             item {

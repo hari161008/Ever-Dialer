@@ -116,7 +116,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
                 modifier = Modifier
                     .scale(fabScale)
-                    .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 76.dp) else Modifier)
+                    .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
             ) {
                 Icon(Icons.Default.PersonAdd, "Add Contact")
             }

@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -8,7 +9,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.EaseOutQuint
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -45,6 +50,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactScreenDest
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
 // Tab routes — only show the bar when one of these is active
@@ -71,29 +77,29 @@ fun BottomBar(navController: NavController) {
     val currentDestination = navBackStackEntry?.destination
     val currentRoute       = currentDestination?.route ?: ""
 
-    // Track the last-clicked route so selection is instant and never shows two items lit at once
+    // ── isNavigating debounce ─────────────────────────────────────────────────
+    // Freeze selection on the tapped item while the back-stack is in transition
+    // so neither the old nor the new route can momentarily appear selected.
+    var isNavigating by remember { mutableStateOf(false) }
     var pendingRoute by remember { mutableStateOf<String?>(null) }
 
-    val isFavoritesSelected = (pendingRoute ?: currentRoute).let { r ->
-        if (pendingRoute != null) r == FavoritesScreenDestination.route
-        else currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
-    }
-    val isRecentsSelected = (pendingRoute ?: currentRoute).let { r ->
-        if (pendingRoute != null) r == RecentScreenDestination.route
-        else currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
-    }
-    val isContactsSelected = (pendingRoute ?: currentRoute).let { r ->
-        if (pendingRoute != null) r == ContactScreenDestination.route
-        else currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
-    }
-    val isNotesSelected = (pendingRoute ?: currentRoute).let { r ->
-        if (pendingRoute != null) r == NotesScreenDestination.route
-        else currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    fun routeSelected(dest: String): Boolean {
+        if (isNavigating && pendingRoute != null) return pendingRoute == dest
+        return currentDestination?.hierarchy?.any { it.route == dest } == true
     }
 
-    // Clear pendingRoute once navigation settles on the target
+    val isFavoritesSelected = routeSelected(FavoritesScreenDestination.route)
+    val isRecentsSelected   = routeSelected(RecentScreenDestination.route)
+    val isContactsSelected  = routeSelected(ContactScreenDestination.route)
+    val isNotesSelected     = routeSelected(NotesScreenDestination.route)
+
+    // Clear flag once back-stack settles on the pending destination
     LaunchedEffect(currentRoute) {
-        if (pendingRoute != null && currentRoute.contains(pendingRoute!!, ignoreCase = true)) {
+        if (isNavigating && pendingRoute != null &&
+            currentRoute.contains(pendingRoute!!, ignoreCase = true)
+        ) {
+            delay(80)
+            isNavigating = false
             pendingRoute = null
         }
     }
@@ -101,26 +107,25 @@ fun BottomBar(navController: NavController) {
     // Only render pill when a tab screen is active
     val isOnTabScreen = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) }
 
-    // Slide-in animation for the pill — triggers on first appear AND every time
-    // the pill re-enters (e.g. returning from Settings, ContactDetails, etc.)
+    // ── Slide-in animation — slower, re-triggers every time pill re-enters ───
     var pillVisible by remember { mutableStateOf(false) }
     LaunchedEffect(isOnTabScreen) {
         if (isOnTabScreen) {
             pillVisible = false
-            kotlinx.coroutines.delay(16) // one frame — lets Compose commit the hidden state
+            delay(16) // one frame — lets Compose commit the hidden state
             pillVisible = true
         } else {
             pillVisible = false
         }
     }
     val pillOffsetY by animateFloatAsState(
-        targetValue   = if (pillVisible) 0f else 200f,
-        animationSpec = tween(durationMillis = 520, easing = EaseOutQuint),
+        targetValue   = if (pillVisible) 0f else 220f,
+        animationSpec = tween(durationMillis = 750, easing = EaseOutQuint),
         label         = "pillSlideIn"
     )
     val pillAlpha by animateFloatAsState(
         targetValue   = if (pillVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label         = "pillFadeIn"
     )
 
@@ -135,6 +140,8 @@ fun BottomBar(navController: NavController) {
     }
 
     fun navigate(route: String) {
+        if (isNavigating) return          // drop rapid double-taps
+        isNavigating = true
         pendingRoute = route
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -144,7 +151,6 @@ fun BottomBar(navController: NavController) {
     }
 
     if (pillNav) {
-        // Hide entirely when not on a tab screen (e.g. Settings, ContactDetails, etc.)
         if (!isOnTabScreen) return
 
         Box(
@@ -160,7 +166,7 @@ fun BottomBar(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 28.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
@@ -213,7 +219,6 @@ fun BottomBar(navController: NavController) {
             }
         }
     } else {
-        // Standard bottom navigation bar — always visible, hides on non-tab via NavigationBarItem selection state
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp
@@ -277,7 +282,6 @@ private fun RowScope.AnimatedNavBarItem(
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label         = "${label}Size"
     )
-    // Bounce only on selection, snap-back on deselection — prevents "phantom press" on the old tab
     val scale by animateFloatAsState(
         targetValue   = if (selected) 1.15f else 1f,
         animationSpec = if (selected)
@@ -309,9 +313,10 @@ private fun RowScope.AnimatedNavBarItem(
 }
 
 // ── Pill nav item ─────────────────────────────────────────────────────────────
-// Bounce ONLY when becoming selected. Deselection uses a fast linear tween so
-// the previously-active item never overshoots back through 1f (which looked
-// like a phantom press on the old tab).
+// • Background & tint transition with a smooth tween
+// • Icon bounces in on selection, snaps back on deselection
+// • Label slides in/out via AnimatedVisibility so the pill width expands/
+//   collapses fluidly instead of the text just popping in or out
 
 @Composable
 private fun PillNavItem(
@@ -326,23 +331,21 @@ private fun PillNavItem(
 
     val bgColor by animateColorAsState(
         targetValue   = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label         = "${label}BgColor"
     )
     val iconTint by animateColorAsState(
         targetValue   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
     )
-    // Select  → bouncy spring   (satisfying bounce into place)
-    // Deselect → fast tween     (no overshoot — stops exactly at 1f)
     val scale by animateFloatAsState(
         targetValue   = if (selected) 1.12f else 1f,
         animationSpec = if (selected)
             spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
         else
-            tween(durationMillis = 120, easing = FastOutSlowInEasing),
+            tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
 
@@ -372,7 +375,18 @@ private fun PillNavItem(
                     modifier           = Modifier.size(24.dp).scale(scale),
                     tint               = iconTint
                 )
-                if (selected) {
+                // Label slides in horizontally so the pill width animates smoothly
+                AnimatedVisibility(
+                    visible = selected,
+                    enter = expandHorizontally(
+                        animationSpec = tween(durationMillis = 280, easing = EaseOutQuint),
+                        expandFrom    = Alignment.Start
+                    ) + fadeIn(tween(200)),
+                    exit = shrinkHorizontally(
+                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                        shrinkTowards = Alignment.Start
+                    ) + fadeOut(tween(120))
+                ) {
                     Text(
                         text  = label,
                         style = MaterialTheme.typography.labelLarge,

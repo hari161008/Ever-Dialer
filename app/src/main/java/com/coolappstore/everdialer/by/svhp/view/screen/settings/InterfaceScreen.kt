@@ -34,7 +34,6 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
-import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -88,8 +87,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val keyboardController = LocalSoftwareKeyboardController.current
-
-    val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
     var themeMode           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
     var dynamicColors       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
@@ -522,10 +519,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
 
-            ScrollToTopButton(
-                visible = showButton,
-                onClick = { scope.launch { listState.animateScrollToItem(0) } }
-            )
+
         }
     }
 }
