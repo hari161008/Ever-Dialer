@@ -394,7 +394,7 @@ fun CallLogFullContent(
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
                             item(key = "group_$header", contentType = "logGroup") {
                                 RivoSectionHeader(title = header)
-                                RivoScrollAnimatedItem {
+                                RivoScrollAnimatedItem(delayMs = 120L) {
                                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                                     RivoExpressiveCard {
                                         logsInGroup.forEachIndexed { index, lg ->
