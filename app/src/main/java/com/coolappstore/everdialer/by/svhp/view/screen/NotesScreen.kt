@@ -120,13 +120,15 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                         if (!down.pressed) continue
                         val startX = down.position.x
                         val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
                         var triggered = false
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Final)
                             val change = event.changes.firstOrNull() ?: break
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
-                            if (!triggered && !change.isConsumed && abs(dx) > 250f && abs(dx) > abs(dy) * 3.5f) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            if (!triggered && elapsed >= 150L && !change.isConsumed && abs(dx) > 700f && abs(dx) > abs(dy) * 5.5f) {
                                 triggered = true
                                 if (dx > 0) {
                                     // swipe right from Notes → Contacts

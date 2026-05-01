@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.EaseOutQuint
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -68,13 +71,58 @@ fun BottomBar(navController: NavController) {
     val currentDestination = navBackStackEntry?.destination
     val currentRoute       = currentDestination?.route ?: ""
 
-    val isFavoritesSelected = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
-    val isRecentsSelected   = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
-    val isContactsSelected  = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
-    val isNotesSelected     = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    // Track the last-clicked route so selection is instant and never shows two items lit at once
+    var pendingRoute by remember { mutableStateOf<String?>(null) }
+
+    val isFavoritesSelected = (pendingRoute ?: currentRoute).let { r ->
+        if (pendingRoute != null) r == FavoritesScreenDestination.route
+        else currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
+    }
+    val isRecentsSelected = (pendingRoute ?: currentRoute).let { r ->
+        if (pendingRoute != null) r == RecentScreenDestination.route
+        else currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+    }
+    val isContactsSelected = (pendingRoute ?: currentRoute).let { r ->
+        if (pendingRoute != null) r == ContactScreenDestination.route
+        else currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    }
+    val isNotesSelected = (pendingRoute ?: currentRoute).let { r ->
+        if (pendingRoute != null) r == NotesScreenDestination.route
+        else currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    }
+
+    // Clear pendingRoute once navigation settles on the target
+    LaunchedEffect(currentRoute) {
+        if (pendingRoute != null && currentRoute.contains(pendingRoute!!, ignoreCase = true)) {
+            pendingRoute = null
+        }
+    }
 
     // Only render pill when a tab screen is active
     val isOnTabScreen = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) }
+
+    // Slide-in animation for the pill — triggers on first appear AND every time
+    // the pill re-enters (e.g. returning from Settings, ContactDetails, etc.)
+    var pillVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(isOnTabScreen) {
+        if (isOnTabScreen) {
+            pillVisible = false
+            kotlinx.coroutines.delay(16) // one frame — lets Compose commit the hidden state
+            pillVisible = true
+        } else {
+            pillVisible = false
+        }
+    }
+    val pillOffsetY by animateFloatAsState(
+        targetValue   = if (pillVisible) 0f else 200f,
+        animationSpec = tween(durationMillis = 520, easing = EaseOutQuint),
+        label         = "pillSlideIn"
+    )
+    val pillAlpha by animateFloatAsState(
+        targetValue   = if (pillVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label         = "pillFadeIn"
+    )
 
     fun doHaptic() {
         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
@@ -87,6 +135,7 @@ fun BottomBar(navController: NavController) {
     }
 
     fun navigate(route: String) {
+        pendingRoute = route
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -102,7 +151,9 @@ fun BottomBar(navController: NavController) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(0.dp)
-                .wrapContentHeight(align = Alignment.Bottom, unbounded = true),
+                .wrapContentHeight(align = Alignment.Bottom, unbounded = true)
+                .offset { IntOffset(0, pillOffsetY.toInt()) }
+                .graphicsLayer { alpha = pillAlpha },
             contentAlignment = Alignment.Center
         ) {
             Box(

@@ -1,3 +1,15 @@
+# 🚀 Ever Dialer - Release v4.0.0
+
+## 🐛 Bug Fix: Accidental Contact Open on Swipe
+* **Swipe Navigation Fix:** Increased the swipe detection threshold from 450px to 700px and the minimum gesture time from 80ms to 150ms across all home screens (Favorites, Recents, Contacts, Notes).
+* **Stricter Directionality:** Raised the horizontal-to-vertical ratio requirement from 4.5× to 5.5× so that only deliberate horizontal swipes trigger tab navigation — tapping or vertically scrolling contacts no longer accidentally opens random contacts.
+* **Notes Screen:** Also added the missing elapsed-time guard to the Notes screen swipe handler, bringing it in line with all other screens.
+
+## 🔢 Version Bump
+* App version updated to v4.0.0.
+
+---
+
 # 🚀 Ever Dialer - Release v3.0.0
 
 ## 🎨 Pill Style Navigation Bar

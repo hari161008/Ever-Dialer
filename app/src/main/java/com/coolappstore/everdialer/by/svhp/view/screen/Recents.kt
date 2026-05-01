@@ -144,9 +144,9 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                             val elapsed = System.currentTimeMillis() - startTime
                             if (!triggered &&
                                 !childHScrolling &&
-                                elapsed >= 80L &&
-                                kotlin.math.abs(dx) > 450f &&
-                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 4.5f
+                                elapsed >= 150L &&
+                                kotlin.math.abs(dx) > 700f &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 5.5f
                             ) {
                                 triggered = true
                                 if (dx < 0) {

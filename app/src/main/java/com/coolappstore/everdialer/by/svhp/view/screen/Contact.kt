@@ -50,7 +50,6 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
     var visible by remember { mutableStateOf(false) }
     val fabScale by animateFloatAsState(
@@ -80,7 +79,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
                             val elapsed = System.currentTimeMillis() - startTime
-                            if (!triggered && elapsed >= 80L && !change.isConsumed && kotlin.math.abs(dx) > 450f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 4.5f) {
+                            if (!triggered && elapsed >= 150L && !change.isConsumed && kotlin.math.abs(dx) > 700f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 5.5f) {
                                 triggered = true
                                 if (dx > 0) {
                                     scope.launch {
@@ -131,10 +130,6 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 isGranted = permState.status == PermissionStatus.Granted,
                 onRequestPermission = { permState.launchPermissionRequest() },
                 listState = listState
-            )
-            ScrollToTopButton(
-                visible = showButton,
-                onClick = { scope.launch { listState.animateScrollToItem(0) } }
             )
         }
     }
