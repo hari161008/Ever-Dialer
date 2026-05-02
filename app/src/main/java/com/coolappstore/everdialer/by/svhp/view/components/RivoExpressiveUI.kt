@@ -5,9 +5,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.DpSize
 import android.os.VibratorManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -30,11 +27,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -381,6 +388,7 @@ fun RivoListItem(
     photoUri: String? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    isMenuOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -388,7 +396,7 @@ fun RivoListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isMenuOpen) 0.97f else if (isPressed) 0.97f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "ListItemScale"
     )
@@ -573,8 +581,9 @@ fun RivoScrollAnimatedItem(
 
 /**
  * Styled context menu that matches Ever Dialer's card-based design.
- * Uses large rounded corners, surfaceContainerHigh colour, and elevated shadow.
- * Replaces the stock Material3 DropdownMenu across the app.
+ * Uses a Popup so the menu is statically positioned without jumping on finger release.
+ * The shadow is rendered by Compose's draw.shadow (not the window elevation)
+ * so it clips correctly to the rounded shape on all API levels.
  */
 @Composable
 fun RivoDropdownMenu(
@@ -583,16 +592,44 @@ fun RivoDropdownMenu(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismissRequest,
-        modifier = modifier.widthIn(min = 220.dp),
-        shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 12.dp,
-        tonalElevation = 4.dp,
-        content = content
-    )
+    if (expanded) {
+        Popup(
+            onDismissRequest = onDismissRequest,
+            properties = PopupProperties(focusable = true)
+        ) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = scaleIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    initialScale = 0.88f,
+                    transformOrigin = TransformOrigin(0f, 0f)
+                ) + fadeIn(tween(120)),
+                exit = scaleOut(
+                    animationSpec = tween(100),
+                    targetScale = 0.88f,
+                    transformOrigin = TransformOrigin(0f, 0f)
+                ) + fadeOut(tween(80))
+            ) {
+                Surface(
+                    modifier = modifier
+                        .widthIn(min = 220.dp, max = 300.dp)
+                        .shadow(
+                            elevation = 20.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            spotColor = Color.Black.copy(alpha = 0.25f),
+                            ambientColor = Color.Black.copy(alpha = 0.12f)
+                        ),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 4.dp
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        content()
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**

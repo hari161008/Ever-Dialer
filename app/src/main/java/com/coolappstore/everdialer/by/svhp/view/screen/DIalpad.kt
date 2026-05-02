@@ -65,27 +65,31 @@ fun DialPadScreen(
     navigator: DestinationsNavigator,
     initialNumber: String? = null
 ) {
-    Scaffold(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = { navigator.navigateUp() },
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = {
-            TopAppBar(
-                title = { Text("Dialpad", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+        dragHandle = {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                    modifier = Modifier.size(width = 36.dp, height = 4.dp)
+                ) {}
+            }
         }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            DialPadContent(
-                initialNumber = initialNumber,
-                navigator = navigator,
-                onDismiss = { navigator.navigateUp() }
-            )
-        }
+    ) {
+        DialPadContent(
+            initialNumber = initialNumber,
+            navigator = navigator,
+            onDismiss = { navigator.navigateUp() }
+        )
     }
 }
 

@@ -269,7 +269,10 @@ fun CallLogFullContent(
         }
 
         if (logs.isEmpty()) {
-            RivoLoadingIndicatorView()
+            // Show nothing while first load completes (cache fills this instantly on repeat opens)
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
+            }
         } else {
             // Use start-of-day (midnight) for "today" so all four stat cards
             // consistently reflect the current calendar day.
@@ -396,10 +399,20 @@ fun CallLogFullContent(
                                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                                     RivoExpressiveCard {
                                         logsInGroup.forEachIndexed { index, lg ->
+                                            val directCall = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
                                             CallLogTile(
                                                 log = lg,
                                                 onTileClick = { log ->
-                                                    navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                    if (directCall) {
+                                                        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                                                        if (hasPermission) {
+                                                            val accounts = telecomManager.callCapablePhoneAccounts
+                                                            if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
+                                                            else makeCall(context, log.number)
+                                                        } else makeCall(context, log.number)
+                                                    } else {
+                                                        navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                    }
                                                 },
                                                 onButtonClick = { log ->
                                                     val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED

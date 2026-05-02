@@ -51,6 +51,26 @@ import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScr
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import kotlinx.coroutines.delay
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.Person
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.GlobalContext.startKoin
@@ -353,29 +373,86 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // ── Main nav host + static bottom bar ─────────────────
-                    // BottomBar is placed HERE (outside NavHost's AnimatedContent)
-                    // so it never participates in tab-switch transitions.
-                    Scaffold(
-                        bottomBar = { BottomBar(navController) },
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentWindowInsets = WindowInsets(0)
-                    ) { scaffoldPadding ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(scaffoldPadding)
-                                .then(
-                                    if (hasOngoingCall)
-                                        Modifier.consumeWindowInsets(WindowInsets.statusBars)
-                                    else
-                                        Modifier
+                    // ── Main nav host + adaptive nav (bottom bar / rail) ───
+                    val configuration = LocalConfiguration.current
+                    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                    val navBackStack by navController.currentBackStackEntryAsState()
+                    val currentDest = navBackStack?.destination
+                    val prefs2 = remember { GlobalContext.get().get<PreferenceManager>() }
+                    val notesEnabled = prefs2.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+
+                    fun navTo(route: String) {
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+
+                    if (isLandscape) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            NavigationRail(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxHeight()
+                            ) {
+                                Spacer(Modifier.height(8.dp))
+                                NavigationRailItem(
+                                    selected = currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true,
+                                    onClick = { navTo(FavoritesScreenDestination.route) },
+                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites") },
+                                    label = { Text("Favourites", style = MaterialTheme.typography.labelSmall) },
+                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
                                 )
-                        ) {
-                            DestinationsNavHost(
-                                navGraph    = NavGraphs.root,
-                                navController = navController
-                            )
+                                NavigationRailItem(
+                                    selected = currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
+                                    onClick = { navTo(RecentScreenDestination.route) },
+                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true) Icons.Filled.History else Icons.Outlined.History, "Calls") },
+                                    label = { Text("Calls", style = MaterialTheme.typography.labelSmall) },
+                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+                                )
+                                NavigationRailItem(
+                                    selected = currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
+                                    onClick = { navTo(ContactScreenDestination.route) },
+                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true) Icons.Filled.Person else Icons.Outlined.Person, "Contacts") },
+                                    label = { Text("Contacts", style = MaterialTheme.typography.labelSmall) },
+                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+                                )
+                                if (notesEnabled) {
+                                    NavigationRailItem(
+                                        selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
+                                        onClick = { navTo(NotesScreenDestination.route) },
+                                        icon = { Icon(if (currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true) Icons.Filled.Note else Icons.Outlined.Note, "Notes") },
+                                        label = { Text("Notes", style = MaterialTheme.typography.labelSmall) },
+                                        colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+                                    )
+                                }
+                            }
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                DestinationsNavHost(navGraph = NavGraphs.root, navController = navController)
+                            }
+                        }
+                    } else {
+                        Scaffold(
+                            bottomBar = { BottomBar(navController) },
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentWindowInsets = WindowInsets(0)
+                        ) { scaffoldPadding ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(scaffoldPadding)
+                                    .then(
+                                        if (hasOngoingCall)
+                                            Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                        else
+                                            Modifier
+                                    )
+                            ) {
+                                DestinationsNavHost(
+                                    navGraph    = NavGraphs.root,
+                                    navController = navController
+                                )
+                            }
                         }
                     }
                 }

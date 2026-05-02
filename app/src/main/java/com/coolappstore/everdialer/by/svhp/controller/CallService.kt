@@ -47,37 +47,28 @@ class CallService : InCallService() {
 
         @Volatile private var isMerging = false
 
-        fun setMuted(muted: Boolean) {
-            instance?.setMuted(muted)
-        }
+        // Set to true when "Add to call" is triggered so CallService knows to
+        // auto-merge the second call once it becomes active, or restore call 1
+        // if it is rejected/disconnected before being answered.
+        @Volatile var isAddingToCall = false
 
-        fun setAudioRoute(route: Int) {
-            instance?.setAudioRoute(route)
-        }
-
-        fun answerCall() {
-            _currentCallSession.value?.call?.answer(VideoProfile.STATE_AUDIO_ONLY)
-        }
-
-        fun declineCall() {
-            _currentCallSession.value?.call?.disconnect()
-        }
+        fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
+        fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
+        fun answerCall() { _currentCallSession.value?.call?.answer(VideoProfile.STATE_AUDIO_ONLY) }
+        fun declineCall() { _currentCallSession.value?.call?.disconnect() }
 
         fun mergeCalls() {
             val primary = _currentCallSession.value?.call ?: return
             val secondary = _heldCallSession.value?.call ?: return
             isMerging = true
             try {
-                primary.conference(secondary)
+                secondary.conference(primary)
             } catch (_: Exception) {
-                isMerging = false
+                try { primary.conference(secondary) } catch (_: Exception) { isMerging = false }
             }
-            // Safety: reset isMerging after 5 seconds if no conference call was added
-            // (some carriers merge in-place without creating a new conference call object)
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 if (isMerging) {
                     isMerging = false
-                    // If calls are still tracked, keep the primary as current
                     if (_currentCallSession.value == null && _heldCallSession.value != null) {
                         _currentCallSession.value = _heldCallSession.value
                         _heldCallSession.value = null
@@ -89,16 +80,45 @@ class CallService : InCallService() {
         fun hasHeldCall(): Boolean = _heldCallSession.value != null
     }
 
+    // Callback for the primary (active/dialing) call
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
+
+            // "Add to call" flow — watch the second outgoing call
+            if (isAddingToCall && _currentCallSession.value?.call == call) {
+                when (state) {
+                    Call.STATE_ACTIVE -> {
+                        // 2nd person answered → auto-merge immediately
+                        isAddingToCall = false
+                        mergeCalls()
+                        return
+                    }
+                    Call.STATE_DISCONNECTED,
+                    Call.STATE_DISCONNECTING -> {
+                        // 2nd person rejected or hung up before answering → restore call 1
+                        isAddingToCall = false
+                        _currentCallSession.value = null
+                        val held = _heldCallSession.value
+                        if (held != null) {
+                            _heldCallSession.value = null
+                            _currentCallSession.value = CallSession(held.call, held.call.state)
+                            try { held.call.unhold() } catch (_: Exception) {}
+                        }
+                        if (_currentCallSession.value == null) {
+                            removeForeground()
+                            cancelNotification()
+                        }
+                        return
+                    }
+                    else -> { /* DIALING / CONNECTING — keep waiting */ }
+                }
+            }
+
+            // Normal state update
             when {
-                _currentCallSession.value?.call == call -> {
-                    _currentCallSession.value = CallSession(call, state)
-                }
-                _heldCallSession.value?.call == call -> {
-                    _heldCallSession.value = CallSession(call, state)
-                }
+                _currentCallSession.value?.call == call -> _currentCallSession.value = CallSession(call, state)
+                _heldCallSession.value?.call == call   -> _heldCallSession.value   = CallSession(call, state)
             }
 
             if (state == Call.STATE_DISCONNECTED) {
@@ -107,16 +127,12 @@ class CallService : InCallService() {
                     _heldCallSession.value?.let { held ->
                         _currentCallSession.value = held
                         _heldCallSession.value = null
-                        // Resume the previously held call
                         try { held.call.unhold() } catch (_: Exception) {}
                     }
                 } else if (_heldCallSession.value?.call == call) {
                     _heldCallSession.value = null
                 }
-                if (_currentCallSession.value == null) {
-                    removeForeground()
-                    cancelNotification()
-                }
+                if (_currentCallSession.value == null) { removeForeground(); cancelNotification() }
             } else {
                 updateNotification(call)
             }
@@ -136,27 +152,18 @@ class CallService : InCallService() {
     }
 
     private fun removeForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stopForeground(STOP_FOREGROUND_REMOVE)
+        else @Suppress("DEPRECATION") stopForeground(true)
     }
 
     private fun isNumberBlocked(number: String): Boolean {
         val blockedList = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
-            ?.split(",")
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-
-        if (blockedList.any { blocked ->
-            val cleanBlocked = blocked.replace(" ", "").replace("-", "")
-            val cleanNumber = number.replace(" ", "").replace("-", "")
-            cleanNumber.endsWith(cleanBlocked) || cleanBlocked.endsWith(cleanNumber)
-        }) return true
-
-        return false
+            ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        return blockedList.any { blocked ->
+            val cb = blocked.replace(" ", "").replace("-", "")
+            val cn = number.replace(" ", "").replace("-", "")
+            cn.endsWith(cb) || cb.endsWith(cn)
+        }
     }
 
     private fun launchCallActivity() {
@@ -170,18 +177,13 @@ class CallService : InCallService() {
         super.onCallAdded(call)
         instance = this
 
-        val handle = call.details.handle
-        val number = handle?.schemeSpecificPart ?: ""
+        val number = call.details.handle?.schemeSpecificPart ?: ""
 
-        val silenceUnknown = prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)
-        if (silenceUnknown && number.isBlank()) {
-            call.disconnect()
-            return
+        if (prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false) && number.isBlank()) {
+            call.disconnect(); return
         }
-
         if (number.isNotBlank() && isNumberBlocked(number)) {
-            call.disconnect()
-            return
+            call.disconnect(); return
         }
 
         if (isMerging) {
@@ -195,36 +197,30 @@ class CallService : InCallService() {
 
         if (_currentCallSession.value != null && _currentCallSession.value?.state != Call.STATE_DISCONNECTED) {
             if (call.state != Call.STATE_RINGING) {
-                // Outgoing second call: hold first, new becomes current
-                val previousSession = _currentCallSession.value
-                previousSession?.call?.unregisterCallback(callCallback)
-                if (previousSession != null) {
-                    previousSession.call.registerCallback(heldCallCallback)
-                    // Explicitly hold the first call in the telecom stack
-                    try { previousSession.call.hold() } catch (_: Exception) {}
-                    _heldCallSession.value = CallSession(previousSession.call, Call.STATE_HOLDING)
+                // Second outgoing call (from "Add to call" or user-initiated)
+                val prev = _currentCallSession.value
+                if (prev != null) {
+                    try { if (prev.call.state != Call.STATE_HOLDING) prev.call.hold() } catch (_: Exception) {}
+                    prev.call.unregisterCallback(callCallback)
+                    prev.call.registerCallback(heldCallCallback)
+                    _heldCallSession.value = CallSession(prev.call, Call.STATE_HOLDING)
                 }
                 call.registerCallback(callCallback)
                 _currentCallSession.value = CallSession(call, call.state)
             } else {
-                // Incoming second call: goes to held
+                // Incoming second call
                 call.registerCallback(heldCallCallback)
                 _heldCallSession.value = CallSession(call, call.state)
             }
             updateNotification(call)
-            if (call.state != Call.STATE_RINGING) {
-                launchCallActivity()
-            }
+            if (call.state != Call.STATE_RINGING) launchCallActivity()
             return
         }
 
         call.registerCallback(callCallback)
         _currentCallSession.value = CallSession(call, call.state)
         updateNotification(call)
-
-        if (call.state != Call.STATE_RINGING) {
-            launchCallActivity()
-        }
+        if (call.state != Call.STATE_RINGING) launchCallActivity()
     }
 
     override fun onCallRemoved(call: Call) {
@@ -233,9 +229,8 @@ class CallService : InCallService() {
         call.unregisterCallback(heldCallCallback)
 
         if (isMerging) {
-            // During a merge both original calls get removed; don't promote held to current
             if (_currentCallSession.value?.call == call) _currentCallSession.value = null
-            if (_heldCallSession.value?.call == call) _heldCallSession.value = null
+            if (_heldCallSession.value?.call == call)   _heldCallSession.value   = null
             return
         }
 
@@ -244,7 +239,6 @@ class CallService : InCallService() {
             _heldCallSession.value?.let { held ->
                 _currentCallSession.value = held
                 _heldCallSession.value = null
-                // Resume the previously held call automatically
                 try { held.call.unhold() } catch (_: Exception) {}
             }
         } else if (_heldCallSession.value?.call == call) {
@@ -264,91 +258,63 @@ class CallService : InCallService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "ANSWER_CALL" -> {
-                answerCall()
-                // Open CallActivity when answering from notification
-                launchCallActivity()
-            }
+            "ANSWER_CALL" -> { answerCall(); launchCallActivity() }
             "DECLINE_CALL" -> declineCall()
         }
         return super.onStartCommand(intent, flags, startId)
     }
 
     private fun updateNotification(call: Call) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
                 setSound(null, null)
-            }
-            notificationManager.createNotificationChannel(channel)
+            })
         }
 
-        val handle = call.details.handle
-        val number = handle?.schemeSpecificPart ?: ""
+        val number = call.details.handle?.schemeSpecificPart ?: ""
+        val contact = if (number.isNotEmpty()) try { contactsRepository.getContactByNumber(number) } catch (_: Exception) { null } else null
+        val contactName = contact?.name ?: number.ifEmpty { "Unknown Number" }
 
-        val contact = if (number.isNotEmpty()) {
-            try {
-                contactsRepository.getContactByNumber(number)
-            } catch (e: Exception) { null }
-        } else null
+        val fsi = PendingIntent.getActivity(this, 0,
+            Intent(this, CallActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val answerPi = PendingIntent.getService(this, 1,
+            Intent(this, CallService::class.java).apply { action = "ANSWER_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val declinePi = PendingIntent.getService(this, 2,
+            Intent(this, CallService::class.java).apply { action = "DECLINE_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val contactName = when {
-            contact != null -> contact.name
-            number.isNotEmpty() -> number
-            else -> "Unknown Number"
-        }
-
-        val fullScreenIntent = Intent(this, CallActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-        }
-        val fullScreenPendingIntent = PendingIntent.getActivity(this, 0, fullScreenIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val answerIntent = Intent(this, CallService::class.java).apply { action = "ANSWER_CALL" }
-        val answerPendingIntent = PendingIntent.getService(this, 1, answerIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val declineIntent = Intent(this, CallService::class.java).apply { action = "DECLINE_CALL" }
-        val declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val person = androidx.core.app.Person.Builder()
-            .setName(contactName)
-            .setImportant(true)
-            .build()
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val person = androidx.core.app.Person.Builder().setName(contactName).setImportant(true).build()
+        val isRinging = call.state == Call.STATE_RINGING
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(contactName)
-            .setContentText(if (call.state == Call.STATE_RINGING) "Incoming call" else "Active call")
+            .setContentText(if (isRinging) "Incoming call" else "Active call")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
-            .setContentIntent(fullScreenPendingIntent)
+            .setFullScreenIntent(fsi, true)
+            .setContentIntent(fsi)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(false)
-            .setSilent(call.state != Call.STATE_RINGING)
-            .setDefaults(if (call.state == Call.STATE_RINGING) NotificationCompat.DEFAULT_ALL else 0)
-            .setStyle(
-                if (call.state == Call.STATE_RINGING) {
-                    NotificationCompat.CallStyle.forIncomingCall(person, declinePendingIntent, answerPendingIntent)
-                } else {
-                    NotificationCompat.CallStyle.forOngoingCall(person, declinePendingIntent)
-                }
-            )
+            .setSilent(!isRinging)
+            .setDefaults(if (isRinging) NotificationCompat.DEFAULT_ALL else 0)
+            .setStyle(if (isRinging) NotificationCompat.CallStyle.forIncomingCall(person, declinePi, answerPi)
+                      else          NotificationCompat.CallStyle.forOngoingCall(person, declinePi))
             .setColorized(false)
+            .build()
 
-        val notification = builder.build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
-        } else {
+        else
             startForeground(NOTIFICATION_ID, notification)
-        }
     }
 
     private fun cancelNotification() {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
     }
 }

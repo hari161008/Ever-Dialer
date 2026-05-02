@@ -52,6 +52,8 @@ import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestin
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 
 // Tab routes — only show the bar when one of these is active
 private val TAB_ROUTES = setOf(
@@ -63,6 +65,9 @@ private val TAB_ROUTES = setOf(
 
 @Composable
 fun BottomBar(navController: NavController) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    if (isLandscape) return
     val prefs         = koinInject<PreferenceManager>()
     val context       = LocalContext.current
     @Suppress("UNUSED_VARIABLE")

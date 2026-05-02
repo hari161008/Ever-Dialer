@@ -65,6 +65,15 @@ import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.util.*
 import kotlin.math.roundToInt
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 class CallActivity : ComponentActivity() {
 
@@ -73,11 +82,32 @@ class CallActivity : ComponentActivity() {
     private val prefs: PreferenceManager by inject()
     private var proximityWakeLock: PowerManager.WakeLock? = null
 
+    // Pocket mode prevention
+    private var sensorManager: SensorManager? = null
+    private var proximitySensor: Sensor? = null
+    private var isPocketBlocked = false
+    private val proxSensorListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            if (!prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) return
+            val maxRange = event.sensor.maximumRange
+            isPocketBlocked = event.values[0] < maxRange * 0.1f
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showWhenLockedAndTurnScreenOn()
         setupProximitySensor()
+        // Prevent notification shade from being pulled down during a call
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         enableEdgeToEdge()
+        // Register pocket mode proximity listener
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        proximitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        proximitySensor?.let {
+            sensorManager?.registerListener(proxSensorListener, it, SensorManager.SENSOR_DELAY_UI)
+        }
 
         setContent {
             Rivo4Theme {
@@ -144,11 +174,12 @@ class CallActivity : ComponentActivity() {
                         phoneNumber = number,
                         photoUri = photoUri,
                         audioState = audioState,
-                        hasHeldCall = heldSession != null,
+                        hasHeldCall = heldSession != null && heldSession?.state != Call.STATE_DISCONNECTED && heldSession?.state != Call.STATE_DISCONNECTING,
                         heldCallName = heldContactName,
                         contactsRepo = contactsRepo,
                         callLogRepo = callLogRepo,
-                        prefs = prefs
+                        prefs = prefs,
+                        isPocketBlocked = { isPocketBlocked }
                     )
                 }
             }
@@ -181,7 +212,7 @@ class CallActivity : ComponentActivity() {
         (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
     }
 
-    override fun onDestroy() { super.onDestroy(); releaseProximityLock() }
+    override fun onDestroy() { super.onDestroy(); releaseProximityLock(); sensorManager?.unregisterListener(proxSensorListener) }
     private fun acquireProximityLock() { if (proximityWakeLock?.isHeld == false) proximityWakeLock?.acquire() }
     private fun releaseProximityLock() { if (proximityWakeLock?.isHeld == true) proximityWakeLock?.release() }
 }
@@ -199,7 +230,8 @@ fun ExpressiveCallScreen(
     heldCallName: String = "",
     contactsRepo: IContactsRepository? = null,
     callLogRepo: ICallLogRepository? = null,
-    prefs: PreferenceManager? = null
+    prefs: PreferenceManager? = null,
+    isPocketBlocked: () -> Boolean = { false }
 ) {
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
@@ -260,7 +292,8 @@ fun ExpressiveCallScreen(
     )
 
     var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
-    var showAcceptAnim by remember { mutableStateOf(false) }
+    // If already active (answered from notification), start with animation shown immediately
+    var showAcceptAnim by remember { mutableStateOf(callState == Call.STATE_ACTIVE) }
     val acceptScale by animateFloatAsState(if (showAcceptAnim) 1f else 0.85f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "acceptScale")
     val acceptAlpha by animateFloatAsState(if (showAcceptAnim) 1f else 0f, tween(400), label = "acceptAlpha")
 
@@ -322,14 +355,26 @@ fun ExpressiveCallScreen(
             onPersonSelected = { number ->
                 showAddPersonSheet = false
                 scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    // Hold current call first and give telecom stack time to settle
+                    // Hold the current call
                     try { call.hold() } catch (_: Exception) {}
-                    delay(800)
-                    try { makeCall(context, number) } catch (_: Exception) {
-                        // Fallback: launch via ACTION_CALL intent
-                        val intent = android.content.Intent(android.content.Intent.ACTION_CALL, Uri.parse("tel:$number"))
-                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
+                    // Signal CallService to auto-merge once the 2nd call is answered,
+                    // or restore call 1 if the 2nd person rejects
+                    CallService.isAddingToCall = true
+                    delay(400)
+                    try {
+                        val appContext = context.applicationContext
+                        val telecomManager = appContext.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+                        val uri = Uri.fromParts("tel", number, null)
+                        if (android.content.pm.PackageManager.PERMISSION_GRANTED ==
+                            androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.CALL_PHONE)) {
+                            telecomManager.placeCall(uri, android.os.Bundle())
+                        } else {
+                            CallService.isAddingToCall = false
+                            try { call.unhold() } catch (_: Exception) {}
+                        }
+                    } catch (_: Exception) {
+                        CallService.isAddingToCall = false
+                        try { call.unhold() } catch (_: Exception) {}
                     }
                 }
             }
@@ -387,6 +432,9 @@ fun ExpressiveCallScreen(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
         Box(
             modifier = Modifier
@@ -394,223 +442,339 @@ fun ExpressiveCallScreen(
                 .offset(y = disconnectOffset)
                 .alpha(disconnectAlpha)
         ) {
+            // Blurred background photo
             if (!photoUri.isNullOrEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
                     AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(if (isDark) 0.35f else 0.2f), contentScale = ContentScale.Crop)
                 }
             }
 
-            Column(
-                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 80.dp)
-                    .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
-                    if (!photoUri.isNullOrEmpty()) {
-                        AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-                Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
-                Text(
-                    text = when {
-                        isOnHold -> "On Hold"
-                        callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                        callState == Call.STATE_DIALING -> "Calling..."
-                        callState == Call.STATE_RINGING -> "Incoming Call..."
-                        else -> "Connecting..."
-                    },
-                    color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-
-                if (hasHeldCall) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                        modifier = Modifier.padding(horizontal = 32.dp)
+            if (isLandscape) {
+                // ── LANDSCAPE: two-panel layout ─────────────────────────────
+                Row(
+                    modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
+                ) {
+                    // Left panel: avatar + caller info
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxHeight().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
-                            Text(
-                                text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color(0xFF4CAF50)
+                        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
+                            if (!photoUri.isNullOrEmpty()) {
+                                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            } else {
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(text = contactName, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium), color = onBgColor, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text(
+                            text = when {
+                                isOnHold -> "On Hold"
+                                callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                callState == Call.STATE_DIALING -> "Calling"
+                                callState == Call.STATE_RINGING -> "Ringing"
+                                callState == Call.STATE_CONNECTING -> "Ringing"
+                                callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                else -> "Connecting..."
+                            },
+                            color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                        if (hasHeldCall) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
+                                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
+                                    Text(text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50))
+                                }
+                            }
+                        }
+                    }
+
+                    // Right panel: controls
+                    if (callState != Call.STATE_RINGING) {
+                        Surface(modifier = Modifier.weight(1f).fillMaxHeight(), color = overlayColor) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
+                                        isOnHold = !isOnHold
+                                        if (isOnHold) call.hold() else call.unhold()
+                                    }
+                                    if (hasHeldCall) {
+                                        AnimatedCallButton(icon = Icons.Default.CallMerge, label = "Merge", isActive = true, btnColor = controlBtnColor, activeBtnColor = Color(0xFF4CAF50), fgColor = controlBtnFg, activeFgColor = Color.White, onClick = { showMergeConfirm = true })
+                                    } else {
+                                        AnimatedCallButton(icon = Icons.Default.PersonAdd, label = "Add", isActive = false, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg, onClick = { showAddPersonSheet = true })
+                                    }
+                                    AnimatedCallButton(icon = Icons.Default.Dialpad, label = "Dialpad", isActive = showDialpad, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { showDialpad = !showDialpad }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    AnimatedCallButton(icon = Icons.Default.EditNote, label = "Note", isActive = showNoteWindow, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { showNoteWindow = !showNoteWindow }
+                                    AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
+                                    AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
+                                        CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+                                    }
+                                }
+                                AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Text("Note — $contactName", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                IconButton(onClick = { if (phoneNumber.isNotEmpty()) NoteManager.writeNote(context, contactName, phoneNumber, noteText); showNoteWindow = false }, modifier = Modifier.size(32.dp)) {
+                                                    Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                            Spacer(Modifier.height(8.dp))
+                                            OutlinedTextField(value = noteText, onValueChange = { noteText = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 140.dp), placeholder = { Text("Type your note...") }, shape = RoundedCornerShape(12.dp), minLines = 3, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant))
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(20.dp))
+                                val endInteraction2 = remember { MutableInteractionSource() }
+                                val endPressed2 by endInteraction2.collectIsPressedAsState()
+                                val endRadius2 by animateDpAsState(if (endPressed2) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius2")
+                                Surface(
+                                    onClick = { if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) NoteManager.writeNote(context, contactName, phoneNumber, noteText); try { call.disconnect() } catch (_: Exception) {} },
+                                    modifier = Modifier.fillMaxWidth(0.8f).height(64.dp).scale(if (endPressed2) 0.96f else 1f),
+                                    shape = RoundedCornerShape(endRadius2), color = Color(0xFFD32F2F), interactionSource = endInteraction2
+                                ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(28.dp)) } }
+                            }
+                        }
+                    } else {
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            NewSwipeToAnswer(
+                                onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
+                                onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
+                                labelColor = subtleColor,
+                                bgColor = overlayColor
                             )
                         }
                     }
                 }
+            } else {
+                // ── PORTRAIT: original layout ────────────────────────────────
+                Column(
+                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 80.dp)
+                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
+                        if (!photoUri.isNullOrEmpty()) {
+                            AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
+                        }
+                    }
 
-                Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
+                    Text(
+                        text = when {
+                            isOnHold -> "On Hold"
+                            callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                            callState == Call.STATE_DIALING -> "Calling"
+                            callState == Call.STATE_RINGING -> "Ringing"
+                            callState == Call.STATE_CONNECTING -> "Ringing"
+                            callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                            else -> "Connecting..."
+                        },
+                        color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
 
-                if (callState != Call.STATE_RINGING) {
-                    Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)), color = overlayColor) {
-                        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            // Top row: Hold, Add Person, Dialpad
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                    isOnHold = !isOnHold
-                                    if (isOnHold) call.hold() else call.unhold()
-                                }
+                    if (hasHeldCall) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        }
+                    }
 
-                                if (hasHeldCall) {
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    if (callState != Call.STATE_RINGING) {
+                        Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)), color = overlayColor) {
+                            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                // Top row: Hold, Add Person, Dialpad
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
+                                        isOnHold = !isOnHold
+                                        if (isOnHold) call.hold() else call.unhold()
+                                    }
+
+                                    if (hasHeldCall) {
+                                        AnimatedCallButton(
+                                            icon = Icons.Default.CallMerge,
+                                            label = "Merge",
+                                            isActive = true,
+                                            btnColor = controlBtnColor,
+                                            activeBtnColor = Color(0xFF4CAF50),
+                                            fgColor = controlBtnFg,
+                                            activeFgColor = Color.White,
+                                            onClick = { showMergeConfirm = true }
+                                        )
+                                    } else {
+                                        AnimatedCallButton(
+                                            icon = Icons.Default.PersonAdd,
+                                            label = "Add Person",
+                                            isActive = false,
+                                            btnColor = controlBtnColor,
+                                            activeBtnColor = controlBtnActiveColor,
+                                            fgColor = controlBtnFg,
+                                            activeFgColor = controlBtnActiveFg,
+                                            onClick = { showAddPersonSheet = true }
+                                        )
+                                    }
+
                                     AnimatedCallButton(
-                                        icon = Icons.Default.CallMerge,
-                                        label = "Merge",
-                                        isActive = true,
-                                        btnColor = controlBtnColor,
-                                        activeBtnColor = Color(0xFF4CAF50),
-                                        fgColor = controlBtnFg,
-                                        activeFgColor = Color.White,
-                                        onClick = { showMergeConfirm = true }
-                                    )
-                                } else {
-                                    AnimatedCallButton(
-                                        icon = Icons.Default.PersonAdd,
-                                        label = "Add Person",
-                                        isActive = false,
+                                        icon = Icons.Default.Dialpad,
+                                        label = "Dialpad",
+                                        isActive = showDialpad,
                                         btnColor = controlBtnColor,
                                         activeBtnColor = controlBtnActiveColor,
                                         fgColor = controlBtnFg,
-                                        activeFgColor = controlBtnActiveFg,
-                                        onClick = { showAddPersonSheet = true }
-                                    )
+                                        activeFgColor = controlBtnActiveFg
+                                    ) { showDialpad = !showDialpad }
                                 }
 
-                                AnimatedCallButton(
-                                    icon = Icons.Default.Dialpad,
-                                    label = "Dialpad",
-                                    isActive = showDialpad,
-                                    btnColor = controlBtnColor,
-                                    activeBtnColor = controlBtnActiveColor,
-                                    fgColor = controlBtnFg,
-                                    activeFgColor = controlBtnActiveFg
-                                ) { showDialpad = !showDialpad }
-                            }
+                                Spacer(modifier = Modifier.height(20.dp))
 
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            // Bottom row: Note, Mute, Speaker
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                AnimatedCallButton(
-                                    icon = Icons.Default.EditNote,
-                                    label = "Note",
-                                    isActive = showNoteWindow,
-                                    btnColor = controlBtnColor,
-                                    activeBtnColor = controlBtnActiveColor,
-                                    fgColor = controlBtnFg,
-                                    activeFgColor = controlBtnActiveFg
-                                ) { showNoteWindow = !showNoteWindow }
-                                AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
-                                AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                    CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+                                // Bottom row: Note, Mute, Speaker
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    AnimatedCallButton(
+                                        icon = Icons.Default.EditNote,
+                                        label = "Note",
+                                        isActive = showNoteWindow,
+                                        btnColor = controlBtnColor,
+                                        activeBtnColor = controlBtnActiveColor,
+                                        fgColor = controlBtnFg,
+                                        activeFgColor = controlBtnActiveFg
+                                    ) { showNoteWindow = !showNoteWindow }
+                                    AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
+                                    AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
+                                        CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+                                    }
                                 }
-                            }
 
-                            AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                                Column(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                                    Surface(
-                                        shape = RoundedCornerShape(20.dp),
-                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    "Note — $contactName",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Row {
-                                                    IconButton(onClick = {
-                                                        if (phoneNumber.isNotEmpty()) {
-                                                            NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                                    Column(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                                        Surface(
+                                            shape = RoundedCornerShape(20.dp),
+                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "Note — $contactName",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Row {
+                                                        IconButton(onClick = {
+                                                            if (phoneNumber.isNotEmpty()) {
+                                                                NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                                            }
+                                                            showNoteWindow = false
+                                                        }, modifier = Modifier.size(32.dp)) {
+                                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                                                         }
-                                                        showNoteWindow = false
-                                                    }, modifier = Modifier.size(32.dp)) {
-                                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                                                     }
                                                 }
-                                            }
-                                            Spacer(Modifier.height(8.dp))
-                                            OutlinedTextField(
-                                                value = noteText,
-                                                onValueChange = { noteText = it },
-                                                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
-                                                placeholder = { Text("Type your note...") },
-                                                shape = RoundedCornerShape(12.dp),
-                                                minLines = 4,
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                                Spacer(Modifier.height(8.dp))
+                                                OutlinedTextField(
+                                                    value = noteText,
+                                                    onValueChange = { noteText = it },
+                                                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
+                                                    placeholder = { Text("Type your note...") },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    minLines = 4,
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                                    )
                                                 )
-                                            )
-                                            if (noteText.isNotBlank()) {
-                                                Text(
-                                                    "Syncing...",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                    modifier = Modifier.padding(top = 4.dp)
-                                                )
+                                                if (noteText.isNotBlank()) {
+                                                    Text(
+                                                        "Syncing...",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        modifier = Modifier.padding(top = 4.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            Spacer(modifier = Modifier.height(48.dp))
+                                Spacer(modifier = Modifier.height(48.dp))
 
-                            // ── Hangup Button with configurable width ──────────────
-                            val endInteraction = remember { MutableInteractionSource() }
-                            val endPressed by endInteraction.collectIsPressedAsState()
-                            val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius")
+                                // ── Hangup Button with configurable width ──────────────
+                                val endInteraction = remember { MutableInteractionSource() }
+                                val endPressed by endInteraction.collectIsPressedAsState()
+                                val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius")
 
-                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Surface(
-                                    onClick = {
-                                        if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
-                                            NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        onClick = {
+                                            if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
+                                                NoteManager.writeNote(context, contactName, phoneNumber, noteText)
+                                            }
+                                            try { call.disconnect() } catch (e: Exception) {}
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth(hangupWidthFraction.coerceIn(0.2f, 1.0f))
+                                            .height(76.dp)
+                                            .scale(if (endPressed) 0.96f else 1f),
+                                        shape = RoundedCornerShape(endRadius),
+                                        color = Color(0xFFD32F2F),
+                                        interactionSource = endInteraction
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
                                         }
-                                        try { call.disconnect() } catch (e: Exception) {}
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth(hangupWidthFraction.coerceIn(0.2f, 1.0f))
-                                        .height(76.dp)
-                                        .scale(if (endPressed) 0.96f else 1f),
-                                    shape = RoundedCornerShape(endRadius),
-                                    color = Color(0xFFD32F2F),
-                                    interactionSource = endInteraction
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
                                     }
                                 }
                             }
                         }
+                    } else {
+                        NewSwipeToAnswer(
+                            onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
+                            onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
+                            labelColor = subtleColor,
+                            bgColor = overlayColor
+                        )
                     }
-                } else {
-                    NewSwipeToAnswer(
-                        onAnswer = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (e: Exception) {} },
-                        onDecline = { try { call.disconnect() } catch (e: Exception) {} },
-                        labelColor = subtleColor,
-                        bgColor = overlayColor
-                    )
                 }
-            }
+            } // end portrait
         }
     }
 }

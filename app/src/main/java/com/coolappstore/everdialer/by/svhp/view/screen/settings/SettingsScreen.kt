@@ -97,6 +97,8 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
     var autoUpdateEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true)) }
+    var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
+    var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
 
     // Haptics popup state
     var showHapticsDialog by remember { mutableStateOf(false) }
@@ -1006,6 +1008,30 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 onCheckedChange = {
                                     proximityBg = it
                                     prefs.setBoolean(PreferenceManager.KEY_PROXIMITY_BG, it)
+                                }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Pocket Mode Prevention",
+                                supporting = "Block accidental answer/decline when phone is in pocket",
+                                leadingIcon = Icons.Outlined.Sensors,
+                                iconContainerColor = ColorAmber,
+                                checked = pocketModePrevention,
+                                onCheckedChange = {
+                                    pocketModePrevention = it
+                                    prefs.setBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, it)
+                                }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Direct Call on Tap",
+                                supporting = "Tap a call log entry to call directly instead of viewing contact info",
+                                leadingIcon = Icons.Outlined.Call,
+                                iconContainerColor = ColorGreen,
+                                checked = directCallOnTap,
+                                onCheckedChange = {
+                                    directCallOnTap = it
+                                    prefs.setBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, it)
                                 }
                             )
                         }

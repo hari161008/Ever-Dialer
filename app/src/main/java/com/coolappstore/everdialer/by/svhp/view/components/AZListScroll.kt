@@ -219,7 +219,7 @@ private fun ContactListItem(
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (showMenu) 0.97f else if (isPressed) 0.97f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "contactItemScale"
     )

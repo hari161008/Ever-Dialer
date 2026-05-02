@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 class CallLogViewModel(
     application: Application,
@@ -29,14 +33,18 @@ class CallLogViewModel(
     private val _selectedFilter = MutableStateFlow(CallLogFilter.All)
     val selectedFilter = _selectedFilter.asStateFlow()
 
-    // In-memory cache to avoid redundant IO on every observer change
+    // In-memory cache
     @Volatile private var cachedLogs: List<CallLogEntry> = emptyList()
     @Volatile private var isFetching = false
     private var debounceJob: Job? = null
 
+    // Disk cache file
+    private val cacheFile: File by lazy {
+        File(application.cacheDir, "call_logs_cache.json")
+    }
+
     private val callLogObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
-            // Debounce rapid successive changes (e.g., bulk delete)
             debounceJob?.cancel()
             debounceJob = viewModelScope.launch {
                 delay(300)
@@ -51,7 +59,18 @@ class CallLogViewModel(
             true,
             callLogObserver
         )
-        fetchLogs(forceRefresh = false)
+        // Step 1: serve disk cache immediately so UI is instant
+        viewModelScope.launch(Dispatchers.IO) {
+            val diskCache = loadFromDisk()
+            if (diskCache.isNotEmpty()) {
+                cachedLogs = diskCache
+                withContext(Dispatchers.Main) {
+                    _allCallLogs.value = diskCache
+                }
+            }
+            // Step 2: refresh from provider in background
+            fetchLogsInternal()
+        }
     }
 
     override fun onCleared() {
@@ -68,21 +87,82 @@ class CallLogViewModel(
     }
 
     private fun fetchLogs(forceRefresh: Boolean = false) {
-        // Serve cached result immediately while a fetch is in-flight to keep UI smooth
         if (!forceRefresh && cachedLogs.isNotEmpty()) {
             _allCallLogs.value = cachedLogs
             return
         }
         if (isFetching) return
-        isFetching = true
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val result = callLogRepo.getCallLogs()
-                cachedLogs = result
+            fetchLogsInternal()
+        }
+    }
+
+    private suspend fun fetchLogsInternal() {
+        if (isFetching) return
+        isFetching = true
+        try {
+            val result = callLogRepo.getCallLogs()
+            cachedLogs = result
+            saveToDisk(result)
+            withContext(Dispatchers.Main) {
                 _allCallLogs.value = result
-            } finally {
-                isFetching = false
             }
+        } finally {
+            isFetching = false
+        }
+    }
+
+    // ── Disk cache helpers ────────────────────────────────────────────────────
+
+    private fun saveToDisk(logs: List<CallLogEntry>) {
+        try {
+            val arr = JSONArray()
+            logs.forEach { e ->
+                val obj = JSONObject()
+                obj.put("number", e.number)
+                obj.put("name", e.name ?: "")
+                obj.put("type", e.type)
+                obj.put("date", e.date)
+                obj.put("duration", e.duration)
+                obj.put("photoUri", e.photoUri ?: "")
+                obj.put("contactId", e.contactId ?: "")
+                val typesArr = JSONArray()
+                e.types.forEach { typesArr.put(it) }
+                obj.put("types", typesArr)
+                arr.put(obj)
+            }
+            cacheFile.writeText(arr.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun loadFromDisk(): List<CallLogEntry> {
+        return try {
+            if (!cacheFile.exists()) return emptyList()
+            val arr = JSONArray(cacheFile.readText())
+            val list = mutableListOf<CallLogEntry>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val typesArr = obj.optJSONArray("types")
+                val types = mutableListOf<Int>()
+                if (typesArr != null) {
+                    for (j in 0 until typesArr.length()) types.add(typesArr.getInt(j))
+                }
+                list.add(
+                    CallLogEntry(
+                        number = obj.getString("number"),
+                        name = obj.getString("name").ifEmpty { null },
+                        type = obj.getInt("type"),
+                        date = obj.getLong("date"),
+                        duration = obj.getLong("duration"),
+                        photoUri = obj.getString("photoUri").ifEmpty { null },
+                        contactId = obj.getString("contactId").ifEmpty { null },
+                        types = types
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 }

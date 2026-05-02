@@ -72,6 +72,7 @@ fun CallLogTile(
                 else                        -> Icons.Default.Call
             },
             onLongClick = { showMenu = true },
+            isMenuOpen  = showMenu,
             onClick     = { onTileClick(log) }
         )
 
