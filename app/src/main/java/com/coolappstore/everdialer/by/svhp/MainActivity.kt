@@ -19,8 +19,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
@@ -33,6 +36,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.coolappstore.everdialer.by.svhp.controller.CallService
@@ -53,9 +60,6 @@ import com.ramcosta.composedestinations.generated.destinations.ContactEditScreen
 import kotlinx.coroutines.delay
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Person
@@ -376,6 +380,7 @@ class MainActivity : ComponentActivity() {
                     // ── Main nav host + adaptive nav (bottom bar / rail) ───
                     val configuration = LocalConfiguration.current
                     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                    com.coolappstore.everdialer.by.svhp.view.theme.isLandscapeMode = isLandscape
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentDest = navBackStack?.destination
                     val prefs2 = remember { GlobalContext.get().get<PreferenceManager>() }
@@ -391,43 +396,82 @@ class MainActivity : ComponentActivity() {
 
                     if (isLandscape) {
                         Row(modifier = Modifier.fillMaxSize()) {
-                            NavigationRail(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            // ── Side rail — draws behind status bar + nav bar (edge-to-edge) ──
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceContainer,
                                 modifier = Modifier.fillMaxHeight()
                             ) {
-                                Spacer(Modifier.height(8.dp))
-                                NavigationRailItem(
-                                    selected = currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true,
-                                    onClick = { navTo(FavoritesScreenDestination.route) },
-                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites") },
-                                    label = { Text("Favourites", style = MaterialTheme.typography.labelSmall) },
-                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
-                                )
-                                NavigationRailItem(
-                                    selected = currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
-                                    onClick = { navTo(RecentScreenDestination.route) },
-                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true) Icons.Filled.History else Icons.Outlined.History, "Calls") },
-                                    label = { Text("Calls", style = MaterialTheme.typography.labelSmall) },
-                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
-                                )
-                                NavigationRailItem(
-                                    selected = currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
-                                    onClick = { navTo(ContactScreenDestination.route) },
-                                    icon = { Icon(if (currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true) Icons.Filled.Person else Icons.Outlined.Person, "Contacts") },
-                                    label = { Text("Contacts", style = MaterialTheme.typography.labelSmall) },
-                                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
-                                )
-                                if (notesEnabled) {
-                                    NavigationRailItem(
-                                        selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
-                                        onClick = { navTo(NotesScreenDestination.route) },
-                                        icon = { Icon(if (currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true) Icons.Filled.Note else Icons.Outlined.Note, "Notes") },
-                                        label = { Text("Notes", style = MaterialTheme.typography.labelSmall) },
-                                        colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(96.dp)
+                                        // push content away from camera cutout (top) and nav bar (bottom)
+                                        .windowInsetsPadding(
+                                            WindowInsets.displayCutout
+                                                .union(WindowInsets.systemBars)
+                                        )
+                                        .padding(bottom = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    // Main nav items — centered vertically in remaining space
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.Center,
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        RailItem(
+                                            selected = currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true,
+                                            icon = { sel -> Icon(if (sel) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites", modifier = Modifier.size(24.dp)) },
+                                            label = "Favourites",
+                                            onClick = { navTo(FavoritesScreenDestination.route) }
+                                        )
+                                        RailItem(
+                                            selected = currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
+                                            icon = { sel -> Icon(if (sel) Icons.Filled.History else Icons.Outlined.History, "Calls", modifier = Modifier.size(24.dp)) },
+                                            label = "Calls",
+                                            onClick = { navTo(RecentScreenDestination.route) }
+                                        )
+                                        RailItem(
+                                            selected = currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
+                                            icon = { sel -> Icon(if (sel) Icons.Filled.Person else Icons.Outlined.Person, "Contacts", modifier = Modifier.size(24.dp)) },
+                                            label = "Contacts",
+                                            onClick = { navTo(ContactScreenDestination.route) }
+                                        )
+                                        if (notesEnabled) {
+                                            RailItem(
+                                                selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
+                                                icon = { sel -> Icon(if (sel) Icons.Filled.Note else Icons.Outlined.Note, "Notes", modifier = Modifier.size(24.dp)) },
+                                                label = "Notes",
+                                                onClick = { navTo(NotesScreenDestination.route) }
+                                            )
+                                        }
+                                    }
+                                    // Search & Settings pinned to bottom
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                     )
+                                    RailItem(
+                                        selected = currentDest?.hierarchy?.any { it.route?.contains("search", ignoreCase = true) == true } == true,
+                                        icon = { _ -> Icon(Icons.Default.Search, "Search", modifier = Modifier.size(24.dp)) },
+                                        label = "Search",
+                                        onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination.route) }
+                                    )
+                                    RailItem(
+                                        selected = currentDest?.hierarchy?.any { it.route?.contains("settings", ignoreCase = true) == true } == true,
+                                        icon = { _ -> Icon(Icons.Default.Tune, "Settings", modifier = Modifier.size(24.dp)) },
+                                        label = "Settings",
+                                        onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination.route) }
+                                    )
+                                    Spacer(Modifier.height(8.dp))
                                 }
                             }
-                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            // ── Main content fills the rest ────────────────────────
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            ) {
                                 DestinationsNavHost(navGraph = NavGraphs.root, navController = navController)
                             }
                         }
@@ -524,5 +568,55 @@ class MainActivity : ComponentActivity() {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         requestPermissionsLauncher.launch(permissions.toTypedArray())
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun RailItem(
+    selected: Boolean,
+    icon: @androidx.compose.runtime.Composable (selected: Boolean) -> Unit,
+    label: String,
+    onClick: () -> Unit
+) {
+    val bgColor = if (selected)
+        androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
+    else
+        androidx.compose.ui.graphics.Color.Transparent
+    val contentColor = if (selected)
+        androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer
+    else
+        androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+
+    androidx.compose.foundation.layout.Column(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = androidx.compose.ui.Modifier
+                .size(width = 56.dp, height = 32.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                .background(bgColor),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides contentColor
+            ) {
+                icon(selected)
+            }
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor,
+            maxLines = 1
+        )
     }
 }

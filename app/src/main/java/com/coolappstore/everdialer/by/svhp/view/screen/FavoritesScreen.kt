@@ -1,5 +1,10 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.telecom.TelecomManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -10,38 +15,46 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedItem
+import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
-import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
-import org.koin.compose.koinInject
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 import kotlin.math.abs
 
@@ -54,6 +67,29 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val scope = rememberCoroutineScope()
     val prefs = koinInject<PreferenceManager>()
     val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+    val context = LocalContext.current
+
+    var showSimPicker by remember { mutableStateOf(false) }
+    var pendingCallNumber by remember { mutableStateOf<String?>(null) }
+
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.CALL_PHONE] == true) {
+            pendingCallNumber?.let { makeCall(context, it) }
+        }
+    }
+
+    if (showSimPicker && pendingCallNumber != null) {
+        val telecomManager = remember { context.getSystemService(android.content.Context.TELECOM_SERVICE) as TelecomManager }
+        SimPickerDialog(
+            onDismissRequest = { showSimPicker = false },
+            onSimSelected = { handle ->
+                makeCall(context, pendingCallNumber!!, handle)
+                showSimPicker = false
+            }
+        )
+    }
 
     val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
     Scaffold(
@@ -74,7 +110,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
                             val elapsed = System.currentTimeMillis() - startTime
-                            // Require: large horizontal distance, strongly horizontal, minimum 150ms gesture
                             if (!triggered && elapsed >= 150L &&
                                 abs(dx) > 700f &&
                                 abs(dx) > abs(dy) * 5.5f
@@ -120,15 +155,35 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(favorites) { contact ->
                         RivoScrollAnimatedItem {
-                        FavoriteContactCard(
-                            contact = contact,
-                            onClick = { navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id)) }
-                        )
+                            FavoriteContactCard(
+                                contact = contact,
+                                onClick = {
+                                    val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, false)
+                                    if (directCall) {
+                                        val phoneNumber = contact.phoneNumbers.firstOrNull() ?: return@FavoriteContactCard
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                                            val hasPState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                                            if (hasPState) {
+                                                val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as TelecomManager
+                                                if (tm.callCapablePhoneAccounts.size > 1) {
+                                                    pendingCallNumber = phoneNumber
+                                                    showSimPicker = true
+                                                } else makeCall(context, phoneNumber)
+                                            } else makeCall(context, phoneNumber)
+                                        } else {
+                                            pendingCallNumber = phoneNumber
+                                            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
+                                        }
+                                    } else {
+                                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -151,8 +206,9 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
     )
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 2.dp,
         modifier = Modifier
             .fillMaxWidth()
             .alpha(alpha)
@@ -166,9 +222,8 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
                     do {
                         val event = awaitPointerEvent()
                         val current = event.changes.firstOrNull() ?: break
-                        val deltaX = abs(current.position.x - downPos.x)
-                        val deltaY = abs(current.position.y - downPos.y)
-                        // If horizontal movement exceeds 30dp, mark as scroll – suppress click
+                        val deltaX = kotlin.math.abs(current.position.x - downPos.x)
+                        val deltaY = kotlin.math.abs(current.position.y - downPos.y)
                         if (deltaX > 30.dp.toPx() && deltaX > deltaY * 1.2f) {
                             horizontalMoved = true
                         }
@@ -187,12 +242,34 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
                     name = contact.name,
                     photoUri = contact.photoUri,
                     modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
                 )
+                // Call icon overlay hint when direct call is enabled
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(CircleShape)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Call,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
             }
             Text(
                 text = contact.name,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelMedium,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,

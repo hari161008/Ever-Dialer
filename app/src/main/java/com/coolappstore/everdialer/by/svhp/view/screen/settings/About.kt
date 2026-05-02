@@ -10,7 +10,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhoneInTalk
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,17 +85,19 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ── Logo ──────────────────────────────────────────────────
+            // ── Material Expressive Logo Area ──────────────────────────
             Surface(
-                modifier = Modifier.size(110.dp).scale(scale).alpha(alpha),
-                shape = RoundedCornerShape(32.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+                modifier = Modifier.size(120.dp).scale(scale).alpha(alpha),
+                shape = RoundedCornerShape(36.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shadowElevation = 6.dp,
+                tonalElevation = 8.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        Icons.Default.Phone,
+                        Icons.Outlined.PhoneInTalk,
                         contentDescription = null,
-                        modifier = Modifier.size(52.dp),
+                        modifier = Modifier.size(56.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -111,19 +117,32 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                 modifier = Modifier.alpha(alpha)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
+            // Version badge - Material Expressive style
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
+                shape = RoundedCornerShape(50.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                tonalElevation = 2.dp
             ) {
-                Text(
-                    text = "v$APP_VERSION",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        text = "v$APP_VERSION",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -156,7 +175,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                     RivoListItem(
                         headline = "App Version",
                         supporting = APP_VERSION,
-                        leadingIcon = Icons.Default.Info,
+                        leadingIcon = Icons.Outlined.Info,
                         iconContainerColor = ColorOrange,
                         onClick = { }
                     )
@@ -182,7 +201,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                     RivoListItem(
                         headline = "App Recommending Channel in Telegram",
                         supporting = "Discover | Explore | Cool Apps | Support",
-                        leadingIcon = Icons.Default.Star,
+                        leadingIcon = Icons.Outlined.StarOutline,
                         iconContainerColor = ColorCyan,
                         onClick = { openLink(context, TELEGRAM_CHANNEL_URL) }
                     )
@@ -193,7 +212,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                     RivoListItem(
                         headline = "My Other App (Everlasting Android Tweak)",
                         supporting = "Tweaks | Tools | Modify | Customize",
-                        leadingIcon = Icons.Default.Build,
+                        leadingIcon = Icons.Outlined.Build,
                         iconContainerColor = ColorTeal,
                         onClick = { openLink(context, EVERLASTING_TWEAK_URL) }
                     )

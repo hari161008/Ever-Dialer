@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.theme
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -12,8 +13,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavBackStackEntry
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 
-// Keep route strings as plain constants so this file has zero dependency on
-// generated Destinations classes (generated code runs AFTER this file compiles).
 private val TAB_ROUTES = listOf(
     "favorites_screen",
     "recent_screen",
@@ -21,16 +20,13 @@ private val TAB_ROUTES = listOf(
     "notes_screen"
 )
 
-/**
- * Direction-aware horizontal slide animation for bottom-tab navigation.
- * Tabs slide left/right based on their logical order.
- * Any non-tab screen (settings, call details …) falls back to a standard push/pop.
- */
+// Shared mutable flag updated from MainActivity / screens
+internal var isLandscapeMode: Boolean = false
+
 object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     private fun routeOrder(route: String?): Int {
         if (route == null) return -1
-        // Strip query-param / argument suffix that compose-destinations may append
         val base = route.substringBefore("?").substringBefore("/")
         return TAB_ROUTES.indexOfFirst { base.contains(it, ignoreCase = true) }
     }
@@ -39,6 +35,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
         when {
+            isLandscapeMode -> fadeIn(tween(220))
             fromIdx >= 0 && toIdx >= 0 -> {
                 val goRight = toIdx > fromIdx
                 slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) {
@@ -53,6 +50,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
         when {
+            isLandscapeMode -> fadeOut(tween(180))
             fromIdx >= 0 && toIdx >= 0 -> {
                 val goRight = toIdx > fromIdx
                 slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) {
@@ -64,10 +62,12 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(tween(280)) { -it } + fadeIn(tween(280))
+        if (isLandscapeMode) fadeIn(tween(220))
+        else slideInHorizontally(tween(280)) { -it } + fadeIn(tween(280))
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(tween(280)) { it } + fadeOut(tween(280))
+        if (isLandscapeMode) fadeOut(tween(180))
+        else slideOutHorizontally(tween(280)) { it } + fadeOut(tween(280))
     }
 }

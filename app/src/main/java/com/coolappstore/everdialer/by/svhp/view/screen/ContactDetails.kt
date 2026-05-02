@@ -9,6 +9,9 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -27,6 +30,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -101,6 +105,20 @@ fun ContactDetailsScreen(
     val scope = rememberCoroutineScope()
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
+    // Entrance animation
+    var screenVisible by remember { mutableStateOf(false) }
+    val screenAlpha by animateFloatAsState(
+        targetValue = if (screenVisible) 1f else 0f,
+        animationSpec = tween(350),
+        label = "screenAlpha"
+    )
+    val screenOffsetY by animateDpAsState(
+        targetValue = if (screenVisible) 0.dp else 40.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "screenOffsetY"
+    )
+    LaunchedEffect(Unit) { screenVisible = true }
+
     val initiateCall = { number: String ->
         val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
@@ -149,7 +167,7 @@ fun ContactDetailsScreen(
             )
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize().alpha(screenAlpha).offset(y = screenOffsetY)) {
             Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
                 AsyncImage(model = contact?.photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(50.dp), contentScale = ContentScale.Crop)
                 Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))

@@ -1,7 +1,9 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import android.content.res.Configuration
 import androidx.compose.animation.core.Spring
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -30,6 +32,13 @@ import org.koin.compose.koinInject
 @Composable
 fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // In landscape, search/settings are in the NavigationRail — just provide status bar inset
+    if (isLandscape) {
+        Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
+        return
+    }
     val prefs = koinInject<PreferenceManager>()
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(

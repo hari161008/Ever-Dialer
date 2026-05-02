@@ -3,6 +3,9 @@ package com.coolappstore.everdialer.by.svhp.view.screen
 import android.content.Context
 import android.provider.CallLog
 import android.telecom.TelecomManager
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -15,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,6 +56,20 @@ fun CallLogFullScreen(
 
     var showSimPicker by remember { mutableStateOf(false) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
+
+    // Entrance animation
+    var screenVisible by remember { mutableStateOf(false) }
+    val screenAlpha by animateFloatAsState(
+        targetValue = if (screenVisible) 1f else 0f,
+        animationSpec = tween(300),
+        label = "logScreenAlpha"
+    )
+    val screenScale by animateFloatAsState(
+        targetValue = if (screenVisible) 1f else 0.96f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "logScreenScale"
+    )
+    LaunchedEffect(Unit) { screenVisible = true }
 
     val filteredLogsByContact = remember(allLogs, contactId, phoneNumber) {
         if (contactId == null && phoneNumber == null) allLogs
@@ -97,7 +116,7 @@ fun CallLogFullScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize().alpha(screenAlpha).scale(screenScale)) {
             Column(modifier = Modifier.fillMaxSize()) {
                 LazyRow(
                     modifier = Modifier

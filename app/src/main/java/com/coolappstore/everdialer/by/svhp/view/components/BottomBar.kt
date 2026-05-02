@@ -226,6 +226,7 @@ fun BottomBar(navController: NavController) {
             }
         }
     } else {
+        if (!isOnTabScreen) return
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp

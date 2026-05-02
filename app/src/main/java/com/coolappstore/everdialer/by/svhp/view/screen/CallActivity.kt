@@ -396,8 +396,10 @@ fun ExpressiveCallScreen(
         ) {
             val dialpadConfiguration = LocalConfiguration.current
             val isDialpadLandscape = dialpadConfiguration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()
-                .then(if (isDialpadLandscape) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isDialpadLandscape) Modifier.fillMaxHeight() else Modifier)
+                .navigationBarsPadding()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -418,19 +420,76 @@ fun ExpressiveCallScreen(
                     )
                 }
 
-                InCallDialPad(
-                    onDigit = { digit ->
-                        dtmfInput += digit
-                        // Send DTMF tone
-                        try {
-                            call.playDtmfTone(digit[0])
-                            call.stopDtmfTone()
-                        } catch (_: Exception) {}
-                    },
-                    onBackspace = {
-                        if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1)
+                if (isDialpadLandscape) {
+                    // Landscape: keys on left, backspace+input on right — all fit without scroll
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Left: dialpad grid
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            val keys = listOf(
+                                listOf("1" to "", "2" to "ABC", "3" to "DEF"),
+                                listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
+                                listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
+                                listOf("*" to "", "0" to "+", "#" to "")
+                            )
+                            keys.forEach { row ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    row.forEach { (digit, letters) ->
+                                        val interaction = remember { MutableInteractionSource() }
+                                        val isPressed by interaction.collectIsPressedAsState()
+                                        val keyRadius by animateDpAsState(if (isPressed) 10.dp else 18.dp, spring(stiffness = Spring.StiffnessMedium), label = "keyR")
+                                        Surface(
+                                            onClick = {
+                                                dtmfInput += digit
+                                                try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
+                                            },
+                                            shape = RoundedCornerShape(keyRadius),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                            modifier = Modifier.weight(1f).height(44.dp).scale(if (isPressed) 0.92f else 1f),
+                                            interactionSource = interaction
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                                Text(digit, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                                                if (letters.isNotEmpty()) Text(letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Right: backspace
+                        Column(
+                            modifier = Modifier.width(72.dp).fillMaxHeight(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                onClick = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) },
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Backspace, null, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
                     }
-                )
+                } else {
+                    InCallDialPad(
+                        onDigit = { digit ->
+                            dtmfInput += digit
+                            try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
+                        },
+                        onBackspace = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) }
+                    )
+                }
             }
         }
     }
@@ -565,62 +624,78 @@ fun ExpressiveCallScreen(
                 }
             } else {
                 // ── PORTRAIT: original layout ────────────────────────────────
-                Column(
-                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 80.dp)
-                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // Use a Box so the caller info is anchored to the top and never
+                // shifts when the dialpad ModalBottomSheet appears/disappears
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
                 ) {
-                    Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
-                        if (!photoUri.isNullOrEmpty()) {
-                            AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else {
-                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
+                    // ── Top: caller info — anchored, never moves ──────────────
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(top = 80.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
+                            if (!photoUri.isNullOrEmpty()) {
+                                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            } else {
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
-                    Text(
-                        text = when {
-                            isOnHold -> "On Hold"
-                            callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                            callState == Call.STATE_DIALING -> "Calling"
-                            callState == Call.STATE_RINGING -> "Ringing"
-                            callState == Call.STATE_CONNECTING -> "Ringing"
-                            callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
-                            else -> "Connecting..."
-                        },
-                        color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
+                        Text(
+                            text = when {
+                                isOnHold -> "On Hold"
+                                callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                callState == Call.STATE_DIALING -> "Calling"
+                                callState == Call.STATE_RINGING -> "Ringing"
+                                callState == Call.STATE_CONNECTING -> "Ringing"
+                                callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                else -> "Connecting..."
+                            },
+                            color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
 
-                    if (hasHeldCall) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                            modifier = Modifier.padding(horizontal = 32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        if (hasHeldCall) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                                modifier = Modifier.padding(horizontal = 32.dp)
                             ) {
-                                Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
-                                Text(
-                                    text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color(0xFF4CAF50)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                                    Text(
+                                        text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = Color(0xFF4CAF50)
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
+                    // ── Bottom: controls — anchored to bottom ─────────────────
                     if (callState != Call.STATE_RINGING) {
-                        Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)), color = overlayColor) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)),
+                            color = overlayColor
+                        ) {
                             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 // Top row: Hold, Add Person, Dialpad
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -770,15 +845,22 @@ fun ExpressiveCallScreen(
                             }
                         }
                     } else {
-                        NewSwipeToAnswer(
-                            onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
-                            onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
-                            labelColor = subtleColor,
-                            bgColor = overlayColor,
-                            isPocketBlocked = isPocketBlocked
-                        )
+                        // Ringing state — swipe to answer, also anchored to bottom
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            NewSwipeToAnswer(
+                                onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
+                                onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
+                                labelColor = subtleColor,
+                                bgColor = overlayColor,
+                                isPocketBlocked = isPocketBlocked
+                            )
+                        }
                     }
-                }
+                } // end portrait Box
             } // end portrait
         }
     }

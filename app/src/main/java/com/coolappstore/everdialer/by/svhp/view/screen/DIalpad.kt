@@ -185,10 +185,192 @@ fun DialPadContent(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .then(if (isLandscape) Modifier.verticalScroll(rememberScrollState()) else Modifier),
-        verticalArrangement = Arrangement.Bottom) {
+    if (isLandscape) {
+        // Landscape: side-by-side layout — left=search+search results, right=dialpad keys+number+actions
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left panel: search bar + results only
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search contacts...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, null)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    )
+                )
+
+                // Number display — below search bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(scale)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (number.isNotEmpty())
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            else Color.Transparent
+                        )
+                        .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                        .padding(vertical = 8.dp, horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = number.ifEmpty { "" },
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontSize = if (number.length > 11) 24.sp else 30.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        fontWeight = FontWeight.Light
+                    )
+                }
+
+                // Search results
+                AnimatedVisibility(
+                    visible = searchResults.isNotEmpty(),
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            searchResults.forEach { contact ->
+                                SingleTile(
+                                    title = contact.name,
+                                    subtitle = contact.phoneNumbers.firstOrNull(),
+                                    photoUri = contact.photoUri,
+                                    onClick = {
+                                        navigator?.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.weight(1f))
+            }
+
+            // Right panel: dialpad keys + action buttons below
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    val keys = listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("*","0","#"))
+                    val subKeys = mapOf("1" to "   ","2" to "ABC","3" to "DEF","4" to "GHI","5" to "JKL","6" to "MNO","7" to "PQRS","8" to "TUV","9" to "WXYZ","0" to "+")
+                    keys.forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            row.forEach { key ->
+                                DialPadKey(
+                                    number = key,
+                                    letters = subKeys[key] ?: "",
+                                    soundPool = soundPool,
+                                    context = context,
+                                    onClick = { digit -> number += digit },
+                                    compact = true
+                                )
+                            }
+                        }
+                    }
+                    // Action row — below the keys
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        FadeScaleBox(visible = number.isNotEmpty()) {
+                            DialerActionExpressive(
+                                onClick = {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
+                                        type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
+                                        putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, number)
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                icon = Icons.Default.PersonAdd,
+                                contentDescription = "Add Contact",
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        }
+                        DialerActionExpressive(
+                            onClick = {
+                                if (number.isNotEmpty()) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                                            val accounts = telecomManager.callCapablePhoneAccounts
+                                            if (accounts.size > 1) showSimPicker = true
+                                            else makeCall(context, number)
+                                        } else makeCall(context, number)
+                                    } else {
+                                        callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
+                                    }
+                                }
+                            },
+                            icon = Icons.Default.Call,
+                            contentDescription = "Call",
+                            containerColor = Color(0xFF34A853),
+                            contentColor = Color.White,
+                            modifier = Modifier.width(96.dp).height(64.dp),
+                            isLarge = true
+                        )
+                        FadeScaleBox(visible = number.isNotEmpty()) {
+                            DialerActionExpressive(
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    number = ""
+                                },
+                                onClick = { number = number.dropLast(1) },
+                                icon = Icons.Default.Backspace,
+                                contentDescription = "Backspace",
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Bottom) {
 
         // ── Search bar on top ──────────────────────────────────────────
         OutlinedTextField(
@@ -469,6 +651,7 @@ fun DialPadContent(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        }   // end else (portrait)
     }
 }
 
@@ -507,7 +690,7 @@ fun DialerActionExpressive(
 }
 
 @Composable
-fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit) {
+fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, compact: Boolean = false) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val prefs = koinInject<PreferenceManager>()
@@ -518,19 +701,21 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
         if (isPressed) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
         spring(stiffness = Spring.StiffnessMedium), "DialKeyColor"
     )
+    val keyWidth = if (compact) 82.dp else 100.dp
+    val keyHeight = if (compact) 52.dp else 68.dp
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, true)) playDtmf(context, number, soundPool)
             if (prefs.getBoolean(PreferenceManager.KEY_DIALPAD_VIBRATION, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onClick(number)
         },
-        modifier = Modifier.size(width = 100.dp, height = 68.dp).scale(scale),
+        modifier = Modifier.size(width = keyWidth, height = keyHeight).scale(scale),
         shape = RoundedCornerShape(cornerRadius),
         color = bgColor,
         interactionSource = interactionSource
     ) {
         Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
-            Text(text = number, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
+            Text(text = number, style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
             if (letters.isNotBlank()) {
                 Text(text = letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 2.sp)
             }

@@ -607,24 +607,27 @@ fun RivoDropdownMenu(
             AnimatedVisibility(
                 visible = expanded,
                 enter = scaleIn(
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    initialScale = 0.88f,
+                    animationSpec = spring(
+                        stiffness = Spring.StiffnessMedium,
+                        dampingRatio = Spring.DampingRatioMediumBouncy
+                    ),
+                    initialScale = 0.75f,
                     transformOrigin = TransformOrigin(0f, 0f)
-                ) + fadeIn(tween(120)),
+                ) + fadeIn(tween(150)),
                 exit = scaleOut(
-                    animationSpec = tween(100),
-                    targetScale = 0.88f,
+                    animationSpec = tween(120),
+                    targetScale = 0.80f,
                     transformOrigin = TransformOrigin(0f, 0f)
-                ) + fadeOut(tween(80))
+                ) + fadeOut(tween(100))
             ) {
                 Box(
                     modifier = modifier
                         .widthIn(min = 220.dp, max = 300.dp)
                         .shadow(
-                            elevation = 8.dp,
+                            elevation = 12.dp,
                             shape = RoundedCornerShape(20.dp),
-                            spotColor = Color.Black.copy(alpha = 0.18f),
-                            ambientColor = Color.Black.copy(alpha = 0.08f)
+                            spotColor = Color.Black.copy(alpha = 0.22f),
+                            ambientColor = Color.Black.copy(alpha = 0.10f)
                         )
                 ) {
                     Surface(
