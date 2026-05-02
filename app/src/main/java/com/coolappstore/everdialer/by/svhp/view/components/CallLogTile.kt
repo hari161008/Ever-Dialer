@@ -48,6 +48,7 @@ fun CallLogTile(
     log: CallLogEntry,
     onTileClick: (CallLogEntry) -> Unit,
     onButtonClick: (CallLogEntry) -> Unit,
+    onAvatarClick: ((CallLogEntry) -> Unit)? = null,
     onDelete: (() -> Unit)? = null
 ) {
     val context   = LocalContext.current
@@ -71,6 +72,7 @@ fun CallLogTile(
                 CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
                 else                        -> Icons.Default.Call
             },
+            onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log) }) else null,
             onLongClick = { showMenu = true },
             isMenuOpen  = showMenu,
             onClick     = { onTileClick(log) }

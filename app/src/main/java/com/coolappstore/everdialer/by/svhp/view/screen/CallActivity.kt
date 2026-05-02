@@ -394,7 +394,10 @@ fun ExpressiveCallScreen(
                 }
             }
         ) {
-            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+            val dialpadConfiguration = LocalConfiguration.current
+            val isDialpadLandscape = dialpadConfiguration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                .then(if (isDialpadLandscape) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -554,7 +557,8 @@ fun ExpressiveCallScreen(
                                 onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
                                 onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
                                 labelColor = subtleColor,
-                                bgColor = overlayColor
+                                bgColor = overlayColor,
+                                isPocketBlocked = isPocketBlocked
                             )
                         }
                     }
@@ -770,7 +774,8 @@ fun ExpressiveCallScreen(
                             onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
                             onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
                             labelColor = subtleColor,
-                            bgColor = overlayColor
+                            bgColor = overlayColor,
+                            isPocketBlocked = isPocketBlocked
                         )
                     }
                 }
@@ -1141,7 +1146,7 @@ fun AnimatedCallButton(
 }
 
 @Composable
-fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Color = Color.White.copy(0.6f), bgColor: Color = Color.White.copy(0.08f)) {
+fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Color = Color.White.copy(0.6f), bgColor: Color = Color.White.copy(0.08f), isPocketBlocked: () -> Boolean = { false }) {
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
@@ -1185,8 +1190,14 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                                 }
                             },
                             onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                coroutineScope.launch { offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-maxDrag, maxDrag)) }
+                                if (!isPocketBlocked()) {
+                                    change.consume()
+                                    coroutineScope.launch { offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-maxDrag, maxDrag)) }
+                                } else {
+                                    // In pocket: snap back to center and consume event to prevent accidental action
+                                    change.consume()
+                                    coroutineScope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.8f)) }
+                                }
                             }
                         )
                     },

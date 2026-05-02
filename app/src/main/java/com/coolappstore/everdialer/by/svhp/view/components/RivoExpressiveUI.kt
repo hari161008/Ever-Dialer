@@ -387,6 +387,7 @@ fun RivoListItem(
     avatarName: String? = null,
     photoUri: String? = null,
     onClick: () -> Unit,
+    onAvatarClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     isMenuOpen: Boolean = false,
     modifier: Modifier = Modifier
@@ -431,7 +432,13 @@ fun RivoListItem(
                 RivoAvatar(
                     name = avatarName ?: "",
                     photoUri = photoUri,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .size(44.dp)
+                        .then(
+                            if (onAvatarClick != null)
+                                Modifier.combinedClickable(onClick = onAvatarClick)
+                            else Modifier
+                        )
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             } else if (leadingIcon != null) {
@@ -610,21 +617,25 @@ fun RivoDropdownMenu(
                     transformOrigin = TransformOrigin(0f, 0f)
                 ) + fadeOut(tween(80))
             ) {
-                Surface(
+                Box(
                     modifier = modifier
                         .widthIn(min = 220.dp, max = 300.dp)
                         .shadow(
-                            elevation = 20.dp,
+                            elevation = 8.dp,
                             shape = RoundedCornerShape(20.dp),
-                            spotColor = Color.Black.copy(alpha = 0.25f),
-                            ambientColor = Color.Black.copy(alpha = 0.12f)
-                        ),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 4.dp
+                            spotColor = Color.Black.copy(alpha = 0.18f),
+                            ambientColor = Color.Black.copy(alpha = 0.08f)
+                        )
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        content()
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 0.dp
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            content()
+                        }
                     }
                 }
             }

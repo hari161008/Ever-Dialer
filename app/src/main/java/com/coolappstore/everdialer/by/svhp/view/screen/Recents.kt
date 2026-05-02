@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import android.Manifest
+import android.content.res.Configuration
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Context
 import android.content.pm.PackageManager
@@ -33,6 +34,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -286,74 +288,82 @@ fun CallLogFullContent(
                 todayLogs.filter { it.duration > 0 }.sumOf { it.duration }
             }
 
+            val configuration = LocalConfiguration.current
+            val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
             Column(modifier = Modifier.fillMaxSize()) {
                 // Stat cards – visibility controlled by Call UI settings
                 val showToday    = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true) }
                 val showMissed   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true) }
                 val showOutgoing = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true) }
                 val showCallTime = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true) }
-                if (showToday || showMissed || showOutgoing || showCallTime) {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
-                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
-                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
-                        ) { viewModel.setFilter(CallLogFilter.Missed) } }
-                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
-                        if (showCallTime) {
-                            item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+
+                // In portrait, render stat cards and pills above the list (sticky)
+                // In landscape, they go inside the LazyColumn so they scroll with content
+                if (!isLandscape) {
+                    if (showToday || showMissed || showOutgoing || showCallTime) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
+                            if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
+                                if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                            ) { viewModel.setFilter(CallLogFilter.Missed) } }
+                            if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
+                            if (showCallTime) {
+                                item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                            }
                         }
                     }
-                }
 
-                // ── Filter pills ──────────────────────────────────────────────
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(CallLogFilter.entries) { filter ->
-                        val isSelected = selectedFilter == filter
-                        val containerColor by animateColorAsState(
-                            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                          else MaterialTheme.colorScheme.surfaceContainerLow,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "chipColor"
-                        )
-                        val labelColor by animateColorAsState(
-                            targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                          else MaterialTheme.colorScheme.onSurface,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "chipLabelColor"
-                        )
-                        val scale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.08f else 1f,
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
-                            label = "chipScale"
-                        )
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                previousFilterIndex = filterEntries.indexOf(selectedFilter)
-                                viewModel.setFilter(filter)
-                            },
-                            label = {
-                                Text(
-                                    filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-                                    color = labelColor
-                                )
-                            },
-                            shape = RoundedCornerShape(50.dp),
-                            modifier = Modifier.scale(scale),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = containerColor,
-                                selectedContainerColor = containerColor,
-                                labelColor = labelColor,
-                                selectedLabelColor = labelColor
+                    // ── Filter pills ──────────────────────────────────────────────
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(CallLogFilter.entries) { filter ->
+                            val isSelected = selectedFilter == filter
+                            val containerColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                              else MaterialTheme.colorScheme.surfaceContainerLow,
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                label = "chipColor"
                             )
-                        )
+                            val labelColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                              else MaterialTheme.colorScheme.onSurface,
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                label = "chipLabelColor"
+                            )
+                            val scale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.08f else 1f,
+                                animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+                                label = "chipScale"
+                            )
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    previousFilterIndex = filterEntries.indexOf(selectedFilter)
+                                    viewModel.setFilter(filter)
+                                },
+                                label = {
+                                    Text(
+                                        filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                                        color = labelColor
+                                    )
+                                },
+                                shape = RoundedCornerShape(50.dp),
+                                modifier = Modifier.scale(scale),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = containerColor,
+                                    selectedContainerColor = containerColor,
+                                    labelColor = labelColor,
+                                    selectedLabelColor = labelColor
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -392,6 +402,76 @@ fun CallLogFullContent(
                         contentPadding = PaddingValues(bottom = 100.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // In landscape, stat cards and filter pills scroll with the list
+                        if (isLandscape) {
+                            if (showToday || showMissed || showOutgoing || showCallTime) {
+                                item(key = "stat_cards", contentType = "statCards") {
+                                    LazyRow(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
+                                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.width(110.dp),
+                                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) { viewModel.setFilter(CallLogFilter.Missed) } }
+                                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
+                                        if (showCallTime) {
+                                            item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.width(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                                        }
+                                    }
+                                }
+                            }
+                            item(key = "filter_pills", contentType = "filterPills") {
+                                LazyRow(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(CallLogFilter.entries) { filter ->
+                                        val isSelected = selectedFilter == filter
+                                        val containerColor by animateColorAsState(
+                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                          else MaterialTheme.colorScheme.surfaceContainerLow,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                            label = "chipColor"
+                                        )
+                                        val labelColor by animateColorAsState(
+                                            targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                          else MaterialTheme.colorScheme.onSurface,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                            label = "chipLabelColor"
+                                        )
+                                        val scale by animateFloatAsState(
+                                            targetValue = if (isSelected) 1.08f else 1f,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+                                            label = "chipScale"
+                                        )
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = {
+                                                previousFilterIndex = filterEntries.indexOf(selectedFilter)
+                                                viewModel.setFilter(filter)
+                                            },
+                                            label = {
+                                                Text(
+                                                    filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                                                    color = labelColor
+                                                )
+                                            },
+                                            shape = RoundedCornerShape(50.dp),
+                                            modifier = Modifier.scale(scale),
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                containerColor = containerColor,
+                                                selectedContainerColor = containerColor,
+                                                labelColor = labelColor,
+                                                selectedLabelColor = labelColor
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
                             item(key = "group_$header", contentType = "logGroup") {
                                 RivoSectionHeader(title = header)
@@ -413,6 +493,9 @@ fun CallLogFullContent(
                                                     } else {
                                                         navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                                     }
+                                                },
+                                                onAvatarClick = { log ->
+                                                    navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                                 },
                                                 onButtonClick = { log ->
                                                     val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
