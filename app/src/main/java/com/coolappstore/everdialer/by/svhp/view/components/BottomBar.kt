@@ -339,21 +339,21 @@ private fun PillNavItem(
 
     val bgAlpha by animateFloatAsState(
         targetValue   = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label         = "${label}BgAlpha"
     )
     val iconTint by animateColorAsState(
         targetValue   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
     )
     val scale by animateFloatAsState(
         targetValue   = if (selected) 1.12f else 1f,
         animationSpec = if (selected)
-            spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
+            spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)
         else
-            tween(durationMillis = 150, easing = FastOutSlowInEasing),
+            tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
 
@@ -387,13 +387,13 @@ private fun PillNavItem(
                 AnimatedVisibility(
                     visible = selected,
                     enter = expandHorizontally(
-                        animationSpec = tween(durationMillis = 280, easing = EaseOutQuint),
+                        animationSpec = tween(durationMillis = 420, easing = EaseOutQuint),
                         expandFrom    = Alignment.Start
-                    ) + fadeIn(tween(200)),
+                    ) + fadeIn(tween(350)),
                     exit = shrinkHorizontally(
-                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
                         shrinkTowards = Alignment.Start
-                    ) + fadeOut(tween(120))
+                    ) + fadeOut(tween(220))
                 ) {
                     Text(
                         text  = label,

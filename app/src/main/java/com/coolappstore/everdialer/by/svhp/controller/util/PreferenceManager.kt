@@ -70,5 +70,6 @@ class PreferenceManager(context: Context) {
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"
         const val KEY_POCKET_MODE_PREVENTION = "pocket_mode_prevention"
         const val KEY_DIRECT_CALL_ON_TAP     = "direct_call_on_tap"
+        const val KEY_CONTACTS_DISPLAY_ACCOUNTS = "contacts_display_accounts"
     }
 }

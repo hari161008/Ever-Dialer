@@ -567,9 +567,9 @@ fun RivoSwitchListItem(
 
 /**
  * Wraps a list item with a scroll-in fade+slide animation, controlled by the
- * scroll animation preference. Safe to use inside LazyColumn items since
- * LazyColumn removes items from composition when off-screen, allowing the
- * animation to replay each time an item scrolls into view.
+ * scroll animation preference. Uses a unique composition key so that each time
+ * the item is composed (or re-composed after filter changes), the entrance
+ * animation replays correctly.
  */
 @Composable
 fun RivoScrollAnimatedItem(
@@ -581,7 +581,13 @@ fun RivoScrollAnimatedItem(
     val scrollAnimEnabled = remember { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
 
     if (scrollAnimEnabled) {
-        RivoAnimatedSection(delayMs = delayMs, modifier = modifier, content = content)
+        // Use a key that changes each time this composable enters composition,
+        // ensuring LaunchedEffect(Unit) inside RivoAnimatedSection always fires
+        // fresh — both on first load and when the item scrolls back into view.
+        val animKey = remember { Any() }
+        key(animKey) {
+            RivoAnimatedSection(delayMs = delayMs, modifier = modifier, content = content)
+        }
     } else {
         Box(modifier = modifier) { content() }
     }

@@ -1,10 +1,9 @@
 package com.coolappstore.everdialer.by.svhp.view.theme
 
-import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +18,9 @@ private val TAB_ROUTES = listOf(
     "contact_screen",
     "notes_screen"
 )
+
+// Smooth expressive decelerate easing
+private val EaseOutExpressive = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 
 // Shared mutable flag updated from MainActivity / screens
 internal var isLandscapeMode: Boolean = false
@@ -35,14 +37,18 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
         when {
-            isLandscapeMode -> fadeIn(tween(220))
+            isLandscapeMode -> fadeIn(tween(300, easing = EaseOutExpressive))
             fromIdx >= 0 && toIdx >= 0 -> {
                 val goRight = toIdx > fromIdx
-                slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) {
-                    if (goRight) it else -it
-                } + fadeIn(tween(260))
+                slideInHorizontally(
+                    animationSpec = tween(500, easing = EaseOutExpressive),
+                    initialOffsetX = { if (goRight) (it * 0.35f).toInt() else -(it * 0.35f).toInt() }
+                ) + fadeIn(tween(380, easing = EaseOutExpressive))
             }
-            else -> slideInHorizontally(tween(280)) { it } + fadeIn(tween(280))
+            else -> slideInHorizontally(
+                animationSpec = tween(500, easing = EaseOutExpressive),
+                initialOffsetX = { (it * 0.35f).toInt() }
+            ) + fadeIn(tween(380))
         }
     }
 
@@ -50,24 +56,34 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
         when {
-            isLandscapeMode -> fadeOut(tween(180))
+            isLandscapeMode -> fadeOut(tween(250, easing = EaseOutExpressive))
             fromIdx >= 0 && toIdx >= 0 -> {
                 val goRight = toIdx > fromIdx
-                slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) {
-                    if (goRight) -it else it
-                } + fadeOut(tween(260))
+                slideOutHorizontally(
+                    animationSpec = tween(500, easing = EaseOutExpressive),
+                    targetOffsetX = { if (goRight) -(it * 0.35f).toInt() else (it * 0.35f).toInt() }
+                ) + fadeOut(tween(320, easing = EaseOutExpressive))
             }
-            else -> slideOutHorizontally(tween(280)) { -it } + fadeOut(tween(280))
+            else -> slideOutHorizontally(
+                animationSpec = tween(500, easing = EaseOutExpressive),
+                targetOffsetX = { -(it * 0.35f).toInt() }
+            ) + fadeOut(tween(320))
         }
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (isLandscapeMode) fadeIn(tween(220))
-        else slideInHorizontally(tween(280)) { -it } + fadeIn(tween(280))
+        if (isLandscapeMode) fadeIn(tween(300, easing = EaseOutExpressive))
+        else slideInHorizontally(
+            animationSpec = tween(500, easing = EaseOutExpressive),
+            initialOffsetX = { -(it * 0.35f).toInt() }
+        ) + fadeIn(tween(380))
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (isLandscapeMode) fadeOut(tween(180))
-        else slideOutHorizontally(tween(280)) { it } + fadeOut(tween(280))
+        if (isLandscapeMode) fadeOut(tween(250, easing = EaseOutExpressive))
+        else slideOutHorizontally(
+            animationSpec = tween(500, easing = EaseOutExpressive),
+            targetOffsetX = { (it * 0.35f).toInt() }
+        ) + fadeOut(tween(320))
     }
 }

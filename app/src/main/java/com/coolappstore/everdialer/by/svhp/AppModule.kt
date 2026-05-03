@@ -22,6 +22,6 @@ val appModule = module {
     single {
         PreferenceManager(androidContext())
     }
-    viewModel { ContactsViewModel(androidApplication(), get()) }
+    viewModel { ContactsViewModel(androidApplication(), get(), get()) }
     viewModel { CallLogViewModel(androidApplication(), get()) }
 }

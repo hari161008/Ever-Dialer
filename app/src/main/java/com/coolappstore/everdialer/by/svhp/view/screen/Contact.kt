@@ -157,8 +157,10 @@ fun ContactContent(
     Column(modifier = Modifier.fillMaxSize().alpha(alpha)) {
         if (isGranted) {
             val contactsVM: ContactsViewModel = koinActivityViewModel()
+            val prefs = koinInject<PreferenceManager>()
+            val settingsVersion by prefs.settingsChanged.collectAsState()
 
-            LaunchedEffect(Unit) {
+            LaunchedEffect(settingsVersion) {
                 contactsVM.fetchContacts()
             }
 

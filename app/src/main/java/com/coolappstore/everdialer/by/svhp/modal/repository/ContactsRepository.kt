@@ -10,7 +10,14 @@ import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 
 class ContactsRepository(private val contentResolver: ContentResolver) : IContactsRepository {
 
-    override fun getContacts(): List<Contact> {
+    override fun getContacts(): List<Contact> = getContacts(emptySet())
+
+    override fun getContacts(enabledAccountKeys: Set<String>): List<Contact> {
+        // Build list of raw contact IDs allowed by the enabled account filter
+        val allowedRawContactIds: Set<Long>? = if (enabledAccountKeys.isNotEmpty()) {
+            buildAllowedRawContactIds(enabledAccountKeys)
+        } else null // null = no filter, show all
+
         val contactsMap = mutableMapOf<String, Contact>()
 
         val projection = arrayOf(
@@ -21,7 +28,8 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
             ContactsContract.Data.DATA1,
             ContactsContract.Data.DATA2,
             ContactsContract.Data.DATA3,
-            ContactsContract.Data.STARRED
+            ContactsContract.Data.STARRED,
+            ContactsContract.Data.RAW_CONTACT_ID
         )
 
         contentResolver.query(
@@ -39,11 +47,18 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
             val data2Idx = cursor.getColumnIndex(ContactsContract.Data.DATA2)
             val data3Idx = cursor.getColumnIndex(ContactsContract.Data.DATA3)
             val starredIdx = cursor.getColumnIndex(ContactsContract.Data.STARRED)
+            val rawIdIdx = cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getString(idIdx) ?: continue
                 val mimeType = cursor.getString(mimeIdx)
                 val data1 = cursor.getString(data1Idx) ?: continue
+
+                // Apply account filter: skip contacts not from allowed raw contact IDs
+                if (allowedRawContactIds != null) {
+                    val rawId = cursor.getLong(rawIdIdx)
+                    if (rawId !in allowedRawContactIds) continue
+                }
 
                 val isStarred = cursor.getInt(starredIdx) == 1
 
@@ -78,6 +93,64 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
         return contactsMap.values.toList()
             .filter { it.phoneNumbers.isNotEmpty() }
             .sortedBy { it.name }
+    }
+
+    /**
+     * Returns raw contact IDs for accounts matching the enabled account keys.
+     * Key format matches what ContactsToDisplayDialog produces:
+     *   "google_<email>"  → account type "com.google", name == email
+     *   "sim_<subId>"     → account type "com.android.local" or null (device/SIM contacts)
+     *   "whatsapp"        → account type contains "whatsapp"
+     */
+    private fun buildAllowedRawContactIds(enabledKeys: Set<String>): Set<Long> {
+        val allowed = mutableSetOf<Long>()
+
+        val rcProjection = arrayOf(
+            ContactsContract.RawContacts._ID,
+            ContactsContract.RawContacts.ACCOUNT_TYPE,
+            ContactsContract.RawContacts.ACCOUNT_NAME
+        )
+        contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            rcProjection,
+            "${ContactsContract.RawContacts.DELETED} = 0",
+            null,
+            null
+        )?.use { cursor ->
+            val idIdx   = cursor.getColumnIndex(ContactsContract.RawContacts._ID)
+            val typeIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)
+            val nameIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
+
+            while (cursor.moveToNext()) {
+                val rawId = cursor.getLong(idIdx)
+                val accountType = cursor.getString(typeIdx) ?: ""
+                val accountName = cursor.getString(nameIdx) ?: ""
+
+                val matchesAny = enabledKeys.any { key ->
+                    when {
+                        key.startsWith("google_") -> {
+                            val email = key.removePrefix("google_")
+                            accountType.equals("com.google", ignoreCase = true) &&
+                                accountName.equals(email, ignoreCase = true)
+                        }
+                        key.startsWith("sim_") -> {
+                            // SIM/device contacts typically have null/empty account type
+                            // or account type like "com.android.local"
+                            accountType.isBlank() ||
+                                accountType.equals("com.android.local", ignoreCase = true) ||
+                                accountType.equals("com.android.contacts", ignoreCase = true)
+                        }
+                        key == "whatsapp" -> {
+                            accountType.contains("whatsapp", ignoreCase = true) ||
+                                accountName.contains("whatsapp", ignoreCase = true)
+                        }
+                        else -> false
+                    }
+                }
+                if (matchesAny) allowed.add(rawId)
+            }
+        }
+        return allowed
     }
 
     override fun getContactById(contactId: String): Contact? {

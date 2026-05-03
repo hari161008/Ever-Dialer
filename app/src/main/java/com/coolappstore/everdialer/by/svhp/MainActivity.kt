@@ -104,8 +104,8 @@ class MainActivity : ComponentActivity() {
         }
 
         requestRequiredPermissions()
-        // NOTE: requestDefaultDialer() is now triggered AFTER the welcome dialog is dismissed
-        // on first launch. On subsequent launches it is called directly.
+        // On first launch, show default dialer prompt first; welcome dialog appears after.
+        requestDefaultDialer()
 
         setContent {
             Rivo4Theme {
@@ -120,7 +120,15 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // ── First Launch Welcome Dialog ─────────────────────────────
-                var showWelcomeDialog by remember { mutableStateOf(isFirstLaunch) }
+                // Show AFTER the default dialer prompt (which fires in onCreate)
+                var showWelcomeDialog by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    if (isFirstLaunch) {
+                        // Small delay so the default dialer system dialog appears first
+                        kotlinx.coroutines.delay(600)
+                        showWelcomeDialog = true
+                    }
+                }
 
                 if (showWelcomeDialog) {
                     Dialog(onDismissRequest = {}) {
@@ -182,8 +190,6 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
                                             showWelcomeDialog = false
-                                            // Show "Set as Default Dialer" popup AFTER welcome is dismissed
-                                            requestDefaultDialer()
                                         },
                                         shape = RoundedCornerShape(50.dp),
                                         color = MaterialTheme.colorScheme.primary,
@@ -204,12 +210,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // On subsequent launches (not first), call requestDefaultDialer directly
-                LaunchedEffect(Unit) {
-                    if (!isFirstLaunch) {
-                        requestDefaultDialer()
-                    }
-                }
+                // On subsequent launches, requestDefaultDialer is called in onCreate
 
                 var autoUpdateVersion by remember { mutableStateOf<String?>(null) }
                 var autoUpdateApkUrl by remember { mutableStateOf<String?>(null) }
