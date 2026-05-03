@@ -56,6 +56,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import androidx.activity.compose.BackHandler
 import androidx.navigation.NavController
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
@@ -105,19 +106,32 @@ fun ContactDetailsScreen(
     val scope = rememberCoroutineScope()
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
-    // Entrance animation
+    // Entrance / exit animation
     var screenVisible by remember { mutableStateOf(false) }
+    var isClosing by remember { mutableStateOf(false) }
+
+    fun navigateBack() {
+        isClosing = true
+        scope.launch {
+            kotlinx.coroutines.delay(280)
+            navigator.navigateUp()
+        }
+    }
+
     val screenAlpha by animateFloatAsState(
-        targetValue = if (screenVisible) 1f else 0f,
-        animationSpec = tween(350),
+        targetValue = if (screenVisible && !isClosing) 1f else 0f,
+        animationSpec = if (isClosing) tween(280, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                        else tween(350),
         label = "screenAlpha"
     )
     val screenOffsetY by animateDpAsState(
-        targetValue = if (screenVisible) 0.dp else 40.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        targetValue = if (screenVisible && !isClosing) 0.dp else if (isClosing) 60.dp else 40.dp,
+        animationSpec = if (isClosing) tween(300, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                        else spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
         label = "screenOffsetY"
     )
     LaunchedEffect(Unit) { screenVisible = true }
+    BackHandler { navigateBack() }
 
     val initiateCall = { number: String ->
         val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
@@ -145,7 +159,7 @@ fun ContactDetailsScreen(
         topBar = {
             TopAppBar(
                 title = {},
-                navigationIcon = { IconButton(onClick = { navigator.navigateUp() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                navigationIcon = { IconButton(onClick = { navigateBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 actions = {
                     IconButton(onClick = { showQrDialog = true }) { Icon(Icons.Outlined.QrCode2, "QR Code") }
                     if (contact != null) {

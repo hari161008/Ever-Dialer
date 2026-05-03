@@ -174,9 +174,9 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 navigator = navigator,
                                 context = context,
                                 onClick = {
-                                    val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, false)
-                                    if (directCall) {
-                                        val phoneNumber = contact.phoneNumbers.firstOrNull() ?: return@FavoriteContactCard
+                                    val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
+                                    val phoneNumber = contact.phoneNumbers.firstOrNull()
+                                    if (directCall && phoneNumber != null) {
                                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                                             val hasPState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
                                             if (hasPState) {

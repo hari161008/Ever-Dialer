@@ -2,7 +2,6 @@ package com.coolappstore.everdialer.by.svhp
 
 import android.Manifest
 import android.app.DownloadManager
-import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.Settings
+import android.telecom.TelecomManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -401,41 +401,32 @@ class MainActivity : ComponentActivity() {
                         val ctx = LocalContext.current
                         @Suppress("DEPRECATION")
                         val rotation = (ctx.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation
-                        // ROTATION_90 = landscape left (natural left rotation, nav bar on left side)
-                        // ROTATION_270 = landscape right (nav bar on right side)
-                        val isRotation90 = rotation == Surface.ROTATION_90
+                        val isRotation90  = rotation == Surface.ROTATION_90
                         val isRotation270 = rotation == Surface.ROTATION_270
-                        // ROTATION_90 = left orientation (top of phone points left)
-                        //   → nav bar on right side of screen, rail buttons need right padding
-                        // ROTATION_270 = right orientation (top of phone points right)
-                        //   → nav bar on left side of screen, rail buttons need left padding
                         val railPaddingStart = if (isRotation270) 10.dp else 0.dp
-                        val railPaddingEnd = if (isRotation90) 10.dp else 0.dp
+                        val railPaddingEnd   = if (isRotation90)  10.dp else 0.dp
 
                         Row(modifier = Modifier.fillMaxSize()) {
-                            // ── Side rail — draws behind status bar + nav bar (edge-to-edge) ──
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
                                 modifier = Modifier.fillMaxHeight()
                             ) {
-                                Column(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .width(96.dp)
-                                        // push content away from camera cutout (top) and nav bar (bottom)
                                         .windowInsetsPadding(
                                             WindowInsets.displayCutout
                                                 .union(WindowInsets.systemBars)
-                                        )
-                                        .padding(bottom = 12.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                        ),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    // Main nav items — centered vertically in remaining space
                                     Column(
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.fillMaxSize(),
                                         verticalArrangement = Arrangement.Center,
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
+                                        // Nav items — perfectly centered
                                         RailItem(
                                             selected = currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true,
                                             icon = { sel -> Icon(if (sel) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites", modifier = Modifier.size(24.dp)) },
@@ -470,29 +461,31 @@ class MainActivity : ComponentActivity() {
                                                 onClick = { navTo(NotesScreenDestination.route) }
                                             )
                                         }
+
+                                        Spacer(Modifier.height(16.dp))
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 8.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+
+                                        RailItem(
+                                            selected = currentDest?.hierarchy?.any { it.route?.contains("search", ignoreCase = true) == true } == true,
+                                            icon = { _ -> Icon(Icons.Default.Search, "Search", modifier = Modifier.size(24.dp)) },
+                                            label = "Search",
+                                            paddingStart = railPaddingStart,
+                                            paddingEnd = railPaddingEnd,
+                                            onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination.route) }
+                                        )
+                                        RailItem(
+                                            selected = currentDest?.hierarchy?.any { it.route?.contains("settings", ignoreCase = true) == true } == true,
+                                            icon = { _ -> Icon(Icons.Default.Tune, "Settings", modifier = Modifier.size(24.dp)) },
+                                            label = "Settings",
+                                            paddingStart = railPaddingStart,
+                                            paddingEnd = railPaddingEnd,
+                                            onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination.route) }
+                                        )
                                     }
-                                    // Search & Settings pinned to bottom
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 8.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                                    )
-                                    RailItem(
-                                        selected = currentDest?.hierarchy?.any { it.route?.contains("search", ignoreCase = true) == true } == true,
-                                        icon = { _ -> Icon(Icons.Default.Search, "Search", modifier = Modifier.size(24.dp)) },
-                                        label = "Search",
-                                        paddingStart = railPaddingStart,
-                                        paddingEnd = railPaddingEnd,
-                                        onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination.route) }
-                                    )
-                                    RailItem(
-                                        selected = currentDest?.hierarchy?.any { it.route?.contains("settings", ignoreCase = true) == true } == true,
-                                        icon = { _ -> Icon(Icons.Default.Tune, "Settings", modifier = Modifier.size(24.dp)) },
-                                        label = "Settings",
-                                        paddingStart = railPaddingStart,
-                                        paddingEnd = railPaddingEnd,
-                                        onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination.route) }
-                                    )
-                                    Spacer(Modifier.height(8.dp))
                                 }
                             }
                             // ── Main content fills the rest ────────────────────────
@@ -576,10 +569,21 @@ class MainActivity : ComponentActivity() {
     }
 
     fun requestDefaultDialer() {
-        val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-        if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-            requestRoleLauncher.launch(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(android.app.role.RoleManager::class.java)
+            if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER)) {
+                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
+                requestRoleLauncher.launch(intent)
+            }
+        } else {
+            // API 26-28: use TelecomManager ACTION_CHANGE_DEFAULT_DIALER
+            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            @Suppress("DEPRECATION")
+            if (telecomManager.defaultDialerPackage != packageName) {
+                val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                    .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+                requestRoleLauncher.launch(intent)
+            }
         }
     }
 

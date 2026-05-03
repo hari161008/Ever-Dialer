@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -16,6 +17,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -321,10 +323,6 @@ private fun RowScope.AnimatedNavBarItem(
 }
 
 // ── Pill nav item ─────────────────────────────────────────────────────────────
-// • Background & tint transition with a smooth tween
-// • Icon bounces in on selection, snaps back on deselection
-// • Label slides in/out via AnimatedVisibility so the pill width expands/
-//   collapses fluidly instead of the text just popping in or out
 
 @Composable
 private fun PillNavItem(
@@ -336,6 +334,7 @@ private fun PillNavItem(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     val bgAlpha by animateFloatAsState(
         targetValue   = if (selected) 1f else 0f,
@@ -348,9 +347,16 @@ private fun PillNavItem(
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
     )
+    // Tap-press squish → spring back bounce
     val scale by animateFloatAsState(
-        targetValue   = if (selected) 1.12f else 1f,
-        animationSpec = if (selected)
+        targetValue   = when {
+            isPressed -> 0.82f
+            selected  -> 1.10f
+            else      -> 1f
+        },
+        animationSpec = if (isPressed)
+            tween(durationMillis = 80, easing = FastOutSlowInEasing)
+        else if (selected)
             spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)
         else
             tween(durationMillis = 300, easing = FastOutSlowInEasing),
@@ -359,6 +365,7 @@ private fun PillNavItem(
 
     Box(
         modifier = Modifier
+            .scale(scale)
             .clip(RoundedCornerShape(50.dp))
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = bgAlpha))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
@@ -366,24 +373,35 @@ private fun PillNavItem(
         contentAlignment = Alignment.Center
     ) {
         if (iconOnly) {
-            Icon(
-                imageVector        = if (selected) selectedIcon else unselectedIcon,
-                contentDescription = label,
-                modifier           = Modifier.size(24.dp).scale(scale),
-                tint               = iconTint
-            )
+            Crossfade(
+                targetState   = selected,
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                label         = "${label}IconCrossfade"
+            ) { sel ->
+                Icon(
+                    imageVector        = if (sel) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    modifier           = Modifier.size(24.dp),
+                    tint               = iconTint
+                )
+            }
         } else {
             Row(
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Icon(
-                    imageVector        = if (selected) selectedIcon else unselectedIcon,
-                    contentDescription = label,
-                    modifier           = Modifier.size(24.dp).scale(scale),
-                    tint               = iconTint
-                )
-                // Label slides in horizontally so the pill width animates smoothly
+                Crossfade(
+                    targetState   = selected,
+                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                    label         = "${label}IconCrossfade"
+                ) { sel ->
+                    Icon(
+                        imageVector        = if (sel) selectedIcon else unselectedIcon,
+                        contentDescription = label,
+                        modifier           = Modifier.size(24.dp),
+                        tint               = iconTint
+                    )
+                }
                 AnimatedVisibility(
                     visible = selected,
                     enter = expandHorizontally(

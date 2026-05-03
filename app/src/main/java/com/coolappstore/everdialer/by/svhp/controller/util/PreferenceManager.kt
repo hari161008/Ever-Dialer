@@ -20,9 +20,9 @@ class PreferenceManager(context: Context) {
     init { prefs.registerOnSharedPreferenceChangeListener(listener) }
 
     fun getBoolean(key: String, defaultValue: Boolean) = prefs.getBoolean(key, defaultValue)
-    fun setBoolean(key: String, value: Boolean)        { prefs.edit().putBoolean(key, value).apply() }
+    fun setBoolean(key: String, value: Boolean)        { prefs.edit().putBoolean(key, value).apply(); _settingsChanged.value += 1 }
     fun getString(key: String, defaultValue: String?)  = prefs.getString(key, defaultValue)
-    fun setString(key: String, value: String?)         { prefs.edit().putString(key, value).apply() }
+    fun setString(key: String, value: String?)         { prefs.edit().putString(key, value).apply(); _settingsChanged.value += 1 }
     fun getInt(key: String, defaultValue: Int)         = prefs.getInt(key, defaultValue)
     fun setInt(key: String, value: Int)                { prefs.edit().putInt(key, value).apply() }
     fun getFloat(key: String, defaultValue: Float)     = prefs.getFloat(key, defaultValue)
