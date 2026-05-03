@@ -79,6 +79,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
 
     var showDialpad by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val fabScale by animateFloatAsState(
         targetValue = if (fabVisible) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -187,6 +189,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 modifier = Modifier
                     .scale(fabScale)
                     .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
+                    .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
             ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -234,6 +237,7 @@ fun CallLogFullContent(
 ) {
     val prefs = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
     val settingsVersion by prefs.settingsChanged.collectAsState()
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     if (isGranted) {
         val viewModel: CallLogViewModel = koinActivityViewModel()
@@ -287,9 +291,6 @@ fun CallLogFullContent(
             val totalDurationToday = remember(todayLogs) {
                 todayLogs.filter { it.duration > 0 }.sumOf { it.duration }
             }
-
-            val configuration = LocalConfiguration.current
-            val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
             Column(modifier = Modifier.fillMaxSize()) {
                 // Stat cards – visibility controlled by Call UI settings

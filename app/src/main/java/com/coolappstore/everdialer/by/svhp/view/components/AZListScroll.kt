@@ -38,12 +38,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinActivityViewModel
 private val CARD_RADIUS = 28.dp
 private val INNER_RADIUS = 4.dp
 
@@ -214,6 +216,7 @@ private fun ContactListItem(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val prefs = koinInject<PreferenceManager>()
+    val contactsVM: ContactsViewModel = koinActivityViewModel()
     var showMenu by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
@@ -341,6 +344,20 @@ private fun ContactListItem(
                         putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${contact.phoneNumbers.joinToString(", ")}")
                     }
                     context.startActivity(Intent.createChooser(intent, "Share contact"))
+                }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            RivoDropdownMenuItem(
+                text     = if (contact.isFavorite) "Remove from Favourites" else "Add to Favourites",
+                icon     = Icons.Default.Favorite,
+                iconTint = if (contact.isFavorite) Color(0xFFF44336) else Color(0xFFE91E63),
+                isDestructive = contact.isFavorite,
+                onClick  = {
+                    showMenu = false
+                    contactsVM.toggleFavorite(contact)
                 }
             )
         }

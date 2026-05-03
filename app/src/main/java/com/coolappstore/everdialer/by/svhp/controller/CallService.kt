@@ -166,9 +166,10 @@ class CallService : InCallService() {
         }
     }
 
-    private fun launchCallActivity() {
+    private fun launchCallActivity(answeredFromNotification: Boolean = false) {
         val intent = Intent(this, CallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            if (answeredFromNotification) putExtra("ANSWERED_FROM_NOTIFICATION", true)
         }
         startActivity(intent)
     }
@@ -258,7 +259,7 @@ class CallService : InCallService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "ANSWER_CALL" -> { answerCall(); launchCallActivity() }
+            "ANSWER_CALL" -> { answerCall(); launchCallActivity(answeredFromNotification = true) }
             "DECLINE_CALL" -> declineCall()
         }
         return super.onStartCommand(intent, flags, startId)

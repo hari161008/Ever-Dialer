@@ -44,9 +44,17 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedItem
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Message
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -162,6 +170,9 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                         RivoScrollAnimatedItem {
                             FavoriteContactCard(
                                 contact = contact,
+                                contactsVM = contactsVM,
+                                navigator = navigator,
+                                context = context,
                                 onClick = {
                                     val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, false)
                                     if (directCall) {
@@ -192,15 +203,25 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
+private fun FavoriteContactCard(
+    contact: Contact,
+    contactsVM: ContactsViewModel,
+    navigator: DestinationsNavigator,
+    context: android.content.Context,
+    onClick: () -> Unit
+) {
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(300), label = "cardAlpha")
     LaunchedEffect(Unit) { visible = true }
 
     var isPressed by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
+        targetValue = if (isPressed || showMenu) 0.93f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "cardScale"
     )
@@ -213,28 +234,15 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
             .fillMaxWidth()
             .alpha(alpha)
             .scale(scale)
-            .pointerInput(onClick) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    isPressed = true
-                    val downPos = down.position
-                    var horizontalMoved = false
-                    do {
-                        val event = awaitPointerEvent()
-                        val current = event.changes.firstOrNull() ?: break
-                        val deltaX = kotlin.math.abs(current.position.x - downPos.x)
-                        val deltaY = kotlin.math.abs(current.position.y - downPos.y)
-                        if (deltaX > 30.dp.toPx() && deltaX > deltaY * 1.2f) {
-                            horizontalMoved = true
-                        }
-                        if (!current.pressed) break
-                    } while (true)
-                    isPressed = false
-                    if (!horizontalMoved) {
-                        onClick()
-                    }
+            .combinedClickable(
+                onClick = {
+                    onClick()
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showMenu = true
                 }
-            }
+            )
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
@@ -244,7 +252,6 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
                 )
-                // Call icon overlay hint when direct call is enabled
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -279,5 +286,58 @@ private fun FavoriteContactCard(contact: Contact, onClick: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    RivoDropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false }
+    ) {
+        RivoDropdownMenuItem(
+            text = "Call",
+            icon = Icons.Default.Call,
+            iconTint = Color(0xFF4CAF50),
+            onClick = {
+                showMenu = false
+                onClick()
+            }
+        )
+        val phoneNumber = contact.phoneNumbers.firstOrNull()
+        if (!phoneNumber.isNullOrEmpty()) {
+            RivoDropdownMenuItem(
+                text = "Send SMS",
+                icon = Icons.Default.Message,
+                iconTint = Color(0xFF009688),
+                onClick = {
+                    showMenu = false
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        data = android.net.Uri.parse("sms:$phoneNumber")
+                    }
+                    context.startActivity(intent)
+                }
+            )
+        }
+        RivoDropdownMenuItem(
+            text = "View Details",
+            icon = Icons.Default.Info,
+            iconTint = Color(0xFF2196F3),
+            onClick = {
+                showMenu = false
+                navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+            }
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+        RivoDropdownMenuItem(
+            text = "Remove from Favourites",
+            icon = Icons.Default.Favorite,
+            iconTint = Color(0xFFF44336),
+            isDestructive = true,
+            onClick = {
+                showMenu = false
+                contactsVM.toggleFavorite(contact)
+            }
+        )
     }
 }

@@ -22,6 +22,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,6 +63,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
 
     val prefs_ui = koinInject<PreferenceManager>()
     val pillNav = remember { prefs_ui.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -117,6 +120,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 modifier = Modifier
                     .scale(fabScale)
                     .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
+                    .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
             ) {
                 Icon(Icons.Default.PersonAdd, "Add Contact")
             }

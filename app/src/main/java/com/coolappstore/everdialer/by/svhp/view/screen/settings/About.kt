@@ -151,8 +151,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
             RivoAnimatedSection(delayMs = 150L) {
                 RivoExpressiveCard {
                     RivoListItem(
-                        headline = "Developer",
-                        supporting = "Hari !",
+                        headline = "Made By Hari :)",
                         leadingIcon = Icons.Outlined.Person,
                         iconContainerColor = ColorBlue,
                         onClick = { openLink(context, TELEGRAM_DEV_URL) }
@@ -168,17 +167,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                         iconContainerColor = ColorGreen,
                         onClick = { openLink(context, GITHUB_URL) }
                     )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    RivoListItem(
-                        headline = "App Version",
-                        supporting = APP_VERSION,
-                        leadingIcon = Icons.Outlined.Info,
-                        iconContainerColor = ColorOrange,
-                        onClick = { }
-                    )
+
                 }
             }
 

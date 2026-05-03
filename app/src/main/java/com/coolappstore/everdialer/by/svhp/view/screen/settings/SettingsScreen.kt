@@ -63,6 +63,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
+import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -997,53 +998,24 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 }
                             )
                             CardDivider()
-                            RivoListItem(headline = "Call Accounts", supporting = "SIM cards and calling accounts", leadingIcon = Icons.Outlined.SimCard, iconContainerColor = ColorGreen, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(CallAccountsScreenDestination) })
-                            CardDivider()
-                            RivoSwitchListItem(
-                                headline   = "Proximity Sensor on in background",
-                                supporting = "Turn off screen when phone is near ear during a call",
-                                leadingIcon = Icons.Outlined.Sensors,
-                                iconContainerColor = ColorTeal,
-                                checked = proximityBg,
-                                onCheckedChange = {
-                                    proximityBg = it
-                                    prefs.setBoolean(PreferenceManager.KEY_PROXIMITY_BG, it)
-                                }
-                            )
-                            CardDivider()
-                            RivoSwitchListItem(
-                                headline   = "Pocket Mode Prevention",
-                                supporting = "Block accidental answer/decline when phone is in pocket",
-                                leadingIcon = Icons.Outlined.Sensors,
-                                iconContainerColor = ColorAmber,
-                                checked = pocketModePrevention,
-                                onCheckedChange = {
-                                    pocketModePrevention = it
-                                    prefs.setBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, it)
-                                }
-                            )
-                            CardDivider()
-                            RivoSwitchListItem(
-                                headline   = "Direct Call on Tap",
-                                supporting = "Tap a call log entry to call directly instead of viewing contact info",
+                            RivoListItem(
+                                headline = "Call Settings",
+                                supporting = "Accounts, sensor, pocket mode, and sound",
                                 leadingIcon = Icons.Outlined.Call,
-                                iconContainerColor = ColorGreen,
-                                checked = directCallOnTap,
-                                onCheckedChange = {
-                                    directCallOnTap = it
-                                    prefs.setBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, it)
-                                }
+                                iconContainerColor = ColorTeal,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { navigator.navigate(CallSettingsScreenDestination) }
                             )
                         }
                     }
                 }
             }
 
-            // ── Privacy ──────────────────────────────────────────────────────
+            // ── Spam ─────────────────────────────────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 180L) {
                     Column {
-                        SectionLabel("Privacy")
+                        SectionLabel("Spam")
                         RivoExpressiveCard {
                             RivoSwitchListItem(
                                 headline   = "Silence Unknown Callers",
@@ -1065,17 +1037,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { showBlockedNumbersDialog = true }
                             )
-                        }
-                    }
-                }
-            }
-
-            // ── Block List ───────────────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 200L) {
-                    Column {
-                        SectionLabel("Block List")
-                        RivoExpressiveCard {
+                            CardDivider()
                             RivoListItem(
                                 headline = "Tap to see the Block list",
                                 supporting = if (blockedContactsList.isEmpty()) "No numbers blocked"
@@ -1090,17 +1052,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Sound & Vibration ────────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 220L) {
-                    Column {
-                        SectionLabel("Sound & Vibration")
-                        RivoExpressiveCard {
-                            RivoListItem(headline = "Sound & Vibration", supporting = "Ringtones and dialpad tones", leadingIcon = Icons.Outlined.VolumeUp, iconContainerColor = ColorBlue, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(SoundVibrationScreenDestination) })
-                        }
-                    }
-                }
-            }
 
             // ── Auto Check For Updates ────────────────────────────────────────
             item {

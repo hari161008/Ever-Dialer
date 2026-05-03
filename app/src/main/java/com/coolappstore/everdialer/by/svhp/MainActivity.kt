@@ -60,6 +60,8 @@ import com.ramcosta.composedestinations.generated.destinations.ContactEditScreen
 import kotlinx.coroutines.delay
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import android.view.Surface
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Person
@@ -395,6 +397,20 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (isLandscape) {
+                        val ctx = LocalContext.current
+                        @Suppress("DEPRECATION")
+                        val rotation = (ctx.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation
+                        // ROTATION_90 = landscape left (natural left rotation, nav bar on left side)
+                        // ROTATION_270 = landscape right (nav bar on right side)
+                        val isRotation90 = rotation == Surface.ROTATION_90
+                        val isRotation270 = rotation == Surface.ROTATION_270
+                        // ROTATION_90 = left orientation (top of phone points left)
+                        //   → nav bar on right side of screen, rail buttons need right padding
+                        // ROTATION_270 = right orientation (top of phone points right)
+                        //   → nav bar on left side of screen, rail buttons need left padding
+                        val railPaddingStart = if (isRotation270) 10.dp else 0.dp
+                        val railPaddingEnd = if (isRotation90) 10.dp else 0.dp
+
                         Row(modifier = Modifier.fillMaxSize()) {
                             // ── Side rail — draws behind status bar + nav bar (edge-to-edge) ──
                             Surface(
@@ -423,18 +439,24 @@ class MainActivity : ComponentActivity() {
                                             selected = currentDest?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true,
                                             icon = { sel -> Icon(if (sel) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, "Favourites", modifier = Modifier.size(24.dp)) },
                                             label = "Favourites",
+                                            paddingStart = railPaddingStart,
+                                            paddingEnd = railPaddingEnd,
                                             onClick = { navTo(FavoritesScreenDestination.route) }
                                         )
                                         RailItem(
                                             selected = currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
                                             icon = { sel -> Icon(if (sel) Icons.Filled.History else Icons.Outlined.History, "Calls", modifier = Modifier.size(24.dp)) },
                                             label = "Calls",
+                                            paddingStart = railPaddingStart,
+                                            paddingEnd = railPaddingEnd,
                                             onClick = { navTo(RecentScreenDestination.route) }
                                         )
                                         RailItem(
                                             selected = currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
                                             icon = { sel -> Icon(if (sel) Icons.Filled.Person else Icons.Outlined.Person, "Contacts", modifier = Modifier.size(24.dp)) },
                                             label = "Contacts",
+                                            paddingStart = railPaddingStart,
+                                            paddingEnd = railPaddingEnd,
                                             onClick = { navTo(ContactScreenDestination.route) }
                                         )
                                         if (notesEnabled) {
@@ -442,6 +464,8 @@ class MainActivity : ComponentActivity() {
                                                 selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
                                                 icon = { sel -> Icon(if (sel) Icons.Filled.Note else Icons.Outlined.Note, "Notes", modifier = Modifier.size(24.dp)) },
                                                 label = "Notes",
+                                                paddingStart = railPaddingStart,
+                                                paddingEnd = railPaddingEnd,
                                                 onClick = { navTo(NotesScreenDestination.route) }
                                             )
                                         }
@@ -455,12 +479,16 @@ class MainActivity : ComponentActivity() {
                                         selected = currentDest?.hierarchy?.any { it.route?.contains("search", ignoreCase = true) == true } == true,
                                         icon = { _ -> Icon(Icons.Default.Search, "Search", modifier = Modifier.size(24.dp)) },
                                         label = "Search",
+                                        paddingStart = railPaddingStart,
+                                        paddingEnd = railPaddingEnd,
                                         onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination.route) }
                                     )
                                     RailItem(
                                         selected = currentDest?.hierarchy?.any { it.route?.contains("settings", ignoreCase = true) == true } == true,
                                         icon = { _ -> Icon(Icons.Default.Tune, "Settings", modifier = Modifier.size(24.dp)) },
                                         label = "Settings",
+                                        paddingStart = railPaddingStart,
+                                        paddingEnd = railPaddingEnd,
                                         onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination.route) }
                                     )
                                     Spacer(Modifier.height(8.dp))
@@ -576,6 +604,8 @@ private fun RailItem(
     selected: Boolean,
     icon: @androidx.compose.runtime.Composable (selected: Boolean) -> Unit,
     label: String,
+    paddingStart: androidx.compose.ui.unit.Dp = 0.dp,
+    paddingEnd: androidx.compose.ui.unit.Dp = 0.dp,
     onClick: () -> Unit
 ) {
     val bgColor = if (selected)
@@ -595,7 +625,7 @@ private fun RailItem(
                 indication = null,
                 onClick = onClick
             )
-            .padding(vertical = 4.dp),
+            .padding(start = paddingStart, end = paddingEnd, top = 4.dp, bottom = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {

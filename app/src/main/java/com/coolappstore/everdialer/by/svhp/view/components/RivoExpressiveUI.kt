@@ -39,7 +39,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.Dp
@@ -599,45 +602,78 @@ fun RivoDropdownMenu(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    if (expanded) {
-        Popup(
+    var showContent by remember { mutableStateOf(false) }
+
+    LaunchedEffect(expanded) {
+        if (expanded) showContent = true
+    }
+
+    if (showContent) {
+        Dialog(
             onDismissRequest = onDismissRequest,
-            properties = PopupProperties(focusable = true)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         ) {
-            AnimatedVisibility(
-                visible = expanded,
-                enter = scaleIn(
-                    animationSpec = spring(
-                        stiffness = Spring.StiffnessMedium,
-                        dampingRatio = Spring.DampingRatioMediumBouncy
+            val dimAlpha by animateFloatAsState(
+                targetValue = if (expanded) 0.45f else 0f,
+                animationSpec = tween(320),
+                label = "dimAlpha",
+                finishedListener = { if (!expanded) showContent = false }
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = dimAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismissRequest
                     ),
-                    initialScale = 0.75f,
-                    transformOrigin = TransformOrigin(0f, 0f)
-                ) + fadeIn(tween(150)),
-                exit = scaleOut(
-                    animationSpec = tween(120),
-                    targetScale = 0.80f,
-                    transformOrigin = TransformOrigin(0f, 0f)
-                ) + fadeOut(tween(100))
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = modifier
-                        .widthIn(min = 220.dp, max = 300.dp)
-                        .shadow(
-                            elevation = 12.dp,
-                            shape = RoundedCornerShape(20.dp),
-                            spotColor = Color.Black.copy(alpha = 0.22f),
-                            ambientColor = Color.Black.copy(alpha = 0.10f)
-                        )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = scaleIn(
+                        animationSpec = spring(
+                            stiffness = Spring.StiffnessLow,
+                            dampingRatio = Spring.DampingRatioMediumBouncy
+                        ),
+                        initialScale = 0.75f,
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    ) + fadeIn(tween(280)),
+                    exit = scaleOut(
+                        animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                        targetScale = 0.85f,
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    ) + fadeOut(tween(200))
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        tonalElevation = 0.dp
+                    Box(
+                        modifier = modifier
+                            .width(260.dp)
+                            .shadow(
+                                elevation = 16.dp,
+                                shape = RoundedCornerShape(24.dp),
+                                spotColor = Color.Black.copy(alpha = 0.28f),
+                                ambientColor = Color.Black.copy(alpha = 0.12f)
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {}
+                            )
                     ) {
-                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            content()
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 0.dp
+                        ) {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                content()
+                            }
                         }
                     }
                 }

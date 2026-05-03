@@ -167,6 +167,7 @@ class CallActivity : ComponentActivity() {
                         }
                     }
 
+                    val answeredFromNotification = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
                     ExpressiveCallScreen(
                         call = call,
                         callState = session?.state ?: Call.STATE_ACTIVE,
@@ -179,7 +180,8 @@ class CallActivity : ComponentActivity() {
                         contactsRepo = contactsRepo,
                         callLogRepo = callLogRepo,
                         prefs = prefs,
-                        isPocketBlocked = { isPocketBlocked }
+                        isPocketBlocked = { isPocketBlocked },
+                        skipIncomingScreen = answeredFromNotification
                     )
                 }
             }
@@ -231,11 +233,15 @@ fun ExpressiveCallScreen(
     contactsRepo: IContactsRepository? = null,
     callLogRepo: ICallLogRepository? = null,
     prefs: PreferenceManager? = null,
-    isPocketBlocked: () -> Boolean = { false }
+    isPocketBlocked: () -> Boolean = { false },
+    skipIncomingScreen: Boolean = false
 ) {
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
     val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
+    // When answered from notification, skip the incoming screen by treating
+    // a brief STATE_RINGING flash as already-active for UI purposes
+    val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
     var isOnHold by remember { mutableStateOf(false) }
     var callDuration by remember { mutableLongStateOf(0L) }
     val isDark = isSystemInDarkTheme()
@@ -381,25 +387,32 @@ fun ExpressiveCallScreen(
         )
     }
 
-    // In-call Dialpad sheet
+    // In-call Dialpad sheet — using Dialog to avoid window inset shifts on main content
     if (showDialpad) {
-        ModalBottomSheet(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showDialpad = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = {
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                    ) {
                 Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
                     Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
                 }
-            }
-        ) {
-            val dialpadConfiguration = LocalConfiguration.current
-            val isDialpadLandscape = dialpadConfiguration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .then(if (isDialpadLandscape) Modifier.fillMaxHeight() else Modifier)
-                .navigationBarsPadding()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -420,75 +433,14 @@ fun ExpressiveCallScreen(
                     )
                 }
 
-                if (isDialpadLandscape) {
-                    // Landscape: keys on left, backspace+input on right — all fit without scroll
-                    Row(
-                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Left: dialpad grid
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            val keys = listOf(
-                                listOf("1" to "", "2" to "ABC", "3" to "DEF"),
-                                listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
-                                listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
-                                listOf("*" to "", "0" to "+", "#" to "")
-                            )
-                            keys.forEach { row ->
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    row.forEach { (digit, letters) ->
-                                        val interaction = remember { MutableInteractionSource() }
-                                        val isPressed by interaction.collectIsPressedAsState()
-                                        val keyRadius by animateDpAsState(if (isPressed) 10.dp else 18.dp, spring(stiffness = Spring.StiffnessMedium), label = "keyR")
-                                        Surface(
-                                            onClick = {
-                                                dtmfInput += digit
-                                                try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
-                                            },
-                                            shape = RoundedCornerShape(keyRadius),
-                                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                            modifier = Modifier.weight(1f).height(44.dp).scale(if (isPressed) 0.92f else 1f),
-                                            interactionSource = interaction
-                                        ) {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                                Text(digit, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                                                if (letters.isNotEmpty()) Text(letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Right: backspace
-                        Column(
-                            modifier = Modifier.width(72.dp).fillMaxHeight(),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Surface(
-                                onClick = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) },
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Backspace, null, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    InCallDialPad(
+                InCallDialPad(
                         onDigit = { digit ->
                             dtmfInput += digit
                             try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
                         },
                         onBackspace = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) }
                     )
+            }
                 }
             }
         }
@@ -536,9 +488,9 @@ fun ExpressiveCallScreen(
                             text = when {
                                 isOnHold -> "On Hold"
                                 callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Calling"
-                                callState == Call.STATE_RINGING -> "Ringing"
-                                callState == Call.STATE_CONNECTING -> "Ringing"
+                                callState == Call.STATE_DIALING -> "Ringing"
+                                callState == Call.STATE_RINGING -> "Incoming"
+                                callState == Call.STATE_CONNECTING -> "Calling"
                                 callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
                                 else -> "Connecting..."
                             },
@@ -558,7 +510,7 @@ fun ExpressiveCallScreen(
                     }
 
                     // Right panel: controls
-                    if (callState != Call.STATE_RINGING) {
+                    if (effectiveCallState != Call.STATE_RINGING) {
                         Surface(modifier = Modifier.weight(1f).fillMaxHeight(), color = overlayColor) {
                             Column(
                                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
@@ -631,9 +583,11 @@ fun ExpressiveCallScreen(
                         .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
                 ) {
                     // ── Top: caller info — anchored, never moves ──────────────
+                    // Use wrapContentHeight + ignoreInsets to avoid bottom sheet jump
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .wrapContentHeight()
                             .align(Alignment.TopCenter)
                             .statusBarsPadding()
                             .padding(top = 80.dp),
@@ -653,9 +607,9 @@ fun ExpressiveCallScreen(
                             text = when {
                                 isOnHold -> "On Hold"
                                 callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Calling"
-                                callState == Call.STATE_RINGING -> "Ringing"
-                                callState == Call.STATE_CONNECTING -> "Ringing"
+                                callState == Call.STATE_DIALING -> "Ringing"
+                                callState == Call.STATE_RINGING -> "Incoming"
+                                callState == Call.STATE_CONNECTING -> "Calling"
                                 callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
                                 else -> "Connecting..."
                             },
@@ -688,7 +642,7 @@ fun ExpressiveCallScreen(
                     }
 
                     // ── Bottom: controls — anchored to bottom ─────────────────
-                    if (callState != Call.STATE_RINGING) {
+                    if (effectiveCallState != Call.STATE_RINGING) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1233,9 +1187,6 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
     val maxDrag = with(density) { 100.dp.toPx() }
-    val progress by remember { derivedStateOf { (kotlin.math.abs(offsetX.value) / maxDrag).coerceIn(0f, 1f) } }
-    val fadeAlpha = 1f - progress
-    val scaleFactor = 1f - (progress * 0.2f)
     val isDark = isSystemInDarkTheme()
     val handleColor = if (isDark) Color.White else Color.Black.copy(0.85f)
     val handleFg = if (isDark) Color.Black else Color.White
@@ -1257,7 +1208,6 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .size(72.dp)
-                    .graphicsLayer { alpha = fadeAlpha; scaleX = scaleFactor; scaleY = scaleFactor }
                     .clip(CircleShape)
                     .background(handleColor)
                     .pointerInput(Unit) {
@@ -1265,8 +1215,8 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                             onDragEnd = {
                                 coroutineScope.launch {
                                     when {
-                                        offsetX.value > maxDrag * 0.6f -> onAnswer()
-                                        offsetX.value < -maxDrag * 0.6f -> onDecline()
+                                        offsetX.value >= maxDrag * 0.92f -> onAnswer()
+                                        offsetX.value <= -maxDrag * 0.92f -> onDecline()
                                         else -> offsetX.animateTo(0f, spring(dampingRatio = 0.8f))
                                     }
                                 }
@@ -1288,7 +1238,7 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                 Icon(
                     imageVector = Icons.Default.Call,
                     contentDescription = null,
-                    tint = when { offsetX.value > 10 -> Color(0xFF4CAF50); offsetX.value < -10 -> Color(0xFFF44336); else -> handleFg },
+                    tint = when { offsetX.value > maxDrag * 0.5f -> Color(0xFF4CAF50); offsetX.value < -maxDrag * 0.5f -> Color(0xFFF44336); else -> handleFg },
                     modifier = Modifier.size(30.dp)
                 )
             }
