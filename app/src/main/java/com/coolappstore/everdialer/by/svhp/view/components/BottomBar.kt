@@ -331,6 +331,7 @@ private fun PillNavItem(
     unselectedIcon: ImageVector,
     label: String,
     iconOnly: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -364,11 +365,11 @@ private fun PillNavItem(
     )
 
     Box(
-        modifier = Modifier
-            .scale(scale)
+        modifier = modifier
             .clip(RoundedCornerShape(50.dp))
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = bgAlpha))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {

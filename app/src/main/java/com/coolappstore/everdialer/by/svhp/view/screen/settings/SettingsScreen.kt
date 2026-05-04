@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
@@ -128,7 +129,27 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     var backupState       by remember { mutableStateOf<BackupDialogState>(BackupDialogState.Idle) }
 
     var visible by remember { mutableStateOf(false) }
-    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "settingsAlpha")
+    var isClosing by remember { mutableStateOf(false) }
+
+    fun navigateBack() {
+        isClosing = true
+        scope.launch {
+            delay(280)
+            navigator.navigateUp()
+        }
+    }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible && !isClosing) 1f else 0f,
+        animationSpec = if (isClosing) tween(280, easing = FastOutLinearInEasing) else tween(350),
+        label = "settingsAlpha"
+    )
+    val offsetY by animateDpAsState(
+        targetValue = if (visible && !isClosing) 0.dp else if (isClosing) 60.dp else 30.dp,
+        animationSpec = if (isClosing) tween(300, easing = FastOutLinearInEasing)
+                        else spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "settingsOffsetY"
+    )
     LaunchedEffect(Unit) { visible = true }
 
     // Font picker
@@ -805,14 +826,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = { IconButton(onClick = { navigator.navigateUp() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
+                navigationIcon = { IconButton(onClick = { navigateBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
+        BackHandler { navigateBack() }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding).alpha(alpha),
+            modifier = Modifier.fillMaxSize().padding(padding).alpha(alpha).offset(y = offsetY),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

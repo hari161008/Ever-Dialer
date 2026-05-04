@@ -52,6 +52,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
+import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -494,7 +495,7 @@ class MainActivity : ComponentActivity() {
                                     .weight(1f)
                                     .fillMaxHeight()
                             ) {
-                                DestinationsNavHost(navGraph = NavGraphs.root, navController = navController)
+                                DestinationsNavHost(navGraph = NavGraphs.root, navController = navController, defaultTransitions = TabTransitionStyle)
                             }
                         }
                     } else {
@@ -515,8 +516,9 @@ class MainActivity : ComponentActivity() {
                                     )
                             ) {
                                 DestinationsNavHost(
-                                    navGraph    = NavGraphs.root,
-                                    navController = navController
+                                    navGraph      = NavGraphs.root,
+                                    navController = navController,
+                                    defaultTransitions = TabTransitionStyle
                                 )
                             }
                         }

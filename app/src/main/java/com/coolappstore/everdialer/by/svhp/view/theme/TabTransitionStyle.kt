@@ -19,10 +19,8 @@ private val TAB_ROUTES = listOf(
     "notes_screen"
 )
 
-// Smooth expressive decelerate easing
-private val EaseOutExpressive = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
+private val EaseOutQuart = CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
 
-// Shared mutable flag updated from MainActivity / screens
 internal var isLandscapeMode: Boolean = false
 
 object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
@@ -36,54 +34,42 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
-        when {
-            isLandscapeMode -> fadeIn(tween(300, easing = EaseOutExpressive))
-            fromIdx >= 0 && toIdx >= 0 -> {
-                val goRight = toIdx > fromIdx
-                slideInHorizontally(
-                    animationSpec = tween(500, easing = EaseOutExpressive),
-                    initialOffsetX = { if (goRight) (it * 0.35f).toInt() else -(it * 0.35f).toInt() }
-                ) + fadeIn(tween(380, easing = EaseOutExpressive))
-            }
-            else -> slideInHorizontally(
-                animationSpec = tween(500, easing = EaseOutExpressive),
-                initialOffsetX = { (it * 0.35f).toInt() }
-            ) + fadeIn(tween(380))
+        if (fromIdx >= 0 && toIdx >= 0) {
+            val goRight = toIdx > fromIdx
+            slideInHorizontally(
+                animationSpec = tween(350, easing = EaseOutQuart),
+                initialOffsetX = { if (goRight) (it * 0.25f).toInt() else -(it * 0.25f).toInt() }
+            ) + fadeIn(tween(250, easing = EaseOutQuart))
+        } else {
+            fadeIn(tween(300, easing = EaseOutQuart))
         }
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
-        when {
-            isLandscapeMode -> fadeOut(tween(250, easing = EaseOutExpressive))
-            fromIdx >= 0 && toIdx >= 0 -> {
-                val goRight = toIdx > fromIdx
-                slideOutHorizontally(
-                    animationSpec = tween(500, easing = EaseOutExpressive),
-                    targetOffsetX = { if (goRight) -(it * 0.35f).toInt() else (it * 0.35f).toInt() }
-                ) + fadeOut(tween(320, easing = EaseOutExpressive))
-            }
-            else -> slideOutHorizontally(
-                animationSpec = tween(500, easing = EaseOutExpressive),
-                targetOffsetX = { -(it * 0.35f).toInt() }
-            ) + fadeOut(tween(320))
+        if (fromIdx >= 0 && toIdx >= 0) {
+            val goRight = toIdx > fromIdx
+            slideOutHorizontally(
+                animationSpec = tween(350, easing = EaseOutQuart),
+                targetOffsetX = { if (goRight) -(it * 0.25f).toInt() else (it * 0.25f).toInt() }
+            ) + fadeOut(tween(200, easing = EaseOutQuart))
+        } else {
+            fadeOut(tween(200, easing = EaseOutQuart))
         }
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (isLandscapeMode) fadeIn(tween(300, easing = EaseOutExpressive))
-        else slideInHorizontally(
-            animationSpec = tween(500, easing = EaseOutExpressive),
-            initialOffsetX = { -(it * 0.35f).toInt() }
-        ) + fadeIn(tween(380))
+        slideInHorizontally(
+            animationSpec = tween(350, easing = EaseOutQuart),
+            initialOffsetX = { -(it * 0.25f).toInt() }
+        ) + fadeIn(tween(250, easing = EaseOutQuart))
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (isLandscapeMode) fadeOut(tween(250, easing = EaseOutExpressive))
-        else slideOutHorizontally(
-            animationSpec = tween(500, easing = EaseOutExpressive),
-            targetOffsetX = { (it * 0.35f).toInt() }
-        ) + fadeOut(tween(320))
+        slideOutHorizontally(
+            animationSpec = tween(350, easing = EaseOutQuart),
+            targetOffsetX = { (it * 0.25f).toInt() }
+        ) + fadeOut(tween(200, easing = EaseOutQuart))
     }
 }
