@@ -50,6 +50,12 @@ import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
+import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 // ─── App Haptics Helper ────────────────────────────────────────────────────────
 
@@ -608,6 +614,8 @@ fun RivoDropdownMenu(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val liquidGlass = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
     var showContent by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
@@ -656,14 +664,20 @@ fun RivoDropdownMenu(
                         transformOrigin = TransformOrigin(0.5f, 0.5f)
                     ) + fadeOut(tween(200))
                 ) {
+                    val menuShape = RoundedCornerShape(35.dp)
+                    val globalBackdrop = LocalLiquidGlassBackdrop.current
+
                     Box(
                         modifier = modifier
                             .width(260.dp)
-                            .shadow(
-                                elevation = 16.dp,
-                                shape = RoundedCornerShape(24.dp),
-                                spotColor = Color.Black.copy(alpha = 0.28f),
-                                ambientColor = Color.Black.copy(alpha = 0.12f)
+                            .then(
+                                if (liquidGlass && globalBackdrop != null) Modifier
+                                else Modifier.shadow(
+                                    elevation = 16.dp,
+                                    shape = RoundedCornerShape(24.dp),
+                                    spotColor = Color.Black.copy(alpha = 0.28f),
+                                    ambientColor = Color.Black.copy(alpha = 0.12f)
+                                )
                             )
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -672,9 +686,28 @@ fun RivoDropdownMenu(
                             )
                     ) {
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) {
+                                Modifier
+                                    .fillMaxWidth()
+                                    .drawBackdrop(
+                                        backdrop = globalBackdrop,
+                                        shape = { menuShape },
+                                        effects = {
+                                            val d = density
+                                            colorControls(brightness = -0.13f, saturation = 1.4f)
+                                            blur(6f * d)
+                                            lens(
+                                                refractionHeight = 40f * d,
+                                                refractionAmount = 248f * d
+                                            )
+                                        },
+                                        highlight = { Highlight.Plain }
+                                    )
+                            } else Modifier.fillMaxWidth(),
+                            shape = if (liquidGlass && globalBackdrop != null) menuShape else RoundedCornerShape(24.dp),
+                            color = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null)
+                                Color.Black.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
                             tonalElevation = 0.dp
                         ) {
                             Column(modifier = Modifier.padding(vertical = 8.dp)) {

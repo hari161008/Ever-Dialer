@@ -100,6 +100,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
     var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
+    var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
 
     // Call UI section checkboxes dialog
     var showCallUIDialog   by remember { mutableStateOf(false) }
@@ -344,6 +345,30 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── Liquid Glass ─────────────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 80L) {
+                        Column {
+                            Text("Visual Effects", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Material Liquid You Glass",
+                                    supporting = "Apply a liquid glass refraction effect to navigation and menus",
+                                    leadingIcon = Icons.Outlined.Lens,
+                                    iconContainerColor = Color(0xFF00BCD4),
+                                    checked = liquidGlass,
+                                    onCheckedChange = {
+                                        liquidGlass = it
+                                        prefs.setBoolean(PreferenceManager.KEY_LIQUID_GLASS, it)
+                                    }
+                                )
                             }
                         }
                     }

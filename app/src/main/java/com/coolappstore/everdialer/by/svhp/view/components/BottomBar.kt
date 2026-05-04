@@ -56,6 +56,13 @@ import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
+import android.os.Build
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
+import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 // Tab routes — only show the bar when one of these is active
 private val TAB_ROUTES = setOf(
@@ -78,6 +85,7 @@ fun BottomBar(navController: NavController) {
     val pillNav      = prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)
     val iconOnly     = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
     val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+    val liquidGlass  = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
     val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
     val navBackStackEntry  by navController.currentBackStackEntryAsState()
@@ -178,11 +186,32 @@ fun BottomBar(navController: NavController) {
                     .padding(bottom = 28.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val globalBackdrop = LocalLiquidGlassBackdrop.current
+                val pillShape = RoundedCornerShape(32.dp)
+
                 Surface(
-                    shape           = RoundedCornerShape(50.dp),
-                    color           = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shadowElevation = 8.dp,
-                    tonalElevation  = 4.dp
+                    shape           = pillShape,
+                    color           = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null)
+                                          MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f)
+                                      else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shadowElevation = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) 0.dp else 8.dp,
+                    tonalElevation  = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) 0.dp else 4.dp,
+                    modifier = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) {
+                        Modifier.drawBackdrop(
+                            backdrop = globalBackdrop,
+                            shape = { pillShape },
+                            effects = {
+                                val d = density
+                                colorControls(saturation = 1.4f)
+                                blur(2f * d)
+                                lens(
+                                    refractionHeight = 23f * d,
+                                    refractionAmount = 64f * d
+                                )
+                            },
+                            highlight = { Highlight.Default }
+                        )
+                    } else Modifier
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),

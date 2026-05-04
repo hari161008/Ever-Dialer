@@ -51,6 +51,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndSchedule
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
+import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.rememberLayerBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.layerBackdrop
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.ramcosta.composedestinations.DestinationsNavHost
@@ -499,27 +502,31 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else {
-                        Scaffold(
-                            bottomBar = { BottomBar(navController) },
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentWindowInsets = WindowInsets(0)
-                        ) { scaffoldPadding ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(scaffoldPadding)
-                                    .then(
-                                        if (hasOngoingCall)
-                                            Modifier.consumeWindowInsets(WindowInsets.statusBars)
-                                        else
-                                            Modifier
+                        val liquidGlassBackdrop = rememberLayerBackdrop()
+                        CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdrop) {
+                            Scaffold(
+                                bottomBar = { BottomBar(navController) },
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentWindowInsets = WindowInsets(0)
+                            ) { scaffoldPadding ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(scaffoldPadding)
+                                        .layerBackdrop(liquidGlassBackdrop)
+                                        .then(
+                                            if (hasOngoingCall)
+                                                Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                            else
+                                                Modifier
+                                        )
+                                ) {
+                                    DestinationsNavHost(
+                                        navGraph      = NavGraphs.root,
+                                        navController = navController,
+                                        defaultTransitions = TabTransitionStyle
                                     )
-                            ) {
-                                DestinationsNavHost(
-                                    navGraph      = NavGraphs.root,
-                                    navController = navController,
-                                    defaultTransitions = TabTransitionStyle
-                                )
+                                }
                             }
                         }
                     }
