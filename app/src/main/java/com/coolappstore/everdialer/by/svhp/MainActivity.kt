@@ -12,7 +12,6 @@ import android.provider.Settings
 import android.telecom.TelecomManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -81,9 +80,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactScreenDest
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
-import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
-import org.koin.core.context.GlobalContext.startKoin
 
 class MainActivity : ComponentActivity() {
 
@@ -97,15 +94,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // enableEdgeToEdge() triggers Adreno GPU driver SIGSEGV on first RenderThread draw.
+        // Edge-to-edge is set via theme XML instead (windowDrawsSystemBarBackgrounds etc).
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        if (GlobalContext.getOrNull() == null) {
-            startKoin {
-                androidContext(this@MainActivity)
-                modules(appModule)
-            }
-        }
 
         requestRequiredPermissions()
         // On first launch, show default dialer prompt first; welcome dialog appears after.
@@ -410,6 +401,8 @@ class MainActivity : ComponentActivity() {
                         val railPaddingStart = if (isRotation270) 10.dp else 0.dp
                         val railPaddingEnd   = if (isRotation90)  10.dp else 0.dp
 
+                        val liquidGlassBackdropLandscape = rememberLayerBackdrop()
+                        CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdropLandscape) {
                         Row(modifier = Modifier.fillMaxSize()) {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -492,7 +485,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            // ── Main content fills the rest ────────────────────────
+                            // ── Main content fills the rest, edge-to-edge ──────────────────────
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -501,6 +494,7 @@ class MainActivity : ComponentActivity() {
                                 DestinationsNavHost(navGraph = NavGraphs.root, navController = navController, defaultTransitions = TabTransitionStyle)
                             }
                         }
+                        } // end CompositionLocalProvider landscape
                     } else {
                         val liquidGlassBackdrop = rememberLayerBackdrop()
                         CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdrop) {

@@ -616,6 +616,7 @@ fun RivoDropdownMenu(
 ) {
     val prefs = koinInject<PreferenceManager>()
     val liquidGlass = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
+    val lgDropdownMenu = prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, false)
     var showContent by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
@@ -666,12 +667,13 @@ fun RivoDropdownMenu(
                 ) {
                     val menuShape = RoundedCornerShape(35.dp)
                     val globalBackdrop = LocalLiquidGlassBackdrop.current
+                    val useLgDropdown = liquidGlass && lgDropdownMenu && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
 
                     Box(
                         modifier = modifier
                             .width(260.dp)
                             .then(
-                                if (liquidGlass && globalBackdrop != null) Modifier
+                                if (useLgDropdown) Modifier
                                 else Modifier.shadow(
                                     elevation = 16.dp,
                                     shape = RoundedCornerShape(24.dp),
@@ -686,11 +688,11 @@ fun RivoDropdownMenu(
                             )
                     ) {
                         Surface(
-                            modifier = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) {
+                            modifier = if (useLgDropdown) {
                                 Modifier
                                     .fillMaxWidth()
                                     .drawBackdrop(
-                                        backdrop = globalBackdrop,
+                                        backdrop = globalBackdrop!!,
                                         shape = { menuShape },
                                         effects = {
                                             val d = density
@@ -704,8 +706,8 @@ fun RivoDropdownMenu(
                                         highlight = { Highlight.Plain }
                                     )
                             } else Modifier.fillMaxWidth(),
-                            shape = if (liquidGlass && globalBackdrop != null) menuShape else RoundedCornerShape(24.dp),
-                            color = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null)
+                            shape = if (useLgDropdown) menuShape else RoundedCornerShape(24.dp),
+                            color = if (useLgDropdown)
                                 Color.Black.copy(alpha = 0.25f)
                             else MaterialTheme.colorScheme.surfaceContainerHigh,
                             tonalElevation = 0.dp
@@ -761,16 +763,18 @@ fun RivoDropdownMenuItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (icon != null) {
+                val prefs2 = koinInject<PreferenceManager>()
+                val liquidGlass2 = prefs2.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = tintColor.copy(alpha = 0.13f),
+                    color = if (liquidGlass2) tintColor.copy(alpha = 0.32f) else tintColor.copy(alpha = 0.13f),
                     modifier = Modifier.size(34.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector        = icon,
                             contentDescription = null,
-                            tint               = tintColor,
+                            tint               = if (liquidGlass2) Color.White else tintColor,
                             modifier           = Modifier.size(18.dp)
                         )
                     }

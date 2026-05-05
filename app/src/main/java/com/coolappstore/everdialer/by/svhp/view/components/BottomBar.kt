@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -86,6 +87,7 @@ fun BottomBar(navController: NavController) {
     val iconOnly     = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
     val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
     val liquidGlass  = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
+    val lgBottomNav  = prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false)
     val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
     val navBackStackEntry  by navController.currentBackStackEntryAsState()
@@ -189,16 +191,17 @@ fun BottomBar(navController: NavController) {
                 val globalBackdrop = LocalLiquidGlassBackdrop.current
                 val pillShape = RoundedCornerShape(32.dp)
 
+                val useLgBottomNav = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
                 Surface(
                     shape           = pillShape,
-                    color           = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null)
+                    color           = if (useLgBottomNav)
                                           MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f)
                                       else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shadowElevation = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) 0.dp else 8.dp,
-                    tonalElevation  = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) 0.dp else 4.dp,
-                    modifier = if (liquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null) {
+                    shadowElevation = if (useLgBottomNav) 0.dp else 8.dp,
+                    tonalElevation  = if (useLgBottomNav) 0.dp else 4.dp,
+                    modifier = if (useLgBottomNav) {
                         Modifier.drawBackdrop(
-                            backdrop = globalBackdrop,
+                            backdrop = globalBackdrop!!,
                             shape = { pillShape },
                             effects = {
                                 val d = density
@@ -214,7 +217,14 @@ fun BottomBar(navController: NavController) {
                     } else Modifier
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        modifier = Modifier
+                            .animateContentSize(
+                                animationSpec = spring(
+                                    stiffness    = Spring.StiffnessMediumLow,
+                                    dampingRatio = Spring.DampingRatioLowBouncy
+                                )
+                            )
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
                     ) {

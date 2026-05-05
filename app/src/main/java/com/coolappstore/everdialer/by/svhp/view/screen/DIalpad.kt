@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.os.Build
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +61,12 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Locale
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
+import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Destination<RootGraph>
@@ -631,7 +638,10 @@ fun DialPadContent(
                         containerColor = Color(0xFF34A853),
                         contentColor = Color.White,
                         modifier = Modifier.width(108.dp).height(72.dp),
-                        isLarge = true
+                        isLarge = true,
+                        liquidGlassBackdrop = LocalLiquidGlassBackdrop.current,
+                        liquidGlassEnabled = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
+                                         && prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
                     )
 
                     FadeScaleBox(visible = number.isNotEmpty()) {
@@ -666,6 +676,8 @@ fun DialerActionExpressive(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     isLarge: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    liquidGlassBackdrop: com.coolappstore.everdialer.by.svhp.liquidglass.Backdrop? = null,
+    liquidGlassEnabled: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -677,10 +689,32 @@ fun DialerActionExpressive(
         targetValue = if (isPressed) 0.92f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow), label = "ButtonScale"
     )
+    val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
+    val buttonShape = RoundedCornerShape(cornerRadius)
     Surface(
-        modifier = modifier.scale(scale).combinedClickable(onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource, indication = null),
-        shape = RoundedCornerShape(cornerRadius),
-        color = containerColor,
+        modifier = modifier
+            .scale(scale)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource, indication = null)
+            .then(
+                if (useLiquidGlass && liquidGlassBackdrop != null)
+                    Modifier.drawBackdrop(
+                        backdrop = liquidGlassBackdrop,
+                        shape = { buttonShape },
+                        effects = {
+                            val d = density
+                            colorControls(saturation = 1.3f)
+                            blur(2f * d)
+                            lens(
+                                refractionHeight = 18f * d,
+                                refractionAmount = 52f * d
+                            )
+                        },
+                        highlight = { Highlight.Default }
+                    )
+                else Modifier
+            ),
+        shape = buttonShape,
+        color = if (useLiquidGlass) containerColor.copy(alpha = 0.5f) else containerColor,
         contentColor = contentColor
     ) {
         Box(contentAlignment = Alignment.Center) {

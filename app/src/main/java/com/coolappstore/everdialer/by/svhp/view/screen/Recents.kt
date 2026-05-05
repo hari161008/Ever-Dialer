@@ -58,6 +58,13 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import android.os.Build
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
+import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Calendar
 import java.util.Locale
@@ -180,16 +187,40 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             },
         topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
+            val globalBackdrop = LocalLiquidGlassBackdrop.current
+            val liquidGlass = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LIQUID_GLASS, false)
+            val lgRecentsFab = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false)
+            val fabShape = RoundedCornerShape(17.dp)
+            val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             FloatingActionButton(
                 onClick = { showDialpad = true },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                containerColor = if (useLiquidGlass)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.0f)
+                else MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(20.dp),
+                shape = fabShape,
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
                 modifier = Modifier
                     .scale(fabScale)
                     .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
                     .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
+                    .then(
+                        if (useLiquidGlass && globalBackdrop != null)
+                            Modifier.drawBackdrop(
+                                backdrop = globalBackdrop,
+                                shape = { fabShape },
+                                effects = {
+                                    val d = density
+                                    colorControls(brightness = -0.15f)
+                                    lens(
+                                        refractionHeight = 46f * d,
+                                        refractionAmount = 64f * d
+                                    )
+                                },
+                                highlight = { Highlight.Default }
+                            )
+                        else Modifier
+                    )
             ) { Icon(Icons.Default.Dialpad, "Dialpad") }
         },
         containerColor = MaterialTheme.colorScheme.surface,

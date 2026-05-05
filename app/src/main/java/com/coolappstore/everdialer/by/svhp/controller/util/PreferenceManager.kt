@@ -72,5 +72,10 @@ class PreferenceManager(context: Context) {
         const val KEY_DIRECT_CALL_ON_TAP     = "direct_call_on_tap"
         const val KEY_CONTACTS_DISPLAY_ACCOUNTS = "contacts_display_accounts"
         const val KEY_LIQUID_GLASS              = "liquid_glass_ui"
+        const val KEY_LG_BOTTOM_NAV            = "lg_bottom_nav"
+        const val KEY_LG_DROPDOWN_MENU         = "lg_dropdown_menu"
+        const val KEY_LG_DIALPAD_CALL_BUTTON   = "lg_dialpad_call_button"
+        const val KEY_LG_CONTACTS_FAB          = "lg_contacts_fab"
+        const val KEY_LG_RECENTS_FAB           = "lg_recents_fab"
     }
 }

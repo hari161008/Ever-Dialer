@@ -405,14 +405,39 @@ fun ExpressiveCallScreen(
                 decorFitsSystemWindows = false
             )
         ) {
+            var dialpadVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { dialpadVisible = true }
+
+            val dialpadOffsetY by animateFloatAsState(
+                targetValue = if (dialpadVisible) 0f else 1f,
+                animationSpec = spring(
+                    stiffness    = Spring.StiffnessMediumLow,
+                    dampingRatio = Spring.DampingRatioLowBouncy
+                ),
+                label = "dialpadSlide"
+            )
+            val dialpadAlpha by animateFloatAsState(
+                targetValue = if (dialpadVisible) 1f else 0f,
+                animationSpec = tween(300),
+                label = "dialpadAlpha"
+            )
+
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = dialpadAlpha },
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Surface(
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            val density = this.density
+                            // translate from bottom — dialpadOffsetY goes 1→0
+                            translationY = dialpadOffsetY * size.height
+                        }
                 ) {
                     Column(
                         modifier = Modifier
@@ -497,7 +522,7 @@ fun ExpressiveCallScreen(
                             text = when {
                                 isOnHold -> "On Hold"
                                 callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Ringing"
+                                callState == Call.STATE_DIALING -> "Calling"
                                 callState == Call.STATE_RINGING -> "Incoming"
                                 callState == Call.STATE_CONNECTING -> "Calling"
                                 callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
@@ -591,15 +616,36 @@ fun ExpressiveCallScreen(
                     modifier = Modifier.fillMaxSize()
                         .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
                 ) {
-                    // ── Top: caller info — anchored, never moves ──────────────
-                    // Use wrapContentHeight + ignoreInsets to avoid bottom sheet jump
+                    // ── Top: caller info — smooth animated entry ──────────────
+                    // Animate initial entry and state transitions smoothly
+                    val callerInfoOffsetY by animateFloatAsState(
+                        targetValue = if (showAcceptAnim || callState == Call.STATE_ACTIVE ||
+                            callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING ||
+                            callState == Call.STATE_RINGING) 0f else -80f,
+                        animationSpec = spring(
+                            stiffness    = Spring.StiffnessMediumLow,
+                            dampingRatio = Spring.DampingRatioLowBouncy
+                        ),
+                        label = "callerInfoOffsetY"
+                    )
+                    val callerInfoAlpha by animateFloatAsState(
+                        targetValue = if (showAcceptAnim || callState == Call.STATE_ACTIVE ||
+                            callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING ||
+                            callState == Call.STATE_RINGING) 1f else 0f,
+                        animationSpec = tween(400),
+                        label = "callerInfoAlpha"
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .align(Alignment.TopCenter)
                             .statusBarsPadding()
-                            .padding(top = 80.dp),
+                            .padding(top = 80.dp)
+                            .graphicsLayer {
+                                translationY = callerInfoOffsetY
+                                alpha = callerInfoAlpha
+                            },
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
@@ -616,7 +662,7 @@ fun ExpressiveCallScreen(
                             text = when {
                                 isOnHold -> "On Hold"
                                 callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Ringing"
+                                callState == Call.STATE_DIALING -> "Calling"
                                 callState == Call.STATE_RINGING -> "Incoming"
                                 callState == Call.STATE_CONNECTING -> "Calling"
                                 callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."

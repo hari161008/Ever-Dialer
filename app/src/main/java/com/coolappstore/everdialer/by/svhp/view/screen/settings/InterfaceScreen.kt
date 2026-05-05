@@ -369,6 +369,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         prefs.setBoolean(PreferenceManager.KEY_LIQUID_GLASS, it)
                                     }
                                 )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Elements to have liquid glass effect",
+                                    supporting = "Choose which UI elements use the liquid glass effect",
+                                    leadingIcon = Icons.Outlined.Layers,
+                                    iconContainerColor = Color(0xFF0097A7),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = {
+                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.LiquidGlassElementsScreenDestination)
+                                    }
+                                )
                             }
                         }
                     }
