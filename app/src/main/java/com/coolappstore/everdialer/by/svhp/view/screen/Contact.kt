@@ -115,44 +115,55 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
         topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
             val globalBackdrop = LocalLiquidGlassBackdrop.current
-            val liquidGlass = prefs_ui.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
-            val lgContactsFab = prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false)
+            val settingsVer by prefs_ui.settingsChanged.collectAsState()
+            val liquidGlass = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+            val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false) }
+            val blurEffects = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
+            val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, false) }
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgContactsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-            FloatingActionButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
-                    context.startActivity(intent)
-                },
-                containerColor = if (useLiquidGlass)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.0f)
-                else MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = fabShape,
-                elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                modifier = Modifier
-                    .scale(fabScale)
-                    .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
-                    .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
-                    .then(
-                        if (useLiquidGlass && globalBackdrop != null)
-                            Modifier.drawBackdrop(
-                                backdrop = globalBackdrop,
-                                shape = { fabShape },
-                                effects = {
-                                    val d = density
-                                    colorControls(brightness = -0.15f)
-                                    lens(
-                                        refractionHeight = 46f * d,
-                                        refractionAmount = 64f * d
-                                    )
-                                },
-                                highlight = { Highlight.Default }
-                            )
-                        else Modifier
+            val useBlur = blurEffects && blurContactsFab && !useLiquidGlass
+            val baseModifier = Modifier
+                .scale(fabScale)
+                .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
+                .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
+            val fabOnClick: () -> Unit = {
+                val intent = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
+                context.startActivity(intent)
+            }
+            if (useLiquidGlass && globalBackdrop != null) {
+                Box(
+                    modifier = baseModifier.drawBackdrop(
+                        backdrop = globalBackdrop,
+                        shape = { fabShape },
+                        effects = {
+                            val d = density
+                            colorControls(brightness = -0.15f)
+                            lens(refractionHeight = 46f * d, refractionAmount = 64f * d)
+                        },
+                        highlight = { Highlight.Default }
                     )
-            ) {
-                Icon(Icons.Default.PersonAdd, "Add Contact")
+                ) {
+                    FloatingActionButton(
+                        onClick = fabOnClick,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.0f),
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = fabShape,
+                        elevation = FloatingActionButtonDefaults.elevation(0.dp),
+                    ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
+                }
+            } else {
+                FloatingActionButton(
+                    onClick = fabOnClick,
+                    containerColor = if (useBlur)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
+                    else
+                        MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = fabShape,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp),
+                    modifier = baseModifier
+                ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,

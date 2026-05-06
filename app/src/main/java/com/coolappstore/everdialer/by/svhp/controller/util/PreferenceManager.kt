@@ -77,5 +77,12 @@ class PreferenceManager(context: Context) {
         const val KEY_LG_DIALPAD_CALL_BUTTON   = "lg_dialpad_call_button"
         const val KEY_LG_CONTACTS_FAB          = "lg_contacts_fab"
         const val KEY_LG_RECENTS_FAB           = "lg_recents_fab"
+        const val KEY_BLUR_EFFECTS            = "blur_effects_ui"
+        // Material Blur effect elements
+        const val KEY_BLUR_BOTTOM_NAV          = "blur_bottom_nav"
+        const val KEY_BLUR_DROPDOWN_MENU       = "blur_dropdown_menu"
+        const val KEY_BLUR_DIALPAD_CALL_BUTTON = "blur_dialpad_call_button"
+        const val KEY_BLUR_CONTACTS_FAB        = "blur_contacts_fab"
+        const val KEY_BLUR_RECENTS_FAB         = "blur_recents_fab"
     }
 }

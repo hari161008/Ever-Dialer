@@ -50,7 +50,10 @@ import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawPlainBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
@@ -615,8 +618,11 @@ fun RivoDropdownMenu(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val prefs = koinInject<PreferenceManager>()
-    val liquidGlass = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
-    val lgDropdownMenu = prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, false)
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val liquidGlass = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+    val lgDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, false) }
+    val blurEffects = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
+    val blurDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_DROPDOWN_MENU, false) }
     var showContent by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
@@ -668,6 +674,7 @@ fun RivoDropdownMenu(
                     val menuShape = RoundedCornerShape(35.dp)
                     val globalBackdrop = LocalLiquidGlassBackdrop.current
                     val useLgDropdown = liquidGlass && lgDropdownMenu && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
+                    val useBlurDropdown = blurEffects && blurDropdownMenu && !useLgDropdown
 
                     Box(
                         modifier = modifier
@@ -687,9 +694,10 @@ fun RivoDropdownMenu(
                                 onClick = {}
                             )
                     ) {
-                        Surface(
-                            modifier = if (useLgDropdown) {
-                                Modifier
+                        val dropdownShape = if (useLgDropdown) menuShape else RoundedCornerShape(24.dp)
+                        if (useLgDropdown) {
+                            Surface(
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .drawBackdrop(
                                         backdrop = globalBackdrop!!,
@@ -704,16 +712,34 @@ fun RivoDropdownMenu(
                                             )
                                         },
                                         highlight = { Highlight.Plain }
-                                    )
-                            } else Modifier.fillMaxWidth(),
-                            shape = if (useLgDropdown) menuShape else RoundedCornerShape(24.dp),
-                            color = if (useLgDropdown)
-                                Color.Black.copy(alpha = 0.25f)
-                            else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            tonalElevation = 0.dp
-                        ) {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                content()
+                                    ),
+                                shape = menuShape,
+                                color = Color.Black.copy(alpha = 0.25f),
+                                tonalElevation = 0.dp
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                            }
+                        } else if (useBlurDropdown && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().drawPlainBackdrop(
+                                    backdrop = globalBackdrop,
+                                    shape    = { dropdownShape },
+                                    effects  = { blur(30f * density) }
+                                ),
+                                shape = dropdownShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                                tonalElevation = 0.dp
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                            }
+                        } else {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = dropdownShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 0.dp
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
                             }
                         }
                     }
@@ -787,5 +813,41 @@ fun RivoDropdownMenuItem(
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+/**
+ * A FAB that optionally shows a background-only blur effect (frosted glass).
+ * When [useBlur] is true and API >= 31, a blurred background layer is drawn
+ * behind the content so the icon remains sharp and fully readable.
+ */
+@Composable
+fun RivoBlurFab(
+    onClick: () -> Unit,
+    shape: androidx.compose.foundation.shape.RoundedCornerShape,
+    useBlur: Boolean,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    if (useBlur) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            shape = shape,
+            elevation = FloatingActionButtonDefaults.elevation(0.dp),
+            modifier = modifier
+        ) { content() }
+    } else {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            shape = shape,
+            elevation = FloatingActionButtonDefaults.elevation(0.dp),
+            modifier = modifier
+        ) { content() }
     }
 }

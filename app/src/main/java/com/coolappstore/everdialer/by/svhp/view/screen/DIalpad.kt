@@ -62,6 +62,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Locale
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawPlainBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
@@ -619,6 +620,16 @@ fun DialPadContent(
                         )
                     }
 
+                    val lgBackdrop = LocalLiquidGlassBackdrop.current
+                    val lgDialpadEnabled = remember(settingsState) {
+                        prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) &&
+                        prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
+                    }
+                    val blurDialpadEnabled = remember(settingsState) {
+                        prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) &&
+                        prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, false) &&
+                        !lgDialpadEnabled
+                    }
                     DialerActionExpressive(
                         onClick = {
                             if (number.isNotEmpty()) {
@@ -639,9 +650,9 @@ fun DialPadContent(
                         contentColor = Color.White,
                         modifier = Modifier.width(108.dp).height(72.dp),
                         isLarge = true,
-                        liquidGlassBackdrop = LocalLiquidGlassBackdrop.current,
-                        liquidGlassEnabled = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
-                                         && prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
+                        liquidGlassBackdrop = lgBackdrop,
+                        liquidGlassEnabled = lgDialpadEnabled,
+                        blurEnabled = blurDialpadEnabled
                     )
 
                     FadeScaleBox(visible = number.isNotEmpty()) {
@@ -678,6 +689,7 @@ fun DialerActionExpressive(
     onLongClick: (() -> Unit)? = null,
     liquidGlassBackdrop: com.coolappstore.everdialer.by.svhp.liquidglass.Backdrop? = null,
     liquidGlassEnabled: Boolean = false,
+    blurEnabled: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -691,34 +703,76 @@ fun DialerActionExpressive(
     )
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val buttonShape = RoundedCornerShape(cornerRadius)
-    Surface(
-        modifier = modifier
-            .scale(scale)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource, indication = null)
-            .then(
-                if (useLiquidGlass && liquidGlassBackdrop != null)
-                    Modifier.drawBackdrop(
-                        backdrop = liquidGlassBackdrop,
-                        shape = { buttonShape },
-                        effects = {
-                            val d = density
-                            colorControls(saturation = 1.3f)
-                            blur(2f * d)
-                            lens(
-                                refractionHeight = 18f * d,
-                                refractionAmount = 52f * d
-                            )
-                        },
-                        highlight = { Highlight.Default }
-                    )
-                else Modifier
-            ),
-        shape = buttonShape,
-        color = if (useLiquidGlass) containerColor.copy(alpha = 0.5f) else containerColor,
-        contentColor = contentColor
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+    val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    if (useLiquidGlass && liquidGlassBackdrop != null) {
+        Box(
+            modifier = modifier
+                .scale(scale)
+                .drawBackdrop(
+                    backdrop = liquidGlassBackdrop,
+                    shape = { buttonShape },
+                    effects = {
+                        val d = density
+                        colorControls(saturation = 1.3f)
+                        blur(2f * d)
+                        lens(refractionHeight = 18f * d, refractionAmount = 52f * d)
+                    },
+                    highlight = { Highlight.Default }
+                )
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
+                    indication = null
+                )
+        ) {
+            Surface(
+                shape = buttonShape,
+                color = containerColor.copy(alpha = 0.5f),
+                contentColor = contentColor,
+                modifier = Modifier.matchParentSize()
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+                }
+            }
+        }
+    } else if (useBackdropBlur && liquidGlassBackdrop != null) {
+        Surface(
+            modifier = modifier
+                .scale(scale)
+                .drawPlainBackdrop(
+                    backdrop = liquidGlassBackdrop,
+                    shape    = { buttonShape },
+                    effects  = { blur(30f * density) }
+                )
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
+                    indication = null
+                ),
+            shape = buttonShape,
+            color = containerColor.copy(alpha = 0.72f),
+            contentColor = contentColor
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+            }
+        }
+    } else {
+        Surface(
+            modifier = modifier
+                .scale(scale)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource, indication = null),
+            shape = buttonShape,
+            color = containerColor,
+            contentColor = contentColor
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+            }
         }
     }
 }

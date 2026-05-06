@@ -137,7 +137,7 @@ class CallActivity : ComponentActivity() {
                     }
                     if (session == null || callState == Call.STATE_DISCONNECTED) {
                         delay(800)
-                        finish()
+                        finishAndRemoveTask()
                     }
                 }
 

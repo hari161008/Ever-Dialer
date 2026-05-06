@@ -101,6 +101,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
     var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
+    var blurEffects         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false)) }
 
     // Call UI section checkboxes dialog
     var showCallUIDialog   by remember { mutableStateOf(false) }
@@ -379,6 +380,32 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.LiquidGlassElementsScreenDestination)
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Material Blur Effects",
+                                    supporting = "Apply a background blur effect to navigation and menus",
+                                    leadingIcon = Icons.Outlined.BlurOn,
+                                    iconContainerColor = Color(0xFF5C6BC0),
+                                    checked = blurEffects,
+                                    onCheckedChange = {
+                                        blurEffects = it
+                                        prefs.setBoolean(PreferenceManager.KEY_BLUR_EFFECTS, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Elements to have blur effect",
+                                    supporting = "Choose which UI elements use the blur effect",
+                                    leadingIcon = Icons.Outlined.Layers,
+                                    iconContainerColor = Color(0xFF3949AB),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = {
+                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
                                     }
                                 )
                             }

@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
 import android.os.Build
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.drawPlainBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
@@ -83,11 +84,13 @@ fun BottomBar(navController: NavController) {
     @Suppress("UNUSED_VARIABLE")
     val settingsState by prefs.settingsChanged.collectAsState()
 
-    val pillNav      = prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)
-    val iconOnly     = prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)
-    val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
-    val liquidGlass  = prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
-    val lgBottomNav  = prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false)
+    val pillNav      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    val iconOnly     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false) }
+    val notesEnabled = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true) }
+    val liquidGlass  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+    val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false) }
+    val blurEffects  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
+    val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, false) }
     val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
     val navBackStackEntry  by navController.currentBackStackEntryAsState()
@@ -192,30 +195,9 @@ fun BottomBar(navController: NavController) {
                 val pillShape = RoundedCornerShape(32.dp)
 
                 val useLgBottomNav = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-                Surface(
-                    shape           = pillShape,
-                    color           = if (useLgBottomNav)
-                                          MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f)
-                                      else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shadowElevation = if (useLgBottomNav) 0.dp else 8.dp,
-                    tonalElevation  = if (useLgBottomNav) 0.dp else 4.dp,
-                    modifier = if (useLgBottomNav) {
-                        Modifier.drawBackdrop(
-                            backdrop = globalBackdrop!!,
-                            shape = { pillShape },
-                            effects = {
-                                val d = density
-                                colorControls(saturation = 1.4f)
-                                blur(2f * d)
-                                lens(
-                                    refractionHeight = 23f * d,
-                                    refractionAmount = 64f * d
-                                )
-                            },
-                            highlight = { Highlight.Default }
-                        )
-                    } else Modifier
-                ) {
+                val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav
+
+                val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
                             .animateContentSize(
@@ -263,6 +245,48 @@ fun BottomBar(navController: NavController) {
                             )
                         }
                     }
+                }
+
+                if (useLgBottomNav && globalBackdrop != null) {
+                    Surface(
+                        shape           = pillShape,
+                        color           = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
+                        shadowElevation = 0.dp,
+                        tonalElevation  = 0.dp,
+                        modifier = Modifier.drawBackdrop(
+                            backdrop = globalBackdrop,
+                            shape = { pillShape },
+                            effects = {
+                                val d = density
+                                colorControls(saturation = 1.4f)
+                                blur(2f * d)
+                                lens(
+                                    refractionHeight = 23f * d,
+                                    refractionAmount = 64f * d
+                                )
+                            },
+                            highlight = { Highlight.Default }
+                        )
+                    ) { pillContent() }
+                } else if (useBlurBottomNav && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Surface(
+                        shape           = pillShape,
+                        color           = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                        shadowElevation = 0.dp,
+                        tonalElevation  = 0.dp,
+                        modifier        = Modifier.drawPlainBackdrop(
+                            backdrop = globalBackdrop,
+                            shape    = { pillShape },
+                            effects  = { blur(30f * density) }
+                        )
+                    ) { pillContent() }
+                } else {
+                    Surface(
+                        shape           = pillShape,
+                        color           = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 8.dp,
+                        tonalElevation  = 4.dp,
+                    ) { pillContent() }
                 }
             }
         }
