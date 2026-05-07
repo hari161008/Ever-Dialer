@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import android.os.Build
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
@@ -358,6 +359,34 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                             Text("Visual Effects", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                                RivoExpressiveCard {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Lens,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                "Not supported on this device",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                "Blur and Liquid Glass require Android 12 or higher",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
                                     headline = "Material Liquid You Glass",
@@ -408,6 +437,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
                                     }
                                 )
+                            }
                             }
                         }
                     }

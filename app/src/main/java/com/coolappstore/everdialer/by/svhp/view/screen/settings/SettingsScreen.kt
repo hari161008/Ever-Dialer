@@ -18,6 +18,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -889,7 +890,9 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         RivoExpressiveCard {
                             RivoListItem(headline = "Interface", supporting = "Themes, colors, and layout", leadingIcon = Icons.Outlined.Palette, iconContainerColor = ColorPurple, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(InterfaceScreenDestination) })
                             CardDivider()
-                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Column(modifier = Modifier
+                                .clickable { fontPickerLauncher.launch("font/ttf") }
+                                .padding(horizontal = 16.dp, vertical = 12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                     Surface(shape = RoundedCornerShape(12.dp), color = ColorPurple.copy(alpha = 0.18f), modifier = Modifier.size(40.dp)) {
                                         Box(contentAlignment = Alignment.Center) {

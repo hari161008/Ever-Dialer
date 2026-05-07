@@ -176,7 +176,7 @@ fun BottomBar(navController: NavController) {
                 val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
