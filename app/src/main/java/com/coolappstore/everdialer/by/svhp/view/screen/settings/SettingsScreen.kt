@@ -702,7 +702,14 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
         is UpdateDialogState.UpToDate -> AlertDialog(
             onDismissRequest = { updateDialogState = UpdateDialogState.Idle },
-            icon = { Icon(Icons.Default.CheckCircle, null, tint = ColorGreen) },
+            icon = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(72.dp)
+                )
+            },
             title = { Text("Up to date") },
             text = { Text("The app is running the latest version (v$APP_VERSION).") },
             confirmButton = { TextButton(onClick = { updateDialogState = UpdateDialogState.Idle }) { Text("OK") } }

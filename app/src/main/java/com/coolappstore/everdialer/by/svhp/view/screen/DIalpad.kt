@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -39,7 +41,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -214,7 +218,8 @@ fun DialPadContent(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth(),
                     placeholder = { Text("Search contacts...") },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                     trailingIcon = {
@@ -229,6 +234,10 @@ fun DialPadContent(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        showKeyboardOnFocus = false
                     )
                 )
 
@@ -401,6 +410,10 @@ fun DialPadContent(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+            ),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                showKeyboardOnFocus = false
             )
         )
 
@@ -520,15 +533,30 @@ fun DialPadContent(
         Spacer(modifier = Modifier.weight(1f))
 
         // ── Dialpad floating card ──────────────────────────────────────
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            // Scale everything based on available width. Reference width = 360dp (standard phone).
+            val refWidth = 360f
+            val availableWidth = maxWidth.value
+            val scaleFactor = (availableWidth / refWidth).coerceIn(0.7f, 1.4f)
+
+            val keyWidth: Dp  = (100 * scaleFactor).dp
+            val keyHeight: Dp = (68 * scaleFactor).dp
+            val actionSize: Dp = (64 * scaleFactor).dp
+            val callW: Dp  = (108 * scaleFactor).dp
+            val callH: Dp  = (72 * scaleFactor).dp
+            val keySpacing: Dp = (8 * scaleFactor).dp
+
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(32.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
                 // Header row
                 Row(
@@ -591,7 +619,9 @@ fun DialPadContent(
                                 letters = subKeys[key] ?: "",
                                 soundPool = soundPool,
                                 context = context,
-                                onClick = { digit -> number += digit }
+                                onClick = { digit -> number += digit },
+                                overrideWidth = keyWidth,
+                                overrideHeight = keyHeight
                             )
                         }
                     }
@@ -616,7 +646,8 @@ fun DialPadContent(
                             },
                             icon = Icons.Default.PersonAdd,
                             contentDescription = "Add Contact",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.size(actionSize)
                         )
                     }
 
@@ -648,7 +679,7 @@ fun DialPadContent(
                         contentDescription = "Call",
                         containerColor = Color(0xFF34A853),
                         contentColor = Color.White,
-                        modifier = Modifier.width(108.dp).height(72.dp),
+                        modifier = Modifier.width(callW).height(callH),
                         isLarge = true,
                         liquidGlassBackdrop = lgBackdrop,
                         liquidGlassEnabled = lgDialpadEnabled,
@@ -664,12 +695,14 @@ fun DialPadContent(
                             onClick = { number = number.dropLast(1) },
                             icon = Icons.Default.Backspace,
                             contentDescription = "Backspace",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.size(actionSize)
                         )
                     }
                 }
             }
         }
+        } // end BoxWithConstraints
 
         Spacer(modifier = Modifier.height(8.dp))
         }   // end else (portrait)
@@ -778,7 +811,7 @@ fun DialerActionExpressive(
 }
 
 @Composable
-fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, compact: Boolean = false) {
+fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, compact: Boolean = false, overrideWidth: Dp? = null, overrideHeight: Dp? = null) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val prefs = koinInject<PreferenceManager>()
@@ -789,8 +822,8 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
         if (isPressed) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
         spring(stiffness = Spring.StiffnessMedium), "DialKeyColor"
     )
-    val keyWidth = if (compact) 82.dp else 100.dp
-    val keyHeight = if (compact) 52.dp else 68.dp
+    val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
+    val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, true)) playDtmf(context, number, soundPool)

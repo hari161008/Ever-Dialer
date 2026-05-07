@@ -610,6 +610,32 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                     }
                 }
 
+
+                // ── App Icon ─────────────────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 240L) {
+                        Column {
+                            Text(
+                                "App Icon",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                            )
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "App Icon",
+                                    supporting = "Choose the app icon displayed on your home screen",
+                                    leadingIcon = Icons.Outlined.Apps,
+                                    iconContainerColor = ColorIndigo,
+                                    onClick = {
+                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.AppIconScreenDestination)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
 
