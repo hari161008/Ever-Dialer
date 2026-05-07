@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -635,13 +636,21 @@ fun ExpressiveCallScreen(
                         animationSpec = tween(400),
                         label = "callerInfoAlpha"
                     )
+                    val callerInfoTopPad by animateDpAsState(
+                        targetValue = if (showDialpad) 20.dp else 80.dp,
+                        animationSpec = spring(
+                            stiffness    = Spring.StiffnessMediumLow,
+                            dampingRatio = Spring.DampingRatioLowBouncy
+                        ),
+                        label = "callerInfoTopPad"
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .align(Alignment.TopCenter)
                             .statusBarsPadding()
-                            .padding(top = 80.dp)
+                            .padding(top = callerInfoTopPad)
                             .graphicsLayer {
                                 translationY = callerInfoOffsetY
                                 alpha = callerInfoAlpha
@@ -1241,10 +1250,15 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
-    val maxDrag = with(density) { 100.dp.toPx() }
     val isDark = isSystemInDarkTheme()
     val handleColor = if (isDark) Color.White else Color.Black.copy(0.85f)
     val handleFg = if (isDark) Color.Black else Color.White
+
+    // pillWidth tracks the actual measured pill width so we can compute real edge travel
+    var pillWidthPx by remember { mutableFloatStateOf(0f) }
+    val handleSizePx = with(density) { 72.dp.toPx() }
+    // maxDrag = half of (pillWidth - handleSize) → handle reaches the pill edge
+    val maxDrag = ((pillWidthPx - handleSizePx) / 2f).coerceAtLeast(with(density) { 120.dp.toPx() })
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Surface(onClick = {}, shape = CircleShape, color = bgColor, modifier = Modifier.height(45.dp).width(140.dp)) {
@@ -1254,7 +1268,15 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                 Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge)
             }
         }
-        Box(modifier = Modifier.height(90.dp).fillMaxWidth(0.85f).clip(CircleShape).background(bgColor), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .height(90.dp)
+                .fillMaxWidth(0.85f)
+                .clip(CircleShape)
+                .background(bgColor)
+                .onSizeChanged { pillWidthPx = it.width.toFloat() },
+            contentAlignment = Alignment.Center
+        ) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge)
                 Text("Answer", color = labelColor, style = MaterialTheme.typography.bodyLarge)
@@ -1270,8 +1292,8 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                             onDragEnd = {
                                 coroutineScope.launch {
                                     when {
-                                        offsetX.value >= maxDrag * 0.92f -> onAnswer()
-                                        offsetX.value <= -maxDrag * 0.92f -> onDecline()
+                                        offsetX.value >= maxDrag * 0.90f -> onAnswer()
+                                        offsetX.value <= -maxDrag * 0.90f -> onDecline()
                                         else -> offsetX.animateTo(0f, spring(dampingRatio = 0.8f))
                                     }
                                 }

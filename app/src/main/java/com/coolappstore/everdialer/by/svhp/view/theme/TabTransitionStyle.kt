@@ -34,42 +34,50 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
-        if (fromIdx >= 0 && toIdx >= 0) {
+        if (fromIdx >= 0 && toIdx >= 0 && !isLandscapeMode) {
             val goRight = toIdx > fromIdx
             slideInHorizontally(
-                animationSpec = tween(350, easing = EaseOutQuart),
+                animationSpec = tween(550, easing = EaseOutQuart),
                 initialOffsetX = { if (goRight) (it * 0.25f).toInt() else -(it * 0.25f).toInt() }
-            ) + fadeIn(tween(250, easing = EaseOutQuart))
+            ) + fadeIn(tween(400, easing = EaseOutQuart))
         } else {
-            fadeIn(tween(300, easing = EaseOutQuart))
+            fadeIn(tween(400, easing = EaseOutQuart))
         }
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
-        if (fromIdx >= 0 && toIdx >= 0) {
+        if (fromIdx >= 0 && toIdx >= 0 && !isLandscapeMode) {
             val goRight = toIdx > fromIdx
             slideOutHorizontally(
-                animationSpec = tween(350, easing = EaseOutQuart),
+                animationSpec = tween(550, easing = EaseOutQuart),
                 targetOffsetX = { if (goRight) -(it * 0.25f).toInt() else (it * 0.25f).toInt() }
-            ) + fadeOut(tween(200, easing = EaseOutQuart))
+            ) + fadeOut(tween(350, easing = EaseOutQuart))
         } else {
-            fadeOut(tween(200, easing = EaseOutQuart))
+            fadeOut(tween(350, easing = EaseOutQuart))
         }
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(
-            animationSpec = tween(350, easing = EaseOutQuart),
-            initialOffsetX = { -(it * 0.25f).toInt() }
-        ) + fadeIn(tween(250, easing = EaseOutQuart))
+        if (!isLandscapeMode) {
+            slideInHorizontally(
+                animationSpec = tween(550, easing = EaseOutQuart),
+                initialOffsetX = { -(it * 0.25f).toInt() }
+            ) + fadeIn(tween(400, easing = EaseOutQuart))
+        } else {
+            fadeIn(tween(400, easing = EaseOutQuart))
+        }
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(
-            animationSpec = tween(350, easing = EaseOutQuart),
-            targetOffsetX = { (it * 0.25f).toInt() }
-        ) + fadeOut(tween(200, easing = EaseOutQuart))
+        if (!isLandscapeMode) {
+            slideOutHorizontally(
+                animationSpec = tween(550, easing = EaseOutQuart),
+                targetOffsetX = { (it * 0.25f).toInt() }
+            ) + fadeOut(tween(350, easing = EaseOutQuart))
+        } else {
+            fadeOut(tween(350, easing = EaseOutQuart))
+        }
     }
 }

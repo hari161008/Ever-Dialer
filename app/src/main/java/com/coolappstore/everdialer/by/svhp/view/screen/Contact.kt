@@ -126,7 +126,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             val baseModifier = Modifier
                 .scale(fabScale)
                 .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
-                .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
+                .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
             val fabOnClick: () -> Unit = {
                 val intent = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
                 context.startActivity(intent)

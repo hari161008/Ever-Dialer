@@ -157,20 +157,20 @@ fun RivoAnimatedSection(
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(delayMs)
+        if (delayMs > 0L) delay(delayMs)
         visible = true
     }
-    val alpha by animateFloatAsState(
+    val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "sectionAlpha"
+        animationSpec = tween(280),
+        label = "sectionProgress"
     )
-    val offset by animateDpAsState(
-        targetValue = if (visible) 0.dp else 22.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "sectionOffset"
-    )
-    Box(modifier = modifier.alpha(alpha).offset(y = offset)) {
+    Box(
+        modifier = modifier.graphicsLayer {
+            alpha = progress
+            translationY = (1f - progress) * 18.dp.toPx()
+        }
+    ) {
         content()
     }
 }
@@ -437,7 +437,7 @@ fun RivoListItem(
                     },
                     onLongClick = onLongClick
                 )
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (avatarName != null || photoUri != null) {
@@ -445,7 +445,7 @@ fun RivoListItem(
                     name = avatarName ?: "",
                     photoUri = photoUri,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .then(
                             if (onAvatarClick != null)
                                 Modifier.combinedClickable(onClick = onAvatarClick)
@@ -793,7 +793,7 @@ fun RivoDropdownMenuItem(
                 val liquidGlass2 = prefs2.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (liquidGlass2) tintColor.copy(alpha = 0.32f) else tintColor.copy(alpha = 0.13f),
+                    color = if (liquidGlass2) tintColor.copy(alpha = 0.40f) else tintColor.copy(alpha = 0.20f),
                     modifier = Modifier.size(34.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {

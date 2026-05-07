@@ -198,7 +198,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val baseModifier = Modifier
                 .scale(fabScale)
                 .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
-                .then(if (isLandscape) Modifier.offset(y = 24.dp) else Modifier)
+                .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
             if (useLiquidGlass && globalBackdrop != null) {
                 Box(
                     modifier = baseModifier.drawBackdrop(
@@ -317,9 +317,18 @@ fun CallLogFullContent(
         }
 
         if (logs.isEmpty()) {
-            // Show nothing while first load completes (cache fills this instantly on repeat opens)
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
+            // Only show a spinner on the very first launch when no disk cache exists.
+            // On subsequent opens the disk cache fills instantly so this won't be seen.
+            var showSpinner by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                // Give the disk cache ~200ms to arrive; only show spinner if still empty
+                kotlinx.coroutines.delay(200)
+                showSpinner = true
+            }
+            if (showSpinner) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
+                }
             }
         } else {
             // Use start-of-day (midnight) for "today" so all four stat cards
@@ -443,7 +452,7 @@ fun CallLogFullContent(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 100.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         // In landscape, stat cards and filter pills scroll with the list
                         if (isLandscape) {
@@ -515,49 +524,81 @@ fun CallLogFullContent(
                             }
                         }
 
+                        val directCall = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
-                            item(key = "group_$header", contentType = "logGroup") {
-                                RivoSectionHeader(title = header)
-                                RivoScrollAnimatedItem(delayMs = 120L) {
-                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                    RivoExpressiveCard {
-                                        logsInGroup.forEachIndexed { index, lg ->
-                                            val directCall = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
-                                            CallLogTile(
-                                                log = lg,
-                                                onTileClick = { log ->
-                                                    if (directCall) {
-                                                        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-                                                        if (hasPermission) {
-                                                            val accounts = telecomManager.callCapablePhoneAccounts
-                                                            if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
-                                                            else makeCall(context, log.number)
-                                                        } else makeCall(context, log.number)
-                                                    } else {
-                                                        navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                            // Section header as its own item
+                            item(key = "header_$header", contentType = "sectionHeader") {
+                                RivoScrollAnimatedItem {
+                                    RivoSectionHeader(title = header)
+                                }
+                            }
+                            // Individual items per log entry with per-item rounded corners
+                            logsInGroup.forEachIndexed { index, lg ->
+                                val isFirst = index == 0
+                                val isLast = index == logsInGroup.size - 1
+                                val cornerRadius = 28.dp
+                                val topStart = if (isFirst) cornerRadius else 0.dp
+                                val topEnd = if (isFirst) cornerRadius else 0.dp
+                                val bottomStart = if (isLast) cornerRadius else 0.dp
+                                val bottomEnd = if (isLast) cornerRadius else 0.dp
+                                item(
+                                    key = "log_${lg.number}_${lg.date}_${index}",
+                                    contentType = "callLogEntry"
+                                ) {
+                                    RivoScrollAnimatedItem(delayMs = (index.coerceAtMost(5) * 30).toLong()) {
+                                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                            Surface(
+                                                shape = RoundedCornerShape(
+                                                    topStart = topStart,
+                                                    topEnd = topEnd,
+                                                    bottomStart = bottomStart,
+                                                    bottomEnd = bottomEnd
+                                                ),
+                                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column {
+                                                    if (!isFirst) {
+                                                        HorizontalDivider(
+                                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                            thickness = 0.5.dp
+                                                        )
                                                     }
-                                                },
-                                                onAvatarClick = { log ->
-                                                    navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
-                                                },
-                                                onButtonClick = { log ->
-                                                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-                                                    if (hasPermission) {
-                                                        val accounts = telecomManager.callCapablePhoneAccounts
-                                                        if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
-                                                        else makeCall(context, log.number)
-                                                    } else makeCall(context, log.number)
-                                                },
-                                                onDelete = { viewModel.refreshLogs() }
-                                            )
-                                            if (index < logsInGroup.size - 1) {
-                                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                                    CallLogTile(
+                                                        log = lg,
+                                                        onTileClick = { log ->
+                                                            if (directCall) {
+                                                                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                                                                if (hasPermission) {
+                                                                    val accounts = telecomManager.callCapablePhoneAccounts
+                                                                    if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
+                                                                    else makeCall(context, log.number)
+                                                                } else makeCall(context, log.number)
+                                                            } else {
+                                                                navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                            }
+                                                        },
+                                                        onAvatarClick = { log ->
+                                                            navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                        },
+                                                        onButtonClick = { log ->
+                                                            val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                                                            if (hasPermission) {
+                                                                val accounts = telecomManager.callCapablePhoneAccounts
+                                                                if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
+                                                                else makeCall(context, log.number)
+                                                            } else makeCall(context, log.number)
+                                                        },
+                                                        onDelete = { viewModel.refreshLogs() }
+                                                    )
+
+                                                }
                                             }
                                         }
                                     }
+                                    if (isLast) Spacer(modifier = Modifier.height(12.dp))
                                 }
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
                     }

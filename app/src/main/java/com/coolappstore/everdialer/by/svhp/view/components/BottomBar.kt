@@ -1,7 +1,11 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -10,15 +14,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.EaseOutQuint
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -97,32 +98,10 @@ fun BottomBar(navController: NavController) {
     val currentDestination = navBackStackEntry?.destination
     val currentRoute       = currentDestination?.route ?: ""
 
-    // ── isNavigating debounce ─────────────────────────────────────────────────
-    // Freeze selection on the tapped item while the back-stack is in transition
-    // so neither the old nor the new route can momentarily appear selected.
-    var isNavigating by remember { mutableStateOf(false) }
-    var pendingRoute by remember { mutableStateOf<String?>(null) }
-
-    fun routeSelected(dest: String): Boolean {
-        if (isNavigating && pendingRoute != null) return pendingRoute == dest
-        return currentDestination?.hierarchy?.any { it.route == dest } == true
-    }
-
-    val isFavoritesSelected = routeSelected(FavoritesScreenDestination.route)
-    val isRecentsSelected   = routeSelected(RecentScreenDestination.route)
-    val isContactsSelected  = routeSelected(ContactScreenDestination.route)
-    val isNotesSelected     = routeSelected(NotesScreenDestination.route)
-
-    // Clear flag once back-stack settles on the pending destination
-    LaunchedEffect(currentRoute) {
-        if (isNavigating && pendingRoute != null &&
-            currentRoute.contains(pendingRoute!!, ignoreCase = true)
-        ) {
-            delay(80)
-            isNavigating = false
-            pendingRoute = null
-        }
-    }
+    val isFavoritesSelected = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
+    val isRecentsSelected   = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+    val isContactsSelected  = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isNotesSelected     = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
 
     // Only render pill when a tab screen is active
     val isOnTabScreen = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) }
@@ -162,9 +141,6 @@ fun BottomBar(navController: NavController) {
     fun navigate(route: String) {
         // If already on this route, do nothing (prevents double-tap freeze)
         if (currentDestination?.hierarchy?.any { it.route == route } == true) return
-        if (isNavigating) return          // drop rapid double-taps to different tabs
-        isNavigating = true
-        pendingRoute = route
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -173,7 +149,7 @@ fun BottomBar(navController: NavController) {
     }
 
     if (pillNav) {
-        if (!isOnTabScreen) return
+        if (!isOnTabScreen && !pillVisible) return
 
         Box(
             modifier = Modifier
@@ -200,12 +176,6 @@ fun BottomBar(navController: NavController) {
                 val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
-                            .animateContentSize(
-                                animationSpec = spring(
-                                    stiffness    = Spring.StiffnessMediumLow,
-                                    dampingRatio = Spring.DampingRatioLowBouncy
-                                )
-                            )
                             .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
@@ -291,10 +261,20 @@ fun BottomBar(navController: NavController) {
             }
         }
     } else {
-        if (!isOnTabScreen) return
+        val navBarAlpha by animateFloatAsState(
+            targetValue   = if (isOnTabScreen) 1f else 0f,
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            label         = "navBarAlpha"
+        )
+        if (!isOnTabScreen && navBarAlpha == 0f) return
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 0.dp
+            tonalElevation = 0.dp,
+            windowInsets = WindowInsets.navigationBars,
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .graphicsLayer { alpha = navBarAlpha }
         ) {
             AnimatedNavBarItem(
                 selected       = isFavoritesSelected,
@@ -350,33 +330,49 @@ private fun RowScope.AnimatedNavBarItem(
     labelStyle: TextStyle,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
     val iconSize by animateDpAsState(
-        targetValue   = if (selected) 27.dp else 22.dp,
+        targetValue   = if (selected) 26.dp else 22.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label         = "${label}Size"
     )
     val scale by animateFloatAsState(
-        targetValue   = if (selected) 1.15f else 1f,
-        animationSpec = if (selected)
+        targetValue   = when {
+            isPressed -> 0.85f
+            selected  -> 1.05f
+            else      -> 1f
+        },
+        animationSpec = if (isPressed)
+            tween(durationMillis = 80, easing = FastOutSlowInEasing)
+        else if (selected)
             spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
         else
-            tween(durationMillis = 150, easing = FastOutSlowInEasing),
+            tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
 
     NavigationBarItem(
         icon = {
             Box(modifier = Modifier.scale(scale)) {
-                Icon(
-                    imageVector        = if (selected) selectedIcon else unselectedIcon,
-                    contentDescription = label,
-                    modifier           = Modifier.size(iconSize)
-                )
+                Crossfade(
+                    targetState   = selected,
+                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                    label         = "${label}IconCrossfade"
+                ) { sel ->
+                    Icon(
+                        imageVector        = if (sel) selectedIcon else unselectedIcon,
+                        contentDescription = label,
+                        modifier           = Modifier.size(iconSize)
+                    )
+                }
             }
         },
         label           = if (iconOnly) null else ({ Text(label, style = labelStyle) }),
         alwaysShowLabel = !iconOnly,
         selected        = selected,
+        interactionSource = interactionSource,
         colors          = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
             indicatorColor    = MaterialTheme.colorScheme.primaryContainer
@@ -429,10 +425,10 @@ private fun PillNavItem(
 
     Box(
         modifier = modifier
+            .scale(scale)
             .clip(RoundedCornerShape(50.dp))
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = bgAlpha))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -451,6 +447,12 @@ private fun PillNavItem(
             }
         } else {
             Row(
+                modifier = Modifier.animateContentSize(
+                    animationSpec = spring(
+                        stiffness    = Spring.StiffnessMediumLow,
+                        dampingRatio = Spring.DampingRatioMediumBouncy
+                    )
+                ),
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
@@ -469,18 +471,20 @@ private fun PillNavItem(
                 AnimatedVisibility(
                     visible = selected,
                     enter = expandHorizontally(
-                        animationSpec = tween(durationMillis = 420, easing = EaseOutQuint),
-                        expandFrom    = Alignment.Start
-                    ) + fadeIn(tween(350)),
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                        expandFrom = Alignment.Start
+                    ) + fadeIn(tween(durationMillis = 350)),
                     exit = shrinkHorizontally(
-                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
                         shrinkTowards = Alignment.Start
-                    ) + fadeOut(tween(220))
+                    ) + fadeOut(tween(durationMillis = 250))
                 ) {
                     Text(
                         text  = label,
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
