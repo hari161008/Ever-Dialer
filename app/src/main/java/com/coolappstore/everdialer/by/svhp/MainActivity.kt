@@ -127,11 +127,16 @@ class MainActivity : ComponentActivity() {
                 // ── First Launch Welcome Dialog ─────────────────────────────
                 // Show AFTER the default dialer prompt (which fires in onCreate)
                 var showWelcomeDialog by remember { mutableStateOf(false) }
+                var showTelegramDialog by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (isFirstLaunch) {
                         // Small delay so the default dialer system dialog appears first
                         kotlinx.coroutines.delay(600)
                         showWelcomeDialog = true
+                    } else if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
+                        // Welcome already done but Telegram dialog not yet shown — show it
+                        kotlinx.coroutines.delay(800)
+                        showTelegramDialog = true
                     }
                 }
 
@@ -197,6 +202,10 @@ class MainActivity : ComponentActivity() {
                                             showWelcomeDialog = false
                                             // Re-prompt to set as default dialer if not already set
                                             requestDefaultDialer()
+                                            // Show Telegram promo dialog after welcome
+                                            if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
+                                                showTelegramDialog = true
+                                            }
                                         },
                                         shape = RoundedCornerShape(50.dp),
                                         color = MaterialTheme.colorScheme.primary,
@@ -218,6 +227,89 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // On subsequent launches, requestDefaultDialer is called in onCreate
+
+                // ── Telegram Support Dialog ─────────────────────────────────
+                if (showTelegramDialog) {
+                    Dialog(onDismissRequest = {}) {
+                        Surface(
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 6.dp
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "❤️",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "You can support me only by joining my Telegram Channel and the App Support Group by navigating to Settings > About ❤️",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Announcements | Updates | Bug Fixes | Feature Requests | Rate | Support",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(
+                                        onClick = {
+                                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
+                                            showTelegramDialog = false
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "Continue",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Surface(
+                                        onClick = {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/EverlastingAndroidTweak"))
+                                            startActivity(intent)
+                                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
+                                            showTelegramDialog = false
+                                        },
+                                        shape = RoundedCornerShape(50.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "Join",
+                                            modifier = Modifier.padding(vertical = 12.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 var autoUpdateVersion by remember { mutableStateOf<String?>(null) }
                 var autoUpdateApkUrl by remember { mutableStateOf<String?>(null) }

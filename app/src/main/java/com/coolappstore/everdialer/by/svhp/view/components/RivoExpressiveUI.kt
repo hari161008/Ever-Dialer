@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,27 +119,59 @@ fun performScrollHaptic(context: android.content.Context) {
 }
 
 /**
- * A composable effect that triggers scroll haptics whenever the first visible item
- * of a LazyListState changes, if scroll haptics are enabled.
+ * A composable effect that triggers scroll haptics based on physical scroll distance.
+ * - cmPerHaptic: how many centimetres the user must scroll before one haptic tick fires
+ * - hapticsPerCm: how many haptic ticks fire per centimetre scrolled
+ * Only one of the two modes is active: cmPerHaptic controls interval; hapticsPerCm is its inverse
+ * and both sliders are surfaced in Settings. We store cmPerHaptic as the canonical value and
+ * derive hapticsPerCm = 1 / cmPerHaptic for display purposes.
  */
 @Composable
 fun ScrollHapticsEffect(listState: LazyListState) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val prefs = koinInject<PreferenceManager>()
     val settingsVersion by prefs.settingsChanged.collectAsState()
     val scrollHapticsEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false) }
+    // cmPerHaptic: default 0.5 cm between each tick (reasonable for most users)
+    val cmPerHaptic = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 0.5f) }
+
+    // Convert cm to pixels: 1 cm = density.density * (160/2.54) px ≈ density * 37.8 px
+    // density.density is pixels per dp; 1 inch = 160 dp; 1 inch = 2.54 cm
+    // So 1 cm = (160/2.54) dp ≈ 62.99 dp; in px = 62.99 * density.density
+    val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
+    val pxPerHapticTrigger = (cmPerHaptic * pxPerCm).coerceAtLeast(10f)
+
+    var accumulatedPx by remember { mutableFloatStateOf(0f) }
+    var lastScrollOffset by remember { mutableIntStateOf(0) }
+    var lastItemIndex by remember { mutableIntStateOf(0) }
     val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var prevFirstVisibleItem by remember { mutableIntStateOf(listState.firstVisibleItemIndex) }
-    LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (scrollHapticsEnabled) {
-            val current = listState.firstVisibleItemIndex
-            if (current != prevFirstVisibleItem) {
-                prevFirstVisibleItem = current
-                try {
-                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                } catch (_: Exception) {
-                    performScrollHaptic(context)
-                }
+
+    LaunchedEffect(listState.firstVisibleItemScrollOffset, listState.firstVisibleItemIndex) {
+        if (!scrollHapticsEnabled) return@LaunchedEffect
+
+        val currentIndex = listState.firstVisibleItemIndex
+        val currentOffset = listState.firstVisibleItemScrollOffset
+
+        // Calculate delta in pixels
+        val delta = if (currentIndex == lastItemIndex) {
+            (currentOffset - lastScrollOffset).toFloat()
+        } else {
+            // Item boundary crossed — approximate as a full item height scroll
+            // We just accumulate a chunk proportional to direction
+            if (currentIndex > lastItemIndex) pxPerHapticTrigger else -pxPerHapticTrigger
+        }
+
+        lastItemIndex = currentIndex
+        lastScrollOffset = currentOffset
+        accumulatedPx += kotlin.math.abs(delta)
+
+        if (accumulatedPx >= pxPerHapticTrigger) {
+            accumulatedPx = 0f
+            try {
+                hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            } catch (_: Exception) {
+                performScrollHaptic(context)
             }
         }
     }
@@ -766,12 +799,13 @@ fun RivoDropdownMenuItem(
     val prefs2 = koinInject<PreferenceManager>()
     val settingsVer2 by prefs2.settingsChanged.collectAsState()
     val liquidGlass2 = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+    val lgDropdown   = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, false) }
 
-    // In liquid glass mode: white text for readability on glass surface; bright solid icon bg
+    // Text color: white only when liquid glass dropdown is fully active
     val textColor  = when {
-        isDestructive -> MaterialTheme.colorScheme.error
-        liquidGlass2  -> Color.White
-        else          -> MaterialTheme.colorScheme.onSurface
+        isDestructive          -> MaterialTheme.colorScheme.error
+        liquidGlass2 && lgDropdown -> Color.White
+        else                   -> MaterialTheme.colorScheme.onSurface
     }
     val tintColor  = if (isDestructive) MaterialTheme.colorScheme.error else iconTint
     val interactionSource = remember { MutableInteractionSource() }
@@ -798,13 +832,20 @@ fun RivoDropdownMenuItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (icon != null) {
-                // Solid bright icon background; slightly lighter/brighter in liquid glass mode
-                val iconBgColor = if (liquidGlass2)
-                    tintColor.copy(red = (tintColor.red * 1.15f).coerceAtMost(1f),
-                                   green = (tintColor.green * 1.15f).coerceAtMost(1f),
-                                   blue = (tintColor.blue * 1.15f).coerceAtMost(1f),
-                                   alpha = 1f)
-                else tintColor.copy(alpha = 0.20f)
+                // solid = LG on AND dropdown toggle on → fully opaque icon bg
+                // translucent = LG off OR LG on but dropdown toggle off → 0.15f alpha (same as settings icons)
+                val solidMode = liquidGlass2 && lgDropdown
+                val iconBgColor = when {
+                    solidMode && isDestructive -> Color(0xFFD32F2F)
+                    solidMode -> tintColor.copy(
+                        red   = (tintColor.red   * 1.15f).coerceAtMost(1f),
+                        green = (tintColor.green * 1.15f).coerceAtMost(1f),
+                        blue  = (tintColor.blue  * 1.15f).coerceAtMost(1f),
+                        alpha = 1f
+                    )
+                    else -> tintColor.copy(alpha = 0.15f)
+                }
+                val iconTintColor = if (solidMode) Color.White else tintColor
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -815,7 +856,7 @@ fun RivoDropdownMenuItem(
                         Icon(
                             imageVector        = icon,
                             contentDescription = null,
-                            tint               = Color.White,
+                            tint               = iconTintColor,
                             modifier           = Modifier.size(18.dp)
                         )
                     }

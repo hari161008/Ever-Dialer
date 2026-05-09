@@ -55,6 +55,8 @@ class PreferenceManager(context: Context) {
         const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
         const val KEY_SCROLL_HAPTICS        = "scroll_haptics_enabled"
+        const val KEY_SCROLL_CM_PER_HAPTIC  = "scroll_cm_per_haptic"   // cm scrolled before each haptic tick
+        const val KEY_SCROLL_HAPTICS_PER_CM = "scroll_haptics_per_cm"  // haptic ticks per cm
         const val KEY_HAPTICS_STRENGTH      = "app_haptics_strength"
         const val KEY_CALL_UI_SHOW_TODAY    = "call_ui_show_today"
         const val KEY_CALL_UI_SHOW_MISSED   = "call_ui_show_missed"
@@ -67,6 +69,7 @@ class PreferenceManager(context: Context) {
         const val KEY_HANGUP_WIDTH          = "hangup_button_width"
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
+        const val KEY_TELEGRAM_SHOWN        = "telegram_shown"
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"
         const val KEY_POCKET_MODE_PREVENTION = "pocket_mode_prevention"
         const val KEY_DIRECT_CALL_ON_TAP     = "direct_call_on_tap"

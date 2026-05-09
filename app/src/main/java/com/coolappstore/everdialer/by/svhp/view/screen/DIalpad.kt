@@ -78,6 +78,7 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
 import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import androidx.activity.compose.BackHandler
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -164,6 +165,12 @@ fun DialPadContent(
     var showClipboardBanner by remember { mutableStateOf(clipText.length in 7..15) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var searchFieldFocused by remember { mutableStateOf(false) }
+
+    // When search field is focused, intercept back press to dismiss keyboard and restore dialpad
+    BackHandler(enabled = searchFieldFocused) {
+        focusManager.clearFocus()
+        searchQuery = ""
+    }
     var openDialpadDefault by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, true))
     }
