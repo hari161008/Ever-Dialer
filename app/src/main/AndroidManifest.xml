@@ -9,7 +9,6 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -28,7 +27,29 @@
         tools:node="remove"/>
 
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
-    <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.CALL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.cursor.item/contact" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" />
+        </intent>
+    </queries>
 
     <application
         android:name=".RivoApp"
@@ -41,10 +62,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RivoPhone">
 
-        <meta-data
-            android:name="com.google.android.gms.car.application"
-            android:resource="@xml/automotive_app_desc" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -53,16 +70,9 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:theme="@style/Theme.RivoPhone">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
-            <!-- Required for ROLE_DIALER eligibility: plain DIAL with no data restriction -->
-            <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -81,8 +91,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="tel" />
             </intent-filter>
-
-            
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -90,8 +98,6 @@
                 <data android:mimeType="vnd.android.cursor.item/phone_v2" />
                 <data android:mimeType="vnd.android.cursor.item/person" />
             </intent-filter>
-
-            
             <intent-filter>
                 <action android:name="android.intent.action.INSERT" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -99,8 +105,6 @@
                 <data android:mimeType="vnd.android.cursor.dir/person" />
                 <data android:mimeType="vnd.android.cursor.dir/raw_contact" />
             </intent-filter>
-
-            
             <intent-filter>
                 <action android:name="android.intent.action.EDIT" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -108,7 +112,6 @@
                 <data android:mimeType="vnd.android.cursor.item/person" />
                 <data android:mimeType="vnd.android.cursor.item/phone_v2" />
             </intent-filter>
-
             <intent-filter>
                 <action android:name="android.intent.action.SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -117,13 +120,14 @@
 
         <activity
             android:name=".view.screen.CallActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleInstance"
             android:showForAllUsers="true"
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
             android:taskAffinity=""
+            android:directBootAware="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:theme="@style/Theme.RivoPhone" />
 
@@ -142,27 +146,65 @@
             android:permission="android.permission.BIND_INCALL_SERVICE"
             android:foregroundServiceType="phoneCall"
             android:exported="true"
+            android:directBootAware="true"
             tools:targetApi="29">
             <meta-data
                 android:name="android.telecom.IN_CALL_SERVICE_UI"
-                android:value="true" />
-            <meta-data
-                android:name="android.telecom.IN_CALL_SERVICE_CAR_MODE_UI"
                 android:value="true" />
             <intent-filter>
                 <action android:name="android.telecom.InCallService" />
             </intent-filter>
         </service>
 
-        <!-- Activity alias for "Phone" app icon variant.
-             Keep the LAUNCHER intent-filter so the launcher can find it when MainActivity
-             is disabled. android:enabled="false" means it is inactive until we toggle it. -->
+
+        <activity-alias
+            android:name=".MainActivityDefaultIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity-alias
             android:name=".MainActivityPhoneIcon"
             android:targetActivity=".MainActivity"
             android:label="@string/app_name"
             android:icon="@mipmap/ic_launcher_phone"
             android:roundIcon="@mipmap/ic_launcher_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityGoogleDialerIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_google_dialer"
+            android:roundIcon="@mipmap/ic_launcher_google_dialer_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNothingIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_nothing"
+            android:roundIcon="@mipmap/ic_launcher_nothing_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

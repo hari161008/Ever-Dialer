@@ -1,7 +1,9 @@
 package com.coolappstore.everdialer.by.svhp.view.components.tiles
 
 import android.provider.CallLog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
@@ -14,7 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 
@@ -32,6 +36,23 @@ fun CallLogTile(
         photoUri = log.photoUri,
         isMissedCall = isMissed,
         modifier = modifier,
+        titleTrailing = if (log.isCallerIdName) {
+            {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "Caller ID",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        } else null,
         supportingContent = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

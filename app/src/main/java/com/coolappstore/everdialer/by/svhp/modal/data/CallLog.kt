@@ -8,7 +8,8 @@ data class CallLogEntry(
     val duration: Long,
     val photoUri: String?,
     val contactId: String?,
-    val types: List<Int> = emptyList()
+    val types: List<Int> = emptyList(),
+    val isCallerIdName: Boolean = false
 ) {
     val count: Int get() = types.size.coerceAtLeast(1)
 }

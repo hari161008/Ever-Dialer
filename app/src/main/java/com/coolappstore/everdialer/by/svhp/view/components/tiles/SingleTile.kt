@@ -47,6 +47,7 @@ fun SingleTile(
     iconContainerColor: Color? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     supportingContent: (@Composable () -> Unit)? = null,
+    titleTrailing: (@Composable () -> Unit)? = null,
     isMissedCall: Boolean = false,
     phoneNumber: String? = null,
     onClick: () -> Unit
@@ -122,15 +123,24 @@ fun SingleTile(
                 modifier            = Modifier.weight(1f).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text     = title,
-                    style    = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color    = if (isMissedCall) MaterialTheme.colorScheme.error
-                               else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text     = title,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color    = if (isMissedCall) MaterialTheme.colorScheme.error
+                                   else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (titleTrailing != null) {
+                        titleTrailing()
+                    }
+                }
                 if (supportingContent != null) {
                     supportingContent()
                 } else if (subtitle != null) {

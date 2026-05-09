@@ -51,9 +51,9 @@ class CallLogRepository(
                         getContactDataByNumber(number)
                     }
 
-                val displayName = contactName
-                    ?: cursor.getString(cachedNameIdx)
-                    ?: number
+                val cachedName = cursor.getString(cachedNameIdx)
+                val isCallerIdName = contactName == null && cachedName != null
+                val displayName = contactName ?: cachedName ?: number
 
                 val lastEntry = callLogs.lastOrNull()
                 if (lastEntry != null && lastEntry.number == number) {
@@ -72,7 +72,8 @@ class CallLogRepository(
                             duration = duration,
                             photoUri = photoUri,
                             contactId = contactId?.toString(),
-                            types = listOf(type)
+                            types = listOf(type),
+                            isCallerIdName = isCallerIdName
                         )
                     )
                 }

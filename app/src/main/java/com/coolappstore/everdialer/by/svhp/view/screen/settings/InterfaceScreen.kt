@@ -43,12 +43,12 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 private val ColorPurple = Color(0xFF9C27B0)
-private val ColorIndigo = Color(0xFF3F51B5)
 private val ColorTeal   = Color(0xFF009688)
 private val ColorAmber  = Color(0xFFFFC107)
 private val ColorBlue   = Color(0xFF2196F3)
 private val ColorGreen  = Color(0xFF4CAF50)
 private val ColorOrange = Color(0xFFFF9800)
+private val ColorIndigo = Color(0xFF3F51B5)
 
 data class ThemeOption(val key: String, val label: String)
 
@@ -610,28 +610,25 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                     }
                 }
 
-
                 // ── App Icon ─────────────────────────────────────────
                 item {
-                    RivoAnimatedSection(delayMs = 240L) {
-                        Column {
-                            Text(
-                                "App Icon",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                    Column {
+                        Text(
+                            "App Icon",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                        )
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "App Icon",
+                                supporting = "Choose the app icon displayed on your home screen",
+                                leadingIcon = Icons.Outlined.Apps,
+                                iconContainerColor = ColorIndigo,
+                                onClick = {
+                                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.AppIconScreenDestination)
+                                }
                             )
-                            RivoExpressiveCard {
-                                RivoListItem(
-                                    headline = "App Icon",
-                                    supporting = "Choose the app icon displayed on your home screen",
-                                    leadingIcon = Icons.Outlined.Apps,
-                                    iconContainerColor = ColorIndigo,
-                                    onClick = {
-                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.AppIconScreenDestination)
-                                    }
-                                )
-                            }
                         }
                     }
                 }
