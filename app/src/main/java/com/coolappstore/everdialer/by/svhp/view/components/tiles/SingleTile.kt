@@ -60,8 +60,8 @@ fun SingleTile(
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue    = if (showMenu) 0.97f else if (isPressed) 0.97f else 1f,
-        animationSpec  = spring(stiffness = Spring.StiffnessMedium),
+        targetValue    = if (showMenu) 0.97f else if (isPressed) 0.95f else 1f,
+        animationSpec  = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label          = "TileScale"
     )
 

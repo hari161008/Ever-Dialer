@@ -62,6 +62,15 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
         label = "settingsScale"
     )
 
+    // Search bar press animation
+    val searchSource = remember { MutableInteractionSource() }
+    val searchPressed by searchSource.collectIsPressedAsState()
+    val searchScale by animateFloatAsState(
+        targetValue = if (searchPressed) 0.96f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "searchScale"
+    )
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -85,9 +94,10 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
                 }
                 navigator.navigate(SearchScreenDestination)
             },
-                modifier = Modifier.weight(1f).height(52.dp),
+                modifier = Modifier.weight(1f).height(52.dp).scale(searchScale),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                interactionSource = searchSource
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

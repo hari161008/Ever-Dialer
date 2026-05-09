@@ -110,6 +110,16 @@ class MainActivity : ComponentActivity() {
                     GlobalContext.get().get<PreferenceManager>()
                 }
 
+                // Compute start destination from prefs — done once so no flash
+                val startRoute = remember {
+                    when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
+                        "favorites" -> FavoritesScreenDestination.route
+                        "contacts"  -> ContactScreenDestination.route
+                        "notes"     -> NotesScreenDestination.route
+                        else        -> null // calls is the native start, no redirect
+                    }
+                }
+
                 val isFirstLaunch = remember {
                     !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
                 }
@@ -185,6 +195,8 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
                                             showWelcomeDialog = false
+                                            // Re-prompt to set as default dialer if not already set
+                                            requestDefaultDialer()
                                         },
                                         shape = RoundedCornerShape(50.dp),
                                         color = MaterialTheme.colorScheme.primary,
@@ -524,6 +536,22 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+
+                // Redirect to default tab before first frame renders — no flash
+                DisposableEffect(navController) {
+                    var redirected = false
+                    val listener = androidx.navigation.NavController.OnDestinationChangedListener { controller, destination, _ ->
+                        if (!redirected && startRoute != null && destination.route == RecentScreenDestination.route) {
+                            redirected = true
+                            controller.navigate(startRoute) {
+                                popUpTo(controller.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                    navController.addOnDestinationChangedListener(listener)
+                    onDispose { navController.removeOnDestinationChangedListener(listener) }
                 }
 
                 LaunchedEffect(intent) {

@@ -409,8 +409,8 @@ fun RivoListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isMenuOpen) 0.97f else if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        targetValue = if (isMenuOpen) 0.97f else if (isPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "ListItemScale"
     )
 
@@ -763,7 +763,16 @@ fun RivoDropdownMenuItem(
     iconTint: Color = MaterialTheme.colorScheme.primary,
     isDestructive: Boolean = false
 ) {
-    val textColor  = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val prefs2 = koinInject<PreferenceManager>()
+    val settingsVer2 by prefs2.settingsChanged.collectAsState()
+    val liquidGlass2 = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+
+    // In liquid glass mode: white text for readability on glass surface; bright solid icon bg
+    val textColor  = when {
+        isDestructive -> MaterialTheme.colorScheme.error
+        liquidGlass2  -> Color.White
+        else          -> MaterialTheme.colorScheme.onSurface
+    }
     val tintColor  = if (isDestructive) MaterialTheme.colorScheme.error else iconTint
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -789,18 +798,24 @@ fun RivoDropdownMenuItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (icon != null) {
-                val prefs2 = koinInject<PreferenceManager>()
-                val liquidGlass2 = prefs2.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)
+                // Solid bright icon background; slightly lighter/brighter in liquid glass mode
+                val iconBgColor = if (liquidGlass2)
+                    tintColor.copy(red = (tintColor.red * 1.15f).coerceAtMost(1f),
+                                   green = (tintColor.green * 1.15f).coerceAtMost(1f),
+                                   blue = (tintColor.blue * 1.15f).coerceAtMost(1f),
+                                   alpha = 1f)
+                else tintColor.copy(alpha = 0.20f)
+
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (liquidGlass2) tintColor.copy(alpha = 0.40f) else tintColor.copy(alpha = 0.20f),
+                    color = iconBgColor,
                     modifier = Modifier.size(34.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector        = icon,
                             contentDescription = null,
-                            tint               = if (liquidGlass2) Color.White else tintColor,
+                            tint               = Color.White,
                             modifier           = Modifier.size(18.dp)
                         )
                     }

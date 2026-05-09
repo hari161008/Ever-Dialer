@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,12 +33,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +51,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -81,13 +88,30 @@ fun DialPadScreen(
     navigator: DestinationsNavigator,
     initialNumber: String? = null
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { true }
+    )
+
+    // Lock the window so the keyboard never pushes the bottom sheet up.
+    // WindowCompat.setDecorFitsSystemWindows(false) in MainActivity normally causes
+    // the sheet to resize with the IME; overriding softInputMode here prevents that.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = (view.context as? android.app.Activity)?.window
+        val prevMode = window?.attributes?.softInputMode ?: 0
+        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        onDispose {
+            window?.setSoftInputMode(prevMode)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = { navigator.navigateUp() },
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
         dragHandle = {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
@@ -120,6 +144,7 @@ fun DialPadContent(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val clipboard = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val prefs = koinInject<PreferenceManager>()
     val settingsState by prefs.settingsChanged.collectAsState()
@@ -138,6 +163,7 @@ fun DialPadContent(
     }
     var showClipboardBanner by remember { mutableStateOf(clipText.length in 7..15) }
     var showOverflowMenu by remember { mutableStateOf(false) }
+    var searchFieldFocused by remember { mutableStateOf(false) }
     var openDialpadDefault by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, true))
     }
@@ -245,47 +271,44 @@ fun DialPadContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .scale(scale)
                         .clip(RoundedCornerShape(16.dp))
                         .background(
                             if (number.isNotEmpty())
                                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                             else Color.Transparent
                         )
-                        .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                        .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
                         .padding(vertical = 8.dp, horizontal = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = number.ifEmpty { "" },
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontSize = if (number.length > 11) 24.sp else 30.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        fontWeight = FontWeight.Light
+                    DialpadNumberDisplay(
+                        number = number,
+                        fontSize = if (number.length > 11) 24 else 30
                     )
                 }
 
                 // Search results
                 AnimatedVisibility(
                     visible = searchResults.isNotEmpty(),
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
+                            expandVertically(tween(420, easing = FastOutSlowInEasing)),
+                    exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
+                            shrinkVertically(tween(320, easing = FastOutLinearInEasing))
                 ) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
                             searchResults.forEach { contact ->
                                 SingleTile(
-                                    title = contact.name,
+                                    title    = contact.name,
                                     subtitle = contact.phoneNumbers.firstOrNull(),
                                     photoUri = contact.photoUri,
-                                    onClick = {
+                                    onClick  = {
                                         navigator?.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                                     }
                                 )
@@ -387,20 +410,31 @@ fun DialPadContent(
             }
         }
     } else {
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Bottom) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
 
-        // ── Search bar on top ──────────────────────────────────────────
+        // Layout: search bar fixed at top, scrollable middle (results/pills/clipboard),
+        // dialpad card fixed at bottom. Nothing moves when results appear.
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Top
+        ) {
+
+        // ── Search bar — always visible at top of screen ───────────────
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .onFocusChanged { focusState -> searchFieldFocused = focusState.isFocused },
             placeholder = { Text("Search contacts...") },
             leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { searchQuery = "" }) {
+                    IconButton(onClick = {
+                        searchQuery = ""
+                        focusManager.clearFocus()
+                    }) {
                         Icon(Icons.Default.Close, null)
                     }
                 }
@@ -417,11 +451,22 @@ fun DialPadContent(
             )
         )
 
+        // ── Middle section: results / pills / clipboard (scrollable, fills space) ──
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+
         // Search results
         AnimatedVisibility(
             visible = searchResults.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
+                    expandVertically(tween(420, easing = FastOutSlowInEasing)),
+            exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
+                    shrinkVertically(tween(320, easing = FastOutLinearInEasing))
         ) {
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Surface(
@@ -432,10 +477,10 @@ fun DialPadContent(
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         searchResults.forEach { contact ->
                             SingleTile(
-                                title = contact.name,
+                                title    = contact.name,
                                 subtitle = contact.phoneNumbers.firstOrNull(),
                                 photoUri = contact.photoUri,
-                                onClick = {
+                                onClick  = {
                                     navigator?.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                                 }
                             )
@@ -505,8 +550,8 @@ fun DialPadContent(
         // Clipboard banner
         AnimatedVisibility(
             visible = showClipboardBanner,
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut() + slideOutVertically()
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -530,9 +575,25 @@ fun DialPadContent(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        } // end scrollable middle Column
 
-        // ── Dialpad floating card ──────────────────────────────────────
+        // ── Dialpad card — hides with animation when search is active ──
+        val showDialpad = !searchFieldFocused && searchQuery.isEmpty()
+        AnimatedVisibility(
+            visible = showDialpad,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(durationMillis = 260, easing = FastOutLinearInEasing)
+            ) + fadeOut(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing))
+        ) {
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ── Dialpad card — always at bottom, never moves ───────────────
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
@@ -566,26 +627,19 @@ fun DialPadContent(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .scale(scale)
                             .clip(RoundedCornerShape(16.dp))
                             .background(
                                 if (number.isNotEmpty())
                                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                                 else Color.Transparent
                             )
-                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
                             .padding(vertical = 10.dp, horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = number.ifEmpty { "" },
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontSize = if (number.length > 11) 28.sp else 36.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            fontWeight = FontWeight.Light
+                        DialpadNumberDisplay(
+                            number = number,
+                            fontSize = if (number.length > 11) 28 else 36
                         )
                     }
 
@@ -702,10 +756,13 @@ fun DialPadContent(
                 }
             }
         }
-        } // end BoxWithConstraints
+        } // end BoxWithConstraints (dialpad card)
+
+        } // end AnimatedVisibility (dialpad card)
 
         Spacer(modifier = Modifier.height(8.dp))
-        }   // end else (portrait)
+        } // end outer Column
+        } // end BoxWithConstraints (screen)
     }
 }
 
@@ -840,6 +897,101 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
             if (letters.isNotBlank()) {
                 Text(text = letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 2.sp)
             }
+        }
+    }
+}
+
+/**
+ * Renders a phone number with smooth per-character animations:
+ * - New chars slide up + fade + scale in from below
+ * - Deleted chars slide down + fade + scale out
+ * - Existing chars animate their horizontal position smoothly when neighbours appear/disappear
+ *
+ * Uses a stable monotonically-increasing ID per character insertion so Compose can
+ * distinguish "same char shifted left" from "new char at this slot".
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DialpadNumberDisplay(
+    number: String,
+    fontSize: Int
+) {
+    val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
+    val textColor   = MaterialTheme.colorScheme.onSurface
+    val textStyle   = MaterialTheme.typography.displaySmall.copy(
+        fontSize   = fontSize.sp,
+        fontWeight = FontWeight.Light
+    )
+
+    // Stable list of (uniqueId, char) — each insertion gets a fresh monotonic id
+    // so position shifts use animateItem, not a full recompose.
+    val idCounter  = remember { mutableStateOf(0) }
+    val stableChars = remember { mutableStateListOf<Pair<Int, Char>>() }
+
+    LaunchedEffect(number) {
+        val current = stableChars.map { it.second }.joinToString("")
+        if (number.length > current.length) {
+            // Characters appended
+            val added = number.drop(current.length)
+            added.forEach { ch ->
+                stableChars.add(Pair(idCounter.value++, ch))
+            }
+        } else if (number.length < current.length) {
+            // Characters removed from end (backspace)
+            val removeCount = current.length - number.length
+            repeat(removeCount) {
+                if (stableChars.isNotEmpty()) stableChars.removeAt(stableChars.lastIndex)
+            }
+        } else if (number != current) {
+            // Full replacement (e.g. paste) — rebuild
+            stableChars.clear()
+            number.forEach { ch -> stableChars.add(Pair(idCounter.value++, ch)) }
+        }
+    }
+
+    LazyRow(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment     = Alignment.CenterVertically,
+        userScrollEnabled     = false,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        itemsIndexed(
+            items = stableChars,
+            key   = { _, pair -> pair.first }
+        ) { _, pair ->
+            var appeared by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { appeared = true }
+
+            val offsetY by animateDpAsState(
+                targetValue  = if (appeared) 0.dp else 20.dp,
+                animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "charOffY"
+            )
+            val alpha by animateFloatAsState(
+                targetValue  = if (appeared) 1f else 0f,
+                animationSpec = tween(360, easing = easeOutExpo),
+                label = "charAlpha"
+            )
+            val scale by animateFloatAsState(
+                targetValue  = if (appeared) 1f else 0.55f,
+                animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "charScale"
+            )
+
+            Text(
+                text     = pair.second.toString(),
+                style    = textStyle,
+                color    = textColor,
+                modifier = Modifier
+                    .animateItem(
+                        placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                        fadeInSpec     = tween(360, easing = easeOutExpo),
+                        fadeOutSpec    = tween(220)
+                    )
+                    .offset(y = offsetY)
+                    .alpha(alpha)
+                    .scale(scale)
+            )
         }
     }
 }

@@ -113,21 +113,24 @@ fun ContactDetailsScreen(
     fun navigateBack() {
         isClosing = true
         scope.launch {
-            kotlinx.coroutines.delay(280)
+            kotlinx.coroutines.delay(420)
             navigator.navigateUp()
         }
     }
 
     val screenAlpha by animateFloatAsState(
         targetValue = if (screenVisible && !isClosing) 1f else 0f,
-        animationSpec = if (isClosing) tween(280, easing = androidx.compose.animation.core.FastOutLinearInEasing)
-                        else tween(350),
+        animationSpec = if (isClosing) tween(380, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                        else tween(500, easing = androidx.compose.animation.core.LinearOutSlowInEasing),
         label = "screenAlpha"
     )
     val screenOffsetY by animateDpAsState(
-        targetValue = if (screenVisible && !isClosing) 0.dp else if (isClosing) 60.dp else 40.dp,
-        animationSpec = if (isClosing) tween(300, easing = androidx.compose.animation.core.FastOutLinearInEasing)
-                        else spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        targetValue = if (screenVisible && !isClosing) 0.dp else if (isClosing) 80.dp else 56.dp,
+        animationSpec = if (isClosing) tween(400, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                        else spring(
+                            stiffness = Spring.StiffnessLow,
+                            dampingRatio = Spring.DampingRatioMediumBouncy
+                        ),
         label = "screenOffsetY"
     )
     LaunchedEffect(Unit) { screenVisible = true }

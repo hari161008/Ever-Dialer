@@ -75,6 +75,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 
 class CallActivity : ComponentActivity() {
 
@@ -249,6 +254,48 @@ fun ExpressiveCallScreen(
     val context = LocalView.current.context
     val isMuted = audioState?.isMuted ?: false
     val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
+    val isBluetoothActive = audioState?.route == CallAudioState.ROUTE_BLUETOOTH
+
+    // Bluetooth availability detection
+    var isBluetoothConnected by remember { mutableStateOf(false) }
+    DisposableEffect(context) {
+        val btAdapter = BluetoothAdapter.getDefaultAdapter()
+        // Initial check via supported routes in audioState or via BluetoothProfile proxy
+        fun checkBtConnected(): Boolean {
+            val supportedMask = audioState?.supportedRouteMask ?: 0
+            return (supportedMask and CallAudioState.ROUTE_BLUETOOTH) != 0
+        }
+        isBluetoothConnected = checkBtConnected()
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context, intent: Intent) {
+                when (intent.action) {
+                    BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
+                        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+                        isBluetoothConnected = state == BluetoothProfile.STATE_CONNECTED
+                    }
+                    BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                        val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF)
+                        if (state == BluetoothAdapter.STATE_OFF) isBluetoothConnected = false
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    // Also update bluetooth connected from audioState changes
+    LaunchedEffect(audioState) {
+        val supportedMask = audioState?.supportedRouteMask ?: 0
+        if ((supportedMask and CallAudioState.ROUTE_BLUETOOTH) != 0) {
+            isBluetoothConnected = true
+        }
+    }
     // When answered from notification, skip the incoming screen by treating
     // a brief STATE_RINGING flash as already-active for UI purposes
     val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
@@ -308,14 +355,23 @@ fun ExpressiveCallScreen(
     )
 
     var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
+    // Track if the screen has just entered — always animate in smoothly from the start
+    var screenEntered by remember { mutableStateOf(false) }
     // If already active (answered from notification), start with animation shown immediately
-    var showAcceptAnim by remember { mutableStateOf(callState == Call.STATE_ACTIVE) }
-    val acceptScale by animateFloatAsState(if (showAcceptAnim) 1f else 0.85f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "acceptScale")
-    val acceptAlpha by animateFloatAsState(if (showAcceptAnim) 1f else 0f, tween(400), label = "acceptAlpha")
+    var showAcceptAnim by remember { mutableStateOf(true) }
+    val acceptScale by animateFloatAsState(if (showAcceptAnim) 1f else 0.92f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "acceptScale")
+    val acceptAlpha by animateFloatAsState(if (showAcceptAnim) 1f else 0f, tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "acceptAlpha")
+
+    LaunchedEffect(Unit) {
+        // Smooth entry — start hidden then fade+scale in
+        showAcceptAnim = false
+        kotlinx.coroutines.delay(30)
+        showAcceptAnim = true
+        screenEntered = true
+    }
 
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
-        if (wasRinging && callState == Call.STATE_ACTIVE) showAcceptAnim = true
         if (callState == Call.STATE_RINGING) wasRinging = true
     }
 
@@ -502,7 +558,7 @@ fun ExpressiveCallScreen(
                 // ── LANDSCAPE: two-panel layout ─────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
-                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
+                        .scale(acceptScale).alpha(acceptAlpha)
                 ) {
                     // Left panel: avatar + caller info
                     Column(
@@ -571,6 +627,20 @@ fun ExpressiveCallScreen(
                                     AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                         CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
                                     }
+                                    if (isBluetoothConnected) {
+                                        AnimatedCallButton(
+                                            icon = if (isBluetoothActive) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
+                                            label = "Bluetooth",
+                                            isActive = isBluetoothActive,
+                                            btnColor = controlBtnColor,
+                                            activeBtnColor = controlBtnActiveColor,
+                                            fgColor = controlBtnFg,
+                                            activeFgColor = controlBtnActiveFg
+                                        ) {
+                                            if (isBluetoothActive) CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                                            else CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+                                        }
+                                    }
                                 }
                                 AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
@@ -615,7 +685,7 @@ fun ExpressiveCallScreen(
                 // shifts when the dialpad ModalBottomSheet appears/disappears
                 Box(
                     modifier = Modifier.fillMaxSize()
-                        .then(if (wasRinging && callState == Call.STATE_ACTIVE) Modifier.scale(acceptScale).alpha(acceptAlpha) else Modifier)
+                        .scale(acceptScale).alpha(acceptAlpha)
                 ) {
                     // ── Top: caller info — smooth animated entry ──────────────
                     // Animate initial entry and state transitions smoothly
@@ -639,8 +709,8 @@ fun ExpressiveCallScreen(
                     val callerInfoTopPad by animateDpAsState(
                         targetValue = if (showDialpad) 20.dp else 80.dp,
                         animationSpec = spring(
-                            stiffness    = Spring.StiffnessMediumLow,
-                            dampingRatio = Spring.DampingRatioLowBouncy
+                            stiffness    = Spring.StiffnessLow,
+                            dampingRatio = Spring.DampingRatioNoBouncy
                         ),
                         label = "callerInfoTopPad"
                     )
@@ -773,6 +843,34 @@ fun ExpressiveCallScreen(
                                     AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
                                     AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
                                         CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+                                    }
+                                }
+
+                                // Bluetooth row — only visible when a BT device is connected
+                                AnimatedVisibility(
+                                    visible = isBluetoothConnected,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        AnimatedCallButton(
+                                            icon = if (isBluetoothActive) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
+                                            label = "Bluetooth",
+                                            isActive = isBluetoothActive,
+                                            btnColor = controlBtnColor,
+                                            activeBtnColor = controlBtnActiveColor,
+                                            fgColor = controlBtnFg,
+                                            activeFgColor = controlBtnActiveFg
+                                        ) {
+                                            if (isBluetoothActive) {
+                                                CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                                            } else {
+                                                CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+                                            }
+                                        }
                                     }
                                 }
 

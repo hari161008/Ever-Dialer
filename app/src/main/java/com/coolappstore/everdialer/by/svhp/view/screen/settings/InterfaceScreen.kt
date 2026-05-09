@@ -111,6 +111,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var callUIShowOutgoing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)) }
     var callUIShowCallTime by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true)) }
 
+    // Default Tab dialog
+    var showDefaultTabDialog by remember { mutableStateOf(false) }
+    var defaultTab           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") }
+    data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+    val tabOptions = listOf(
+        TabOption("favorites", "Favourites", Icons.Outlined.FavoriteBorder),
+        TabOption("calls",     "Calls",      Icons.Outlined.History),
+        TabOption("contacts",  "Contacts",   Icons.Outlined.Person),
+        TabOption("notes",     "Note",       Icons.Outlined.Note)
+    )
+
     var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
     var hexError by remember { mutableStateOf(false) }
 
@@ -192,6 +203,75 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
             },
             confirmButton = {
                 TextButton(onClick = { showCallUIDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
+    // ── Default Tab Dialog ─────────────────────────────────────────────────
+    if (showDefaultTabDialog) {
+        AlertDialog(
+            onDismissRequest = { showDefaultTabDialog = false },
+            icon = { Icon(Icons.Default.Tab, null, tint = ColorIndigo) },
+            title = { Text("Default Tab Section") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Choose which tab opens when the app starts.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    tabOptions.forEach { option ->
+                        val isSelected = defaultTab == option.key
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        defaultTab = option.key
+                                        prefs.setString(PreferenceManager.KEY_DEFAULT_TAB, option.key)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = option.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    option.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurface
+                                )
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        defaultTab = option.key
+                                        prefs.setString(PreferenceManager.KEY_DEFAULT_TAB, option.key)
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary,
+                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDefaultTabDialog = false }) { Text("Done") }
             }
         )
     }
@@ -481,6 +561,16 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorOrange,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showCallUIDialog = true }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Default Tab Section",
+                                    supporting = "Choose which tab opens when the app starts (currently: ${tabOptions.firstOrNull { it.key == defaultTab }?.label ?: "Calls"})",
+                                    leadingIcon = Icons.Default.Tab,
+                                    iconContainerColor = ColorIndigo,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showDefaultTabDialog = true }
                                 )
                             }
                         }

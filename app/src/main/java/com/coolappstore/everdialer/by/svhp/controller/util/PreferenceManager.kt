@@ -84,5 +84,6 @@ class PreferenceManager(context: Context) {
         const val KEY_BLUR_DIALPAD_CALL_BUTTON = "blur_dialpad_call_button"
         const val KEY_BLUR_CONTACTS_FAB        = "blur_contacts_fab"
         const val KEY_BLUR_RECENTS_FAB         = "blur_recents_fab"
+        const val KEY_DEFAULT_TAB              = "default_tab"
     }
 }

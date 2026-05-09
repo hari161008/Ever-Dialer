@@ -218,6 +218,7 @@ private fun ContactListItem(
     val prefs = koinInject<PreferenceManager>()
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
@@ -229,6 +230,34 @@ private fun ContactListItem(
 
     val headline = contact.name.ifEmpty {
         contact.phoneNumbers.firstOrNull() ?: "Unknown"
+    }
+
+    // Delete confirmation dialog
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFFF44336)) },
+            title = { Text("Delete Contact") },
+            text = {
+                Text(
+                    "Are you sure you want to permanently delete \"$headline\"? This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        contactsVM.deleteContact(contact.id)
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
 
     Box(modifier = Modifier.fillMaxWidth().scale(scale)) {
@@ -358,6 +387,20 @@ private fun ContactListItem(
                 onClick  = {
                     showMenu = false
                     contactsVM.toggleFavorite(contact)
+                }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            RivoDropdownMenuItem(
+                text     = "Delete contact",
+                icon     = Icons.Default.Delete,
+                iconTint = Color(0xFFF44336),
+                isDestructive = true,
+                onClick  = {
+                    showMenu = false
+                    showDeleteConfirm = true
                 }
             )
         }
