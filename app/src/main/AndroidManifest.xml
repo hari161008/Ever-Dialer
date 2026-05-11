@@ -215,6 +215,25 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Recent Calls Home Screen Widget -->
+        <receiver
+            android:name=".widget.RecentCallsWidgetProvider"
+            android:exported="true"
+            android:label="Recent Calls">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.coolappstore.everdialer.widget.ACTION_DIAL" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_calls_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.RecentCallsWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
     </application>
 
 </manifest>

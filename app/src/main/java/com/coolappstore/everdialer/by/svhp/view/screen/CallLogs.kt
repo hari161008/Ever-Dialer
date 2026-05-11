@@ -156,6 +156,7 @@ fun CallLogFullScreen(
 
                     val groupedLogs = remember(finalLogs) { finalLogs.groupBy { formatDateHeader(it.date) } }
 
+                    ScrollHapticsEffect(listState = listState)
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),

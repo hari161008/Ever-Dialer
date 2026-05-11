@@ -212,6 +212,7 @@ fun ContactSearchContent(
                 }
             }
             else -> {
+                ScrollHapticsEffect(listState = listState)
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),

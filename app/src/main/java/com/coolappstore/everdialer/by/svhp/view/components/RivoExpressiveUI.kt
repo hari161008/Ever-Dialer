@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -98,21 +99,21 @@ fun performAppHaptic(
     } catch (_: Exception) {}
 }
 
-fun performScrollHaptic(context: android.content.Context) {
+fun performScrollHaptic(context: android.content.Context, amplitude: Int = 60) {
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(VibratorManager::class.java)
             val vibrator = vm?.defaultVibrator
-            val effect = VibrationEffect.createOneShot(12, 60)
+            val effect = VibrationEffect.createOneShot(10, amplitude.coerceIn(1, 255))
             vibrator?.vibrate(effect)
         } else {
             val vibrator = context.getSystemService(Vibrator::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val effect = VibrationEffect.createOneShot(12, 60)
+                val effect = VibrationEffect.createOneShot(10, amplitude.coerceIn(1, 255))
                 vibrator?.vibrate(effect)
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(12L)
+                vibrator?.vibrate(10L)
             }
         }
     } catch (_: Exception) {}
@@ -120,11 +121,7 @@ fun performScrollHaptic(context: android.content.Context) {
 
 /**
  * A composable effect that triggers scroll haptics based on physical scroll distance.
- * - cmPerHaptic: how many centimetres the user must scroll before one haptic tick fires
- * - hapticsPerCm: how many haptic ticks fire per centimetre scrolled
- * Only one of the two modes is active: cmPerHaptic controls interval; hapticsPerCm is its inverse
- * and both sliders are surfaced in Settings. We store cmPerHaptic as the canonical value and
- * derive hapticsPerCm = 1 / cmPerHaptic for display purposes.
+ * Uses snapshotFlow to reliably track scroll position changes in real time.
  */
 @Composable
 fun ScrollHapticsEffect(listState: LazyListState) {
@@ -132,46 +129,97 @@ fun ScrollHapticsEffect(listState: LazyListState) {
     val density = LocalDensity.current
     val prefs = koinInject<PreferenceManager>()
     val settingsVersion by prefs.settingsChanged.collectAsState()
+
     val scrollHapticsEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false) }
-    // cmPerHaptic: default 0.5 cm between each tick (reasonable for most users)
-    val cmPerHaptic = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 0.5f) }
+    val cmPerHaptic = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f) }
+    val hapticAmplitude = remember(settingsVersion) { prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60) }
 
-    // Convert cm to pixels: 1 cm = density.density * (160/2.54) px ≈ density * 37.8 px
-    // density.density is pixels per dp; 1 inch = 160 dp; 1 inch = 2.54 cm
-    // So 1 cm = (160/2.54) dp ≈ 62.99 dp; in px = 62.99 * density.density
+    // Physical pixels per cm on this screen
     val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
-    val pxPerHapticTrigger = (cmPerHaptic * pxPerCm).coerceAtLeast(10f)
+    val pxThreshold = (cmPerHaptic * pxPerCm).coerceAtLeast(8f)
 
-    var accumulatedPx by remember { mutableFloatStateOf(0f) }
-    var lastScrollOffset by remember { mutableIntStateOf(0) }
-    var lastItemIndex by remember { mutableIntStateOf(0) }
-    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
-
-    LaunchedEffect(listState.firstVisibleItemScrollOffset, listState.firstVisibleItemIndex) {
+    LaunchedEffect(scrollHapticsEnabled, pxThreshold, hapticAmplitude) {
         if (!scrollHapticsEnabled) return@LaunchedEffect
 
-        val currentIndex = listState.firstVisibleItemIndex
-        val currentOffset = listState.firstVisibleItemScrollOffset
+        var lastAbsolutePx = 0f
+        var hapticBucket = 0f
+        var initialized = false
 
-        // Calculate delta in pixels
-        val delta = if (currentIndex == lastItemIndex) {
-            (currentOffset - lastScrollOffset).toFloat()
-        } else {
-            // Item boundary crossed — approximate as a full item height scroll
-            // We just accumulate a chunk proportional to direction
-            if (currentIndex > lastItemIndex) pxPerHapticTrigger else -pxPerHapticTrigger
+        snapshotFlow {
+            // Use layoutInfo so we always get the real item size, not just index+offset
+            val info = listState.layoutInfo
+            val firstItem = info.visibleItemsInfo.firstOrNull()
+            val itemSize = firstItem?.size?.toFloat()?.takeIf { it > 0f }
+                ?: info.viewportSize.height.toFloat().takeIf { it > 0f }
+                ?: 1f
+            val index = listState.firstVisibleItemIndex
+            val offset = listState.firstVisibleItemScrollOffset
+            // Absolute scroll position in pixels from top of content
+            index * itemSize + offset
+        }.collect { absolutePx ->
+            if (!initialized) {
+                lastAbsolutePx = absolutePx
+                initialized = true
+                return@collect
+            }
+            val delta = kotlin.math.abs(absolutePx - lastAbsolutePx)
+            lastAbsolutePx = absolutePx
+            hapticBucket += delta
+            if (hapticBucket >= pxThreshold) {
+                val count = (hapticBucket / pxThreshold).toInt()
+                hapticBucket -= count * pxThreshold
+                performScrollHaptic(context, hapticAmplitude)
+            }
         }
+    }
+}
 
-        lastItemIndex = currentIndex
-        lastScrollOffset = currentOffset
-        accumulatedPx += kotlin.math.abs(delta)
+/**
+ * Scroll haptics for LazyVerticalGrid / LazyHorizontalGrid.
+ */
+@Composable
+fun ScrollHapticsGridEffect(gridState: androidx.compose.foundation.lazy.grid.LazyGridState) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
 
-        if (accumulatedPx >= pxPerHapticTrigger) {
-            accumulatedPx = 0f
-            try {
-                hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-            } catch (_: Exception) {
-                performScrollHaptic(context)
+    val scrollHapticsEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false) }
+    val cmPerHaptic = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f) }
+    val hapticAmplitude = remember(settingsVersion) { prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60) }
+
+    val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
+    val pxThreshold = (cmPerHaptic * pxPerCm).coerceAtLeast(8f)
+
+    LaunchedEffect(scrollHapticsEnabled, pxThreshold, hapticAmplitude) {
+        if (!scrollHapticsEnabled) return@LaunchedEffect
+
+        var lastAbsolutePx = 0f
+        var hapticBucket = 0f
+        var initialized = false
+
+        snapshotFlow {
+            val info = gridState.layoutInfo
+            val firstItem = info.visibleItemsInfo.firstOrNull()
+            val itemSize = firstItem?.size?.height?.toFloat()?.takeIf { it > 0f }
+                ?: info.viewportSize.height.toFloat().takeIf { it > 0f }
+                ?: 1f
+            val index = gridState.firstVisibleItemIndex
+            val offset = gridState.firstVisibleItemScrollOffset
+            index * itemSize + offset
+        }.collect { absolutePx ->
+            if (!initialized) {
+                lastAbsolutePx = absolutePx
+                initialized = true
+                return@collect
+            }
+            val delta = kotlin.math.abs(absolutePx - lastAbsolutePx)
+            lastAbsolutePx = absolutePx
+            hapticBucket += delta
+            if (hapticBucket >= pxThreshold) {
+                val count = (hapticBucket / pxThreshold).toInt()
+                hapticBucket -= count * pxThreshold
+                performScrollHaptic(context, hapticAmplitude)
             }
         }
     }

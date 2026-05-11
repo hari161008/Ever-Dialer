@@ -62,6 +62,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.components.ScrollHapticsEffect
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
@@ -99,7 +100,8 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
-    var scrollCmPerHaptic by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 0.5f)) }
+    var scrollCmPerHaptic by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f)) }
+    var scrollHapticStrength by remember { mutableIntStateOf(prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60)) }
     var autoUpdateEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true)) }
     var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
@@ -841,6 +843,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         BackHandler { navigateBack() }
+        ScrollHapticsEffect(listState = listState)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).alpha(alpha).offset(y = offsetY),
@@ -988,17 +991,16 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    // ── Slider 1: cm per haptic tick (interval) ──
-                                    // Range: 0.1 cm (very frequent) → 3.0 cm (very sparse)
-                                    val cmLabel = "%.1f cm".format(scrollCmPerHaptic)
-                                    val hzLabel = "%.1f/cm".format(1f / scrollCmPerHaptic)
+                                    // ── Slider: Haptic Interval ──
+                                    // 1 haptic per X cm. Range 0.5–5.0 cm.
+                                    val cmLabel = "1 per %.1f cm".format(scrollCmPerHaptic)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Scroll per Haptic",
+                                            text = "Haptic Interval",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1018,23 +1020,23 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     Slider(
                                         value = scrollCmPerHaptic,
                                         onValueChange = { v ->
-                                            // Snap to 0.1 steps
                                             val snapped = (v * 10f).roundToInt() / 10f
                                             scrollCmPerHaptic = snapped
                                             prefs.setFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, snapped)
                                         },
-                                        valueRange = 0.1f..3.0f,
-                                        steps = 28, // 0.1 increments across 0.1–3.0 = 29 positions → 28 steps
+                                        valueRange = 0.5f..5.0f,
+                                        steps = 44,
                                         modifier = Modifier.fillMaxWidth()
                                     )
-                                    // ── Slider 2: haptics per cm (inverse display) ──
+
+                                    // ── Slider: Haptic Strength ──
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Haptics per Centimetre",
+                                            text = "Haptic Strength",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1043,7 +1045,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                             color = MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
-                                                text = hzLabel,
+                                                text = scrollHapticStrength.toString(),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontWeight = FontWeight.SemiBold,
@@ -1051,19 +1053,14 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                             )
                                         }
                                     }
-                                    // This slider controls hapticsPerCm = 1 / cmPerHaptic
-                                    // Range: 1/3.0 ≈ 0.33/cm → 1/0.1 = 10/cm
-                                    // Moving this slider right = more frequent = smaller cmPerHaptic
-                                    val hapticsPerCm = 1f / scrollCmPerHaptic
                                     Slider(
-                                        value = hapticsPerCm,
+                                        value = scrollHapticStrength.toFloat(),
                                         onValueChange = { v ->
-                                            val clipped = v.coerceIn(1f / 3.0f, 1f / 0.1f)
-                                            val newCm = (((1f / clipped) * 10f).roundToInt() / 10f).coerceIn(0.1f, 3.0f)
-                                            scrollCmPerHaptic = newCm
-                                            prefs.setFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, newCm)
+                                            val snapped = v.roundToInt().coerceIn(1, 255)
+                                            scrollHapticStrength = snapped
+                                            prefs.setInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, snapped)
                                         },
-                                        valueRange = 1f / 3.0f..10f,
+                                        valueRange = 1f..255f,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }

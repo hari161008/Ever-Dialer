@@ -403,10 +403,11 @@ fun DialPadContent(
                         FadeScaleBox(visible = number.isNotEmpty()) {
                             DialerActionExpressive(
                                 onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     number = ""
                                 },
-                                onClick = { number = number.dropLast(1) },
+                                onClick = {
+                                    number = number.dropLast(1)
+                                },
                                 icon = Icons.Default.Backspace,
                                 contentDescription = "Backspace",
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -417,7 +418,12 @@ fun DialPadContent(
             }
         }
     } else {
+        // Prevent keyboard from auto-opening on composition
+        LaunchedEffect(Unit) { focusManager.clearFocus() }
+
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val screenHeight = maxHeight
+        val screenWidth = maxWidth
 
         // Layout: search bar fixed at top, scrollable middle (results/pills/clipboard),
         // dialpad card fixed at bottom. Nothing moves when results appear.
@@ -509,6 +515,7 @@ fun DialPadContent(
             ) {
                 Surface(
                     onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         val intent = Intent(Intent.ACTION_INSERT).apply {
                             type = ContactsContract.RawContacts.CONTENT_TYPE
                             putExtra(ContactsContract.Intents.Insert.PHONE, number)
@@ -531,6 +538,7 @@ fun DialPadContent(
                 }
                 Surface(
                     onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
                             type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
                             putExtra(ContactsContract.Intents.Insert.PHONE, number)
@@ -572,7 +580,7 @@ fun DialPadContent(
                 ) {
                     Icon(Icons.Default.ContentPaste, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
                     Text(text = clipText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { number = clipText; showClipboardBanner = false }) {
+                    TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); number = clipText; showClipboardBanner = false }) {
                         Text("Use", color = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { showClipboardBanner = false }, modifier = Modifier.size(28.dp)) {
@@ -604,10 +612,20 @@ fun DialPadContent(
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
-            // Scale everything based on available width. Reference width = 360dp (standard phone).
+            // Scale based on the SMALLER of width-derived and height-derived factors
+            // so the dialpad always fits on screen regardless of device size.
             val refWidth = 360f
             val availableWidth = maxWidth.value
-            val scaleFactor = (availableWidth / refWidth).coerceIn(0.7f, 1.4f)
+            val widthScale = (availableWidth / refWidth).coerceIn(0.6f, 1.4f)
+
+            // Height budget: total screen height minus search bar (~64dp) minus spacing (~24dp)
+            // The dialpad card needs: header(~56dp) + 4 key rows + action row(~72dp) + padding(~40dp)
+            // Reference key height = 68dp, so 4 rows = 272dp + overhead ~168dp = ~440dp total card
+            val cardHeightBudget = (screenHeight.value - 64f - 24f).coerceAtLeast(200f)
+            val refCardHeight = 440f
+            val heightScale = (cardHeightBudget / refCardHeight).coerceIn(0.55f, 1.4f)
+
+            val scaleFactor = minOf(widthScale, heightScale)
 
             val keyWidth: Dp  = (100 * scaleFactor).dp
             val keyHeight: Dp = (68 * scaleFactor).dp
@@ -622,7 +640,7 @@ fun DialPadContent(
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = (16 * scaleFactor).coerceIn(6f, 16f).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
@@ -646,7 +664,7 @@ fun DialPadContent(
                     ) {
                         DialpadNumberDisplay(
                             number = number,
-                            fontSize = if (number.length > 11) 28 else 36
+                            fontSize = ((if (number.length > 11) 28 else 36) * scaleFactor).coerceIn(18f, 40f).toInt()
                         )
                     }
 
@@ -682,7 +700,8 @@ fun DialPadContent(
                                 context = context,
                                 onClick = { digit -> number += digit },
                                 overrideWidth = keyWidth,
-                                overrideHeight = keyHeight
+                                overrideHeight = keyHeight,
+                                scaleFactor = scaleFactor
                             )
                         }
                     }
@@ -749,10 +768,7 @@ fun DialPadContent(
 
                     FadeScaleBox(visible = number.isNotEmpty()) {
                         DialerActionExpressive(
-                            onLongClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                number = ""
-                            },
+                            onLongClick = { number = "" },
                             onClick = { number = number.dropLast(1) },
                             icon = Icons.Default.Backspace,
                             contentDescription = "Backspace",
@@ -790,6 +806,20 @@ fun DialerActionExpressive(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val prefs = koinInject<PreferenceManager>()
+    val haptic = LocalHapticFeedback.current
+    val wrappedOnClick: () -> Unit = {
+        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        onClick()
+    }
+    val wrappedOnLongClick: (() -> Unit)? = if (onLongClick != null) ({
+        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        onLongClick()
+    }) else null
     val cornerRadius by animateDpAsState(
         targetValue = if (isPressed) (if (isLarge) 18.dp else 14.dp) else (if (isLarge) 28.dp else 24.dp),
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow), label = "ButtonShape"
@@ -818,8 +848,8 @@ fun DialerActionExpressive(
                     highlight = { Highlight.Default }
                 )
                 .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
+                    onClick = wrappedOnClick,
+                    onLongClick = wrappedOnLongClick,
                     interactionSource = interactionSource,
                     indication = null
                 )
@@ -845,8 +875,8 @@ fun DialerActionExpressive(
                     effects  = { blur(30f * density) }
                 )
                 .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
+                    onClick = wrappedOnClick,
+                    onLongClick = wrappedOnLongClick,
                     interactionSource = interactionSource,
                     indication = null
                 ),
@@ -862,7 +892,7 @@ fun DialerActionExpressive(
         Surface(
             modifier = modifier
                 .scale(scale)
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource, indication = null),
+                .combinedClickable(onClick = wrappedOnClick, onLongClick = wrappedOnLongClick, interactionSource = interactionSource, indication = null),
             shape = buttonShape,
             color = containerColor,
             contentColor = contentColor
@@ -875,7 +905,7 @@ fun DialerActionExpressive(
 }
 
 @Composable
-fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, compact: Boolean = false, overrideWidth: Dp? = null, overrideHeight: Dp? = null) {
+fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, compact: Boolean = false, overrideWidth: Dp? = null, overrideHeight: Dp? = null, scaleFactor: Float = 1f) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val prefs = koinInject<PreferenceManager>()
@@ -888,6 +918,8 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
     )
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
+    val mainFontSize = (if (compact) 18f else 22f) * scaleFactor.coerceIn(0.6f, 1.4f)
+    val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f))
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, true)) playDtmf(context, number, soundPool)
@@ -900,9 +932,9 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
         interactionSource = interactionSource
     ) {
         Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
-            Text(text = number, style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
+            Text(text = number, style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp), fontWeight = FontWeight.Medium)
             if (letters.isNotBlank()) {
-                Text(text = letters, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 2.sp)
+                Text(text = letters, style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
             }
         }
     }

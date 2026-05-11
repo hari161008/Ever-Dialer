@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -149,7 +150,14 @@ class CallActivity : ComponentActivity() {
 
                 if (call != null && session != null) {
                     val number = call.details?.handle?.schemeSpecificPart ?: ""
-                    var contactName by remember { mutableStateOf(number.ifEmpty { "Unknown" }) }
+                    // Stable initial values — number shown immediately, replaced by
+                    // contact name in-place once async lookup completes (no layout shift
+                    // because the composable tree is already present and sized).
+                    // Start empty so the layout is stable from the first frame.
+                    // contactName is filled by the async lookup; until then we
+                    // show the number as a subtitle-style fallback (see the status
+                    // text below the name), so there is no visible content gap.
+                    var contactName by remember { mutableStateOf("") }
                     var photoUri by remember { mutableStateOf<String?>(null) }
 
                     val heldCall = heldSession?.call
@@ -158,10 +166,15 @@ class CallActivity : ComponentActivity() {
 
                     LaunchedEffect(number) {
                         if (number.isNotEmpty()) {
-                            contactsRepo.getContactByNumber(number)?.let {
-                                contactName = it.name
-                                photoUri = it.photoUri
+                            val contact = contactsRepo.getContactByNumber(number)
+                            if (contact != null) {
+                                contactName = contact.name
+                                photoUri = contact.photoUri
+                            } else {
+                                contactName = number
                             }
+                        } else {
+                            contactName = "Unknown"
                         }
                     }
 
@@ -355,20 +368,10 @@ fun ExpressiveCallScreen(
     )
 
     var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
-    // Track if the screen has just entered — always animate in smoothly from the start
-    var screenEntered by remember { mutableStateOf(false) }
-    // If already active (answered from notification), start with animation shown immediately
-    var showAcceptAnim by remember { mutableStateOf(true) }
-    val acceptScale by animateFloatAsState(if (showAcceptAnim) 1f else 0.92f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "acceptScale")
-    val acceptAlpha by animateFloatAsState(if (showAcceptAnim) 1f else 0f, tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "acceptAlpha")
-
-    LaunchedEffect(Unit) {
-        // Smooth entry — start hidden then fade+scale in
-        showAcceptAnim = false
-        kotlinx.coroutines.delay(30)
-        showAcceptAnim = true
-        screenEntered = true
-    }
+    var screenEntered by remember { mutableStateOf(true) }
+    // Fully static — no scale, no alpha animation — zero movement on entry
+    val acceptScale = 1f
+    val acceptAlpha = 1f
 
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
@@ -453,92 +456,19 @@ fun ExpressiveCallScreen(
         )
     }
 
-    // In-call Dialpad sheet — using Dialog to avoid window inset shifts on main content
-    if (showDialpad) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showDialpad = false },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            var dialpadVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { dialpadVisible = true }
-
-            val dialpadOffsetY by animateFloatAsState(
-                targetValue = if (dialpadVisible) 0f else 1f,
-                animationSpec = spring(
-                    stiffness    = Spring.StiffnessMediumLow,
-                    dampingRatio = Spring.DampingRatioLowBouncy
-                ),
-                label = "dialpadSlide"
-            )
-            val dialpadAlpha by animateFloatAsState(
-                targetValue = if (dialpadVisible) 1f else 0f,
-                animationSpec = tween(300),
-                label = "dialpadAlpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = dialpadAlpha },
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer {
-                            val density = this.density
-                            // translate from bottom — dialpadOffsetY goes 1→0
-                            translationY = dialpadOffsetY * size.height
-                        }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                    ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
-                    Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Dialpad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { showDialpad = false }) { Icon(Icons.Default.Close, null) }
-                }
-
-                if (dtmfInput.isNotEmpty()) {
-                    Text(
-                        text = dtmfInput,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-
-                InCallDialPad(
-                        onDigit = { digit ->
-                            dtmfInput += digit
-                            try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
-                        },
-                        onBackspace = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) }
-                    )
-            }
-                }
-            }
-        }
-    }
-
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val dialpadOffsetY by animateFloatAsState(
+        targetValue = if (showDialpad) 0f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+        label = "dialpadSlide"
+    )
+    val dialpadAlpha by animateFloatAsState(
+        targetValue = if (showDialpad) 1f else 0f,
+        animationSpec = tween(220),
+        label = "dialpadAlpha"
+    )
 
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
         Box(
@@ -556,8 +486,13 @@ fun ExpressiveCallScreen(
 
             if (isLandscape) {
                 // ── LANDSCAPE: two-panel layout ─────────────────────────────
+                val lsStatusBarHeight = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
+                val lsNavBarHeight = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
+                val frozenLsTop = remember { lsStatusBarHeight }
+                val frozenLsBottom = remember { lsNavBarHeight }
                 Row(
-                    modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                    modifier = Modifier.fillMaxSize()
+                        .padding(top = frozenLsTop, bottom = frozenLsBottom)
                         .scale(acceptScale).alpha(acceptAlpha)
                 ) {
                     // Left panel: avatar + caller info
@@ -567,14 +502,27 @@ fun ExpressiveCallScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
+                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
                             if (!photoUri.isNullOrEmpty()) {
-                                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            } else {
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.height(20.dp))
-                        Text(text = contactName, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium), color = onBgColor, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = contactName.ifEmpty { "" },
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium),
+                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                         Text(
                             text = when {
                                 isOnHold -> "On Hold"
@@ -681,62 +629,58 @@ fun ExpressiveCallScreen(
                 }
             } else {
                 // ── PORTRAIT: original layout ────────────────────────────────
-                // Use a Box so the caller info is anchored to the top and never
-                // shifts when the dialpad ModalBottomSheet appears/disappears
+                // Snapshot inset sizes once — never reread them — so window-flag
+                // changes during the call (lock-screen → active) can't shift the layout.
+                val statusBarHeight = with(LocalDensity.current) {
+                    WindowInsets.statusBars.getTop(this).toDp()
+                }
+                val navBarHeight = with(LocalDensity.current) {
+                    WindowInsets.navigationBars.getBottom(this).toDp()
+                }
+                val frozenStatusBarHeight = remember { statusBarHeight }
+                val frozenNavBarHeight = remember { navBarHeight }
                 Box(
-                    modifier = Modifier.fillMaxSize()
-                        .scale(acceptScale).alpha(acceptAlpha)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = frozenStatusBarHeight, bottom = frozenNavBarHeight)
                 ) {
-                    // ── Top: caller info — smooth animated entry ──────────────
-                    // Animate initial entry and state transitions smoothly
-                    val callerInfoOffsetY by animateFloatAsState(
-                        targetValue = if (showAcceptAnim || callState == Call.STATE_ACTIVE ||
-                            callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING ||
-                            callState == Call.STATE_RINGING) 0f else -80f,
-                        animationSpec = spring(
-                            stiffness    = Spring.StiffnessMediumLow,
-                            dampingRatio = Spring.DampingRatioLowBouncy
-                        ),
-                        label = "callerInfoOffsetY"
-                    )
-                    val callerInfoAlpha by animateFloatAsState(
-                        targetValue = if (showAcceptAnim || callState == Call.STATE_ACTIVE ||
-                            callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING ||
-                            callState == Call.STATE_RINGING) 1f else 0f,
-                        animationSpec = tween(400),
-                        label = "callerInfoAlpha"
-                    )
-                    val callerInfoTopPad by animateDpAsState(
-                        targetValue = if (showDialpad) 20.dp else 80.dp,
-                        animationSpec = spring(
-                            stiffness    = Spring.StiffnessLow,
-                            dampingRatio = Spring.DampingRatioNoBouncy
-                        ),
-                        label = "callerInfoTopPad"
-                    )
+                    // ── Top: caller info — absolutely top-anchored, never affected by bottom content ──
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .align(Alignment.TopCenter)
-                            .statusBarsPadding()
-                            .padding(top = callerInfoTopPad)
-                            .graphicsLayer {
-                                translationY = callerInfoOffsetY
-                                alpha = callerInfoAlpha
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(top = 72.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Top
                     ) {
-                        Box(modifier = Modifier.size(110.dp).clip(CircleShape).background(controlBtnColor)) {
+                        Box(modifier = Modifier.size(120.dp).clip(CircleShape).background(controlBtnColor)) {
+                            // Always render Icon as base layer so layout never shifts
+                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(56.dp), tint = subtleColor)
                             if (!photoUri.isNullOrEmpty()) {
-                                AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            } else {
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(50.dp), tint = subtleColor)
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(photoUri)
+                                        .crossfade(300)
+                                        .build(),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(32.dp))
-                        Text(text = contactName, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium), color = onBgColor)
+                        Spacer(modifier = Modifier.height(28.dp))
+                        // Fixed height box so layout never shifts when name loads
+                        Box(modifier = Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = contactName.ifEmpty { "" },
+                                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Medium),
+                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = when {
                                 isOnHold -> "On Hold"
@@ -978,6 +922,56 @@ fun ExpressiveCallScreen(
                     }
                 } // end portrait Box
             } // end portrait
+        }
+
+        // ── Dialpad overlay — last child of main Box, never triggers layout shift ──
+        if (showDialpad || dialpadAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = dialpadAlpha }
+                    .background(Color.Black.copy(alpha = 0.55f * dialpadAlpha)),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer { translationY = dialpadOffsetY * size.height }
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
+                            Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(width = 36.dp, height = 4.dp)) {}
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Dialpad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            IconButton(onClick = { showDialpad = false }) { Icon(Icons.Default.Close, null) }
+                        }
+                        if (dtmfInput.isNotEmpty()) {
+                            Text(
+                                text = dtmfInput,
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Light,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                        InCallDialPad(
+                            onDigit = { digit ->
+                                dtmfInput += digit
+                                try { call.playDtmfTone(digit[0]); call.stopDtmfTone() } catch (_: Exception) {}
+                            },
+                            onBackspace = { if (dtmfInput.isNotEmpty()) dtmfInput = dtmfInput.dropLast(1) }
+                        )
+                    }
+                }
+            }
         }
     }
 }
