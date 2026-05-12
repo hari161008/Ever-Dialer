@@ -11,22 +11,9 @@
       "type": "UNIVERSAL",
       "filters": [],
       "attributes": [],
-      "versionCode": 6,
-      "versionName": "6.0.0",
+      "versionCode": 7,
+      "versionName": "7.0.0",
       "outputFile": "app-universal-release.apk"
-    },
-    {
-      "type": "ONE_OF_MANY",
-      "filters": [
-        {
-          "filterType": "ABI",
-          "value": "x86_64"
-        }
-      ],
-      "attributes": [],
-      "versionCode": 6,
-      "versionName": "6.0.0",
-      "outputFile": "app-x86_64-release.apk"
     },
     {
       "type": "ONE_OF_MANY",
@@ -37,9 +24,22 @@
         }
       ],
       "attributes": [],
-      "versionCode": 6,
-      "versionName": "6.0.0",
+      "versionCode": 7,
+      "versionName": "7.0.0",
       "outputFile": "app-arm64-v8a-release.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "x86_64"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 7,
+      "versionName": "7.0.0",
+      "outputFile": "app-x86_64-release.apk"
     },
     {
       "type": "ONE_OF_MANY",
@@ -50,8 +50,8 @@
         }
       ],
       "attributes": [],
-      "versionCode": 6,
-      "versionName": "6.0.0",
+      "versionCode": 7,
+      "versionName": "7.0.0",
       "outputFile": "app-armeabi-v7a-release.apk"
     }
   ],
@@ -62,8 +62,8 @@
       "maxApi": 30,
       "baselineProfiles": [
         "baselineProfiles/1/app-universal-release.dm",
-        "baselineProfiles/1/app-x86_64-release.dm",
         "baselineProfiles/1/app-arm64-v8a-release.dm",
+        "baselineProfiles/1/app-x86_64-release.dm",
         "baselineProfiles/1/app-armeabi-v7a-release.dm"
       ]
     },
@@ -72,8 +72,8 @@
       "maxApi": 2147483647,
       "baselineProfiles": [
         "baselineProfiles/0/app-universal-release.dm",
-        "baselineProfiles/0/app-x86_64-release.dm",
         "baselineProfiles/0/app-arm64-v8a-release.dm",
+        "baselineProfiles/0/app-x86_64-release.dm",
         "baselineProfiles/0/app-armeabi-v7a-release.dm"
       ]
     }
