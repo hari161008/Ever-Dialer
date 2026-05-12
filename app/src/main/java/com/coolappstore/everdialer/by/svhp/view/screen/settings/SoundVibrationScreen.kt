@@ -1,10 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.content.Intent
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-
 import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -32,7 +28,6 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
 private val ColorGreen  = Color(0xFF4CAF50)
-private val ColorOrange = Color(0xFFFF9800)
 private val ColorPink   = Color(0xFFE91E63)
 private val ColorBlue   = Color(0xFF2196F3)
 
@@ -43,8 +38,7 @@ fun SoundVibrationScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
     val context = LocalContext.current
 
-    var dtmfTone by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, true)) }
-    var dialpadVibration by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_VIBRATION, true)) }
+    var dtmfTone by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) }
 
     var visible by remember { mutableStateOf(false) }
     val screenAlpha by animateFloatAsState(
@@ -87,21 +81,6 @@ fun SoundVibrationScreen(navigator: DestinationsNavigator) {
                             onCheckedChange = {
                                 dtmfTone = it
                                 prefs.setBoolean(PreferenceManager.KEY_DTMF_TONE, it)
-                            }
-                        )
-                        HorizontalDivider(
-                            Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        RivoSwitchListItem(
-                            headline = "Dialpad Vibration",
-                            supporting = "Vibration that plays during keypress",
-                            leadingIcon = Icons.Outlined.Vibration,
-                            iconContainerColor = ColorOrange,
-                            checked = dialpadVibration,
-                            onCheckedChange = {
-                                dialpadVibration = it
-                                prefs.setBoolean(PreferenceManager.KEY_DIALPAD_VIBRATION, it)
                             }
                         )
                     }

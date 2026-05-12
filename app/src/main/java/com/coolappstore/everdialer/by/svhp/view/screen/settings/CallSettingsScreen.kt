@@ -46,7 +46,6 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.generated.destinations.CallAccountsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
@@ -216,6 +215,8 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
     var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
+    var defaultSim by remember { mutableStateOf(prefs.getInt("default_sim", 0)) }
+    var showSimDialog by remember { mutableStateOf(false) }
 
     var visible by remember { mutableStateOf(false) }
     val screenAlpha by animateFloatAsState(
@@ -229,6 +230,44 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
         ContactsToDisplayDialog(
             onDismiss = { showContactsToDisplayDialog = false },
             prefs = prefs
+        )
+    }
+
+    if (showSimDialog) {
+        AlertDialog(
+            onDismissRequest = { showSimDialog = false },
+            title = { Text("Default SIM") },
+            text = {
+                Column {
+                    listOf("Ask every time", "SIM 1", "SIM 2").forEachIndexed { index, label ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = defaultSim == index,
+                                onClick = {
+                                    defaultSim = index
+                                    prefs.setInt("default_sim", index)
+                                    showSimDialog = false
+                                }
+                            )
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = androidx.compose.ui.Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSimDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
@@ -259,12 +298,17 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                         CallSettingsSectionLabel("Accounts")
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline = "Call Accounts",
-                                supporting = "SIM cards and calling accounts",
+                                headline = "Default SIM",
+                                supporting = when(defaultSim) {
+                                    0 -> "Ask every time"
+                                    1 -> "SIM 1"
+                                    2 -> "SIM 2"
+                                    else -> "Ask every time"
+                                },
                                 leadingIcon = Icons.Outlined.SimCard,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { navigator.navigate(CallAccountsScreenDestination) }
+                                onClick = { showSimDialog = true }
                             )
                             HorizontalDivider(
                                 Modifier.padding(horizontal = 16.dp),

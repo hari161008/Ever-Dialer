@@ -322,10 +322,10 @@ fun ExpressiveCallScreen(
     var showDialpad by remember { mutableStateOf(false) }
     var dtmfInput by remember { mutableStateOf("") }
 
-    // Hangup button width from prefs (0.4f .. 1.0f)
+    // Hangup button width from prefs (0.1f .. 1.0f)
     val settingsVersion by (prefs?.settingsChanged ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
     val hangupWidthFraction = remember(settingsVersion) {
-        prefs?.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f) ?: 1.0f
+        prefs?.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f) ?: 0.5f
     }
     var noteText by remember { mutableStateOf("") }
 
@@ -897,6 +897,7 @@ fun ExpressiveCallScreen(
                                 val endRadius by animateDpAsState(if (endPressed) 16.dp else 32.dp, spring(stiffness = Spring.StiffnessMedium), label = "endRadius")
 
                                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    val isCircleHangup = hangupWidthFraction <= 0.1f
                                     Surface(
                                         onClick = {
                                             if (noteText.isNotBlank() && phoneNumber.isNotEmpty()) {
@@ -904,11 +905,14 @@ fun ExpressiveCallScreen(
                                             }
                                             try { call.disconnect() } catch (e: Exception) {}
                                         },
-                                        modifier = Modifier
-                                            .fillMaxWidth(hangupWidthFraction.coerceIn(0.2f, 1.0f))
+                                        modifier = if (isCircleHangup) Modifier
+                                            .size(76.dp)
+                                            .scale(if (endPressed) 0.96f else 1f)
+                                        else Modifier
+                                            .fillMaxWidth(hangupWidthFraction.coerceIn(0.1f, 1.0f))
                                             .height(76.dp)
                                             .scale(if (endPressed) 0.96f else 1f),
-                                        shape = RoundedCornerShape(endRadius),
+                                        shape = if (isCircleHangup) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(endRadius),
                                         color = Color(0xFFD32F2F),
                                         interactionSource = endInteraction
                                     ) {

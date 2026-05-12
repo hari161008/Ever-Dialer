@@ -53,6 +53,8 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.QrCodeUtils
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithSimPreference
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -61,6 +63,7 @@ import androidx.navigation.NavController
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -87,6 +90,8 @@ fun ContactDetailsScreen(
     val displayName = contact?.name ?: phoneNumber ?: "Unknown"
     val context = LocalContext.current
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+    val prefs = koinInject<PreferenceManager>()
+    val simPref = remember { prefs.getInt("default_sim", 0) }
 
     var showSimPicker by remember { mutableStateOf(false) }
     var showNumberPicker by remember { mutableStateOf(false) }
@@ -137,12 +142,9 @@ fun ContactDetailsScreen(
     BackHandler { navigateBack() }
 
     val initiateCall = { number: String ->
-        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-        if (hasPermission) {
-            val accounts = try { telecomManager.callCapablePhoneAccounts } catch (e: SecurityException) { emptyList() }
-            if (accounts.size > 1) { pendingNumber = number; showSimPicker = true }
-            else makeCall(context, number)
-        } else makeCall(context, number)
+        placeCallWithSimPreference(context, number, simPref) {
+            pendingNumber = number; showSimPicker = true
+        }
     }
 
     if (showNumberPicker && contact != null) {

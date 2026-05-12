@@ -1,7 +1,7 @@
 package com.coolappstore.everdialer.by.svhp
 
 val APP_NAME = "Ever Dialer"
-val APP_VERSION = "7.0.0"
+val APP_VERSION = "8.0.0"
 val BUILD_NUMBER = "20260429"
 val PATREON_URL = "https://www.patreon.com/c/GrinchDev"
 val DISCORD_URL = "https://discord.gg/NtEvU3726e"

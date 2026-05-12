@@ -70,6 +70,35 @@ fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle
     }
 }
 
+/**
+ * Places a call respecting the user's default SIM preference.
+ * simPref: 0 = ask, 1 = SIM1 (index 0), 2 = SIM2 (index 1)
+ * Returns true if a direct call was placed, false if sim picker should be shown.
+ */
+fun placeCallWithSimPreference(
+    context: Context,
+    number: String,
+    simPref: Int,
+    onShowSimPicker: () -> Unit
+) {
+    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+    val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+    if (hasPhoneState) {
+        val accounts = telecomManager.callCapablePhoneAccounts
+        if (accounts.size > 1) {
+            when {
+                simPref == 1 && accounts.isNotEmpty() -> makeCall(context, number, accounts[0])
+                simPref == 2 && accounts.size >= 2 -> makeCall(context, number, accounts[1])
+                else -> onShowSimPicker()
+            }
+        } else {
+            makeCall(context, number)
+        }
+    } else {
+        makeCall(context, number)
+    }
+}
+
 fun openInContacts(context: Context, contactId: String) {
     val intent = Intent(Intent.ACTION_VIEW).apply {
         data = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contactId)

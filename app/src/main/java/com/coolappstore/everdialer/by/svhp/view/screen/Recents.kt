@@ -46,6 +46,8 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithSimPreference
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogFilter
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
@@ -290,6 +292,7 @@ fun CallLogFullContent(
 
         var showSimPicker by remember { mutableStateOf(false) }
         var pendingNumber by remember { mutableStateOf<String?>(null) }
+        val simPref = remember(settingsVersion) { prefs.getInt("default_sim", 0) }
 
         // Track previous filter index for slide direction
         val filterEntries = CallLogFilter.entries
@@ -581,12 +584,9 @@ fun CallLogFullContent(
                                                         log = lg,
                                                         onTileClick = { log ->
                                                             if (directCall) {
-                                                                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-                                                                if (hasPermission) {
-                                                                    val accounts = telecomManager.callCapablePhoneAccounts
-                                                                    if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
-                                                                    else makeCall(context, log.number)
-                                                                } else makeCall(context, log.number)
+                                                                placeCallWithSimPreference(context, log.number, simPref) {
+                                                                    pendingNumber = log.number; showSimPicker = true
+                                                                }
                                                             } else {
                                                                 navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                                             }
@@ -595,12 +595,9 @@ fun CallLogFullContent(
                                                             navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                                         },
                                                         onButtonClick = { log ->
-                                                            val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-                                                            if (hasPermission) {
-                                                                val accounts = telecomManager.callCapablePhoneAccounts
-                                                                if (accounts.size > 1) { pendingNumber = log.number; showSimPicker = true }
-                                                                else makeCall(context, log.number)
-                                                            } else makeCall(context, log.number)
+                                                            placeCallWithSimPreference(context, log.number, simPref) {
+                                                                pendingNumber = log.number; showSimPicker = true
+                                                            }
                                                         },
                                                         onDelete = { viewModel.refreshLogs() }
                                                     )

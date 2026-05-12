@@ -16,7 +16,6 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
-import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -24,11 +23,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-private val ColorOrange  = Color(0xFFFF9800)
 private val ColorBlue    = Color(0xFF2196F3)
-private val ColorPurple  = Color(0xFF9C27B0)
-private val ColorGreen   = Color(0xFF4CAF50)
-private val ColorTeal    = Color(0xFF009688)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -44,12 +39,6 @@ fun CallAccountsScreen(
             listState.firstVisibleItemIndex > 0
         }
     }
-
-    var speedDial by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SPEED_DIAL, true)) }
-    var t9Dialing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_T9_DIALING, true)) }
-    var defaultSim by remember { mutableStateOf(prefs.getInt("default_sim", 0)) }
-
-    var showSimDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -83,45 +72,12 @@ fun CallAccountsScreen(
         ) {
             item {
                 RivoExpressiveCard {
-                    RivoSwitchListItem(
-                        headline = "Speed dial",
-                        supporting = "Directly call someone by holding a dialpad key",
-                        leadingIcon = Icons.Outlined.Speed,
-                        iconContainerColor = ColorOrange,
-                        checked = speedDial,
-                        onCheckedChange = {
-                            speedDial = it
-                            prefs.setBoolean(PreferenceManager.KEY_SPEED_DIAL, it)
-                        }
-                    )
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     RivoListItem(
-                        headline = "Default SIM",
-                        supporting = when(defaultSim) {
-                            0 -> "Ask every time"
-                            1 -> "SIM 1"
-                            2 -> "SIM 2"
-                            else -> "Ask every time"
-                        },
+                        headline = "Manage Calling Accounts",
+                        supporting = "SIM cards and calling accounts",
                         leadingIcon = Icons.Outlined.SimCard,
                         iconContainerColor = ColorBlue,
-                        onClick = { showSimDialog = true }
-                    )
-                }
-            }
-
-            item {
-                RivoExpressiveCard {
-                    RivoSwitchListItem(
-                        headline = "T9 Dialing",
-                        supporting = "Predicts words from numeric keypad inputs",
-                        leadingIcon = Icons.Outlined.Dialpad,
-                        iconContainerColor = ColorPurple,
-                        checked = t9Dialing,
-                        onCheckedChange = {
-                            t9Dialing = it
-                            prefs.setBoolean(PreferenceManager.KEY_T9_DIALING, it)
-                        }
+                        onClick = { /* no-op: system handles */ }
                     )
                 }
             }
@@ -130,43 +86,5 @@ fun CallAccountsScreen(
                 Spacer(modifier = Modifier.height(100.dp))
             }
         }
-    }
-
-    if (showSimDialog) {
-        AlertDialog(
-            onDismissRequest = { showSimDialog = false },
-            title = { Text("Default SIM") },
-            text = {
-                Column {
-                    listOf("Ask every time", "SIM 1", "SIM 2").forEachIndexed { index, label ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = defaultSim == index,
-                                onClick = {
-                                    defaultSim = index
-                                    prefs.setInt("default_sim", index)
-                                    showSimDialog = false
-                                }
-                            )
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showSimDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }

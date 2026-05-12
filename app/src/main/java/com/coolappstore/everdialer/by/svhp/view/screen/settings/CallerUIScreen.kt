@@ -2,6 +2,7 @@ package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,7 +30,7 @@ import org.koin.compose.koinInject
 fun CallerUIScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
 
-    var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 1.0f).coerceIn(0.2f, 1.0f)) }
+    var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f).coerceIn(0.1f, 1.0f)) }
 
     Scaffold(
         topBar = {
@@ -103,12 +104,12 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    val isCircle = hangupWidth <= 0.1f
                                     Surface(
-                                        shape = RoundedCornerShape(28.dp),
+                                        shape = if (isCircle) CircleShape else RoundedCornerShape(28.dp),
                                         color = Color(0xFFD32F2F),
-                                        modifier = Modifier
-                                            .fillMaxWidth(hangupWidth.coerceIn(0.2f, 1.0f))
-                                            .height(64.dp)
+                                        modifier = if (isCircle) Modifier.size(64.dp)
+                                            else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(64.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Row(
@@ -154,8 +155,8 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                         onValueChangeFinished = {
                                             prefs.setFloat(PreferenceManager.KEY_HANGUP_WIDTH, hangupWidth)
                                         },
-                                        valueRange = 0.2f..1.0f,
-                                        steps = 15,
+                                        valueRange = 0.1f..1.0f,
+                                        steps = 8,
                                         modifier = Modifier.weight(1f),
                                         colors = SliderDefaults.colors(
                                             thumbColor = Color(0xFFD32F2F),

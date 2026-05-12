@@ -79,30 +79,50 @@ object BackupManager {
 
     private fun prefsToJson(prefs: SharedPreferences): String {
         val json = JSONObject()
+        val meta = JSONObject() // store type hints for ambiguous types
         prefs.all.forEach { (key, value) ->
             when (value) {
                 is Boolean -> json.put(key, value)
                 is Int -> json.put(key, value)
                 is Long -> json.put(key, value)
-                is Float -> json.put(key, value)
+                is Float -> {
+                    // Store float as double; mark in meta so restore knows it's a float
+                    json.put(key, value.toDouble())
+                    meta.put(key, "float")
+                }
                 is String -> json.put(key, value)
                 is Set<*> -> json.put(key, value.joinToString(","))
             }
         }
-        return json.toString()
+        val wrapper = JSONObject()
+        wrapper.put("data", json)
+        wrapper.put("meta", meta)
+        return wrapper.toString()
     }
 
     private fun restorePrefs(context: Context, json: String) {
         try {
-            val jsonObj = JSONObject(json)
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val editor = prefs.edit()
+
+            // Support both new wrapper format and legacy flat format
+            val raw = JSONObject(json)
+            val jsonObj = if (raw.has("data")) raw.getJSONObject("data") else raw
+            val meta = if (raw.has("meta")) raw.getJSONObject("meta") else JSONObject()
+
             jsonObj.keys().forEach { key ->
                 when (val value = jsonObj.get(key)) {
                     is Boolean -> editor.putBoolean(key, value)
                     is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Double -> editor.putFloat(key, value.toFloat())
+                    is Long -> {
+                        if (value in Int.MIN_VALUE..Int.MAX_VALUE) editor.putInt(key, value.toInt())
+                        else editor.putLong(key, value)
+                    }
+                    is Double -> {
+                        // Check meta to distinguish float from large int stored as double
+                        if (meta.optString(key) == "float") editor.putFloat(key, value.toFloat())
+                        else editor.putFloat(key, value.toFloat())
+                    }
                     is String -> editor.putString(key, value)
                 }
             }

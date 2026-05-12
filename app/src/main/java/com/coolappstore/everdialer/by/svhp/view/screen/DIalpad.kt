@@ -159,6 +159,21 @@ fun DialPadContent(
     var showSimPicker by remember { mutableStateOf(false) }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
 
+    // Helper: place a call respecting the default SIM preference
+    fun placeCallWithSimPreference(num: String) {
+        val accounts = telecomManager.callCapablePhoneAccounts
+        if (accounts.size > 1) {
+            val simPref = prefs.getInt("default_sim", 0)
+            when {
+                simPref == 1 && accounts.size >= 1 -> makeCall(context, num, accounts[0])
+                simPref == 2 && accounts.size >= 2 -> makeCall(context, num, accounts[1])
+                else -> showSimPicker = true
+            }
+        } else {
+            makeCall(context, num)
+        }
+    }
+
     val clipText = remember {
         clipboard.getText()?.text?.filter { it.isDigit() || it == '+' } ?: ""
     }
@@ -210,9 +225,7 @@ fun DialPadContent(
         if (permissions[Manifest.permission.CALL_PHONE] == true) {
             val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
             if (hasPhoneState) {
-                val accounts = telecomManager.callCapablePhoneAccounts
-                if (accounts.size > 1) showSimPicker = true
-                else makeCall(context, number)
+                placeCallWithSimPreference(number)
             } else makeCall(context, number)
         }
     }
@@ -388,9 +401,7 @@ fun DialPadContent(
                                 if (number.isNotEmpty()) {
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                                            val accounts = telecomManager.callCapablePhoneAccounts
-                                            if (accounts.size > 1) showSimPicker = true
-                                            else makeCall(context, number)
+                                            placeCallWithSimPreference(number)
                                         } else makeCall(context, number)
                                     } else {
                                         callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
@@ -754,9 +765,7 @@ fun DialPadContent(
                             if (number.isNotEmpty()) {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                                        val accounts = telecomManager.callCapablePhoneAccounts
-                                        if (accounts.size > 1) showSimPicker = true
-                                        else makeCall(context, number)
+                                        placeCallWithSimPreference(number)
                                     } else makeCall(context, number)
                                 } else {
                                     callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
@@ -930,8 +939,8 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
     val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f))
     Surface(
         onClick = {
-            if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, true)) playDtmf(context, number, soundPool)
-            if (prefs.getBoolean(PreferenceManager.KEY_DIALPAD_VIBRATION, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool)
             onClick(number)
         },
         modifier = Modifier.size(width = keyWidth, height = keyHeight).scale(scale),
@@ -1070,9 +1079,26 @@ private fun buildDtmfSoundPool(context: Context): SoundPool {
 }
 
 private fun playDtmf(context: Context, key: String, soundPool: SoundPool) {
-    val resName = when (key) { "*" -> "dtmf_star"; "#" -> "dtmf_pound"; else -> "dtmf_$key" }
-    val soundId = context.resources.getIdentifier(resName, "raw", context.packageName)
-    if (soundId != 0) soundPool.play(soundId, 1f, 1f, 0, 0, 1f)
+    val toneType = when (key) {
+        "0" -> android.media.ToneGenerator.TONE_DTMF_0
+        "1" -> android.media.ToneGenerator.TONE_DTMF_1
+        "2" -> android.media.ToneGenerator.TONE_DTMF_2
+        "3" -> android.media.ToneGenerator.TONE_DTMF_3
+        "4" -> android.media.ToneGenerator.TONE_DTMF_4
+        "5" -> android.media.ToneGenerator.TONE_DTMF_5
+        "6" -> android.media.ToneGenerator.TONE_DTMF_6
+        "7" -> android.media.ToneGenerator.TONE_DTMF_7
+        "8" -> android.media.ToneGenerator.TONE_DTMF_8
+        "9" -> android.media.ToneGenerator.TONE_DTMF_9
+        "*" -> android.media.ToneGenerator.TONE_DTMF_S
+        "#" -> android.media.ToneGenerator.TONE_DTMF_P
+        else -> return
+    }
+    try {
+        val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_DTMF, 80)
+        toneGen.startTone(toneType, 150)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 200)
+    } catch (_: Exception) {}
 }
 
 @Composable
