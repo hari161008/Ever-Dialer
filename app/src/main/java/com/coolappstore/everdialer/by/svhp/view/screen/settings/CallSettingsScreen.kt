@@ -2,9 +2,11 @@ package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.accounts.AccountManager
 import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import java.io.File
 import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -352,40 +354,34 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Call Recording (standalone, below Call Settings) ──────────────
-            item {
-                RivoAnimatedSection(delayMs = 160L) {
-                    var showRecordingDialog by remember { mutableStateOf(false) }
-                    RivoExpressiveCard {
-                        RivoListItem(
-                            headline = "Call Recording",
-                            supporting = "Download the Ever Call Recorder companion app",
-                            leadingIcon = Icons.Default.FiberManualRecord,
-                            iconContainerColor = Color(0xFFE53935),
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = { showRecordingDialog = true }
-                        )
-                    }
-                    if (showRecordingDialog) {
-                        CallRecordingDialog(onDismiss = { showRecordingDialog = false })
-                    }
-                }
-            }
-
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
 }
 
 @Composable
-private fun CallRecordingDialog(onDismiss: () -> Unit) {
+internal fun CallRecordingDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
     val recorderPkg = "com.coolappstore.evercallrecorder.by.svhp"
     val githubUrl   = "https://github.com/hari161008/Ever-Call-Recorder"
     val apiUrl      = "https://api.github.com/repos/hari161008/Ever-Call-Recorder/releases/latest"
+    val apkFile     = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "EverCallRecorder.apk")
 
-    // Download states mirroring the main update dialog
+    // Check state on every composition so it reacts after install
+    val pm = context.packageManager
+    val isInstalled = remember { mutableStateOf(try { pm.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }) }
+    val apkAlreadyDownloaded = remember { mutableStateOf(apkFile.exists() && apkFile.length() > 0L) }
+
+    // Refresh install state when dialog is shown (handles post-install return)
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            isInstalled.value = try { pm.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }
+            apkAlreadyDownloaded.value = apkFile.exists() && apkFile.length() > 0L
+        }
+    }
+
     var dlState by remember { mutableStateOf<DlState>(DlState.Idle) }
 
     // Poll download progress
@@ -404,9 +400,9 @@ private fun CallRecordingDialog(onDismiss: () -> Unit) {
                 when (dmStatus) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         dlState = DlState.Idle
-                        val file = getApkDestinationFile()
-                        installApkAndScheduleDelete(context, file)
-                        onDismiss()
+                        apkAlreadyDownloaded.value = apkFile.exists()
+                        // Launch standard package installer via FileProvider — most reliable method
+                        launchApkInstaller(context, apkFile)
                         break
                     }
                     DownloadManager.STATUS_FAILED -> { dlState = DlState.Error; break }
@@ -452,7 +448,6 @@ private fun CallRecordingDialog(onDismiss: () -> Unit) {
             confirmButton = { TextButton(onClick = { dlState = DlState.Idle; onDismiss() }) { Text("OK") } }
         )
         else -> {
-            // Main dialog
             AlertDialog(
                 onDismissRequest = onDismiss,
                 icon = {
@@ -465,79 +460,88 @@ private fun CallRecordingDialog(onDismiss: () -> Unit) {
                             "Ever Call Recorder is a companion app that adds call recording support.",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        val pm = context.packageManager
-                        val isInstalled = try { pm.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }
-                        if (isInstalled) {
-                            Text(
-                                "Ever Call Recorder is already installed.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF4CAF50)
-                            )
+                        if (isInstalled.value) {
+                            Text("Ever Call Recorder is already installed.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF4CAF50))
+                        } else if (apkAlreadyDownloaded.value) {
+                            Text("APK already downloaded. Tap Install to proceed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 },
                 confirmButton = {
-                    val pm = context.packageManager
-                    val isInstalled = try { pm.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }
-                    if (isInstalled) {
-                        Button(
-                            onClick = {
-                                val launchIntent = pm.getLaunchIntentForPackage(recorderPkg)
-                                if (launchIntent != null) context.startActivity(launchIntent)
-                                onDismiss()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                        ) { Text("Open App") }
-                    } else {
-                        Button(
-                            onClick = {
-                                dlState = DlState.Fetching
-                                scope.launch {
-                                    try {
-                                        val apkUrl = withContext(Dispatchers.IO) {
-                                            val conn = URL(apiUrl).openConnection() as HttpURLConnection
-                                            conn.setRequestProperty("Accept", "application/vnd.github+json")
-                                            conn.connect()
-                                            val json = JSONObject(conn.inputStream.bufferedReader().readText())
-                                            val assets = json.getJSONArray("assets")
-                                            var url: String? = null
-                                            for (i in 0 until assets.length()) {
-                                                val a = assets.getJSONObject(i)
-                                                if (a.getString("name").endsWith(".apk")) {
-                                                    url = a.getString("browser_download_url")
-                                                    break
+                    when {
+                        isInstalled.value -> {
+                            Button(
+                                onClick = {
+                                    // Re-check at click time so it reflects actual install state
+                                    val launch = try { pm.getLaunchIntentForPackage(recorderPkg) } catch (_: Exception) { null }
+                                    if (launch != null) {
+                                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(launch)
+                                    }
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                            ) { Text("Open App") }
+                        }
+                        apkAlreadyDownloaded.value -> {
+                            Button(
+                                onClick = { launchApkInstaller(context, apkFile) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) { Text("Install") }
+                        }
+                        else -> {
+                            Button(
+                                onClick = {
+                                    dlState = DlState.Fetching
+                                    scope.launch {
+                                        try {
+                                            val releaseInfo = withContext(Dispatchers.IO) {
+                                                val conn = URL(apiUrl).openConnection() as HttpURLConnection
+                                                conn.setRequestProperty("Accept", "application/vnd.github+json")
+                                                conn.connectTimeout = 10_000
+                                                conn.readTimeout = 10_000
+                                                conn.connect()
+                                                val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                                                val tag = json.optString("tag_name", "").trimStart('v')
+                                                val assets = json.optJSONArray("assets")
+                                                var url: String? = null
+                                                if (assets != null) {
+                                                    for (i in 0 until assets.length()) {
+                                                        val a = assets.getJSONObject(i)
+                                                        if (a.optString("name").endsWith(".apk", ignoreCase = true)) {
+                                                            url = a.optString("browser_download_url")
+                                                            break
+                                                        }
+                                                    }
                                                 }
+                                                Pair(tag, url)
                                             }
-                                            url
-                                        }
-                                        if (apkUrl != null) {
-                                            val req = DownloadManager.Request(Uri.parse(apkUrl))
-                                                .setTitle("Ever Call Recorder")
-                                                .setDescription("Downloading…")
-                                                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "EverCallRecorder.apk")
-                                                .setMimeType("application/vnd.android.package-archive")
-                                            val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as DownloadManager
-                                            val dlId = dm.enqueue(req)
-                                            val version = try {
-                                                withContext(Dispatchers.IO) {
-                                                    val conn2 = URL(apiUrl).openConnection() as HttpURLConnection
-                                                    conn2.setRequestProperty("Accept", "application/vnd.github+json")
-                                                    conn2.connect()
-                                                    JSONObject(conn2.inputStream.bufferedReader().readText()).getString("tag_name").trimStart('v')
-                                                }
-                                            } catch (_: Exception) { "" }
-                                            dlState = DlState.Downloading(version, dlId, 0f)
-                                        } else {
+                                            val (version, apkUrl) = releaseInfo
+                                            if (apkUrl != null) {
+                                                // Delete stale APK before re-download
+                                                if (apkFile.exists()) apkFile.delete()
+                                                val req = DownloadManager.Request(Uri.parse(apkUrl))
+                                                    .setTitle("Ever Call Recorder")
+                                                    .setDescription("Downloading v$version…")
+                                                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                                                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "EverCallRecorder.apk")
+                                                    .setMimeType("application/vnd.android.package-archive")
+                                                    .setAllowedOverMetered(true)
+                                                    .setAllowedOverRoaming(true)
+                                                val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as DownloadManager
+                                                val dlId = dm.enqueue(req)
+                                                dlState = DlState.Downloading(version, dlId, 0f)
+                                            } else {
+                                                dlState = DlState.Error
+                                            }
+                                        } catch (_: Exception) {
                                             dlState = DlState.Error
                                         }
-                                    } catch (_: Exception) {
-                                        dlState = DlState.Error
                                     }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                        ) { Text("Download") }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                            ) { Text("Download") }
+                        }
                     }
                 },
                 dismissButton = {
@@ -551,6 +555,22 @@ private fun CallRecordingDialog(onDismiss: () -> Unit) {
             )
         }
     }
+}
+
+/** Install an APK via the standard Android package installer (FileProvider URI). */
+internal fun launchApkInstaller(context: Context, file: File) {
+    try {
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        } else {
+            Uri.fromFile(file)
+        }
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {}
 }
 
 @Composable

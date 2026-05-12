@@ -214,6 +214,21 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
 
+    // Call recorder install state (top-level so it re-checks on resume)
+    val recorderPkgTopLevel = "com.coolappstore.evercallrecorder.by.svhp"
+    fun isRecorderInstalled(): Boolean = try { context.packageManager.getPackageInfo(recorderPkgTopLevel, 0); true } catch (_: Exception) { false }
+    var recorderInstalled by remember { mutableStateOf(isRecorderInstalled()) }
+    DisposableEffect(activity) {
+        val recorderLifecycleOwner = activity as? androidx.lifecycle.LifecycleOwner
+        val recorderObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME)
+                recorderInstalled = isRecorderInstalled()
+        }
+        recorderLifecycleOwner?.lifecycle?.addObserver(recorderObserver)
+        onDispose { recorderLifecycleOwner?.lifecycle?.removeObserver(recorderObserver) }
+    }
+    var showRecordingDialog by remember { mutableStateOf(false) }
+
     // ── Haptics Dialog ────────────────────────────────────────────────────────
     if (showHapticsDialog) {
         fun triggerPreviewVibration(strength: String) {
@@ -1127,6 +1142,45 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { navigator.navigate(CallSettingsScreenDestination) }
                             )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // ── Call Recording (separate card) ────────────────────
+                        val recorderPkg = recorderPkgTopLevel
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Call Recording",
+                                supporting = if (recorderInstalled) "Open Ever Call Recorder" else "Download the Ever Call Recorder companion app",
+                                leadingIcon = Icons.Default.FiberManualRecord,
+                                iconContainerColor = Color(0xFFE53935),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    val isActuallyInstalled = try { context.packageManager.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }
+                                    if (isActuallyInstalled) {
+                                        val launch = Intent().apply {
+                                            setClassName(recorderPkg, "com.coolappstore.evercallrecorder.by.svhp.ui.MainActivity")
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                        }
+                                        try { context.startActivity(launch) } catch (_: Exception) {}
+                                    } else {
+                                        showRecordingDialog = true
+                                    }
+                                }
+                            )
+                        }
+                        if (showRecordingDialog) {
+                            val isInstalledNow = try { context.packageManager.getPackageInfo(recorderPkg, 0); true } catch (_: Exception) { false }
+                            if (isInstalledNow) {
+                                showRecordingDialog = false
+                                val launch = Intent().apply {
+                                    setClassName(recorderPkg, "com.coolappstore.evercallrecorder.by.svhp.ui.MainActivity")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                }
+                                try { context.startActivity(launch) } catch (_: Exception) {}
+                            } else {
+                                CallRecordingDialog(onDismiss = { showRecordingDialog = false })
+                            }
                         }
                     }
                 }
