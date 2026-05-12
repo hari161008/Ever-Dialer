@@ -102,10 +102,20 @@ class CallLogViewModel(
         isFetching = true
         try {
             val result = callLogRepo.getCallLogs()
+            // Only push an update to the UI if the data actually changed.
+            // This prevents a visible "refresh flicker" when the disk cache
+            // and the freshly-fetched data are identical (the common case on
+            // every app open after the first one).
+            val changed = result.size != cachedLogs.size ||
+                result.zip(cachedLogs).any { (a, b) ->
+                    a.number != b.number || a.date != b.date || a.type != b.type
+                }
             cachedLogs = result
             saveToDisk(result)
-            withContext(Dispatchers.Main) {
-                _allCallLogs.value = result
+            if (changed) {
+                withContext(Dispatchers.Main) {
+                    _allCallLogs.value = result
+                }
             }
         } finally {
             isFetching = false

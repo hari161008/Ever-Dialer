@@ -81,6 +81,7 @@ import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
+import androidx.compose.ui.util.lerp
 
 class CallActivity : ComponentActivity() {
 
@@ -369,9 +370,21 @@ fun ExpressiveCallScreen(
 
     var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
     var screenEntered by remember { mutableStateOf(true) }
-    // Fully static — no scale, no alpha animation — zero movement on entry
-    val acceptScale = 1f
-    val acceptAlpha = 1f
+
+    // Smooth answer transition: when ringing → active, gently scale + fade the UI in.
+    var callAnswered by remember { mutableStateOf(false) }
+    LaunchedEffect(callState) {
+        if (callState == Call.STATE_ACTIVE && wasRinging && !callAnswered) {
+            callAnswered = true
+        }
+    }
+    val answerProgress by animateFloatAsState(
+        targetValue = if (wasRinging && !callAnswered) 0f else 1f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "answerProgress"
+    )
+    val acceptScale = if (wasRinging) lerp(0.96f, 1f, answerProgress) else 1f
+    val acceptAlpha = if (wasRinging) lerp(0.7f, 1f, answerProgress) else 1f
 
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
@@ -643,6 +656,8 @@ fun ExpressiveCallScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = frozenStatusBarHeight, bottom = frozenNavBarHeight)
+                        .scale(acceptScale)
+                        .alpha(acceptAlpha)
                 ) {
                     // ── Top: caller info — absolutely top-anchored, never affected by bottom content ──
                     Column(
@@ -650,7 +665,7 @@ fun ExpressiveCallScreen(
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .align(Alignment.TopCenter)
-                            .padding(top = 72.dp),
+                            .padding(top = 130.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Top
                     ) {

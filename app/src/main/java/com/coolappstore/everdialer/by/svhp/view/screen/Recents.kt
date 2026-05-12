@@ -420,33 +420,45 @@ fun CallLogFullContent(
                 }
 
                 // ── Animated content: slides left/right on filter change ──────
+                // On the very first data load (startup) we use a slow fade-in so the
+                // list appears gracefully instead of jumping. Once the user starts
+                // changing filters the normal slide transition takes over.
+                var hasLoadedOnce by remember { mutableStateOf(false) }
                 AnimatedContent(
                     targetState = Pair(selectedFilter, groupedLogs),
                     transitionSpec = {
-                        val currentIdx = filterEntries.indexOf(targetState.first)
-                        val prevIdx = filterEntries.indexOf(initialState.first)
-                        val goingRight = currentIdx > prevIdx
-                        if (goingRight) {
-                            slideInHorizontally(
-                                initialOffsetX = { it },
-                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                            ) togetherWith slideOutHorizontally(
-                                targetOffsetX = { -it },
-                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                            )
+                        val filterChanged = initialState.first != targetState.first
+                        if (!hasLoadedOnce || !filterChanged) {
+                            // Startup / data-only refresh: slow gentle fade, no slide
+                            fadeIn(animationSpec = tween(600, easing = LinearOutSlowInEasing)) togetherWith
+                                fadeOut(animationSpec = tween(0))
                         } else {
-                            slideInHorizontally(
-                                initialOffsetX = { -it },
-                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                            ) togetherWith slideOutHorizontally(
-                                targetOffsetX = { it },
-                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                            )
+                            val currentIdx = filterEntries.indexOf(targetState.first)
+                            val prevIdx = filterEntries.indexOf(initialState.first)
+                            val goingRight = currentIdx > prevIdx
+                            if (goingRight) {
+                                slideInHorizontally(
+                                    initialOffsetX = { it },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) togetherWith slideOutHorizontally(
+                                    targetOffsetX = { -it },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                )
+                            } else {
+                                slideInHorizontally(
+                                    initialOffsetX = { -it },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) togetherWith slideOutHorizontally(
+                                    targetOffsetX = { it },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                )
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
                     label = "filterSlide"
                 ) { (_, currentGroupedLogs) ->
+                    LaunchedEffect(Unit) { hasLoadedOnce = true }
                     ScrollHapticsEffect(listState = listState)
                     LazyColumn(
                         state = listState,

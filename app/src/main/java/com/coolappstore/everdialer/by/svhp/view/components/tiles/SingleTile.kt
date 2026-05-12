@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -50,6 +51,7 @@ fun SingleTile(
     titleTrailing: (@Composable () -> Unit)? = null,
     isMissedCall: Boolean = false,
     phoneNumber: String? = null,
+    onAvatarClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -115,7 +117,26 @@ fun SingleTile(
                 photoUri           = photoUri,
                 icon               = icon,
                 iconContainerColor = iconContainerColor,
-                modifier           = Modifier.size(42.dp),
+                modifier           = Modifier
+                    .size(42.dp)
+                    .then(
+                        if (onAvatarClick != null)
+                            Modifier.combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                        performAppHaptic(
+                                            context,
+                                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                        )
+                                    }
+                                    onAvatarClick()
+                                }
+                            )
+                        else Modifier
+                    ),
                 shape              = RoundedCornerShape(14.dp)
             )
 

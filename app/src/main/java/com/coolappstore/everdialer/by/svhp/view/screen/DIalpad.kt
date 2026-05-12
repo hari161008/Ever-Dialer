@@ -315,8 +315,12 @@ fun DialPadContent(
                                     title    = contact.name,
                                     subtitle = contact.phoneNumbers.firstOrNull(),
                                     photoUri = contact.photoUri,
-                                    onClick  = {
+                                    onAvatarClick = {
                                         navigator?.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                                    },
+                                    onClick  = {
+                                        val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
+                                        makeCall(context, num)
                                     }
                                 )
                             }
@@ -493,8 +497,12 @@ fun DialPadContent(
                                 title    = contact.name,
                                 subtitle = contact.phoneNumbers.firstOrNull(),
                                 photoUri = contact.photoUri,
-                                onClick  = {
+                                onAvatarClick = {
                                     navigator?.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                                },
+                                onClick  = {
+                                    val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
+                                    makeCall(context, num)
                                 }
                             )
                         }
