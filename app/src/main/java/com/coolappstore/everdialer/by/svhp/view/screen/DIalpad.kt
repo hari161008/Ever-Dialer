@@ -158,6 +158,7 @@ fun DialPadContent(
     val t9Enabled = prefs.getBoolean(PreferenceManager.KEY_T9_DIALING, true)
     var showSimPicker by remember { mutableStateOf(false) }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+    var pendingSearchCallNumber by remember { mutableStateOf<String?>(null) }
 
     // Helper: place a call respecting the default SIM preference
     fun placeCallWithSimPreference(num: String) {
@@ -167,7 +168,10 @@ fun DialPadContent(
             when {
                 simPref == 1 && accounts.size >= 1 -> makeCall(context, num, accounts[0])
                 simPref == 2 && accounts.size >= 2 -> makeCall(context, num, accounts[1])
-                else -> showSimPicker = true
+                else -> {
+                    pendingSearchCallNumber = num
+                    showSimPicker = true
+                }
             }
         } else {
             makeCall(context, num)
@@ -223,10 +227,28 @@ fun DialPadContent(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.CALL_PHONE] == true) {
+            val numToCall = pendingSearchCallNumber ?: number
+            pendingSearchCallNumber = null
             val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
             if (hasPhoneState) {
-                placeCallWithSimPreference(number)
-            } else makeCall(context, number)
+                placeCallWithSimPreference(numToCall)
+            } else makeCall(context, numToCall)
+        } else {
+            pendingSearchCallNumber = null
+        }
+    }
+
+    fun initiateCall(num: String) {
+        val cleanNum = num.trim()
+        if (cleanNum.isEmpty() || cleanNum == "Unknown") return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+            if (hasPhoneState) {
+                placeCallWithSimPreference(cleanNum)
+            } else makeCall(context, cleanNum)
+        } else {
+            pendingSearchCallNumber = cleanNum
+            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
         }
     }
 
@@ -234,7 +256,8 @@ fun DialPadContent(
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
             onSimSelected = { handle ->
-                makeCall(context, number, handle)
+                makeCall(context, pendingSearchCallNumber ?: number, handle)
+                pendingSearchCallNumber = null
                 showSimPicker = false
             }
         )
@@ -333,7 +356,7 @@ fun DialPadContent(
                                     },
                                     onClick  = {
                                         val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
-                                        makeCall(context, num)
+                                        initiateCall(num)
                                     }
                                 )
                             }
@@ -399,13 +422,7 @@ fun DialPadContent(
                         DialerActionExpressive(
                             onClick = {
                                 if (number.isNotEmpty()) {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                                            placeCallWithSimPreference(number)
-                                        } else makeCall(context, number)
-                                    } else {
-                                        callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
-                                    }
+                                    initiateCall(number)
                                 }
                             },
                             icon = Icons.Default.Call,
@@ -513,7 +530,7 @@ fun DialPadContent(
                                 },
                                 onClick  = {
                                     val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
-                                    makeCall(context, num)
+                                    initiateCall(num)
                                 }
                             )
                         }
@@ -522,7 +539,6 @@ fun DialPadContent(
             }
         }
 
-        // Unknown number pills
         AnimatedVisibility(
             visible = number.isNotEmpty() && searchResults.isEmpty() && searchQuery.isEmpty(),
             enter = fadeIn() + expandVertically(),
@@ -763,13 +779,7 @@ fun DialPadContent(
                     DialerActionExpressive(
                         onClick = {
                             if (number.isNotEmpty()) {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                                        placeCallWithSimPreference(number)
-                                    } else makeCall(context, number)
-                                } else {
-                                    callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
-                                }
+                                initiateCall(number)
                             }
                         },
                         icon = Icons.Default.Call,

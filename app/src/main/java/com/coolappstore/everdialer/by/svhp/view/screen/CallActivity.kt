@@ -314,13 +314,25 @@ fun ExpressiveCallScreen(
     // a brief STATE_RINGING flash as already-active for UI purposes
     val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
     var isOnHold by remember { mutableStateOf(false) }
-    var callDuration by remember { mutableLongStateOf(0L) }
-    val isDark = isSystemInDarkTheme()
     var showNoteWindow by remember { mutableStateOf(false) }
     var showMergeConfirm by remember { mutableStateOf(false) }
     var showAddPersonSheet by remember { mutableStateOf(false) }
     var showDialpad by remember { mutableStateOf(false) }
     var dtmfInput by remember { mutableStateOf("") }
+
+    // Auto-dismiss merge confirm dialog if the held call disappears (3rd person hung up)
+    LaunchedEffect(hasHeldCall) {
+        if (!hasHeldCall) {
+            showMergeConfirm = false
+            showAddPersonSheet = false
+            if (callState == Call.STATE_ACTIVE) {
+                isOnHold = false
+            }
+        }
+    }
+
+    var callDuration by remember { mutableLongStateOf(0L) }
+    val isDark = isSystemInDarkTheme()
 
     // Hangup button width from prefs (0.1f .. 1.0f)
     val settingsVersion by (prefs?.settingsChanged ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
@@ -389,6 +401,8 @@ fun ExpressiveCallScreen(
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
         if (callState == Call.STATE_RINGING) wasRinging = true
+        // If call returns to active from holding (e.g. held call restored), sync isOnHold
+        if (callState == Call.STATE_ACTIVE && isOnHold) isOnHold = false
     }
 
     LaunchedEffect(callState) {
@@ -443,12 +457,14 @@ fun ExpressiveCallScreen(
             onPersonSelected = { number ->
                 showAddPersonSheet = false
                 scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    // Hold the current call
-                    try { call.hold() } catch (_: Exception) {}
-                    // Signal CallService to auto-merge once the 2nd call is answered,
-                    // or restore call 1 if the 2nd person rejects
+                    // Hold the current call and reflect that in UI
+                    try {
+                        call.hold()
+                        isOnHold = true
+                    } catch (_: Exception) {}
+                    // Signal CallService to auto-merge once the 3rd call is answered
                     CallService.isAddingToCall = true
-                    delay(400)
+                    delay(500)
                     try {
                         val appContext = context.applicationContext
                         val telecomManager = appContext.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
@@ -458,10 +474,12 @@ fun ExpressiveCallScreen(
                             telecomManager.placeCall(uri, android.os.Bundle())
                         } else {
                             CallService.isAddingToCall = false
+                            isOnHold = false
                             try { call.unhold() } catch (_: Exception) {}
                         }
                     } catch (_: Exception) {
                         CallService.isAddingToCall = false
+                        isOnHold = false
                         try { call.unhold() } catch (_: Exception) {}
                     }
                 }

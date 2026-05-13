@@ -54,8 +54,10 @@ fun formatDuration(durationSeconds: Long): String {
 }
 
 fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null) {
+    val sanitized = number.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if (sanitized.isEmpty()) return
     val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-    val uri = Uri.fromParts("tel", number, null)
+    val uri = Uri.fromParts("tel", sanitized, null)
     val extras = Bundle()
     if (accountHandle != null) {
         extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accountHandle)
@@ -63,7 +65,6 @@ fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
         telecomManager.placeCall(uri, extras)
     } else {
-        
         val intent = Intent(Intent.ACTION_DIAL, uri)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)

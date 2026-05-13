@@ -89,29 +89,43 @@ class CallService : InCallService() {
             if (isAddingToCall && _currentCallSession.value?.call == call) {
                 when (state) {
                     Call.STATE_ACTIVE -> {
-                        // 2nd person answered → auto-merge immediately
+                        // 3rd person answered → auto-merge with delay so telecom settles
                         isAddingToCall = false
-                        mergeCalls()
+                        _currentCallSession.value = CallSession(call, state)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            mergeCalls()
+                        }, 1200)
                         return
                     }
-                    Call.STATE_DISCONNECTED,
                     Call.STATE_DISCONNECTING -> {
-                        // 2nd person rejected or hung up before answering → restore call 1
+                        // 3rd person call ending — update state but wait for DISCONNECTED
+                        _currentCallSession.value = CallSession(call, state)
+                        return
+                    }
+                    Call.STATE_DISCONNECTED -> {
+                        // 3rd person rejected/hung up before or after answering — restore call 1
                         isAddingToCall = false
-                        _currentCallSession.value = null
+                        // Don't update _currentCallSession here; onCallRemoved will handle cleanup
+                        // Promote held call immediately so UI updates
                         val held = _heldCallSession.value
                         if (held != null) {
                             _heldCallSession.value = null
                             _currentCallSession.value = CallSession(held.call, held.call.state)
-                            try { held.call.unhold() } catch (_: Exception) {}
-                        }
-                        if (_currentCallSession.value == null) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                try { held.call.unhold() } catch (_: Exception) {}
+                            }, 300)
+                        } else {
+                            _currentCallSession.value = null
                             removeForeground()
                             cancelNotification()
                         }
                         return
                     }
-                    else -> { /* DIALING / CONNECTING — keep waiting */ }
+                    else -> {
+                        // DIALING / CONNECTING — update state and keep waiting
+                        _currentCallSession.value = CallSession(call, state)
+                        return
+                    }
                 }
             }
 
@@ -125,9 +139,11 @@ class CallService : InCallService() {
                 if (_currentCallSession.value?.call == call) {
                     _currentCallSession.value = null
                     _heldCallSession.value?.let { held ->
-                        _currentCallSession.value = held
                         _heldCallSession.value = null
-                        try { held.call.unhold() } catch (_: Exception) {}
+                        _currentCallSession.value = CallSession(held.call, held.call.state)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            try { held.call.unhold() } catch (_: Exception) {}
+                        }, 300)
                     }
                 } else if (_heldCallSession.value?.call == call) {
                     _heldCallSession.value = null
@@ -148,6 +164,39 @@ class CallService : InCallService() {
             } else {
                 updateNotification(call)
             }
+        }
+    }
+
+    override fun onCallRemoved(call: Call) {
+        super.onCallRemoved(call)
+        call.unregisterCallback(callCallback)
+        call.unregisterCallback(heldCallCallback)
+
+        if (isMerging) {
+            if (_currentCallSession.value?.call == call) _currentCallSession.value = null
+            if (_heldCallSession.value?.call == call)   _heldCallSession.value   = null
+            return
+        }
+
+        // If isAddingToCall was already handled in onStateChanged (DISCONNECTED case),
+        // the currentCallSession is already promoted — skip duplicate handling
+        if (_currentCallSession.value?.call == call) {
+            _currentCallSession.value = null
+            _heldCallSession.value?.let { held ->
+                _heldCallSession.value = null
+                _currentCallSession.value = CallSession(held.call, held.call.state)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    try { held.call.unhold() } catch (_: Exception) {}
+                }, 300)
+            }
+        } else if (_heldCallSession.value?.call == call) {
+            _heldCallSession.value = null
+        }
+
+        if (_currentCallSession.value == null) {
+            instance = null
+            removeForeground()
+            cancelNotification()
         }
     }
 
@@ -222,34 +271,6 @@ class CallService : InCallService() {
         _currentCallSession.value = CallSession(call, call.state)
         updateNotification(call)
         if (call.state != Call.STATE_RINGING) launchCallActivity()
-    }
-
-    override fun onCallRemoved(call: Call) {
-        super.onCallRemoved(call)
-        call.unregisterCallback(callCallback)
-        call.unregisterCallback(heldCallCallback)
-
-        if (isMerging) {
-            if (_currentCallSession.value?.call == call) _currentCallSession.value = null
-            if (_heldCallSession.value?.call == call)   _heldCallSession.value   = null
-            return
-        }
-
-        if (_currentCallSession.value?.call == call) {
-            _currentCallSession.value = null
-            _heldCallSession.value?.let { held ->
-                _currentCallSession.value = held
-                _heldCallSession.value = null
-                try { held.call.unhold() } catch (_: Exception) {}
-            }
-        } else if (_heldCallSession.value?.call == call) {
-            _heldCallSession.value = null
-        }
-        if (_currentCallSession.value == null) {
-            instance = null
-            removeForeground()
-            cancelNotification()
-        }
     }
 
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
