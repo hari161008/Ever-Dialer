@@ -94,11 +94,33 @@ class CallActivity : ComponentActivity() {
     private var sensorManager: SensorManager? = null
     private var proximitySensor: Sensor? = null
     private var isPocketBlocked = false
+    // Auto-speaker proximity tracking
+    private var autoSpeakerActive = false
     private val proxSensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
-            if (!prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) return
             val maxRange = event.sensor.maximumRange
-            isPocketBlocked = event.values[0] < maxRange * 0.1f
+            val isNear = event.values[0] < maxRange * 0.5f
+
+            // Pocket mode prevention
+            if (prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) {
+                isPocketBlocked = isNear
+            }
+
+            // Auto speaker: near -> earpiece, far -> speaker
+            if (prefs.getBoolean(PreferenceManager.KEY_AUTO_SPEAKER, false)) {
+                val session = CallService.currentCallSession.value
+                if (session != null && (session.state == android.telecom.Call.STATE_ACTIVE)) {
+                    if (isNear && autoSpeakerActive) {
+                        // Near ear: switch to earpiece
+                        CallService.setAudioRoute(android.telecom.CallAudioState.ROUTE_EARPIECE)
+                        autoSpeakerActive = false
+                    } else if (!isNear && !autoSpeakerActive) {
+                        // Far from ear: switch to speaker
+                        CallService.setAudioRoute(android.telecom.CallAudioState.ROUTE_SPEAKER)
+                        autoSpeakerActive = true
+                    }
+                }
+            }
         }
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
     }
@@ -320,11 +342,24 @@ fun ExpressiveCallScreen(
     var showDialpad by remember { mutableStateOf(false) }
     var dtmfInput by remember { mutableStateOf("") }
 
+    // Track isAddingToCall from service so Merge button only shows when 3rd party answered
+    var isAddingToCallState by remember { mutableStateOf(CallService.isAddingToCall) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            isAddingToCallState = CallService.isAddingToCall
+            kotlinx.coroutines.delay(200)
+        }
+    }
+
+    // Merge is only available when held call exists AND we are NOT still dialing the 3rd party
+    val canShowMerge = hasHeldCall && !isAddingToCallState
+
     // Auto-dismiss merge confirm dialog if the held call disappears (3rd person hung up)
     LaunchedEffect(hasHeldCall) {
         if (!hasHeldCall) {
             showMergeConfirm = false
             showAddPersonSheet = false
+            isAddingToCallState = false
             if (callState == Call.STATE_ACTIVE) {
                 isOnHold = false
             }
@@ -769,7 +804,7 @@ fun ExpressiveCallScreen(
                                         if (isOnHold) call.hold() else call.unhold()
                                     }
 
-                                    if (hasHeldCall) {
+                                    if (canShowMerge) {
                                         AnimatedCallButton(
                                             icon = Icons.Default.CallMerge,
                                             label = "Merge",

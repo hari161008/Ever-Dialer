@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -56,6 +58,121 @@ fun AZListScroll(
     navigator: DestinationsNavigator,
     modifier: Modifier = Modifier,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
+) {
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedContacts by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showContactsSelectionMenu by remember { mutableStateOf(false) }
+    var showContactsDeleteConfirm by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val contactsVM: ContactsViewModel = koinActivityViewModel()
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedContacts = emptySet()
+    }
+
+    if (showContactsDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showContactsDeleteConfirm = false },
+            title = { Text("Delete ${selectedContacts.size} contacts?") },
+            text = { Text("This will permanently delete the selected contacts.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showContactsDeleteConfirm = false
+                        selectedContacts.forEach { contactsVM.deleteContact(it) }
+                        selectedContacts = emptySet()
+                        selectionMode = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showContactsDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Selection top bar
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+        ) {
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { selectionMode = false; selectedContacts = emptySet() }) {
+                        Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Text(
+                        "${selectedContacts.size} selected",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        IconButton(onClick = { showContactsSelectionMenu = true }) {
+                            Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        DropdownMenu(expanded = showContactsSelectionMenu, onDismissRequest = { showContactsSelectionMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showContactsSelectionMenu = false; if (selectedContacts.isNotEmpty()) showContactsDeleteConfirm = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share") },
+                                leadingIcon = { Icon(Icons.Default.Share, null) },
+                                onClick = {
+                                    showContactsSelectionMenu = false
+                                    val text = contacts.filter { selectedContacts.contains(it.id) }
+                                        .joinToString("\n") { "${it.name}: ${it.phoneNumbers.firstOrNull() ?: ""}" }
+                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                    context.startActivity(Intent.createChooser(intent, "Share contacts"))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Select All") },
+                                leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                onClick = { showContactsSelectionMenu = false; selectedContacts = contacts.map { it.id }.toSet() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        AZListContent(
+            contacts = contacts,
+            navigator = navigator,
+            listState = listState,
+            selectionMode = selectionMode,
+            selectedContacts = selectedContacts,
+            onSelectMode = { contact ->
+                selectionMode = true
+                selectedContacts = setOf(contact.id)
+            },
+            onSelectToggle = { contact ->
+                selectedContacts = if (selectedContacts.contains(contact.id))
+                    selectedContacts - contact.id else selectedContacts + contact.id
+            }
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+fun AZListContent(
+    contacts: List<Contact>,
+    navigator: DestinationsNavigator,
+    modifier: Modifier = Modifier,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    selectionMode: Boolean = false,
+    selectedContacts: Set<String> = emptySet(),
+    onSelectMode: (Contact) -> Unit = {},
+    onSelectToggle: (Contact) -> Unit = {}
 ) {
     val grouped = remember(contacts) {
         val mainGroups = contacts.groupBy {
@@ -152,7 +269,14 @@ fun AZListScroll(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column {
-                                ContactListItem(contact = contact, navigator = navigator)
+                                ContactListItem(
+                                    contact = contact,
+                                    navigator = navigator,
+                                    selectionMode = selectionMode,
+                                    isSelected = selectedContacts.contains(contact.id),
+                                    onSelectMode = { onSelectMode(contact) },
+                                    onSelectToggle = { onSelectToggle(contact) }
+                                )
                                 if (!isLast) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -211,7 +335,11 @@ fun AZListScroll(
 @Composable
 private fun ContactListItem(
     contact: Contact,
-    navigator: DestinationsNavigator
+    navigator: DestinationsNavigator,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onSelectMode: () -> Unit = {},
+    onSelectToggle: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -267,14 +395,18 @@ private fun ContactListItem(
                 .combinedClickable(
                     onClick = {
                         if (horizontalDragDetected) return@combinedClickable
-                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                            performAppHaptic(
-                                context,
-                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                            )
+                        if (selectionMode) {
+                            onSelectToggle()
+                        } else {
+                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                performAppHaptic(
+                                    context,
+                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                )
+                            }
+                            navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                         }
-                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                     },
                     onLongClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -327,10 +459,33 @@ private fun ContactListItem(
             }
         }
 
+        if (selectionMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSelectToggle() },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 8.dp)
+            )
+        }
+
         RivoDropdownMenu(
-            expanded         = showMenu,
+            expanded         = showMenu && !selectionMode,
             onDismissRequest = { showMenu = false }
         ) {
+            RivoDropdownMenuItem(
+                text     = "Select",
+                icon     = Icons.Default.CheckBox,
+                iconTint = Color(0xFF9C27B0),
+                onClick  = {
+                    showMenu = false
+                    onSelectMode()
+                }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
             RivoDropdownMenuItem(
                 text     = "View contact",
                 icon     = Icons.Default.Person,
@@ -405,7 +560,7 @@ private fun ContactListItem(
             )
         }
     }
-}
+} // end AZListContent
 
 @Composable
 fun AlphabetSideBar(

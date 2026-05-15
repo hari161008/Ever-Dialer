@@ -21,11 +21,13 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.*
+import android.content.Intent
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
@@ -57,6 +59,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactScreenDest
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -89,6 +92,19 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     var fabVisible by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // Hoisted selection state
+    val context = LocalContext.current
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedLogs by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showSelectionDeleteConfirm by remember { mutableStateOf(false) }
+    var showSelectionMenuOuter by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedLogs = emptySet()
+    }
+
     val fabScale by animateFloatAsState(
         targetValue = if (fabVisible) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -239,14 +255,79 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            CallLogFullContent(
-                navController = navController,
-                navigator = navigator,
-                isGranted = permState.status == PermissionStatus.Granted,
-                onRequestPermission = { permState.launchPermissionRequest() },
-                listState = listState
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                CallLogFullContent(
+                    navController = navController,
+                    navigator = navigator,
+                    isGranted = permState.status == PermissionStatus.Granted,
+                    onRequestPermission = { permState.launchPermissionRequest() },
+                    listState = listState,
+                    selectionMode = selectionMode,
+                    selectedLogs = selectedLogs,
+                    onSelectionModeChange = { selectionMode = it },
+                    onSelectedLogsChange = { selectedLogs = it },
+                    showSelectionDeleteConfirm = showSelectionDeleteConfirm,
+                    onShowSelectionDeleteConfirmChange = { showSelectionDeleteConfirm = it }
+                )
+            }
+            // Selection bar overlays the top bar - no innerPadding applied
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier.fillMaxWidth().zIndex(10f)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { selectionMode = false; selectedLogs = emptySet() }) {
+                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Text(
+                            "${selectedLogs.size} selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box {
+                            IconButton(onClick = { showSelectionMenuOuter = true }) {
+                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            DropdownMenu(expanded = showSelectionMenuOuter, onDismissRequest = { showSelectionMenuOuter = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Delete") },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = { showSelectionMenuOuter = false; if (selectedLogs.isNotEmpty()) showSelectionDeleteConfirm = true }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share") },
+                                    leadingIcon = { Icon(Icons.Default.Share, null) },
+                                    onClick = {
+                                        showSelectionMenuOuter = false
+                                        val text = selectedLogs.joinToString("\n") { it.split("|").firstOrNull() ?: it }
+                                        val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                        context.startActivity(Intent.createChooser(intent, "Share call logs"))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Deselect All") },
+                                    leadingIcon = { Icon(Icons.Default.Close, null) },
+                                    onClick = { showSelectionMenuOuter = false; selectedLogs = emptySet() }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -277,7 +358,13 @@ fun CallLogFullContent(
     navigator: DestinationsNavigator,
     isGranted: Boolean,
     onRequestPermission: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    selectionMode: Boolean = false,
+    selectedLogs: Set<String> = emptySet(),
+    onSelectionModeChange: (Boolean) -> Unit = {},
+    onSelectedLogsChange: (Set<String>) -> Unit = {},
+    showSelectionDeleteConfirm: Boolean = false,
+    onShowSelectionDeleteConfirmChange: (Boolean) -> Unit = {}
 ) {
     val prefs = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
     val settingsVersion by prefs.settingsChanged.collectAsState()
@@ -293,6 +380,40 @@ fun CallLogFullContent(
         var showSimPicker by remember { mutableStateOf(false) }
         var pendingNumber by remember { mutableStateOf<String?>(null) }
         val simPref = remember(settingsVersion) { prefs.getInt("default_sim", 0) }
+
+        // Selection mode state - hoisted to parent
+
+        if (showSelectionDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { onShowSelectionDeleteConfirmChange(false) },
+                title = { Text("Delete ${selectedLogs.size} entries?") },
+                text = { Text("This will permanently delete the selected call log entries.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onShowSelectionDeleteConfirmChange(false)
+                            selectedLogs.forEach { key ->
+                                val parts = key.split("|", limit = 2)
+                                if (parts.size == 2) {
+                                    try {
+                                        context.contentResolver.delete(
+                                            android.provider.CallLog.Calls.CONTENT_URI,
+                                            "${android.provider.CallLog.Calls.NUMBER} = ? AND ${android.provider.CallLog.Calls.DATE} = ?",
+                                            arrayOf(parts[0], parts[1])
+                                        )
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                            onSelectedLogsChange(emptySet())
+                            onSelectionModeChange(false)
+                            viewModel.refreshLogs()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = { onShowSelectionDeleteConfirmChange(false) }) { Text("Cancel") } }
+            )
+        }
 
         // Track previous filter index for slide direction
         val filterEntries = CallLogFilter.entries
@@ -347,6 +468,7 @@ fun CallLogFullContent(
             }
 
             Column(modifier = Modifier.fillMaxSize()) {
+
                 // Stat cards – visibility controlled by Call UI settings
                 val showToday    = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true) }
                 val showMissed   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true) }
@@ -582,8 +704,22 @@ fun CallLogFullContent(
                                                     }
                                                     CallLogTile(
                                                         log = lg,
+                                                        isSelected = selectedLogs.contains("${lg.number}|${lg.date}"),
+                                                        selectionMode = selectionMode,
+                                                        onSelectToggle = { log ->
+                                                            val key = "${log.number}|${log.date}"
+                                                            onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
+                                                        },
+                                                        onSelectMode = { log ->
+                                                            onSelectionModeChange(true)
+                                                            val key = "${log.number}|${log.date}"
+                                                            onSelectedLogsChange(setOf(key))
+                                                        },
                                                         onTileClick = { log ->
-                                                            if (directCall) {
+                                                            if (selectionMode) {
+                                                                val key = "${log.number}|${log.date}"
+                                                                onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
+                                                            } else if (directCall) {
                                                                 placeCallWithSimPreference(context, log.number, simPref) {
                                                                     pendingNumber = log.number; showSimPicker = true
                                                                 }

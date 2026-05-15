@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.telecom.TelecomManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -55,6 +57,15 @@ import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -83,6 +94,34 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     var showSimPicker by remember { mutableStateOf(false) }
     var pendingCallNumber by remember { mutableStateOf<String?>(null) }
     val simPref = remember { prefs.getInt("default_sim", 0) }
+
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedFavorites by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showFavSelectionMenu by remember { mutableStateOf(false) }
+    var showFavDeleteConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedFavorites = emptySet()
+    }
+
+    if (showFavDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showFavDeleteConfirm = false },
+            title = { Text("Remove ${selectedFavorites.size} from Favourites?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showFavDeleteConfirm = false
+                        allContacts.filter { selectedFavorites.contains(it.id) }.forEach { contactsVM.toggleFavorite(it) }
+                        selectedFavorites = emptySet(); selectionMode = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { showFavDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
 
     val callPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -159,6 +198,30 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            ) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectionMode = false; selectedFavorites = emptySet() }) {
+                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Text("${selectedFavorites.size} selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.weight(1f))
+                        Box {
+                            IconButton(onClick = { showFavSelectionMenu = true }) {
+                                Icon(androidx.compose.material.icons.Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            DropdownMenu(expanded = showFavSelectionMenu, onDismissRequest = { showFavSelectionMenu = false }) {
+                                DropdownMenuItem(text = { Text("Remove from Favourites") }, leadingIcon = { Icon(Icons.Default.Favorite, null, tint = MaterialTheme.colorScheme.error) }, onClick = { showFavSelectionMenu = false; if (selectedFavorites.isNotEmpty()) showFavDeleteConfirm = true })
+                                DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Default.SelectAll, null) }, onClick = { showFavSelectionMenu = false; selectedFavorites = favorites.map { it.id }.toSet() })
+                            }
+                        }
+                    }
+                }
+            } // end AnimatedVisibility
             if (favorites.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Icon(Icons.Default.Favorite, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
@@ -184,6 +247,16 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 contactsVM = contactsVM,
                                 navigator = navigator,
                                 context = context,
+                                isSelected = selectedFavorites.contains(contact.id),
+                                selectionMode = selectionMode,
+                                onSelectToggle = {
+                                    val id = contact.id
+                                    selectedFavorites = if (selectedFavorites.contains(id)) selectedFavorites - id else selectedFavorites + id
+                                },
+                                onSelectMode = {
+                                    selectionMode = true
+                                    selectedFavorites = setOf(contact.id)
+                                },
                                 onClick = {
                                     val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
                                     val phoneNumber = contact.phoneNumbers.firstOrNull()
@@ -206,6 +279,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     }
                 }
             }
+            } // end Column
         }
     }
 }
@@ -217,6 +291,10 @@ private fun FavoriteContactCard(
     contactsVM: ContactsViewModel,
     navigator: DestinationsNavigator,
     context: android.content.Context,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    onSelectToggle: (() -> Unit)? = null,
+    onSelectMode: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
@@ -299,6 +377,19 @@ private fun FavoriteContactCard(
         expanded = showMenu,
         onDismissRequest = { showMenu = false }
     ) {
+        RivoDropdownMenuItem(
+            text = "Select",
+            icon = Icons.Default.CheckBox,
+            iconTint = Color(0xFF9C27B0),
+            onClick = {
+                showMenu = false
+                onSelectMode?.invoke()
+            }
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
         RivoDropdownMenuItem(
             text = "Call",
             icon = Icons.Default.Call,

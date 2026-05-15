@@ -85,11 +85,11 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
 
-            // "Add to call" flow — watch the second outgoing call
+            // "Add to call" flow — watch the outgoing 3rd-party call
             if (isAddingToCall && _currentCallSession.value?.call == call) {
                 when (state) {
                     Call.STATE_ACTIVE -> {
-                        // 3rd person answered → auto-merge with delay so telecom settles
+                        // 3rd person answered — update current state and auto-merge
                         isAddingToCall = false
                         _currentCallSession.value = CallSession(call, state)
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -98,15 +98,13 @@ class CallService : InCallService() {
                         return
                     }
                     Call.STATE_DISCONNECTING -> {
-                        // 3rd person call ending — update state but wait for DISCONNECTED
+                        // 3rd party call ending, wait for DISCONNECTED
                         _currentCallSession.value = CallSession(call, state)
                         return
                     }
                     Call.STATE_DISCONNECTED -> {
-                        // 3rd person rejected/hung up before or after answering — restore call 1
+                        // 3rd person rejected/was cancelled/hung up → restore held call (call 1/2)
                         isAddingToCall = false
-                        // Don't update _currentCallSession here; onCallRemoved will handle cleanup
-                        // Promote held call immediately so UI updates
                         val held = _heldCallSession.value
                         if (held != null) {
                             _heldCallSession.value = null
@@ -178,8 +176,29 @@ class CallService : InCallService() {
             return
         }
 
-        // If isAddingToCall was already handled in onStateChanged (DISCONNECTED case),
-        // the currentCallSession is already promoted — skip duplicate handling
+        // If isAddingToCall was set, the DISCONNECTED branch in onStateChanged
+        // already promoted the held call. Guard against double-promotion by
+        // checking whether currentCallSession still points to this call.
+        if (isAddingToCall && _currentCallSession.value?.call == call) {
+            // onStateChanged DISCONNECTED branch didn't fire (race) — handle here
+            isAddingToCall = false
+            val held = _heldCallSession.value
+            if (held != null) {
+                _heldCallSession.value = null
+                _currentCallSession.value = CallSession(held.call, held.call.state)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    try { held.call.unhold() } catch (_: Exception) {}
+                }, 300)
+            } else {
+                _currentCallSession.value = null
+                instance = null
+                removeForeground()
+                cancelNotification()
+            }
+            return
+        }
+
+        // Normal removal — if the current call is removed, promote held call if any
         if (_currentCallSession.value?.call == call) {
             _currentCallSession.value = null
             _heldCallSession.value?.let { held ->

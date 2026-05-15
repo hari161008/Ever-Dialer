@@ -214,6 +214,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
+    var autoSpeaker by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_SPEAKER, false)) }
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
     var defaultSim by remember { mutableStateOf(prefs.getInt("default_sim", 0)) }
     var showSimDialog by remember { mutableStateOf(false) }
@@ -372,6 +373,21 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                                 onCheckedChange = {
                                     directCallOnTap = it
                                     prefs.setBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, it)
+                                }
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline   = "Auto Speaker",
+                                supporting = "Automatically switch to loudspeaker when phone is away from ear, and back to earpiece when near",
+                                leadingIcon = Icons.Outlined.VolumeUp,
+                                iconContainerColor = ColorPink,
+                                checked = autoSpeaker,
+                                onCheckedChange = {
+                                    autoSpeaker = it
+                                    prefs.setBoolean(PreferenceManager.KEY_AUTO_SPEAKER, it)
                                 }
                             )
                         }

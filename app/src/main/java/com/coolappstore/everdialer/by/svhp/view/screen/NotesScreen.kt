@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp.view.screen
 import android.content.Intent
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -38,6 +39,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollHapticsEffect
@@ -75,6 +79,34 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
 
     var notes by remember { mutableStateOf(NoteManager.getAllNotes(context)) }
     var showOverflow by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedNotes by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showNotesSelectionMenu by remember { mutableStateOf(false) }
+    var showNotesDeleteConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedNotes = emptySet()
+    }
+
+    if (showNotesDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showNotesDeleteConfirm = false },
+            title = { Text("Delete ${selectedNotes.size} notes?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotesDeleteConfirm = false
+                        notes.filter { selectedNotes.contains(it.file.absolutePath) }.forEach { it.file.delete() }
+                        selectedNotes = emptySet(); selectionMode = false
+                        notes = NoteManager.getAllNotes(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showNotesDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
     var selectedNote by remember { mutableStateOf<NoteEntry?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var editorNote by remember { mutableStateOf<NoteEntry?>(null) }
@@ -186,6 +218,36 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            ) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectionMode = false; selectedNotes = emptySet() }) {
+                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Text("${selectedNotes.size} selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.weight(1f))
+                        Box {
+                            IconButton(onClick = { showNotesSelectionMenu = true }) {
+                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            DropdownMenu(expanded = showNotesSelectionMenu, onDismissRequest = { showNotesSelectionMenu = false }) {
+                                DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { showNotesSelectionMenu = false; if (selectedNotes.isNotEmpty()) showNotesDeleteConfirm = true })
+                                DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = {
+                                    showNotesSelectionMenu = false
+                                    val text = notes.filter { selectedNotes.contains(it.file.absolutePath) }.joinToString("\n\n") { "${it.contactName}: ${it.content}" }
+                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                    context.startActivity(Intent.createChooser(intent, "Share Notes"))
+                                })
+                                DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Default.SelectAll, null) }, onClick = { showNotesSelectionMenu = false; selectedNotes = notes.map { it.file.absolutePath }.toSet() })
+                            }
+                        }
+                    }
+                }
+            } // end AnimatedVisibility
             if (notes.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -228,9 +290,16 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                         NoteCard(
                             note = note,
                             photoUri = photoUri,
+                            isSelected = selectedNotes.contains(note.file.absolutePath),
+                            selectionMode = selectionMode,
                             onClick = {
-                                editorNote = note
-                                showEditor = true
+                                if (selectionMode) {
+                                    val key = note.file.absolutePath
+                                    selectedNotes = if (selectedNotes.contains(key)) selectedNotes - key else selectedNotes + key
+                                } else {
+                                    editorNote = note
+                                    showEditor = true
+                                }
                             },
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -243,12 +312,28 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                 }
             }
 
+            } // end Column
+
             // Long-press context menu
             if (selectedNote != null) {
                 RivoDropdownMenu(
                     expanded         = true,
                     onDismissRequest = { selectedNote = null }
                 ) {
+                    RivoDropdownMenuItem(
+                        text     = "Select",
+                        icon     = Icons.Default.CheckBox,
+                        iconTint = androidx.compose.ui.graphics.Color(0xFF9C27B0),
+                        onClick  = {
+                            selectionMode = true
+                            selectedNote?.let { selectedNotes = setOf(it.file.absolutePath) }
+                            selectedNote = null
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                     RivoDropdownMenuItem(
                         text     = "Share",
                         icon     = Icons.Default.Share,
@@ -282,17 +367,19 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NoteCard(note: NoteEntry, photoUri: String? = null, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = false, selectionMode: Boolean = false, onClick: () -> Unit, onLongClick: () -> Unit) {
     val dateStr = remember(note.lastModified) {
         SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(note.lastModified))
     }
 
+    Box(modifier = Modifier.fillMaxWidth()) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -344,6 +431,7 @@ fun NoteCard(note: NoteEntry, photoUri: String? = null, onClick: () -> Unit, onL
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

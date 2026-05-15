@@ -52,12 +52,17 @@ fun SingleTile(
     isMissedCall: Boolean = false,
     phoneNumber: String? = null,
     onAvatarClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    isMenuOpen: Boolean = false,
+    onSelectMode: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val haptic  = LocalHapticFeedback.current
     val prefs   = koinInject<PreferenceManager>()
     var showMenu              by remember { mutableStateOf(false) }
+    // Sync with external isMenuOpen
+    LaunchedEffect(isMenuOpen) { if (isMenuOpen) showMenu = true }
     var isPressed             by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
@@ -89,7 +94,8 @@ fun SingleTile(
                     },
                     onLongClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMenu = true
+                        if (onLongClick != null) onLongClick()
+                        else showMenu = true
                     }
                 )
                 .pointerInput(Unit) {
@@ -186,6 +192,21 @@ fun SingleTile(
             expanded         = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
+            if (onSelectMode != null) {
+                RivoDropdownMenuItem(
+                    text     = "Select",
+                    icon     = Icons.Default.CheckBox,
+                    iconTint = Color(0xFF9C27B0),
+                    onClick  = {
+                        showMenu = false
+                        onSelectMode()
+                    }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
             RivoDropdownMenuItem(
                 text     = "Call",
                 icon     = Icons.Default.Call,

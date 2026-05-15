@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -49,7 +51,11 @@ fun CallLogTile(
     onTileClick: (CallLogEntry) -> Unit,
     onButtonClick: (CallLogEntry) -> Unit,
     onAvatarClick: ((CallLogEntry) -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    onSelectToggle: ((CallLogEntry) -> Unit)? = null,
+    onSelectMode: ((CallLogEntry) -> Unit)? = null
 ) {
     val context   = LocalContext.current
     val isContact = log.name != null && log.name != log.number
@@ -73,15 +79,46 @@ fun CallLogTile(
                 else                        -> Icons.Default.Call
             },
             onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log) }) else null,
-            onLongClick = { showMenu = true },
-            isMenuOpen  = showMenu,
-            onClick     = { onTileClick(log) }
+            onLongClick = {
+                if (selectionMode) onSelectToggle?.invoke(log)
+                else showMenu = true
+            },
+            isMenuOpen  = showMenu && !selectionMode,
+            onClick     = {
+                if (selectionMode) onSelectToggle?.invoke(log)
+                else onTileClick(log)
+            }
         )
+        if (selectionMode) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.CenterStart)
+                    .padding(start = 8.dp)
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onSelectToggle?.invoke(log) }
+                )
+            }
+        }
 
         RivoDropdownMenu(
             expanded          = showMenu,
             onDismissRequest  = { showMenu = false }
         ) {
+            RivoDropdownMenuItem(
+                text     = "Select",
+                icon     = Icons.Default.CheckBox,
+                iconTint = Color(0xFF9C27B0),
+                onClick  = {
+                    showMenu = false
+                    onSelectMode?.invoke(log)
+                }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
             RivoDropdownMenuItem(
                 text     = "Call back",
                 icon     = Icons.Default.Call,
@@ -134,10 +171,11 @@ fun CallLogTile(
                 onClick       = {
                     showMenu = false
                     try {
+                        // Delete only this specific call log entry by its exact timestamp
                         context.contentResolver.delete(
                             CallLog.Calls.CONTENT_URI,
-                            "${CallLog.Calls.NUMBER} = ?",
-                            arrayOf(log.number)
+                            "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
+                            arrayOf(log.number, log.date.toString())
                         )
                         onDelete?.invoke()
                         Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
