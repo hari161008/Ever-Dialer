@@ -193,8 +193,6 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 • 👥 Contact Display Filters – Control visible contacts <br>
 • ⚙️ UI Element Configuration – Customize interface components <br>
 • 🧩 Settings Customization – Fine-tune app behavior <br><br>
-<br>
-<br>
 
 # The Base To Build This App
 ┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer)
