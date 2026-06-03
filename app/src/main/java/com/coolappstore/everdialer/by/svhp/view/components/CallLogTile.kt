@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -61,7 +62,15 @@ fun CallLogTile(
     val isContact = log.name != null && log.name != log.number
     var showMenu  by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (selectionMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSelectToggle?.invoke(log) },
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+        Box(modifier = Modifier.weight(1f)) {
         RivoListItem(
             headline = buildString {
                 append(log.name ?: log.number)
@@ -89,18 +98,6 @@ fun CallLogTile(
                 else onTileClick(log)
             }
         )
-        if (selectionMode) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.CenterStart)
-                    .padding(start = 8.dp)
-            ) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onSelectToggle?.invoke(log) }
-                )
-            }
-        }
 
         RivoDropdownMenu(
             expanded          = showMenu,
@@ -184,6 +181,7 @@ fun CallLogTile(
                     }
                 }
             )
+        }
         }
     }
 }

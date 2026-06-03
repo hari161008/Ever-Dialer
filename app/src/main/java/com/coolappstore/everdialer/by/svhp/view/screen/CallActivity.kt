@@ -492,26 +492,16 @@ fun ExpressiveCallScreen(
             onPersonSelected = { number ->
                 showAddPersonSheet = false
                 scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    // Signal CallService FIRST so it knows the next outgoing call is an "add to call"
+                    CallService.isAddingToCall = true
                     // Hold the current call and reflect that in UI
                     try {
                         call.hold()
                         isOnHold = true
                     } catch (_: Exception) {}
-                    // Signal CallService to auto-merge once the 3rd call is answered
-                    CallService.isAddingToCall = true
-                    delay(500)
+                    delay(300)
                     try {
-                        val appContext = context.applicationContext
-                        val telecomManager = appContext.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
-                        val uri = Uri.fromParts("tel", number, null)
-                        if (android.content.pm.PackageManager.PERMISSION_GRANTED ==
-                            androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.CALL_PHONE)) {
-                            telecomManager.placeCall(uri, android.os.Bundle())
-                        } else {
-                            CallService.isAddingToCall = false
-                            isOnHold = false
-                            try { call.unhold() } catch (_: Exception) {}
-                        }
+                        makeCall(context, number)
                     } catch (_: Exception) {
                         CallService.isAddingToCall = false
                         isOnHold = false

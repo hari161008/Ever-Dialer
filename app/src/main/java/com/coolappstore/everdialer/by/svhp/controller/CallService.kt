@@ -32,6 +32,7 @@ class CallService : InCallService() {
 
     companion object {
         private const val CHANNEL_ID = "call_channel"
+        private const val CHANNEL_INCOMING_ID = "call_incoming_channel"
         private const val NOTIFICATION_ID = 101
 
         private val _currentCallSession = MutableStateFlow<CallSession?>(null)
@@ -61,10 +62,16 @@ class CallService : InCallService() {
             val primary = _currentCallSession.value?.call ?: return
             val secondary = _heldCallSession.value?.call ?: return
             isMerging = true
+            var mergeSucceeded = false
             try {
-                secondary.conference(primary)
-            } catch (_: Exception) {
-                try { primary.conference(secondary) } catch (_: Exception) { isMerging = false }
+                primary.conference(secondary)
+                mergeSucceeded = true
+            } catch (_: Exception) {}
+            if (!mergeSucceeded) {
+                try {
+                    secondary.conference(primary)
+                    mergeSucceeded = true
+                } catch (_: Exception) { isMerging = false }
             }
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 if (isMerging) {
@@ -269,7 +276,10 @@ class CallService : InCallService() {
                 // Second outgoing call (from "Add to call" or user-initiated)
                 val prev = _currentCallSession.value
                 if (prev != null) {
-                    try { if (prev.call.state != Call.STATE_HOLDING) prev.call.hold() } catch (_: Exception) {}
+                    // If isAddingToCall, the original call was already held by CallActivity
+                    if (!isAddingToCall) {
+                        try { if (prev.call.state != Call.STATE_HOLDING) prev.call.hold() } catch (_: Exception) {}
+                    }
                     prev.call.unregisterCallback(callCallback)
                     prev.call.registerCallback(heldCallCallback)
                     _heldCallSession.value = CallSession(prev.call, Call.STATE_HOLDING)
@@ -308,10 +318,18 @@ class CallService : InCallService() {
     private fun updateNotification(call: Call) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
+            // Dedicated incoming call channel: high importance, bypass DND, no sound override
+            // (fresh channel ID ensures full-screen intent is enabled by default on new installs)
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING_ID, "Incoming Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
+                setBypassDnd(true)
+            })
+            // Ongoing call channel: low importance, silent background notification
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Ongoing Calls", NotificationManager.IMPORTANCE_LOW).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(null, null)
+                enableVibration(false)
             })
         }
 
@@ -331,7 +349,8 @@ class CallService : InCallService() {
 
         val person = androidx.core.app.Person.Builder().setName(contactName).setImportant(true).build()
         val isRinging = call.state == Call.STATE_RINGING
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ID
+        val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(contactName)
             .setContentText(if (isRinging) "Incoming call" else "Active call")

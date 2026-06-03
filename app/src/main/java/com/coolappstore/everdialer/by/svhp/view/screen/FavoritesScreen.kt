@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -147,6 +148,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     }
 
     val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -199,30 +201,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-            AnimatedVisibility(
-                visible = selectionMode,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
-            ) {
-                Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { selectionMode = false; selectedFavorites = emptySet() }) {
-                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Text("${selectedFavorites.size} selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.weight(1f))
-                        Box {
-                            IconButton(onClick = { showFavSelectionMenu = true }) {
-                                Icon(androidx.compose.material.icons.Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
-                            DropdownMenu(expanded = showFavSelectionMenu, onDismissRequest = { showFavSelectionMenu = false }) {
-                                DropdownMenuItem(text = { Text("Remove from Favourites") }, leadingIcon = { Icon(Icons.Default.Favorite, null, tint = MaterialTheme.colorScheme.error) }, onClick = { showFavSelectionMenu = false; if (selectedFavorites.isNotEmpty()) showFavDeleteConfirm = true })
-                                DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Default.SelectAll, null) }, onClick = { showFavSelectionMenu = false; selectedFavorites = favorites.map { it.id }.toSet() })
-                            }
-                        }
-                    }
-                }
-            } // end AnimatedVisibility
-            if (favorites.isEmpty()) {
+                if (favorites.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Icon(Icons.Default.Favorite, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.height(16.dp))
@@ -279,8 +258,62 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     }
                 }
             }
-            } // end Column
+                } // end Column
+            } // end inner Box
         }
+    // Selection bar at screen root level (outside Scaffold)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopStart)
+            .zIndex(10f)
+    ) {
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { selectionMode = false; selectedFavorites = emptySet() }) {
+                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text(
+                                "${selectedFavorites.size} selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { showFavSelectionMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                DropdownMenu(expanded = showFavSelectionMenu, onDismissRequest = { showFavSelectionMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Remove from Favourites") },
+                                        leadingIcon = { Icon(Icons.Default.Favorite, null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { showFavSelectionMenu = false; if (selectedFavorites.isNotEmpty()) showFavDeleteConfirm = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Select All") },
+                                        leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                        onClick = { showFavSelectionMenu = false; selectedFavorites = favorites.map { it.id }.toSet() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
     }
 }
 

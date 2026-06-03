@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
@@ -217,37 +218,9 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-            AnimatedVisibility(
-                visible = selectionMode,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
-            ) {
-                Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { selectionMode = false; selectedNotes = emptySet() }) {
-                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Text("${selectedNotes.size} selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.weight(1f))
-                        Box {
-                            IconButton(onClick = { showNotesSelectionMenu = true }) {
-                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
-                            DropdownMenu(expanded = showNotesSelectionMenu, onDismissRequest = { showNotesSelectionMenu = false }) {
-                                DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { showNotesSelectionMenu = false; if (selectedNotes.isNotEmpty()) showNotesDeleteConfirm = true })
-                                DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = {
-                                    showNotesSelectionMenu = false
-                                    val text = notes.filter { selectedNotes.contains(it.file.absolutePath) }.joinToString("\n\n") { "${it.contactName}: ${it.content}" }
-                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
-                                    context.startActivity(Intent.createChooser(intent, "Share Notes"))
-                                })
-                                DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Default.SelectAll, null) }, onClick = { showNotesSelectionMenu = false; selectedNotes = notes.map { it.file.absolutePath }.toSet() })
-                            }
-                        }
-                    }
-                }
-            } // end AnimatedVisibility
             if (notes.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -361,7 +334,72 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                     )
                 }
             }
-        }
+        } // end inner Box
+
+            // Selection bar overlays the top bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart)
+                    .zIndex(10f)
+            ) {
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { selectionMode = false; selectedNotes = emptySet() }) {
+                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text(
+                                "${selectedNotes.size} selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { showNotesSelectionMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                DropdownMenu(expanded = showNotesSelectionMenu, onDismissRequest = { showNotesSelectionMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete") },
+                                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { showNotesSelectionMenu = false; if (selectedNotes.isNotEmpty()) showNotesDeleteConfirm = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share") },
+                                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                                        onClick = {
+                                            showNotesSelectionMenu = false
+                                            val text = notes.filter { selectedNotes.contains(it.file.absolutePath) }.joinToString("\n\n") { "${it.contactName}: ${it.content}" }
+                                            val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                            context.startActivity(Intent.createChooser(intent, "Share Notes"))
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Select All") },
+                                        leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                        onClick = { showNotesSelectionMenu = false; selectedNotes = notes.map { it.file.absolutePath }.toSet() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } // end outer Box
     }
 }
 

@@ -146,6 +146,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -255,81 +256,86 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                CallLogFullContent(
-                    navController = navController,
-                    navigator = navigator,
-                    isGranted = permState.status == PermissionStatus.Granted,
-                    onRequestPermission = { permState.launchPermissionRequest() },
-                    listState = listState,
-                    selectionMode = selectionMode,
-                    selectedLogs = selectedLogs,
-                    onSelectionModeChange = { selectionMode = it },
-                    onSelectedLogsChange = { selectedLogs = it },
-                    showSelectionDeleteConfirm = showSelectionDeleteConfirm,
-                    onShowSelectionDeleteConfirmChange = { showSelectionDeleteConfirm = it }
-                )
-            }
-            // Selection bar overlays the top bar - no innerPadding applied
-            AnimatedVisibility(
-                visible = selectionMode,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                modifier = Modifier.fillMaxWidth().zIndex(10f)
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                    shadowElevation = 4.dp
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            CallLogFullContent(
+                navController = navController,
+                navigator = navigator,
+                isGranted = permState.status == PermissionStatus.Granted,
+                onRequestPermission = { permState.launchPermissionRequest() },
+                listState = listState,
+                selectionMode = selectionMode,
+                selectedLogs = selectedLogs,
+                onSelectionModeChange = { selectionMode = it },
+                onSelectedLogsChange = { selectedLogs = it },
+                showSelectionDeleteConfirm = showSelectionDeleteConfirm,
+                onShowSelectionDeleteConfirmChange = { showSelectionDeleteConfirm = it }
+            )
+        }
+    }
+    // Selection bar overlays at screen root level (outside Scaffold)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopStart)
+            .zIndex(10f)
+    ) {
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shadowElevation = 4.dp
                     ) {
-                        IconButton(onClick = { selectionMode = false; selectedLogs = emptySet() }) {
-                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Text(
-                            "${selectedLogs.size} selected",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box {
-                            IconButton(onClick = { showSelectionMenuOuter = true }) {
-                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { selectionMode = false; selectedLogs = emptySet() }) {
+                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
-                            DropdownMenu(expanded = showSelectionMenuOuter, onDismissRequest = { showSelectionMenuOuter = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Delete") },
-                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                                    onClick = { showSelectionMenuOuter = false; if (selectedLogs.isNotEmpty()) showSelectionDeleteConfirm = true }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share") },
-                                    leadingIcon = { Icon(Icons.Default.Share, null) },
-                                    onClick = {
-                                        showSelectionMenuOuter = false
-                                        val text = selectedLogs.joinToString("\n") { it.split("|").firstOrNull() ?: it }
-                                        val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
-                                        context.startActivity(Intent.createChooser(intent, "Share call logs"))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Deselect All") },
-                                    leadingIcon = { Icon(Icons.Default.Close, null) },
-                                    onClick = { showSelectionMenuOuter = false; selectedLogs = emptySet() }
-                                )
+                            Text(
+                                "${selectedLogs.size} selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { showSelectionMenuOuter = true }) {
+                                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                DropdownMenu(expanded = showSelectionMenuOuter, onDismissRequest = { showSelectionMenuOuter = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete") },
+                                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { showSelectionMenuOuter = false; if (selectedLogs.isNotEmpty()) showSelectionDeleteConfirm = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share") },
+                                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                                        onClick = {
+                                            showSelectionMenuOuter = false
+                                            val text = selectedLogs.joinToString("\n") { it.split("|").firstOrNull() ?: it }
+                                            val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                            context.startActivity(Intent.createChooser(intent, "Share call logs"))
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Deselect All") },
+                                        leadingIcon = { Icon(Icons.Default.Close, null) },
+                                        onClick = { showSelectionMenuOuter = false; selectedLogs = emptySet() }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
 }
 
 private fun formatDuration(totalSeconds: Long): String {
