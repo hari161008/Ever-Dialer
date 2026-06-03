@@ -213,5 +213,5 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 <br><br>
 The source code of Rate and Review are open, Check it out: [Click Here](https://github.com/hari161008/Website-For-Everlasting-Android-Tweak)
 
-# The Base TO Build This App
-[P Dialer](https://github.com/MoHamed-B-M/Pdialer)
+# The Base To Build This App
+┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer)
