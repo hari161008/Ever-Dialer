@@ -281,8 +281,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     ) {
                 AnimatedVisibility(
                     visible = selectionMode,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+                    exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(animationSpec = tween(380, easing = FastOutLinearInEasing))
                 ) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,

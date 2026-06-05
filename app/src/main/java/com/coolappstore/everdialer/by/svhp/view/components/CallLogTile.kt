@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,7 +65,11 @@ fun CallLogTile(
     var showMenu  by remember { mutableStateOf(false) }
 
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (selectionMode) {
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+            exit  = fadeOut(tween(300)) + shrinkHorizontally(tween(300))
+        ) {
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onSelectToggle?.invoke(log) },

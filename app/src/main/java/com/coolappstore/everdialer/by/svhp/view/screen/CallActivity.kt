@@ -430,8 +430,8 @@ fun ExpressiveCallScreen(
         animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
         label = "answerProgress"
     )
-    val acceptScale = if (wasRinging) lerp(0.96f, 1f, answerProgress) else 1f
-    val acceptAlpha = if (wasRinging) lerp(0.7f, 1f, answerProgress) else 1f
+    val acceptScale = if (wasRinging && callAnswered) lerp(0.97f, 1f, answerProgress) else 1f
+    val acceptAlpha = if (wasRinging && callAnswered) lerp(0.88f, 1f, answerProgress) else 1f
 
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
@@ -1411,8 +1411,9 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
     // pillWidth tracks the actual measured pill width so we can compute real edge travel
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
     val handleSizePx = with(density) { 72.dp.toPx() }
-    // maxDrag = half of (pillWidth - handleSize) → handle reaches the pill edge
-    val maxDrag = ((pillWidthPx - handleSizePx) / 2f).coerceAtLeast(with(density) { 120.dp.toPx() })
+    val edgeGapPx = with(density) { 9.dp.toPx() }
+    // maxDrag = half of (pillWidth - handleSize) minus edge gap → symmetric gap at both ends
+    val maxDrag = ((pillWidthPx - handleSizePx) / 2f - edgeGapPx).coerceAtLeast(with(density) { 100.dp.toPx() })
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Surface(onClick = {}, shape = CircleShape, color = bgColor, modifier = Modifier.height(45.dp).width(140.dp)) {

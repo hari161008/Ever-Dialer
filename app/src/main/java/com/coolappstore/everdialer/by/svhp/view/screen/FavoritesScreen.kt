@@ -56,6 +56,15 @@ import com.coolappstore.everdialer.by.svhp.view.components.ScrollHapticsGridEffe
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.CheckBox
@@ -76,6 +85,8 @@ import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScr
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -89,6 +100,30 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val favorites = remember(allContacts) { allContacts.filter { it.isFavorite } }
     val scope = rememberCoroutineScope()
     val prefs = koinInject<PreferenceManager>()
+
+    // Ordered favorites — persists custom drag-to-reorder order
+    val orderedFavorites = remember { mutableStateListOf<Contact>() }
+    LaunchedEffect(favorites) {
+        val savedIds = prefs.getString(PreferenceManager.KEY_FAVORITES_ORDER, null)
+            ?.split(",")?.filter { it.isNotEmpty() } ?: emptyList()
+        val favMap = favorites.associateBy { it.id }
+        val ordered = savedIds.mapNotNull { favMap[it] }
+        val remaining = favorites.filter { it.id !in savedIds.toSet() }
+        val newList = ordered + remaining
+        // Sync removals and additions without full clear (to keep animations)
+        val toRemove = orderedFavorites.filter { o -> newList.none { it.id == o.id } }
+        toRemove.forEach { orderedFavorites.remove(it) }
+        newList.filter { n -> orderedFavorites.none { it.id == n.id } }.forEach { orderedFavorites.add(it) }
+    }
+
+    // Drag-to-reorder state
+    var draggedContactId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val itemBoundsMap = remember { mutableStateMapOf<String, Rect>() }
+
+    fun saveFavoritesOrder() {
+        prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
+    }
     val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
     val context = LocalContext.current
 
@@ -219,7 +254,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(favorites) { contact ->
+                    items(orderedFavorites, key = { it.id }) { contact ->
                         RivoScrollAnimatedItem {
                             FavoriteContactCard(
                                 contact = contact,
@@ -228,6 +263,44 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 context = context,
                                 isSelected = selectedFavorites.contains(contact.id),
                                 selectionMode = selectionMode,
+                                isDragging = draggedContactId == contact.id,
+                                dragOffset = if (draggedContactId == contact.id) dragOffset else Offset.Zero,
+                                onBoundsChanged = { bounds -> itemBoundsMap[contact.id] = bounds },
+                                onDragStart = {
+                                    draggedContactId = contact.id
+                                    dragOffset = Offset.Zero
+                                },
+                                onDrag = { amt ->
+                                    if (draggedContactId == contact.id) {
+                                        dragOffset += amt
+                                        val currentBounds = itemBoundsMap[contact.id] ?: return@FavoriteContactCard
+                                        val dragCenter = Offset(
+                                            currentBounds.center.x + dragOffset.x,
+                                            currentBounds.center.y + dragOffset.y
+                                        )
+                                        val targetId = itemBoundsMap.entries
+                                            .filter { it.key != draggedContactId }
+                                            .firstOrNull { (_, b) -> b.contains(dragCenter) }
+                                            ?.key
+                                        if (targetId != null) {
+                                            val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
+                                            val toIdx = orderedFavorites.indexOfFirst { it.id == targetId }
+                                            if (fromIdx != -1 && toIdx != -1) {
+                                                orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
+                                                dragOffset = Offset.Zero
+                                            }
+                                        }
+                                    }
+                                },
+                                onDragEnd = {
+                                    draggedContactId = null
+                                    dragOffset = Offset.Zero
+                                    saveFavoritesOrder()
+                                },
+                                onDragCancel = {
+                                    draggedContactId = null
+                                    dragOffset = Offset.Zero
+                                },
                                 onSelectToggle = {
                                     val id = contact.id
                                     selectedFavorites = if (selectedFavorites.contains(id)) selectedFavorites - id else selectedFavorites + id
@@ -270,8 +343,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     ) {
                 AnimatedVisibility(
                     visible = selectionMode,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+                    exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(animationSpec = tween(380, easing = FastOutLinearInEasing))
                 ) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -326,6 +399,13 @@ private fun FavoriteContactCard(
     context: android.content.Context,
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
+    isDragging: Boolean = false,
+    dragOffset: Offset = Offset.Zero,
+    onBoundsChanged: ((Rect) -> Unit)? = null,
+    onDragStart: (() -> Unit)? = null,
+    onDrag: ((Offset) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
+    onDragCancel: (() -> Unit)? = null,
     onSelectToggle: (() -> Unit)? = null,
     onSelectMode: (() -> Unit)? = null,
     onClick: () -> Unit
@@ -336,32 +416,112 @@ private fun FavoriteContactCard(
 
     var isPressed by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var isDraggingLocally by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed || showMenu) 0.93f else 1f,
+        targetValue = when {
+            isDragging -> 1.08f
+            isPressed || showMenu -> 0.93f
+            else -> 1f
+        },
         animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "cardScale"
+    )
+    // Selection highlight
+    val cardBgColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = tween(200),
+        label = "cardBg"
     )
 
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
+        color = cardBgColor,
+        tonalElevation = if (isDragging) 8.dp else 2.dp,
         modifier = Modifier
             .fillMaxWidth()
             .alpha(alpha)
             .scale(scale)
-            .combinedClickable(
-                onClick = {
-                    onClick()
-                },
-                onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    showMenu = true
+            .zIndex(if (isDragging) 10f else 0f)
+            .graphicsLayer {
+                if (isDragging) {
+                    translationX = dragOffset.x
+                    translationY = dragOffset.y
+                    shadowElevation = 24f
                 }
-            )
+            }
+            .onGloballyPositioned { coords -> onBoundsChanged?.invoke(coords.boundsInWindow()) }
+            .pointerInput(selectionMode, contact.id) {
+                val pis = this
+                coroutineScope {
+                    val cs = this
+                    pis.awaitPointerEventScope {
+                        while (true) {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            isPressed = true
+                            val startPos = down.position
+                            val touchSlop = viewConfiguration.touchSlop
+                            var longPressTriggered = false
+                            var dragStarted = false
+
+                            val longPressJob = cs.launch {
+                                delay(viewConfiguration.longPressTimeoutMillis)
+                                longPressTriggered = true
+                            }
+
+                            loop@ while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+
+                                if (change == null || !change.pressed) {
+                                    longPressJob.cancel()
+                                    isPressed = false
+                                    when {
+                                        dragStarted -> {
+                                            isDraggingLocally = false
+                                            onDragEnd?.invoke()
+                                        }
+                                        longPressTriggered -> {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (selectionMode) onSelectToggle?.invoke() else showMenu = true
+                                        }
+                                        else -> {
+                                            if (selectionMode) onSelectToggle?.invoke() else onClick()
+                                        }
+                                    }
+                                    break@loop
+                                }
+
+                                val totalDist = (change.position - startPos).getDistance()
+                                val delta = change.position - change.previousPosition
+
+                                if (!dragStarted && totalDist > touchSlop) {
+                                    if (longPressTriggered && !selectionMode) {
+                                        dragStarted = true
+                                        isDraggingLocally = true
+                                        isPressed = false
+                                        longPressJob.cancel()
+                                        onDragStart?.invoke()
+                                    } else if (!longPressTriggered) {
+                                        longPressJob.cancel()
+                                        isPressed = false
+                                        break@loop
+                                    }
+                                }
+
+                                if (dragStarted) {
+                                    change.consume()
+                                    onDrag?.invoke(delta)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
     ) {
+        Box {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
                 RivoAvatar(
@@ -403,6 +563,26 @@ private fun FavoriteContactCard(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
+        }
+        // Checkbox overlay — animated entry/exit
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.6f),
+            exit  = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.6f),
+            modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onSelectToggle?.invoke() },
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
         }
     }
 

@@ -639,20 +639,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Redirect to default tab before first frame renders — no flash
-                DisposableEffect(navController) {
-                    var redirected = false
-                    val listener = androidx.navigation.NavController.OnDestinationChangedListener { controller, destination, _ ->
-                        if (!redirected && startRoute != null && destination.route == RecentScreenDestination.route) {
-                            redirected = true
-                            controller.navigate(startRoute) {
-                                popUpTo(controller.graph.startDestinationId) { inclusive = true }
-                                launchSingleTop = true
-                            }
+                // Redirect to default tab — keep RecentScreen in back-stack so
+                // findStartDestination() remains valid and BottomBar highlights correctly
+                LaunchedEffect(startRoute) {
+                    if (startRoute != null) {
+                        navController.navigate(startRoute) {
+                            popUpTo(RecentScreenDestination.route) { inclusive = false; saveState = false }
+                            launchSingleTop = true
                         }
                     }
-                    navController.addOnDestinationChangedListener(listener)
-                    onDispose { navController.removeOnDestinationChangedListener(listener) }
                 }
 
                 LaunchedEffect(intent) {

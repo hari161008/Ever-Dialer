@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -684,39 +685,59 @@ fun DialPadContent(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                if (number.isNotEmpty())
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                else Color.Transparent
+                    Box(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = if (number.isEmpty()) 64.dp else 0.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (number.isNotEmpty())
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                    else MaterialTheme.colorScheme.surfaceContainerLow
+                                )
+                                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        showOverflowMenu = true
+                                    }
+                                )
+                                .padding(vertical = 10.dp, horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DialpadNumberDisplay(
+                                number = number,
+                                fontSize = ((if (number.length > 11) 28 else 36) * scaleFactor).coerceIn(18f, 40f).toInt()
                             )
-                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
-                            .padding(vertical = 10.dp, horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        DialpadNumberDisplay(
-                            number = number,
-                            fontSize = ((if (number.length > 11) 28 else 36) * scaleFactor).coerceIn(18f, 40f).toInt()
-                        )
-                    }
-
-                    Box {
-                        IconButton(onClick = { showOverflowMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         RivoDropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                            RivoDropdownMenuItem(
-                                text     = if (openDialpadDefault) "✓  Open dialpad by default" else "Open dialpad by default",
-                                icon     = Icons.Default.Dialpad,
-                                iconTint = MaterialTheme.colorScheme.primary,
-                                onClick  = {
-                                    openDialpadDefault = !openDialpadDefault
-                                    prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, openDialpadDefault)
-                                }
-                            )
+                            if (number.isNotEmpty()) {
+                                RivoDropdownMenuItem(
+                                    text     = "Copy",
+                                    icon     = Icons.Default.ContentCopy,
+                                    iconTint = MaterialTheme.colorScheme.primary,
+                                    onClick  = {
+                                        clipboard.setText(AnnotatedString(number))
+                                        showOverflowMenu = false
+                                    }
+                                )
+                            }
+                            val pasteText = clipboard.getText()?.text
+                                ?.filter { it.isDigit() || it == '+' } ?: ""
+                            if (pasteText.isNotEmpty()) {
+                                RivoDropdownMenuItem(
+                                    text     = "Paste",
+                                    icon     = Icons.Default.ContentPaste,
+                                    iconTint = MaterialTheme.colorScheme.primary,
+                                    onClick  = {
+                                        number = pasteText
+                                        showOverflowMenu = false
+                                    }
+                                )
+                            }
+
                         }
                     }
                 }

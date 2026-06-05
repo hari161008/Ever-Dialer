@@ -7,9 +7,12 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -95,8 +98,8 @@ fun AZListScroll(
         // Selection top bar
         AnimatedVisibility(
             visible = selectionMode,
-            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(tween(280)),
+            exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(tween(380))
         ) {
             Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Row(
@@ -459,13 +462,16 @@ private fun ContactListItem(
             }
         }
 
-        if (selectionMode) {
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+            exit  = fadeOut(tween(300)) + shrinkHorizontally(tween(300)),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onSelectToggle() },
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
+                modifier = Modifier.padding(end = 8.dp)
             )
         }
 

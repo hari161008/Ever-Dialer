@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -345,8 +346,8 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
             ) {
                 AnimatedVisibility(
                     visible = selectionMode,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit  = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+                    exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(animationSpec = tween(380, easing = FastOutLinearInEasing))
                 ) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -410,20 +411,35 @@ fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = fa
         SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(note.lastModified))
     }
 
+    val cardBgColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = tween(200), label = "noteBg"
+    )
     Box(modifier = Modifier.fillMaxWidth()) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else MaterialTheme.colorScheme.surfaceContainerLow
+        color = cardBgColor
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top
         ) {
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+                exit  = fadeOut(tween(300)) + shrinkHorizontally(tween(300))
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp)
+                )
+            }
             RivoAvatar(
                 name = note.contactName,
                 photoUri = photoUri,
