@@ -60,109 +60,29 @@ fun AZListScroll(
     contacts: List<Contact>,
     navigator: DestinationsNavigator,
     modifier: Modifier = Modifier,
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    selectionMode: Boolean = false,
+    selectedContacts: Set<String> = emptySet(),
+    onSelectionModeChange: (Boolean) -> Unit = {},
+    onSelectedContactsChange: (Set<String>) -> Unit = {}
 ) {
-    var selectionMode by remember { mutableStateOf(false) }
-    var selectedContacts by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var showContactsSelectionMenu by remember { mutableStateOf(false) }
-    var showContactsDeleteConfirm by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val contactsVM: ContactsViewModel = koinActivityViewModel()
-
-    BackHandler(enabled = selectionMode) {
-        selectionMode = false
-        selectedContacts = emptySet()
-    }
-
-    if (showContactsDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showContactsDeleteConfirm = false },
-            title = { Text("Delete ${selectedContacts.size} contacts?") },
-            text = { Text("This will permanently delete the selected contacts.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showContactsDeleteConfirm = false
-                        selectedContacts.forEach { contactsVM.deleteContact(it) }
-                        selectedContacts = emptySet()
-                        selectionMode = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { showContactsDeleteConfirm = false }) { Text("Cancel") } }
-        )
-    }
-
-    Column(modifier = modifier.fillMaxSize()) {
-        // Selection top bar
-        AnimatedVisibility(
-            visible = selectionMode,
-            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(tween(280)),
-            exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(tween(380))
-        ) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { selectionMode = false; selectedContacts = emptySet() }) {
-                        Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                    Text(
-                        "${selectedContacts.size} selected",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Box {
-                        IconButton(onClick = { showContactsSelectionMenu = true }) {
-                            Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        DropdownMenu(expanded = showContactsSelectionMenu, onDismissRequest = { showContactsSelectionMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Delete") },
-                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                                onClick = { showContactsSelectionMenu = false; if (selectedContacts.isNotEmpty()) showContactsDeleteConfirm = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share") },
-                                leadingIcon = { Icon(Icons.Default.Share, null) },
-                                onClick = {
-                                    showContactsSelectionMenu = false
-                                    val text = contacts.filter { selectedContacts.contains(it.id) }
-                                        .joinToString("\n") { "${it.name}: ${it.phoneNumbers.firstOrNull() ?: ""}" }
-                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
-                                    context.startActivity(Intent.createChooser(intent, "Share contacts"))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Select All") },
-                                leadingIcon = { Icon(Icons.Default.SelectAll, null) },
-                                onClick = { showContactsSelectionMenu = false; selectedContacts = contacts.map { it.id }.toSet() }
-                            )
-                        }
-                    }
-                }
-            }
+    AZListContent(
+        contacts = contacts,
+        navigator = navigator,
+        listState = listState,
+        modifier = modifier,
+        selectionMode = selectionMode,
+        selectedContacts = selectedContacts,
+        onSelectMode = { contact ->
+            onSelectionModeChange(true)
+            onSelectedContactsChange(setOf(contact.id))
+        },
+        onSelectToggle = { contact ->
+            val updated = if (selectedContacts.contains(contact.id))
+                selectedContacts - contact.id else selectedContacts + contact.id
+            onSelectedContactsChange(updated)
         }
-
-        AZListContent(
-            contacts = contacts,
-            navigator = navigator,
-            listState = listState,
-            selectionMode = selectionMode,
-            selectedContacts = selectedContacts,
-            onSelectMode = { contact ->
-                selectionMode = true
-                selectedContacts = setOf(contact.id)
-            },
-            onSelectToggle = { contact ->
-                selectedContacts = if (selectedContacts.contains(contact.id))
-                    selectedContacts - contact.id else selectedContacts + contact.id
-            }
-        )
-    }
+    )
 }
 
 @Composable

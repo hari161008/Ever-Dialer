@@ -4,20 +4,28 @@ import android.Manifest
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Intent
 import android.provider.ContactsContract
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.scale
@@ -70,6 +78,32 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
     val prefs_ui = koinInject<PreferenceManager>()
     val pillNav = remember { prefs_ui.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedContacts by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showSelectionMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val contactsVM2: ContactsViewModel = koinActivityViewModel()
+    val allContacts2 by contactsVM2.allContacts.collectAsState()
+
+    BackHandler(enabled = selectionMode) { selectionMode = false; selectedContacts = emptySet() }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete ${selectedContacts.size} contact${if (selectedContacts.size != 1) "s" else ""}?") },
+            text  = { Text("This will permanently delete the selected contacts.") },
+            confirmButton = {
+                Button(onClick = {
+                    showDeleteConfirm = false
+                    selectedContacts.forEach { contactsVM2.deleteContact(it) }
+                    selectedContacts = emptySet(); selectionMode = false
+                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -150,7 +184,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                    ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
+                    ) { Icon(Icons.Default.Person, "Add Contact") }
                 }
             } else {
                 FloatingActionButton(
@@ -163,7 +197,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(0.dp),
                     modifier = baseModifier
-                ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
+                ) { Icon(Icons.Default.Person, "Add Contact") }
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -174,10 +208,52 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 navigator = navigator,
                 isGranted = permState.status == PermissionStatus.Granted,
                 onRequestPermission = { permState.launchPermissionRequest() },
-                listState = listState
+                listState = listState,
+                selectionMode = selectionMode,
+                selectedContacts = selectedContacts,
+                onSelectionModeChange = { selectionMode = it },
+                onSelectedContactsChange = { selectedContacts = it }
             )
         }
     }
+    // Selection bar — screen-root overlay (same style as Recents)
+    Box(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).zIndex(10f)) {
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(tween(280)),
+            exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(tween(380))
+        ) {
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth(), shadowElevation = 4.dp) {
+                Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { selectionMode = false; selectedContacts = emptySet() }) {
+                        Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Text("${selectedContacts.size} selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.weight(1f))
+                    Box {
+                        IconButton(onClick = { showSelectionMenu = true }) {
+                            Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        DropdownMenu(expanded = showSelectionMenu, onDismissRequest = { showSelectionMenu = false }) {
+                            DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showSelectionMenu = false; if (selectedContacts.isNotEmpty()) showDeleteConfirm = true })
+                            DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null) },
+                                onClick = {
+                                    showSelectionMenu = false
+                                    val text = allContacts2.filter { selectedContacts.contains(it.id) }.joinToString("\n") { "${it.name}: ${it.phoneNumbers.firstOrNull() ?: ""}" }
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text) }
+                                    context.startActivity(android.content.Intent.createChooser(intent, "Share contacts"))
+                                })
+                            DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                onClick = { showSelectionMenu = false; selectedContacts = allContacts2.map { it.id }.toSet() })
+                            DropdownMenuItem(text = { Text("Deselect All") }, leadingIcon = { Icon(Icons.Default.Close, null) },
+                                onClick = { showSelectionMenu = false; selectedContacts = emptySet() })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    } // end wrapper Box
 }
 
 @Composable
@@ -185,7 +261,11 @@ fun ContactContent(
     navigator: DestinationsNavigator,
     isGranted: Boolean,
     onRequestPermission: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    selectionMode: Boolean = false,
+    selectedContacts: Set<String> = emptySet(),
+    onSelectionModeChange: (Boolean) -> Unit = {},
+    onSelectedContactsChange: (Set<String>) -> Unit = {}
 ) {
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(
@@ -258,7 +338,15 @@ fun ContactContent(
                 }
 
                 ScrollHapticsEffect(listState = listState)
-                AZListScroll(contacts, navigator, listState = listState)
+                AZListScroll(
+                                contacts = contacts,
+                                navigator = navigator,
+                                listState = listState,
+                                selectionMode = selectionMode,
+                                selectedContacts = selectedContacts,
+                                onSelectionModeChange = onSelectionModeChange,
+                                onSelectedContactsChange = onSelectedContactsChange
+                            )
             }
         } else {
             PermissionDeniedView(

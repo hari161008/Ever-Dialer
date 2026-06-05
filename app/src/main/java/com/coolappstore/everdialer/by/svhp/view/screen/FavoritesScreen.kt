@@ -118,7 +118,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
 
     // Drag-to-reorder state
     var draggedContactId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var dragTarget by remember { mutableStateOf(Offset.Zero) }   // absolute screen finger position
     val itemBoundsMap = remember { mutableStateMapOf<String, Rect>() }
 
     fun saveFavoritesOrder() {
@@ -264,42 +264,34 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 isSelected = selectedFavorites.contains(contact.id),
                                 selectionMode = selectionMode,
                                 isDragging = draggedContactId == contact.id,
-                                dragOffset = if (draggedContactId == contact.id) dragOffset else Offset.Zero,
+                                dragTarget = if (draggedContactId == contact.id) dragTarget else null,
                                 onBoundsChanged = { bounds -> itemBoundsMap[contact.id] = bounds },
-                                onDragStart = {
+                                onDragStart = { initialPos ->
                                     draggedContactId = contact.id
-                                    dragOffset = Offset.Zero
+                                    dragTarget = initialPos
                                 },
                                 onDrag = { amt ->
                                     if (draggedContactId == contact.id) {
-                                        dragOffset += amt
-                                        val currentBounds = itemBoundsMap[contact.id] ?: return@FavoriteContactCard
-                                        val dragCenter = Offset(
-                                            currentBounds.center.x + dragOffset.x,
-                                            currentBounds.center.y + dragOffset.y
-                                        )
+                                        dragTarget += amt
                                         val targetId = itemBoundsMap.entries
                                             .filter { it.key != draggedContactId }
-                                            .firstOrNull { (_, b) -> b.contains(dragCenter) }
+                                            .firstOrNull { (_, b) -> b.contains(dragTarget) }
                                             ?.key
                                         if (targetId != null) {
                                             val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
                                             val toIdx = orderedFavorites.indexOfFirst { it.id == targetId }
                                             if (fromIdx != -1 && toIdx != -1) {
                                                 orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
-                                                dragOffset = Offset.Zero
                                             }
                                         }
                                     }
                                 },
                                 onDragEnd = {
                                     draggedContactId = null
-                                    dragOffset = Offset.Zero
                                     saveFavoritesOrder()
                                 },
                                 onDragCancel = {
                                     draggedContactId = null
-                                    dragOffset = Offset.Zero
                                 },
                                 onSelectToggle = {
                                     val id = contact.id
@@ -400,9 +392,9 @@ private fun FavoriteContactCard(
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
     isDragging: Boolean = false,
-    dragOffset: Offset = Offset.Zero,
+    dragTarget: Offset? = null,
     onBoundsChanged: ((Rect) -> Unit)? = null,
-    onDragStart: (() -> Unit)? = null,
+    onDragStart: ((Offset) -> Unit)? = null,
     onDrag: ((Offset) -> Unit)? = null,
     onDragEnd: (() -> Unit)? = null,
     onDragCancel: (() -> Unit)? = null,
@@ -417,6 +409,7 @@ private fun FavoriteContactCard(
     var isPressed by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var isDraggingLocally by remember { mutableStateOf(false) }
+    var localBounds by remember { mutableStateOf<Rect?>(null) }
     val haptic = LocalHapticFeedback.current
 
     val scale by animateFloatAsState(
@@ -447,12 +440,19 @@ private fun FavoriteContactCard(
             .zIndex(if (isDragging) 10f else 0f)
             .graphicsLayer {
                 if (isDragging) {
-                    translationX = dragOffset.x
-                    translationY = dragOffset.y
-                    shadowElevation = 24f
+                    val lb = localBounds
+                    if (lb != null && dragTarget != null) {
+                        translationX = dragTarget.x - lb.center.x
+                        translationY = dragTarget.y - lb.center.y
+                    }
+                    scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 24f
                 }
             }
-            .onGloballyPositioned { coords -> onBoundsChanged?.invoke(coords.boundsInWindow()) }
+            .onGloballyPositioned { coords ->
+                val bounds = coords.boundsInWindow()
+                localBounds = bounds
+                onBoundsChanged?.invoke(bounds)
+            }
             .pointerInput(selectionMode, contact.id) {
                 val pis = this
                 coroutineScope {
@@ -469,6 +469,9 @@ private fun FavoriteContactCard(
                             val longPressJob = cs.launch {
                                 delay(viewConfiguration.longPressTimeoutMillis)
                                 longPressTriggered = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isPressed = false
+                                if (selectionMode) onSelectToggle?.invoke() else showMenu = true
                             }
 
                             loop@ while (true) {
@@ -479,17 +482,9 @@ private fun FavoriteContactCard(
                                     longPressJob.cancel()
                                     isPressed = false
                                     when {
-                                        dragStarted -> {
-                                            isDraggingLocally = false
-                                            onDragEnd?.invoke()
-                                        }
-                                        longPressTriggered -> {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            if (selectionMode) onSelectToggle?.invoke() else showMenu = true
-                                        }
-                                        else -> {
-                                            if (selectionMode) onSelectToggle?.invoke() else onClick()
-                                        }
+                                        dragStarted -> { isDraggingLocally = false; onDragEnd?.invoke() }
+                                        !longPressTriggered -> { if (selectionMode) onSelectToggle?.invoke() else onClick() }
+                                        // long press without drag: menu already shown in job
                                     }
                                     break@loop
                                 }
@@ -499,11 +494,12 @@ private fun FavoriteContactCard(
 
                                 if (!dragStarted && totalDist > touchSlop) {
                                     if (longPressTriggered && !selectionMode) {
+                                        showMenu = false
                                         dragStarted = true
                                         isDraggingLocally = true
                                         isPressed = false
                                         longPressJob.cancel()
-                                        onDragStart?.invoke()
+                                        onDragStart?.invoke(localBounds?.center ?: startPos)
                                     } else if (!longPressTriggered) {
                                         longPressJob.cancel()
                                         isPressed = false
