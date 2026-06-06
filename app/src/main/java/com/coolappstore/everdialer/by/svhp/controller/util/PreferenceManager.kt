@@ -91,5 +91,6 @@ class PreferenceManager(context: Context) {
         const val KEY_DEFAULT_TAB              = "default_tab"
         const val KEY_AUTO_SPEAKER             = "auto_speaker"
         const val KEY_FAVORITES_ORDER          = "favorites_order"
+        const val KEY_FLOATING_CALL            = "floating_ongoing_call"
     }
 }

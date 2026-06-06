@@ -213,6 +213,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
 
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
+    var floatingCall by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FLOATING_CALL, false)) }
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
     var autoSpeaker by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_SPEAKER, false)) }
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
@@ -358,6 +359,30 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                                 onCheckedChange = {
                                     pocketModePrevention = it
                                     prefs.setBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, it)
+                                }
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline   = "Floating Ongoing Call",
+                                supporting = "Show a draggable floating bubble during calls. Requires 'Display over other apps' permission.",
+                                leadingIcon = Icons.Outlined.Sensors,
+                                iconContainerColor = ColorBlue,
+                                checked = floatingCall,
+                                onCheckedChange = { newValue ->
+                                    if (newValue && !Settings.canDrawOverlays(context)) {
+                                        context.startActivity(
+                                            Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                android.net.Uri.parse("package:${context.packageName}")
+                                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        )
+                                    } else {
+                                        floatingCall = newValue
+                                        prefs.setBoolean(PreferenceManager.KEY_FLOATING_CALL, newValue)
+                                    }
                                 }
                             )
                             HorizontalDivider(

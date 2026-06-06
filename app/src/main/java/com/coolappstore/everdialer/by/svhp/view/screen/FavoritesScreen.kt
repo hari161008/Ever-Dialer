@@ -120,6 +120,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     var draggedContactId by remember { mutableStateOf<String?>(null) }
     var dragTarget by remember { mutableStateOf(Offset.Zero) }   // absolute screen finger position
     val itemBoundsMap = remember { mutableStateMapOf<String, Rect>() }
+    // Tracks the last item we swapped with – prevents rapid back-and-forth swapping
+    var lastSwapTargetId by remember { mutableStateOf<String?>(null) }
 
     fun saveFavoritesOrder() {
         prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
@@ -269,6 +271,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 onDragStart = { initialPos ->
                                     draggedContactId = contact.id
                                     dragTarget = initialPos
+                                    lastSwapTargetId = null
                                 },
                                 onDrag = { amt ->
                                     if (draggedContactId == contact.id) {
@@ -277,21 +280,26 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                             .filter { it.key != draggedContactId }
                                             .firstOrNull { (_, b) -> b.contains(dragTarget) }
                                             ?.key
-                                        if (targetId != null) {
+                                        if (targetId != null && targetId != lastSwapTargetId) {
+                                            lastSwapTargetId = targetId
                                             val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
-                                            val toIdx = orderedFavorites.indexOfFirst { it.id == targetId }
+                                            val toIdx   = orderedFavorites.indexOfFirst { it.id == targetId }
                                             if (fromIdx != -1 && toIdx != -1) {
                                                 orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
                                             }
+                                        } else if (targetId == null) {
+                                            lastSwapTargetId = null
                                         }
                                     }
                                 },
                                 onDragEnd = {
                                     draggedContactId = null
+                                    lastSwapTargetId = null
                                     saveFavoritesOrder()
                                 },
                                 onDragCancel = {
                                     draggedContactId = null
+                                    lastSwapTargetId = null
                                 },
                                 onSelectToggle = {
                                     val id = contact.id

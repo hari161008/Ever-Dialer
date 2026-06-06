@@ -146,6 +146,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
     val coroutineScope = rememberCoroutineScope()
 
     val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -219,8 +220,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
             if (notes.isEmpty()) {
                 Column(
@@ -336,14 +336,15 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                 }
             }
         } // end inner Box
+    } // end Scaffold
 
-            // Selection bar overlays the top bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopStart)
-                    .zIndex(10f)
-            ) {
+    // Selection bar at screen root level (outside Scaffold — overlays TopAppBar)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopStart)
+            .zIndex(10f)
+    ) {
                 AnimatedVisibility(
                     visible = selectionMode,
                     enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
@@ -400,8 +401,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                     }
                 }
             }
-        } // end outer Box
-    }
+    } // end outer Box
 }
 
 @OptIn(ExperimentalFoundationApi::class)

@@ -12,6 +12,7 @@ import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import androidx.core.app.NotificationCompat
+import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
@@ -305,12 +306,26 @@ class CallService : InCallService() {
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
         super.onCallAudioStateChanged(audioState)
         _audioState.value = audioState
+        // Rebuild notification so mute/speaker button labels stay in sync
+        _currentCallSession.value?.call?.let { updateNotification(it) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "ANSWER_CALL" -> { answerCall(); launchCallActivity(answeredFromNotification = true) }
+            "ANSWER_CALL"  -> { answerCall(); launchCallActivity(answeredFromNotification = true) }
             "DECLINE_CALL" -> declineCall()
+            "MUTE_CALL"    -> setMuted(!(_audioState.value?.isMuted ?: false))
+            "SPEAKER_CALL" -> {
+                val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
+                setAudioRoute(if (isSpeaker) android.telecom.CallAudioState.ROUTE_EARPIECE else android.telecom.CallAudioState.ROUTE_SPEAKER)
+            }
+            "NOTES_CALL"   -> {
+                val name   = intent.getStringExtra("contact_name") ?: "Unknown"
+                val number = intent.getStringExtra("phone_number") ?: ""
+                if (android.provider.Settings.canDrawOverlays(this)) {
+                    FloatingNotesService.start(this, name, number)
+                }
+            }
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -318,14 +333,11 @@ class CallService : InCallService() {
     private fun updateNotification(call: Call) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Dedicated incoming call channel: high importance, bypass DND, no sound override
-            // (fresh channel ID ensures full-screen intent is enabled by default on new installs)
             nm.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING_ID, "Incoming Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
                 setBypassDnd(true)
             })
-            // Ongoing call channel: low importance, silent background notification
             nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Ongoing Calls", NotificationManager.IMPORTANCE_LOW).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(null, null)
@@ -346,11 +358,27 @@ class CallService : InCallService() {
         val declinePi = PendingIntent.getService(this, 2,
             Intent(this, CallService::class.java).apply { action = "DECLINE_CALL" },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notesPi = PendingIntent.getService(this, 3,
+            Intent(this, CallService::class.java).apply {
+                action = "NOTES_CALL"
+                putExtra("contact_name", contactName)
+                putExtra("phone_number", number)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val mutePi = PendingIntent.getService(this, 4,
+            Intent(this, CallService::class.java).apply { action = "MUTE_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val speakerPi = PendingIntent.getService(this, 5,
+            Intent(this, CallService::class.java).apply { action = "SPEAKER_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val person = androidx.core.app.Person.Builder().setName(contactName).setImportant(true).build()
         val isRinging = call.state == Call.STATE_RINGING
+        val isMuted   = _audioState.value?.isMuted ?: false
+        val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
         val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ID
-        val notification = NotificationCompat.Builder(this, channelId)
+
+        val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(contactName)
             .setContentText(if (isRinging) "Incoming call" else "Active call")
@@ -363,15 +391,54 @@ class CallService : InCallService() {
             .setAutoCancel(false)
             .setSilent(!isRinging)
             .setDefaults(if (isRinging) NotificationCompat.DEFAULT_ALL else 0)
-            .setStyle(if (isRinging) NotificationCompat.CallStyle.forIncomingCall(person, declinePi, answerPi)
-                      else          NotificationCompat.CallStyle.forOngoingCall(person, declinePi))
+            .setStyle(
+                if (isRinging) NotificationCompat.CallStyle.forIncomingCall(person, declinePi, answerPi)
+                else           NotificationCompat.CallStyle.forOngoingCall(person, declinePi)
+            )
             .setColorized(false)
-            .build()
+
+        // Add extra action buttons for ongoing calls
+        if (!isRinging) {
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    R.drawable.ic_notif_note,
+                    "Notes",
+                    notesPi
+                ).build()
+            )
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    if (isMuted) R.drawable.ic_notif_mic_on else R.drawable.ic_notif_mic_off,
+                    if (isMuted) "Unmute" else "Mute",
+                    mutePi
+                ).build()
+            )
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    R.drawable.ic_notif_speaker,
+                    if (isSpeaker) "Earpiece" else "Speaker",
+                    speakerPi
+                ).build()
+            )
+        }
+
+        val notification = builder.build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
         else
             startForeground(NOTIFICATION_ID, notification)
+
+        // Start/stop floating bubble based on preference
+        if (!isRinging && call.state == android.telecom.Call.STATE_ACTIVE) {
+            maybeStartFloatingCall(contactName, number)
+        }
+    }
+
+    private fun maybeStartFloatingCall(contactName: String, number: String) {
+        if (!prefs.getBoolean(PreferenceManager.KEY_FLOATING_CALL, false)) return
+        if (!android.provider.Settings.canDrawOverlays(this)) return
+        FloatingCallService.start(this, contactName, number)
     }
 
     private fun cancelNotification() {
