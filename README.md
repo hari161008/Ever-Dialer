@@ -33,6 +33,8 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 <br>
 📢 Everlasting Support Group:
 <a href="https://t.me/EverlastingAndroidTweak">Join Now</a>
+<br>
+🔭 To contact me through Telegram: <a href="https://t.me/hariprabhu1008">@hariprabhu1008</a>
 
 <br>
 
