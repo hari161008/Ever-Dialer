@@ -105,28 +105,27 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val scope = rememberCoroutineScope()
     val prefs = koinInject<PreferenceManager>()
 
-    // Ordered favorites — persists custom drag-to-reorder order
-    val orderedFavorites = remember { mutableStateListOf<Contact>() }
-    LaunchedEffect(favorites) {
-        val savedIds = prefs.getString(PreferenceManager.KEY_FAVORITES_ORDER, null)
-            ?.split(",")?.filter { it.isNotEmpty() } ?: emptyList()
-        val favMap = favorites.associateBy { it.id }
-        val ordered = savedIds.mapNotNull { favMap[it] }
-        val remaining = favorites.filter { it.id !in savedIds.toSet() }
-        val newList = ordered + remaining
-        // Sync removals and additions without full clear (to keep animations)
-        val toRemove = orderedFavorites.filter { o -> newList.none { it.id == o.id } }
-        toRemove.forEach { orderedFavorites.remove(it) }
-        newList.filter { n -> orderedFavorites.none { it.id == n.id } }.forEach { orderedFavorites.add(it) }
-    }
-
-    // Drag-to-reorder state  
-    // dragOffset = accumulated translation delta from drag start (not an absolute screen position).
-    // This avoids the "jump" that happens when the list reorders and localBounds changes.
+    // Drag-to-reorder state — declared first so LaunchedEffect can reference draggedContactId
     var draggedContactId by remember { mutableStateOf<String?>(null) }
     var dragOffset       by remember { mutableStateOf(Offset.Zero) }
     val itemBoundsMap    = remember { mutableStateMapOf<String, Rect>() }
     var lastSwapTargetId by remember { mutableStateOf<String?>(null) }
+
+    // Ordered favorites — persists custom drag-to-reorder order
+    val orderedFavorites = remember { mutableStateListOf<Contact>() }
+    LaunchedEffect(favorites) {
+        // Don't touch the list while the user is actively dragging
+        if (draggedContactId != null) return@LaunchedEffect
+        val savedIds = prefs.getString(PreferenceManager.KEY_FAVORITES_ORDER, null)
+            ?.split(",")?.filter { it.isNotEmpty() } ?: emptyList()
+        val favMap   = favorites.associateBy { it.id }
+        val ordered  = savedIds.mapNotNull { favMap[it] }
+        val newList  = ordered + favorites.filter { it.id !in savedIds.toSet() }
+        val toRemove = orderedFavorites.filter { o -> newList.none { it.id == o.id } }
+        toRemove.forEach { orderedFavorites.remove(it) }
+        newList.filter { n -> orderedFavorites.none { it.id == n.id } }
+               .forEach { orderedFavorites.add(it) }
+    }
 
     val dragNestedScroll = remember {
         object : NestedScrollConnection {
@@ -271,17 +270,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(orderedFavorites, key = { it.id }) { contact ->
-                        val isBeingDragged = draggedContactId == contact.id
-                        Box(
-                            modifier = if (!isBeingDragged) Modifier.animateItem(
-                                fadeInSpec    = null,
-                                fadeOutSpec   = null,
-                                placementSpec = spring(
-                                    stiffness    = Spring.StiffnessMediumLow,
-                                    dampingRatio = Spring.DampingRatioMediumBouncy
-                                )
-                            ) else Modifier
-                        ) {
                         RivoScrollAnimatedItem {
                             FavoriteContactCard(
                                 contact = contact,
@@ -366,7 +354,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 }
                             )
                         }
-                        } // end animateItem Box
                     }
                 }
             }
