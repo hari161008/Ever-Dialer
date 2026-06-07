@@ -11,6 +11,9 @@ import androidx.compose.animation.core.*
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -117,12 +120,20 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         newList.filter { n -> orderedFavorites.none { it.id == n.id } }.forEach { orderedFavorites.add(it) }
     }
 
-    // Drag-to-reorder state
+    // Drag-to-reorder state  
+    // dragOffset = accumulated translation delta from drag start (not an absolute screen position).
+    // This avoids the "jump" that happens when the list reorders and localBounds changes.
     var draggedContactId by remember { mutableStateOf<String?>(null) }
-    var dragTarget by remember { mutableStateOf(Offset.Zero) }   // absolute screen finger position
-    val itemBoundsMap = remember { mutableStateMapOf<String, Rect>() }
-    // Tracks the last item we swapped with – prevents rapid back-and-forth swapping
+    var dragOffset       by remember { mutableStateOf(Offset.Zero) }
+    val itemBoundsMap    = remember { mutableStateMapOf<String, Rect>() }
     var lastSwapTargetId by remember { mutableStateOf<String?>(null) }
+
+    val dragNestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (draggedContactId != null) available else Offset.Zero
+        }
+    }
 
     fun saveFavoritesOrder() {
         prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
@@ -252,7 +263,9 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     state = gridState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(dragNestedScroll),
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -278,25 +291,36 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 isSelected = selectedFavorites.contains(contact.id),
                                 selectionMode = selectionMode,
                                 isDragging = draggedContactId == contact.id,
-                                dragTarget = if (draggedContactId == contact.id) dragTarget else null,
+                                dragOffset = if (draggedContactId == contact.id) dragOffset else null,
                                 onBoundsChanged = { bounds -> itemBoundsMap[contact.id] = bounds },
-                                onDragStart = { initialPos ->
+                                onDragStart = { _ ->
                                     draggedContactId = contact.id
-                                    dragTarget = initialPos
+                                    dragOffset = Offset.Zero
                                     lastSwapTargetId = null
                                 },
                                 onDrag = { amt ->
                                     if (draggedContactId == contact.id) {
-                                        dragTarget += amt
-                                        val targetId = itemBoundsMap.entries
-                                            .filter { it.key != draggedContactId }
-                                            .firstOrNull { (_, b) -> b.contains(dragTarget) }
-                                            ?.key
+                                        dragOffset += amt
+                                        // Compute dragged card's current visual centre
+                                        val myCenter = itemBoundsMap[draggedContactId]
+                                            ?.center?.plus(dragOffset)
+                                        val targetId = myCenter?.let { c ->
+                                            itemBoundsMap.entries
+                                                .filter { it.key != draggedContactId }
+                                                .firstOrNull { (_, b) -> b.contains(c) }
+                                                ?.key
+                                        }
                                         if (targetId != null && targetId != lastSwapTargetId) {
                                             lastSwapTargetId = targetId
                                             val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
                                             val toIdx   = orderedFavorites.indexOfFirst { it.id == targetId }
                                             if (fromIdx != -1 && toIdx != -1) {
+                                                // Compensate dragOffset so the card stays under the finger
+                                                val fromCenter = itemBoundsMap[draggedContactId]?.center
+                                                val toCenter   = itemBoundsMap[targetId]?.center
+                                                if (fromCenter != null && toCenter != null) {
+                                                    dragOffset -= (toCenter - fromCenter)
+                                                }
                                                 orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
                                             }
                                         } else if (targetId == null) {
@@ -306,11 +330,13 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 },
                                 onDragEnd = {
                                     draggedContactId = null
+                                    dragOffset = Offset.Zero
                                     lastSwapTargetId = null
                                     saveFavoritesOrder()
                                 },
                                 onDragCancel = {
                                     draggedContactId = null
+                                    dragOffset = Offset.Zero
                                     lastSwapTargetId = null
                                 },
                                 onSelectToggle = {
@@ -413,7 +439,7 @@ private fun FavoriteContactCard(
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
     isDragging: Boolean = false,
-    dragTarget: Offset? = null,
+    dragOffset: Offset? = null,
     onBoundsChanged: ((Rect) -> Unit)? = null,
     onDragStart: ((Offset) -> Unit)? = null,
     onDrag: ((Offset) -> Unit)? = null,
@@ -430,7 +456,6 @@ private fun FavoriteContactCard(
     var isPressed by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var isDraggingLocally by remember { mutableStateOf(false) }
-    var localBounds by remember { mutableStateOf<Rect?>(null) }
     val haptic = LocalHapticFeedback.current
 
     val scale by animateFloatAsState(
@@ -460,18 +485,14 @@ private fun FavoriteContactCard(
             .scale(scale)
             .zIndex(if (isDragging) 10f else 0f)
             .graphicsLayer {
-                if (isDragging) {
-                    val lb = localBounds
-                    if (lb != null && dragTarget != null) {
-                        translationX = dragTarget.x - lb.center.x
-                        translationY = dragTarget.y - lb.center.y
-                    }
+                if (isDragging && dragOffset != null) {
+                    translationX = dragOffset.x
+                    translationY = dragOffset.y
                     scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 24f
                 }
             }
             .onGloballyPositioned { coords ->
                 val bounds = coords.boundsInWindow()
-                localBounds = bounds
                 onBoundsChanged?.invoke(bounds)
             }
             .pointerInput(selectionMode, contact.id) {
@@ -520,7 +541,7 @@ private fun FavoriteContactCard(
                                         isDraggingLocally = true
                                         isPressed = false
                                         longPressJob.cancel()
-                                        onDragStart?.invoke(localBounds?.center ?: startPos)
+                                        onDragStart?.invoke(startPos)
                                     } else if (!longPressTriggered) {
                                         longPressJob.cancel()
                                         isPressed = false
