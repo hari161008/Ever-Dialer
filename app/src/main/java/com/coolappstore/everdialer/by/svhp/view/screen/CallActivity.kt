@@ -90,6 +90,11 @@ class CallActivity : ComponentActivity() {
     private val prefs: PreferenceManager by inject()
     private var proximityWakeLock: PowerManager.WakeLock? = null
 
+    companion object {
+        /** FloatingCallService observes this to hide the bubble when CallActivity is visible. */
+        val isInForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
+    }
+
     // Pocket mode prevention
     private var sensorManager: SensorManager? = null
     private var proximitySensor: Sensor? = null
@@ -232,6 +237,7 @@ class CallActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        isInForeground.value = true
         val session = CallService.currentCallSession.value
         val audioState = CallService.audioState.value
         val proximityBgEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)
@@ -266,6 +272,11 @@ class CallActivity : ComponentActivity() {
     }
 
     override fun onDestroy() { super.onDestroy(); releaseProximityLock(); sensorManager?.unregisterListener(proxSensorListener) }
+
+    override fun onPause() {
+        super.onPause()
+        isInForeground.value = false
+    }
     private fun acquireProximityLock() { if (proximityWakeLock?.isHeld == false) proximityWakeLock?.acquire() }
     private fun releaseProximityLock() { if (proximityWakeLock?.isHeld == true) proximityWakeLock?.release() }
 }

@@ -430,7 +430,8 @@ class CallService : InCallService() {
             startForeground(NOTIFICATION_ID, notification)
 
         // Start/stop floating bubble based on preference
-        if (!isRinging && call.state == android.telecom.Call.STATE_ACTIVE) {
+        if (call.state != android.telecom.Call.STATE_DISCONNECTED &&
+            call.state != android.telecom.Call.STATE_DISCONNECTING) {
             maybeStartFloatingCall(contactName, number)
         }
     }

@@ -93,6 +93,7 @@ import org.koin.compose.viewmodel.koinActivityViewModel
 import kotlin.math.abs
 
 @Destination<RootGraph>(style = TabTransitionStyle::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigator) {
     val contactsVM: ContactsViewModel = koinActivityViewModel()
@@ -257,6 +258,17 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(orderedFavorites, key = { it.id }) { contact ->
+                        val isBeingDragged = draggedContactId == contact.id
+                        Box(
+                            modifier = if (!isBeingDragged) Modifier.animateItem(
+                                fadeInSpec    = null,
+                                fadeOutSpec   = null,
+                                placementSpec = spring(
+                                    stiffness    = Spring.StiffnessMediumLow,
+                                    dampingRatio = Spring.DampingRatioMediumBouncy
+                                )
+                            ) else Modifier
+                        ) {
                         RivoScrollAnimatedItem {
                             FavoriteContactCard(
                                 contact = contact,
@@ -328,6 +340,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 }
                             )
                         }
+                        } // end animateItem Box
                     }
                 }
             }
