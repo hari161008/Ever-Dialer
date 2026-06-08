@@ -13,9 +13,8 @@ Ever Dialer is the best replacement of Google dialer which has Material You desi
 
 <br>
 
-# ⭐ Rate and Review (Coming soon, not yet made)
-Everyone's Ratings: [Click Here](https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ratings%20Reviews/Ratings%20and%20Reviews%20v3.html)
-<br>
+# ⭐ Rate and Review
+Everyone's Ratings: [Click Here](https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ratings%20Reviews/Ever%20Dialer/Ever%20Dialer.html)
 
 If you would like to write a Review, you must install the app, then go to App's settings > Rate and Review
 
