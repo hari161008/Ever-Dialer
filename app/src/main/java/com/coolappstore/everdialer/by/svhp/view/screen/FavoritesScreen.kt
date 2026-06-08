@@ -106,10 +106,12 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val prefs = koinInject<PreferenceManager>()
 
     // Drag-to-reorder state — declared first so LaunchedEffect can reference draggedContactId
-    var draggedContactId by remember { mutableStateOf<String?>(null) }
-    var dragOffset       by remember { mutableStateOf(Offset.Zero) }
-    val itemBoundsMap    = remember { mutableStateMapOf<String, Rect>() }
-    var lastSwapTargetId by remember { mutableStateOf<String?>(null) }
+    var draggedContactId       by remember { mutableStateOf<String?>(null) }
+    var dragOffset             by remember { mutableStateOf(Offset.Zero) }
+    val itemBoundsMap          = remember { mutableStateMapOf<String, Rect>() }
+    var lastSwapTargetId       by remember { mutableStateOf<String?>(null) }
+    var fingerAbsPos           by remember { mutableStateOf(Offset.Zero) }
+    var expectedDraggedCenter  by remember { mutableStateOf(Offset.Zero) }
 
     // Ordered favorites — persists custom drag-to-reorder order
     val orderedFavorites = remember { mutableStateListOf<Contact>() }
@@ -284,47 +286,54 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 onDragStart = { _ ->
                                     draggedContactId = contact.id
                                     dragOffset = Offset.Zero
+                                    val center = itemBoundsMap[contact.id]?.center ?: Offset.Zero
+                                    fingerAbsPos = center
+                                    expectedDraggedCenter = center
                                     lastSwapTargetId = null
                                 },
                                 onDrag = { amt ->
                                     if (draggedContactId == contact.id) {
-                                        dragOffset += amt
-                                        // Compute dragged card's current visual centre
-                                        val myCenter = itemBoundsMap[draggedContactId]
-                                            ?.center?.plus(dragOffset)
-                                        val targetId = myCenter?.let { c ->
-                                            itemBoundsMap.entries
-                                                .filter { it.key != draggedContactId }
-                                                .firstOrNull { (_, b) -> b.contains(c) }
-                                                ?.key
-                                        }
+                                        fingerAbsPos += amt
+                                        // dragOffset = finger position minus expected card center
+                                        // expectedDraggedCenter is updated synchronously on swap,
+                                        // eliminating the 1-frame position jump that causes flicker
+                                        dragOffset = fingerAbsPos - expectedDraggedCenter
+
+                                        val targetId = itemBoundsMap.entries
+                                            .filter { it.key != draggedContactId }
+                                            .firstOrNull { (_, b) -> b.contains(fingerAbsPos) }
+                                            ?.key
+
                                         if (targetId != null && targetId != lastSwapTargetId) {
+                                            // Update expectedDraggedCenter to target's current bounds BEFORE swap
+                                            // so dragOffset compensates immediately in this same frame
+                                            val targetCenter = itemBoundsMap[targetId]?.center
+                                            if (targetCenter != null) {
+                                                expectedDraggedCenter = targetCenter
+                                                dragOffset = fingerAbsPos - expectedDraggedCenter
+                                            }
                                             lastSwapTargetId = targetId
                                             val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
                                             val toIdx   = orderedFavorites.indexOfFirst { it.id == targetId }
                                             if (fromIdx != -1 && toIdx != -1) {
-                                                // Compensate dragOffset so the card stays under the finger
-                                                val fromCenter = itemBoundsMap[draggedContactId]?.center
-                                                val toCenter   = itemBoundsMap[targetId]?.center
-                                                if (fromCenter != null && toCenter != null) {
-                                                    dragOffset -= (toCenter - fromCenter)
-                                                }
                                                 orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
                                             }
-                                        } else if (targetId == null) {
-                                            lastSwapTargetId = null
                                         }
                                     }
                                 },
                                 onDragEnd = {
                                     draggedContactId = null
                                     dragOffset = Offset.Zero
+                                    fingerAbsPos = Offset.Zero
+                                    expectedDraggedCenter = Offset.Zero
                                     lastSwapTargetId = null
                                     saveFavoritesOrder()
                                 },
                                 onDragCancel = {
                                     draggedContactId = null
                                     dragOffset = Offset.Zero
+                                    fingerAbsPos = Offset.Zero
+                                    expectedDraggedCenter = Offset.Zero
                                     lastSwapTargetId = null
                                 },
                                 onSelectToggle = {

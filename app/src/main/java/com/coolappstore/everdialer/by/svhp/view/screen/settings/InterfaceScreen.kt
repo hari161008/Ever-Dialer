@@ -114,6 +114,12 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     // Default Tab dialog
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var defaultTab           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") }
+
+    var showTabSectionsDialog by remember { mutableStateOf(false) }
+    var tabShowFavorites by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)) }
+    var tabShowCalls     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,     true)) }
+    var tabShowContacts  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,  true)) }
+    var tabShowNotes     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,     true)) }
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val tabOptions = listOf(
         TabOption("favorites", "Favourites", Icons.Outlined.FavoriteBorder),
@@ -272,6 +278,63 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
             },
             confirmButton = {
                 TextButton(onClick = { showDefaultTabDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
+    // ── Tab Sections Dialog ──────────────────────────────────────────────────
+    if (showTabSectionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showTabSectionsDialog = false },
+            icon = { Icon(Icons.Default.ViewWeek, null, tint = ColorIndigo) },
+            title = { Text("Tab Sections") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Choose which tabs are visible in the navigation bar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    listOf(
+                        Triple("Favourites", tabShowFavorites) { v: Boolean ->
+                            tabShowFavorites = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, v)
+                        },
+                        Triple("Calls", tabShowCalls) { v: Boolean ->
+                            tabShowCalls = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, v)
+                        },
+                        Triple("Contacts", tabShowContacts) { v: Boolean ->
+                            tabShowContacts = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, v)
+                        },
+                        Triple("Notes", tabShowNotes) { v: Boolean ->
+                            tabShowNotes = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, v)
+                        }
+                    ).forEach { (label, checked, onChange) ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = onChange,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTabSectionsDialog = false }) { Text("Done") }
             }
         )
     }
@@ -561,6 +624,16 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorOrange,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showCallUIDialog = true }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Tab Sections",
+                                    supporting = "Toggle which tabs appear in the navigation bar",
+                                    leadingIcon = Icons.Default.ViewWeek,
+                                    iconContainerColor = ColorIndigo,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showTabSectionsDialog = true }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

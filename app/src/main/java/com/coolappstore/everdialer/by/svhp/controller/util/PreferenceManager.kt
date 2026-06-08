@@ -92,5 +92,10 @@ class PreferenceManager(context: Context) {
         const val KEY_AUTO_SPEAKER             = "auto_speaker"
         const val KEY_FAVORITES_ORDER          = "favorites_order"
         const val KEY_FLOATING_CALL            = "floating_ongoing_call"
+        // Tab Sections visibility
+        const val KEY_TAB_SHOW_FAVORITES       = "tab_show_favorites"
+        const val KEY_TAB_SHOW_CALLS           = "tab_show_calls"
+        const val KEY_TAB_SHOW_CONTACTS        = "tab_show_contacts"
+        const val KEY_TAB_SHOW_NOTES           = "tab_show_notes"
     }
 }

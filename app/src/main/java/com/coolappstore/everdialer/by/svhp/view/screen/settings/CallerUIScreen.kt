@@ -32,6 +32,11 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
 
     var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f).coerceIn(0.1f, 1.0f)) }
 
+    var tabShowFavorites by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)) }
+    var tabShowCalls     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,     true)) }
+    var tabShowContacts  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,  true)) }
+    var tabShowNotes     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,     true)) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -192,6 +197,101 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Tab Sections ──────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 80L) {
+                    Column {
+                        Text(
+                            "Tab Sections",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                        )
+                        RivoExpressiveCard {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Tab,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    Column {
+                                        Text(
+                                            "Visible Tabs",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            "Choose which tabs appear in the navigation bar",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                listOf(
+                                    Triple("Favourites", tabShowFavorites) { v: Boolean ->
+                                        tabShowFavorites = v
+                                        prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, v)
+                                    },
+                                    Triple("Calls", tabShowCalls) { v: Boolean ->
+                                        tabShowCalls = v
+                                        prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, v)
+                                    },
+                                    Triple("Contacts", tabShowContacts) { v: Boolean ->
+                                        tabShowContacts = v
+                                        prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, v)
+                                    },
+                                    Triple("Notes", tabShowNotes) { v: Boolean ->
+                                        tabShowNotes = v
+                                        prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, v)
+                                    }
+                                ).forEach { (label, checked, onChange) ->
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                label,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Checkbox(
+                                                checked = checked,
+                                                onCheckedChange = onChange,
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

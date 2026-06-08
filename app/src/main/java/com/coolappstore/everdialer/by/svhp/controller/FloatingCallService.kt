@@ -340,8 +340,8 @@ class FloatingCallService : Service() {
                 ) + fadeOut(tween(300, easing = FastOutLinearInEasing))
             ) {
                 Surface(
-                    modifier        = Modifier.fillMaxWidth(),
-                    shape           = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    modifier        = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+                    shape           = RoundedCornerShape(32.dp),
                     color           = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation  = 4.dp,
                     shadowElevation = 0.dp
