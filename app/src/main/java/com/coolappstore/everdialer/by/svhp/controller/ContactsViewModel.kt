@@ -9,6 +9,7 @@ import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,8 +25,15 @@ class ContactsViewModel(
     private val _allContacts = MutableStateFlow<List<Contact>>(emptyList())
     val allContacts: StateFlow<List<Contact>> = _allContacts.asStateFlow()
 
+    private val _selectedAccountKey = MutableStateFlow<String?>(null)
+    val selectedAccountKey: StateFlow<String?> = _selectedAccountKey.asStateFlow()
+
+    private val _availableAccounts = MutableStateFlow<List<ContactAccount>>(emptyList())
+    val availableAccounts: StateFlow<List<ContactAccount>> = _availableAccounts.asStateFlow()
+
     init {
         fetchContacts()
+        fetchAvailableAccounts()
     }
 
     fun fetchContacts() {
@@ -34,15 +42,31 @@ class ContactsViewModel(
             != PackageManager.PERMISSION_GRANTED) return
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val enabledKeys = getEnabledAccountKeys()
-                if (enabledKeys.isEmpty()) {
-                    // No filter saved yet — show all contacts
-                    contactsRepo.getContacts()
+                val sessionKey = _selectedAccountKey.value
+                if (sessionKey != null) {
+                    contactsRepo.getContacts(setOf(sessionKey))
                 } else {
-                    contactsRepo.getContacts(enabledKeys)
+                    val enabledKeys = getEnabledAccountKeys()
+                    if (enabledKeys.isEmpty()) contactsRepo.getContacts()
+                    else contactsRepo.getContacts(enabledKeys)
                 }
             }.onSuccess { _allContacts.value = it }
         }
+    }
+
+    fun fetchAvailableAccounts() {
+        val ctx = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { contactsRepo.getAvailableAccounts() }
+                .onSuccess { _availableAccounts.value = it }
+        }
+    }
+
+    fun setAccountFilter(key: String?) {
+        _selectedAccountKey.value = key
+        fetchContacts()
     }
 
     private fun getEnabledAccountKeys(): Set<String> {

@@ -5,10 +5,15 @@ import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Intent
 import android.provider.ContactsContract
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -20,6 +25,13 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.SimCard
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,6 +69,10 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = TabTransitionStyle::class)
@@ -290,7 +306,7 @@ fun ContactContent(
             if (contacts.isEmpty()) {
                 RivoLoadingIndicatorView()
             } else {
-                // ── Contact count pill ────────────────────────────────
+                // ── Contact count / account-switcher pill ─────────────────
                 var chipVisible by remember { mutableStateOf(false) }
                 val chipAlpha by animateFloatAsState(
                     targetValue = if (chipVisible) 1f else 0f,
@@ -304,6 +320,22 @@ fun ContactContent(
                 )
                 LaunchedEffect(contacts.size) { chipVisible = true }
 
+                val availableAccounts by contactsVM.availableAccounts.collectAsState()
+                val selectedAccountKey by contactsVM.selectedAccountKey.collectAsState()
+                var showAccountSheet by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) { contactsVM.fetchAvailableAccounts() }
+
+                val pillText = when {
+                    selectedAccountKey != null -> {
+                        val acc = availableAccounts.find { it.key == selectedAccountKey }
+                        val name = acc?.displayName ?: selectedAccountKey!!
+                        "$name · ${contacts.size}"
+                    }
+                    availableAccounts.size > 1 -> "${contacts.size} contacts · ${availableAccounts.size} sources"
+                    else -> "${contacts.size} contacts"
+                }
+
                 Row(
                     modifier = Modifier
                         .padding(horizontal = 20.dp, vertical = 6.dp)
@@ -313,8 +345,12 @@ fun ContactContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
+                        onClick = { showAccountSheet = true },
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = if (selectedAccountKey != null)
+                            MaterialTheme.colorScheme.secondaryContainer
+                        else
+                            MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -325,16 +361,44 @@ fun ContactContent(
                                 Icons.Default.Person,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = if (selectedAccountKey != null)
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "${contacts.size} contacts",
+                                text = pillText,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = if (selectedAccountKey != null)
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (selectedAccountKey != null)
+                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
                         }
                     }
+                }
+
+                if (showAccountSheet) {
+                    AccountSwitcherSheet(
+                        accounts = availableAccounts,
+                        selectedKey = selectedAccountKey,
+                        totalCount = availableAccounts.sumOf { it.contactCount }.takeIf { it > 0 } ?: contacts.size,
+                        onSelect = { key ->
+                            contactsVM.setAccountFilter(key)
+                            showAccountSheet = false
+                        },
+                        onDismiss = { showAccountSheet = false }
+                    )
                 }
 
                 ScrollHapticsEffect(listState = listState)
@@ -355,6 +419,174 @@ fun ContactContent(
                 description = "Ever Dialer needs access to your contacts to show your contact list and identify incoming calls.",
                 onGrantClick = onRequestPermission
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccountSwitcherSheet(
+    accounts: List<ContactAccount>,
+    selectedKey: String?,
+    totalCount: Int,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            Box(
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                    modifier = androidx.compose.ui.Modifier.size(width = 36.dp, height = 4.dp)
+                ) {}
+            }
+        }
+    ) {
+        Column(
+            modifier = androidx.compose.ui.Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        ) {
+            // Header
+            Row(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Contact Accounts",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = null)
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                // "All Contacts" row
+                item {
+                    AccountRow(
+                        icon = Icons.Default.People,
+                        name = "All Contacts",
+                        subtitle = "$totalCount contacts",
+                        isSelected = selectedKey == null,
+                        onClick = { onSelect(null) }
+                    )
+                }
+
+                if (accounts.isNotEmpty()) {
+                    item {
+                        HorizontalDivider(
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                    items(accounts, key = { it.key }) { account ->
+                        val accountIcon = when {
+                            account.accountType.contains("google", ignoreCase = true) -> Icons.Default.Email
+                            account.accountType.isBlank() ||
+                                    account.accountType.contains("local", ignoreCase = true) -> Icons.Default.SimCard
+                            else -> Icons.Default.AccountCircle
+                        }
+                        AccountRow(
+                            icon = accountIcon,
+                            name = account.displayName,
+                            subtitle = "${account.contactCount} contacts",
+                            isSelected = selectedKey == account.key,
+                            onClick = { onSelect(account.key) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor by animateColorAsState(
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        else androidx.compose.ui.graphics.Color.Transparent,
+        spring(stiffness = Spring.StiffnessMediumLow), label = "rowBg"
+    )
+    Surface(
+        onClick = onClick,
+        color = bgColor,
+        modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = androidx.compose.ui.Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = androidx.compose.ui.Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = androidx.compose.ui.Modifier.size(22.dp),
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Column(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AnimatedVisibility(
+                visible = isSelected,
+                enter = scaleIn(spring(stiffness = Spring.StiffnessMedium)) + fadeIn(),
+                exit = scaleOut() + fadeOut()
+            ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = androidx.compose.ui.Modifier.size(22.dp)
+                )
+            }
         }
     }
 }

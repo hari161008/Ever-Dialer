@@ -10,7 +10,7 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.telecom.TelecomManager
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -82,7 +82,7 @@ import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestin
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import org.koin.core.context.GlobalContext
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val requestRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -110,13 +110,25 @@ class MainActivity : ComponentActivity() {
                     GlobalContext.get().get<PreferenceManager>()
                 }
 
+                // ── Biometric app-lock ──────────────────────────────────────
+                val settingsVer by prefs.settingsChanged.collectAsState()
+                val biometricType = remember(settingsVer) {
+                    prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
+                }
+                val appLockEnabled = remember(settingsVer) {
+                    prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
+                }
+                var isUnlocked by remember {
+                    mutableStateOf(!(biometricType.isNotEmpty() && appLockEnabled))
+                }
+
                 // Compute start destination from prefs — done once so no flash
-                val startRoute = remember {
+                val startDestination = remember {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
-                        "favorites" -> FavoritesScreenDestination.route
-                        "contacts"  -> ContactScreenDestination.route
-                        "notes"     -> NotesScreenDestination.route
-                        else        -> null // calls is the native start, no redirect
+                        "favorites" -> FavoritesScreenDestination
+                        "contacts"  -> ContactScreenDestination
+                        "notes"     -> NotesScreenDestination
+                        else        -> RecentScreenDestination
                     }
                 }
 
@@ -495,7 +507,7 @@ class MainActivity : ComponentActivity() {
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentDest = navBackStack?.destination
                     val prefs2 = remember { GlobalContext.get().get<PreferenceManager>() }
-                    val notesEnabled = prefs2.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+                    val showNotesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
 
                     fun navTo(route: String) {
                         navController.navigate(route) {
@@ -561,7 +573,7 @@ class MainActivity : ComponentActivity() {
                                             paddingEnd = railPaddingEnd,
                                             onClick = { navTo(ContactScreenDestination.route) }
                                         )
-                                        if (notesEnabled) {
+                                        if (showNotesRail) {
                                             RailItem(
                                                 selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
                                                 icon = { sel -> Icon(if (sel) Icons.Filled.Note else Icons.Outlined.Note, "Notes", modifier = Modifier.size(24.dp)) },
@@ -604,7 +616,7 @@ class MainActivity : ComponentActivity() {
                                     .weight(1f)
                                     .fillMaxHeight()
                             ) {
-                                DestinationsNavHost(navGraph = NavGraphs.root, navController = navController, defaultTransitions = TabTransitionStyle)
+                                DestinationsNavHost(navGraph = NavGraphs.root, navController = navController, start = startDestination, defaultTransitions = TabTransitionStyle)
                             }
                         }
                         } // end CompositionLocalProvider landscape
@@ -631,6 +643,7 @@ class MainActivity : ComponentActivity() {
                                     DestinationsNavHost(
                                         navGraph      = NavGraphs.root,
                                         navController = navController,
+                                        start         = startDestination,
                                         defaultTransitions = TabTransitionStyle
                                     )
                                 }
@@ -639,15 +652,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Redirect to default tab — keep RecentScreen in back-stack so
-                // findStartDestination() remains valid and BottomBar highlights correctly
-                LaunchedEffect(startRoute) {
-                    if (startRoute != null) {
-                        navController.navigate(startRoute) {
-                            popUpTo(RecentScreenDestination.route) { inclusive = false; saveState = false }
-                            launchSingleTop = true
-                        }
-                    }
+                // ── Biometric lock overlay ─────────────────────────────────
+                if (!isUnlocked) {
+                    com.coolappstore.everdialer.by.svhp.view.screen.settings.BiometricUnlockScreen(
+                        prefs = prefs,
+                        onUnlocked = { isUnlocked = true },
+                        onDismiss  = { finish() }
+                    )
                 }
 
                 LaunchedEffect(intent) {

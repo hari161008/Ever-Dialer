@@ -1085,23 +1085,61 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Notes ────────────────────────────────────────────────────────
+            // ── Biometrics ───────────────────────────────────────────────────
             item {
-                RivoAnimatedSection(delayMs = 100L) {
+                RivoAnimatedSection(delayMs = 110L) {
                     Column {
-                        SectionLabel("Notes")
+                        SectionLabel("Biometrics")
                         RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline   = "Enable Notes Section",
-                                supporting = "Show Notes tab in bottom navigation",
-                                leadingIcon = Icons.Outlined.StickyNote2,
-                                iconContainerColor = ColorTeal,
-                                checked = notesEnabled,
-                                onCheckedChange = {
-                                    notesEnabled = it
-                                    prefs.setBoolean(PreferenceManager.KEY_NOTES_ENABLED, it)
-                                }
+                            val biometricsType = remember(prefs.settingsChanged.collectAsState().value) {
+                                prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
+                            }
+                            val appLockOn = remember(prefs.settingsChanged.collectAsState().value) {
+                                prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
+                            }
+                            val callLockOn = remember(prefs.settingsChanged.collectAsState().value) {
+                                prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
+                            }
+                            val biometricsLabel = when (biometricsType) {
+                                "system"   -> "System Biometrics"
+                                "pin"      -> "Custom PIN"
+                                "password" -> "Custom Password"
+                                else       -> "Not configured"
+                            }
+                            RivoListItem(
+                                headline   = "Biometrics",
+                                supporting = biometricsLabel,
+                                leadingIcon = Icons.Default.Fingerprint,
+                                iconContainerColor = Color(0xFF6750A4),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { navigator.navigate(BiometricScreenDestination) }
                             )
+                            AnimatedVisibility(visible = biometricsType.isNotEmpty()) {
+                                Column {
+                                    CardDivider()
+                                    RivoSwitchListItem(
+                                        headline   = "Lock App on Open",
+                                        supporting = "Require auth when opening Ever Dialer",
+                                        leadingIcon = Icons.Default.LockOpen,
+                                        iconContainerColor = ColorBlue,
+                                        checked = appLockOn,
+                                        onCheckedChange = {
+                                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, it)
+                                        }
+                                    )
+                                    CardDivider()
+                                    RivoSwitchListItem(
+                                        headline   = "Lock Call Actions",
+                                        supporting = "Require auth to answer or reject calls",
+                                        leadingIcon = Icons.Default.PhonePaused,
+                                        iconContainerColor = ColorGreen,
+                                        checked = callLockOn,
+                                        onCheckedChange = {
+                                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, it)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1322,7 +1360,7 @@ private sealed class BackupDialogState {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelLarge,
@@ -1332,7 +1370,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun CardDivider() {
+internal fun CardDivider() {
     HorizontalDivider(
         Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)

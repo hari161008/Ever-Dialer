@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.net.Uri
 import android.provider.ContactsContract
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactEvent
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 
@@ -273,6 +274,57 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
     override fun deleteContact(contactId: String) {
         val uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contactId)
         contentResolver.delete(uri, null, null)
+    }
+
+    override fun getAvailableAccounts(): List<ContactAccount> {
+        data class AccInfo(val type: String, val name: String, val contactIds: MutableSet<Long> = mutableSetOf())
+        val accountMap = mutableMapOf<String, AccInfo>()
+
+        contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(
+                ContactsContract.RawContacts.CONTACT_ID,
+                ContactsContract.RawContacts.ACCOUNT_TYPE,
+                ContactsContract.RawContacts.ACCOUNT_NAME
+            ),
+            "${ContactsContract.RawContacts.DELETED} = 0",
+            null, null
+        )?.use { cursor ->
+            val contactIdIdx = cursor.getColumnIndex(ContactsContract.RawContacts.CONTACT_ID)
+            val typeIdx      = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)
+            val nameIdx      = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
+            while (cursor.moveToNext()) {
+                val contactId = if (contactIdIdx >= 0) cursor.getLong(contactIdIdx) else continue
+                val type = cursor.getString(typeIdx) ?: ""
+                val name = cursor.getString(nameIdx) ?: ""
+                val key = buildAccountKey(type, name)
+                accountMap.getOrPut(key) { AccInfo(type, name) }.contactIds.add(contactId)
+            }
+        }
+        return accountMap.map { (key, info) ->
+            ContactAccount(
+                key          = key,
+                displayName  = buildAccountDisplayName(info.type, info.name),
+                accountType  = info.type,
+                accountName  = info.name,
+                contactCount = info.contactIds.size
+            )
+        }.filter { it.contactCount > 0 }.sortedByDescending { it.contactCount }
+    }
+
+    private fun buildAccountKey(type: String, name: String): String = when {
+        type.contains("google", ignoreCase = true) -> "google_$name"
+        type.isBlank() || type.contains("local", ignoreCase = true) ||
+                type.contains("android.contacts", ignoreCase = true) -> "sim_0"
+        type.contains("whatsapp", ignoreCase = true) -> "whatsapp"
+        else -> "${type}_${name}".take(60)
+    }
+
+    private fun buildAccountDisplayName(type: String, name: String): String = when {
+        type.contains("google", ignoreCase = true) -> name.ifBlank { "Google" }
+        type.isBlank() || type.contains("local", ignoreCase = true) -> "Device / SIM"
+        type.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
+        else -> name.ifBlank { type }
     }
 
     override fun getContactByNumber(number: String): Contact? {

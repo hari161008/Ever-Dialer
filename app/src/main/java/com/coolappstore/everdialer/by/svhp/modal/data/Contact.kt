@@ -16,3 +16,11 @@ data class Contact(
     val photoUri: String? = null,
     val isFavorite: Boolean = false,
 )
+
+data class ContactAccount(
+    val key: String,
+    val displayName: String,
+    val accountType: String,
+    val accountName: String,
+    val contactCount: Int = 0
+)

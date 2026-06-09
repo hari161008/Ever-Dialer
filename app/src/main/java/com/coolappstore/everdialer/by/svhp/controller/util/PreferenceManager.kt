@@ -97,5 +97,11 @@ class PreferenceManager(context: Context) {
         const val KEY_TAB_SHOW_CALLS           = "tab_show_calls"
         const val KEY_TAB_SHOW_CONTACTS        = "tab_show_contacts"
         const val KEY_TAB_SHOW_NOTES           = "tab_show_notes"
+        // Biometrics
+        const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | ""
+        const val KEY_BIOMETRICS_PIN           = "biometrics_pin"
+        const val KEY_BIOMETRICS_PASSWORD      = "biometrics_password"
+        const val KEY_BIOMETRICS_APP_LOCK      = "biometrics_app_lock"
+        const val KEY_BIOMETRICS_CALL_LOCK     = "biometrics_call_lock"
     }
 }

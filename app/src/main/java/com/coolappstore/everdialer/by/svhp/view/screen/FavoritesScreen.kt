@@ -214,6 +214,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Final)
                             val change = event.changes.firstOrNull() ?: break
+                            // Never swipe tabs while a drag-to-reorder is in progress
+                            if (draggedContactId != null) { if (!change.pressed) break; continue }
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
                             val elapsed = System.currentTimeMillis() - startTime

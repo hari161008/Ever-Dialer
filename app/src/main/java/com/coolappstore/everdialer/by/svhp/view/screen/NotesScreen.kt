@@ -208,7 +208,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                                 iconTint = androidx.compose.ui.graphics.Color(0xFF607D8B),
                                 onClick  = {
                                     showOverflow = false
-                                    prefs.setBoolean(PreferenceManager.KEY_NOTES_ENABLED, false)
+                                    prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, false)
                                     navigator.navigateUp()
                                 }
                             )

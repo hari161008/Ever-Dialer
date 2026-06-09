@@ -348,6 +348,16 @@ fun ExpressiveCallScreen(
     val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
     var isOnHold by remember { mutableStateOf(false) }
     var showNoteWindow by remember { mutableStateOf(false) }
+
+    // ── Call-lock biometric ────────────────────────────────────────────────
+    val callLockEnabled = remember {
+        prefs?.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) == true &&
+        (prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "").isNotEmpty()
+    }
+    var callBiometricUnlocked by remember { mutableStateOf(!callLockEnabled) }
+    var showCallBiometricUnlock by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     var showMergeConfirm by remember { mutableStateOf(false) }
     var showAddPersonSheet by remember { mutableStateOf(false) }
     var showDialpad by remember { mutableStateOf(false) }
@@ -451,10 +461,11 @@ fun ExpressiveCallScreen(
         if (callState == Call.STATE_ACTIVE && isOnHold) isOnHold = false
     }
 
-    LaunchedEffect(callState) {
-        if (callState == Call.STATE_ACTIVE) {
-            val start = System.currentTimeMillis()
-            while (true) { callDuration = (System.currentTimeMillis() - start) / 1000; delay(1000) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val connectTime = call.details?.connectTimeMillis ?: 0L
+            callDuration = if (connectTime > 0L) (System.currentTimeMillis() - connectTime) / 1000L else 0L
+            delay(500)
         }
     }
 
@@ -685,8 +696,26 @@ fun ExpressiveCallScreen(
                     } else {
                         Column(modifier = Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             NewSwipeToAnswer(
-                                onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
-                                onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
+                                onAnswer = {
+                                    if (!isPocketBlocked()) {
+                                        if (callBiometricUnlocked) {
+                                            try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                        } else {
+                                            pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
+                                            showCallBiometricUnlock = true
+                                        }
+                                    }
+                                },
+                                onDecline = {
+                                    if (!isPocketBlocked()) {
+                                        if (callBiometricUnlocked) {
+                                            try { call.disconnect() } catch (_: Exception) {}
+                                        } else {
+                                            pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                            showCallBiometricUnlock = true
+                                        }
+                                    }
+                                },
                                 labelColor = subtleColor,
                                 bgColor = overlayColor,
                                 isPocketBlocked = isPocketBlocked
@@ -985,8 +1014,26 @@ fun ExpressiveCallScreen(
                                 .align(Alignment.BottomCenter)
                         ) {
                             NewSwipeToAnswer(
-                                onAnswer = { if (!isPocketBlocked()) try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} },
-                                onDecline = { if (!isPocketBlocked()) try { call.disconnect() } catch (_: Exception) {} },
+                                onAnswer = {
+                                    if (!isPocketBlocked()) {
+                                        if (callBiometricUnlocked) {
+                                            try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                        } else {
+                                            pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
+                                            showCallBiometricUnlock = true
+                                        }
+                                    }
+                                },
+                                onDecline = {
+                                    if (!isPocketBlocked()) {
+                                        if (callBiometricUnlocked) {
+                                            try { call.disconnect() } catch (_: Exception) {}
+                                        } else {
+                                            pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                            showCallBiometricUnlock = true
+                                        }
+                                    }
+                                },
                                 labelColor = subtleColor,
                                 bgColor = overlayColor,
                                 isPocketBlocked = isPocketBlocked
@@ -995,6 +1042,23 @@ fun ExpressiveCallScreen(
                     }
                 } // end portrait Box
             } // end portrait
+        }
+
+        // ── Call biometric unlock overlay ──────────────────────────────────────
+        if (showCallBiometricUnlock && prefs != null) {
+            com.coolappstore.everdialer.by.svhp.view.screen.settings.BiometricUnlockScreen(
+                prefs = prefs,
+                onUnlocked = {
+                    callBiometricUnlocked = true
+                    showCallBiometricUnlock = false
+                    pendingAction?.invoke()
+                    pendingAction = null
+                },
+                onDismiss = {
+                    showCallBiometricUnlock = false
+                    pendingAction = null
+                }
+            )
         }
 
         // ── Dialpad overlay — last child of main Box, never triggers layout shift ──
