@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1044,21 +1045,80 @@ fun ExpressiveCallScreen(
             } // end portrait
         }
 
-        // ── Call biometric unlock overlay ──────────────────────────────────────
+        // ── Call biometric — direct prompt, no overlay ────────────────────
         if (showCallBiometricUnlock && prefs != null) {
-            com.coolappstore.everdialer.by.svhp.view.screen.settings.BiometricUnlockScreen(
-                prefs = prefs,
-                onUnlocked = {
-                    callBiometricUnlocked = true
-                    showCallBiometricUnlock = false
-                    pendingAction?.invoke()
-                    pendingAction = null
-                },
-                onDismiss = {
-                    showCallBiometricUnlock = false
-                    pendingAction = null
+            val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
+            val context = LocalContext.current
+            when (biometricType) {
+                "system" -> {
+                    LaunchedEffect(showCallBiometricUnlock) {
+                        val activity = context as? androidx.fragment.app.FragmentActivity ?: run {
+                            showCallBiometricUnlock = false; pendingAction = null; return@LaunchedEffect
+                        }
+                        val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
+                        val prompt = androidx.biometric.BiometricPrompt(
+                            activity, executor,
+                            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                    callBiometricUnlocked = true
+                                    showCallBiometricUnlock = false
+                                    pendingAction?.invoke()
+                                    pendingAction = null
+                                }
+                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                    showCallBiometricUnlock = false
+                                    pendingAction = null
+                                }
+                                override fun onAuthenticationFailed() {
+                                    showCallBiometricUnlock = false
+                                    pendingAction = null
+                                }
+                            }
+                        )
+                        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                            .setTitle("Authenticate")
+                            .setSubtitle("Verify your identity to perform this action")
+                            .setNegativeButtonText("Cancel")
+                            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                            .build()
+                        prompt.authenticate(info)
+                    }
                 }
-            )
+                "pin" -> {
+                    com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
+                        title = "Enter PIN",
+                        isVerify = true,
+                        expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
+                        onConfirm = {
+                            callBiometricUnlocked = true
+                            showCallBiometricUnlock = false
+                            pendingAction?.invoke()
+                            pendingAction = null
+                        },
+                        onDismiss = {
+                            showCallBiometricUnlock = false
+                            pendingAction = null
+                        }
+                    )
+                }
+                "password" -> {
+                    com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
+                        title = "Enter Password",
+                        isVerify = true,
+                        expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
+                        onConfirm = {
+                            callBiometricUnlocked = true
+                            showCallBiometricUnlock = false
+                            pendingAction?.invoke()
+                            pendingAction = null
+                        },
+                        onDismiss = {
+                            showCallBiometricUnlock = false
+                            pendingAction = null
+                        }
+                    )
+                }
+            }
         }
 
         // ── Dialpad overlay — last child of main Box, never triggers layout shift ──

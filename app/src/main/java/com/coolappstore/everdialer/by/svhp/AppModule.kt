@@ -14,7 +14,7 @@ import org.koin.dsl.module
 
 val appModule = module {
     single<IContactsRepository> {
-        ContactsRepository(androidContext().contentResolver)
+        ContactsRepository(androidContext().contentResolver, androidContext())
     }
     single<ICallLogRepository> {
         CallLogRepository(androidContext().contentResolver)

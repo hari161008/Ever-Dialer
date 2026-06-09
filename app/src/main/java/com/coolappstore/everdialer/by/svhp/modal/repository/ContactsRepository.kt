@@ -2,14 +2,18 @@ package com.coolappstore.everdialer.by.svhp.modal.repository
 import android.content.ContentProviderOperation
 import android.content.ContentResolver
 import android.content.ContentValues
+import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
+import android.telephony.SubscriptionManager
+import androidx.annotation.RequiresApi
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactEvent
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 
-class ContactsRepository(private val contentResolver: ContentResolver) : IContactsRepository {
+class ContactsRepository(private val contentResolver: ContentResolver, private val context: Context) : IContactsRepository {
 
     override fun getContacts(): List<Contact> = getContacts(emptySet())
 
@@ -135,11 +139,17 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
                                 accountName.equals(email, ignoreCase = true)
                         }
                         key.startsWith("sim_") -> {
-                            // SIM/device contacts typically have null/empty account type
-                            // or account type like "com.android.local"
-                            accountType.isBlank() ||
+                            // SIM/device contacts have blank or local account type
+                            val isLocalType = accountType.isBlank() ||
                                 accountType.equals("com.android.local", ignoreCase = true) ||
                                 accountType.equals("com.android.contacts", ignoreCase = true)
+                            if (!isLocalType) return@any false
+                            // If multiple SIMs, further disambiguate by slot
+                            val slotNum = key.removePrefix("sim_").toIntOrNull() ?: 0
+                            val slot = getSimSlotForAccount(accountName)
+                            // slot == -1 means device storage (slot 0 by default), slotNum 0 == device
+                            if (slot == -1) slotNum == 0 || slotNum == 1
+                            else (slot + 1) == slotNum
                         }
                         key == "whatsapp" -> {
                             accountType.contains("whatsapp", ignoreCase = true) ||
@@ -314,18 +324,64 @@ class ContactsRepository(private val contentResolver: ContentResolver) : IContac
 
     private fun buildAccountKey(type: String, name: String): String = when {
         type.contains("google", ignoreCase = true) -> "google_$name"
-        type.isBlank() || type.contains("local", ignoreCase = true) ||
-                type.contains("android.contacts", ignoreCase = true) -> "sim_0"
         type.contains("whatsapp", ignoreCase = true) -> "whatsapp"
-        else -> "${type}_${name}".take(60)
+        else -> {
+            // SIM / local / device storage — assign per-SIM keys using SubscriptionManager
+            val simSlot = getSimSlotForAccount(name)
+            if (simSlot >= 0) "sim_${simSlot + 1}" else "sim_0"
+        }
     }
 
     private fun buildAccountDisplayName(type: String, name: String): String = when {
         type.contains("google", ignoreCase = true) -> name.ifBlank { "Google" }
-        type.isBlank() || type.contains("local", ignoreCase = true) -> "Device / SIM"
         type.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
-        else -> name.ifBlank { type }
+        else -> {
+            val simSlot = getSimSlotForAccount(name)
+            when {
+                simSlot == 0 -> "SIM 1"
+                simSlot == 1 -> "SIM 2"
+                simSlot > 1  -> "SIM ${simSlot + 1}"
+                else         -> "Device Storage"
+            }
+        }
     }
+
+    /** Returns 0-based SIM slot index if the account name matches a SIM subscription, else -1. */
+    private fun getSimSlotForAccount(accountName: String): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1
+        return try {
+            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                    as? SubscriptionManager ?: return -1
+            val subs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                sm.activeSubscriptionInfoList ?: emptyList()
+            } else {
+                @Suppress("DEPRECATION")
+                SubscriptionManager.from(context).activeSubscriptionInfoList ?: emptyList()
+            }
+            // Match by display name or ICC ID that may be embedded in accountName
+            subs.firstOrNull { sub ->
+                sub.displayName?.toString()?.equals(accountName, ignoreCase = true) == true ||
+                sub.iccId?.equals(accountName, ignoreCase = true) == true ||
+                accountName.contains(sub.subscriptionId.toString())
+            }?.simSlotIndex ?: -1
+        } catch (_: Exception) { -1 }
+    }
+
+    /** Returns how many active SIM cards are present (max 2 for dual-SIM). */
+    private fun getActiveSimCount(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return 1
+        return try {
+            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                    as? SubscriptionManager ?: return 1
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                sm.activeSubscriptionInfoList?.size ?: 1
+            } else {
+                @Suppress("DEPRECATION")
+                SubscriptionManager.from(context).activeSubscriptionInfoList?.size ?: 1
+            }
+        } catch (_: Exception) { 1 }
+    }
+
 
     override fun getContactByNumber(number: String): Contact? {
         val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))

@@ -652,13 +652,64 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                // ── Biometric lock overlay ─────────────────────────────────
+                // ── Biometric lock — direct prompt, no overlay ─────────────
                 if (!isUnlocked) {
-                    com.coolappstore.everdialer.by.svhp.view.screen.settings.BiometricUnlockScreen(
-                        prefs = prefs,
-                        onUnlocked = { isUnlocked = true },
-                        onDismiss  = { finish() }
-                    )
+                    val activity = this@MainActivity
+                    LaunchedEffect(biometricType) {
+                        if (biometricType.isEmpty() || !appLockEnabled) {
+                            isUnlocked = true
+                            return@LaunchedEffect
+                        }
+                        when (biometricType) {
+                            "system" -> {
+                                val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
+                                val prompt = androidx.biometric.BiometricPrompt(
+                                    activity, executor,
+                                    object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                        override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                            isUnlocked = true
+                                        }
+                                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                            finish()
+                                        }
+                                        override fun onAuthenticationFailed() {
+                                            finish()
+                                        }
+                                    }
+                                )
+                                val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                    .setTitle("Ever Dialer")
+                                    .setSubtitle("Verify your identity to continue")
+                                    .setNegativeButtonText("Cancel")
+                                    .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                                    .build()
+                                prompt.authenticate(info)
+                            }
+                            "pin", "password" -> {
+                                // PIN/password shown inline below — handled by showCustomUnlock
+                            }
+                        }
+                    }
+
+                    if (biometricType == "pin" || biometricType == "password") {
+                        if (biometricType == "pin") {
+                            com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
+                                title = "Enter PIN",
+                                isVerify = true,
+                                expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
+                                onConfirm = { isUnlocked = true },
+                                onDismiss = { finish() }
+                            )
+                        } else {
+                            com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
+                                title = "Enter Password",
+                                isVerify = true,
+                                expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
+                                onConfirm = { isUnlocked = true },
+                                onDismiss = { finish() }
+                            )
+                        }
+                    }
                 }
 
                 LaunchedEffect(intent) {

@@ -326,13 +326,11 @@ fun ContactContent(
 
                 LaunchedEffect(Unit) { contactsVM.fetchAvailableAccounts() }
 
-                val pillText = when {
+                val contactsCountText = when {
                     selectedAccountKey != null -> {
                         val acc = availableAccounts.find { it.key == selectedAccountKey }
-                        val name = acc?.displayName ?: selectedAccountKey!!
-                        "$name · ${contacts.size}"
+                        "${acc?.displayName ?: selectedAccountKey} · ${contacts.size}"
                     }
-                    availableAccounts.size > 1 -> "${contacts.size} contacts · ${availableAccounts.size} sources"
                     else -> "${contacts.size} contacts"
                 }
 
@@ -344,6 +342,7 @@ fun ContactContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // ── Contacts count + account switcher pill ─────────────
                     Surface(
                         onClick = { showAccountSheet = true },
                         shape = RoundedCornerShape(20.dp),
@@ -367,7 +366,7 @@ fun ContactContent(
                                     MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = pillText,
+                                text = contactsCountText,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selectedAccountKey != null)
@@ -384,6 +383,43 @@ fun ContactContent(
                                 else
                                     MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
+                        }
+                    }
+
+                    // ── Sources pill (separate, non-interactive summary) ───
+                    if (selectedAccountKey == null && availableAccounts.isNotEmpty()) {
+                        val sourceLabels = availableAccounts.joinToString(" · ") { acc ->
+                            when {
+                                acc.key.startsWith("google_") -> acc.accountName.substringBefore("@").take(10)
+                                acc.key == "sim_1" -> "SIM 1"
+                                acc.key == "sim_2" -> "SIM 2"
+                                acc.key == "whatsapp" -> "WhatsApp"
+                                else -> acc.displayName.take(10)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = sourceLabels,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -500,8 +536,7 @@ private fun AccountSwitcherSheet(
                     items(accounts, key = { it.key }) { account ->
                         val accountIcon = when {
                             account.accountType.contains("google", ignoreCase = true) -> Icons.Default.Email
-                            account.accountType.isBlank() ||
-                                    account.accountType.contains("local", ignoreCase = true) -> Icons.Default.SimCard
+                            account.key == "sim_1" || account.key == "sim_2" || account.key.startsWith("sim_") -> Icons.Default.SimCard
                             else -> Icons.Default.AccountCircle
                         }
                         AccountRow(
