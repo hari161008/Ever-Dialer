@@ -400,7 +400,8 @@ fun PinSetupDialog(
     onDismiss: () -> Unit,
     title: String = "Set PIN",
     isVerify: Boolean = false,
-    expectedPin: String = ""
+    expectedPin: String = "",
+    showCloseButton: Boolean = true
 ) {
     var phase by remember { mutableIntStateOf(if (isVerify) 2 else 0) } // 0=enter, 1=confirm, 2=done
     var pin by remember { mutableStateOf("") }
@@ -468,7 +469,13 @@ fun PinSetupDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = showCloseButton,
+            dismissOnClickOutside = showCloseButton
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -490,8 +497,10 @@ fun PinSetupDialog(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, null)
+                    if (showCloseButton) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Close, null)
+                        }
                     }
                 }
 
@@ -614,7 +623,8 @@ fun PasswordSetupDialog(
     onDismiss: () -> Unit,
     title: String = "Set Password",
     isVerify: Boolean = false,
-    expectedPassword: String = ""
+    expectedPassword: String = "",
+    showCloseButton: Boolean = true
 ) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -622,7 +632,13 @@ fun PasswordSetupDialog(
     var showConfirm by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf("") }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = showCloseButton,
+            dismissOnClickOutside = showCloseButton
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -638,8 +654,10 @@ fun PasswordSetupDialog(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, null)
+                    if (showCloseButton) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Close, null)
+                        }
                     }
                 }
 

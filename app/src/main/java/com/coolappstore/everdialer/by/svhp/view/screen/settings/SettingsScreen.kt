@@ -891,7 +891,17 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
                             )
-                            CardDivider()
+                        }
+                    }
+                }
+            }
+
+            // ── Rate And Review ───────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 30L) {
+                    Column {
+                        SectionLabel("Rate And Review")
+                        RivoExpressiveCard {
                             RivoListItem(
                                 headline = "Rate and Review",
                                 supporting = "Share your feedback about Ever Dialer",
@@ -902,6 +912,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.google.com/forms/d/e/1FAIpQLSdY2WYWDFfvLScsBBxfCWzozyA_4sHUCzfR1JycfzJKASvbfQ/viewform?usp=header"))
                                     context.startActivity(intent)
                                 }
+                            )
+                            CardDivider()
+                            RivoListItem(
+                                headline = "Check Ratings and Reviews",
+                                supporting = "See what others are saying about Ever Dialer",
+                                leadingIcon = Icons.Default.Reviews,
+                                iconContainerColor = ColorGreen,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { navigator.navigate(RatingsWebViewScreenDestination) }
                             )
                         }
                     }

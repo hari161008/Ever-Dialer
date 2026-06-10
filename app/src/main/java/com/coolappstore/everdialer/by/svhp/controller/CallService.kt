@@ -242,10 +242,11 @@ class CallService : InCallService() {
         }
     }
 
-    private fun launchCallActivity(answeredFromNotification: Boolean = false) {
+    private fun launchCallActivity(answeredFromNotification: Boolean = false, pendingNotifAction: String? = null) {
         val intent = Intent(this, CallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             if (answeredFromNotification) putExtra("ANSWERED_FROM_NOTIFICATION", true)
+            pendingNotifAction?.let { putExtra("NOTIFICATION_PENDING_ACTION", it) }
         }
         startActivity(intent)
     }
@@ -312,8 +313,24 @@ class CallService : InCallService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "ANSWER_CALL"  -> { answerCall(); launchCallActivity(answeredFromNotification = true) }
-            "DECLINE_CALL" -> declineCall()
+            "ANSWER_CALL"  -> {
+                val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
+                    !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
+                if (biometricEnabled) {
+                    launchCallActivity(pendingNotifAction = "ANSWER")
+                } else {
+                    answerCall(); launchCallActivity(answeredFromNotification = true)
+                }
+            }
+            "DECLINE_CALL" -> {
+                val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
+                    !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
+                if (biometricEnabled) {
+                    launchCallActivity(pendingNotifAction = "DECLINE")
+                } else {
+                    declineCall()
+                }
+            }
             "MUTE_CALL"    -> setMuted(!(_audioState.value?.isMuted ?: false))
             "SPEAKER_CALL" -> {
                 val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER

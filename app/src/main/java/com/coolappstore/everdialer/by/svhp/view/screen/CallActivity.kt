@@ -9,9 +9,9 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.DisconnectCause
 import android.telecom.VideoProfile
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -87,7 +87,7 @@ import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import androidx.compose.ui.util.lerp
 
-class CallActivity : ComponentActivity() {
+class CallActivity : FragmentActivity() {
 
     private val contactsRepo: IContactsRepository by inject()
     private val callLogRepo: ICallLogRepository by inject()
@@ -225,6 +225,7 @@ class CallActivity : ComponentActivity() {
                     }
 
                     val answeredFromNotification = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
+                    val notifPendingAction = intent?.getStringExtra("NOTIFICATION_PENDING_ACTION")
                     ExpressiveCallScreen(
                         call = call,
                         callState = session?.state ?: Call.STATE_ACTIVE,
@@ -238,7 +239,8 @@ class CallActivity : ComponentActivity() {
                         callLogRepo = callLogRepo,
                         prefs = prefs,
                         isPocketBlocked = { isPocketBlocked },
-                        skipIncomingScreen = answeredFromNotification
+                        skipIncomingScreen = answeredFromNotification,
+                        notifPendingAction = notifPendingAction
                     )
                 }
             }
@@ -306,7 +308,8 @@ fun ExpressiveCallScreen(
     callLogRepo: ICallLogRepository? = null,
     prefs: PreferenceManager? = null,
     isPocketBlocked: () -> Boolean = { false },
-    skipIncomingScreen: Boolean = false
+    skipIncomingScreen: Boolean = false,
+    notifPendingAction: String? = null
 ) {
     val context = LocalView.current.context
     val ctx = context
@@ -370,11 +373,31 @@ fun ExpressiveCallScreen(
     var biometricGatesScreen by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    // When answered from notification + call-lock is on → gate the screen immediately
-    LaunchedEffect(Unit) {
-        if (skipIncomingScreen && callLockEnabled && !callBiometricUnlocked) {
-            biometricGatesScreen = true
-            showCallBiometricUnlock = true
+    val notifPendingAnswer = notifPendingAction == "ANSWER"
+    val notifPendingDecline = notifPendingAction == "DECLINE"
+
+    // Show biometric gate immediately when call arrives (ringing or answered from notification)
+    // so the user CANNOT answer or decline without authenticating first
+    LaunchedEffect(callState) {
+        if (callLockEnabled && !callBiometricUnlocked && !showCallBiometricUnlock) {
+            val isRinging = callState == Call.STATE_RINGING
+            val isGatedFromNotification = skipIncomingScreen
+            if (isRinging || isGatedFromNotification) {
+                when {
+                    notifPendingAnswer -> {
+                        pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
+                        biometricGatesScreen = false
+                    }
+                    notifPendingDecline -> {
+                        pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                        biometricGatesScreen = false
+                    }
+                    else -> {
+                        biometricGatesScreen = true
+                    }
+                }
+                showCallBiometricUnlock = true
+            }
         }
     }
 
@@ -1104,7 +1127,7 @@ fun ExpressiveCallScreen(
         // ── Call biometric — direct prompt, no overlay ────────────────────
         if (showCallBiometricUnlock && prefs != null) {
             val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
-            val ctx = LocalContext.current
+            val callActivity   = LocalContext.current as? FragmentActivity
             fun onBiometricFail() {
                 showCallBiometricUnlock = false
                 pendingAction = null
@@ -1113,9 +1136,7 @@ fun ExpressiveCallScreen(
             when (biometricType) {
                 "system" -> {
                     LaunchedEffect(showCallBiometricUnlock) {
-                        val activity = ctx as? androidx.fragment.app.FragmentActivity ?: run {
-                            onBiometricFail(); return@LaunchedEffect
-                        }
+                        val activity = callActivity ?: run { onBiometricFail(); return@LaunchedEffect }
                         val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
                         val prompt = androidx.biometric.BiometricPrompt(
                             activity, executor,
@@ -1127,12 +1148,12 @@ fun ExpressiveCallScreen(
                                     pendingAction?.invoke(); pendingAction = null
                                 }
                                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { onBiometricFail() }
-                                override fun onAuthenticationFailed() { onBiometricFail() }
+                                override fun onAuthenticationFailed() { /* keep prompt open */ }
                             }
                         )
                         prompt.authenticate(
                             androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                                .setTitle("Authenticate")
+                                .setTitle("Ever Dialer")
                                 .setSubtitle("Verify your identity to access this call")
                                 .setNegativeButtonText("Cancel")
                                 .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
@@ -1144,6 +1165,7 @@ fun ExpressiveCallScreen(
                     com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
                         title = "Enter PIN", isVerify = true,
                         expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
+                        showCloseButton = !biometricGatesScreen,
                         onConfirm = {
                             callBiometricUnlocked = true; biometricGatesScreen = false
                             showCallBiometricUnlock = false
@@ -1156,6 +1178,7 @@ fun ExpressiveCallScreen(
                     com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
                         title = "Enter Password", isVerify = true,
                         expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
+                        showCloseButton = !biometricGatesScreen,
                         onConfirm = {
                             callBiometricUnlocked = true; biometricGatesScreen = false
                             showCallBiometricUnlock = false

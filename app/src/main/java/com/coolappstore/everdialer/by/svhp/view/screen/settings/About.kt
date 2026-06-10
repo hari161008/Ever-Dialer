@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PhoneInTalk
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.*
@@ -22,12 +21,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.EVERLASTING_TWEAK_URL
 import com.coolappstore.everdialer.by.svhp.GITHUB_URL
+import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_CHANNEL_URL
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_DEV_URL
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_SUPPORT_URL
@@ -85,23 +88,19 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ── Material Expressive Logo Area ──────────────────────────
-            Surface(
-                modifier = Modifier.size(120.dp).scale(scale).alpha(alpha),
-                shape = RoundedCornerShape(36.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 6.dp,
-                tonalElevation = 8.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Outlined.PhoneInTalk,
-                        contentDescription = null,
-                        modifier = Modifier.size(56.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+            // ── App Icon (plain, no surrounding elements) ────────────
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(R.mipmap.ic_launcher)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Ever Dialer",
+                modifier = Modifier
+                    .size(96.dp)
+                    .scale(scale)
+                    .alpha(alpha),
+                contentScale = ContentScale.Fit
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -119,7 +118,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Version badge - Material Expressive style
+            // Version badge
             Surface(
                 shape = RoundedCornerShape(50.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -167,7 +166,6 @@ fun AboutAppScreen(navigator: DestinationsNavigator) {
                         iconContainerColor = ColorGreen,
                         onClick = { openLink(context, GITHUB_URL) }
                     )
-
                 }
             }
 

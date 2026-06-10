@@ -253,6 +253,62 @@ fun DialPadContent(
         }
     }
 
+    // Auto-process Android hidden/secret codes and MMI codes as the user types
+    fun processSecretCodeIfNeeded(input: String): Boolean {
+        val code = input.trim()
+        if (code.length < 5) return false
+
+        // ── Pattern 1: *#*#DIGITS#*#*  (Android secret activity codes) ───────
+        // These end with #*#* so a plain endsWith("#") check misses them entirely
+        val secretMatch = Regex("^\\*#\\*#(\\d+)#\\*#\\*$").find(code)
+        if (secretMatch != null) {
+            val digits = secretMatch.groupValues[1]
+            val uri = android.net.Uri.parse("android_secret_code://$digits")
+            try {
+                // Legacy broadcast (pre-Android O / API 25)
+                context.sendBroadcast(
+                    Intent("android.provider.Telephony.SECRET_CODE", uri).apply {
+                        addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                    }
+                )
+                // Modern broadcast (Android O+ / API 26+)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.sendBroadcast(
+                        Intent("android.telephony.action.SECRET_CODE", uri).apply {
+                            addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                        }
+                    )
+                }
+            } catch (_: Exception) {}
+            return true
+        }
+
+        // ── Pattern 2: All other MMI / USSD codes ending with # ─────────────
+        // e.g. *#06#  *#21#  ##002#  *21*number#  etc.
+        if (!code.endsWith("#")) return false
+        if (!code.startsWith("*") && !code.startsWith("#")) return false
+
+        val telUri = android.net.Uri.fromParts("tel", code, null)
+        return try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                context.startActivity(
+                    Intent(Intent.ACTION_CALL, telUri).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                )
+            } else {
+                context.startActivity(
+                    Intent(Intent.ACTION_DIAL, telUri).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                )
+            }
+            true
+        } catch (_: Exception) { false }
+    }
+
     if (showSimPicker) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
@@ -394,7 +450,13 @@ fun DialPadContent(
                                     letters = subKeys[key] ?: "",
                                     soundPool = soundPool,
                                     context = context,
-                                    onClick = { digit -> number += digit },
+                                    onClick = { digit ->
+                                        val newNumber = number + digit
+                                        number = newNumber
+                                        if (processSecretCodeIfNeeded(newNumber)) {
+                                            number = ""
+                                        }
+                                    },
                                     compact = true
                                 )
                             }
@@ -754,7 +816,13 @@ fun DialPadContent(
                                 letters = subKeys[key] ?: "",
                                 soundPool = soundPool,
                                 context = context,
-                                onClick = { digit -> number += digit },
+                                onClick = { digit ->
+                                    val newNumber = number + digit
+                                    number = newNumber
+                                    if (processSecretCodeIfNeeded(newNumber)) {
+                                        number = ""
+                                    }
+                                },
                                 overrideWidth = keyWidth,
                                 overrideHeight = keyHeight,
                                 scaleFactor = scaleFactor
