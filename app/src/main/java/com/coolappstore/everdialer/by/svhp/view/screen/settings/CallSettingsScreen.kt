@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -413,6 +414,22 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                                 onCheckedChange = {
                                     autoSpeaker = it
                                     prefs.setBoolean(PreferenceManager.KEY_AUTO_SPEAKER, it)
+                                }
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            var autoRedial by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_REDIAL_ENABLED, false)) }
+                            RivoSwitchListItem(
+                                headline   = "Auto Redial",
+                                supporting = "When a call is rejected, unanswered, or busy, show an option to automatically redial",
+                                leadingIcon = Icons.Default.Replay,
+                                iconContainerColor = Color(0xFF2196F3),
+                                checked = autoRedial,
+                                onCheckedChange = {
+                                    autoRedial = it
+                                    prefs.setBoolean(PreferenceManager.KEY_AUTO_REDIAL_ENABLED, it)
                                 }
                             )
                         }

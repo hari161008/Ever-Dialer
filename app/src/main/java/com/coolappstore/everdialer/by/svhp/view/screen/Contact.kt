@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -200,7 +201,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                    ) { Icon(Icons.Default.Person, "Add Contact") }
+                    ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                 }
             } else {
                 FloatingActionButton(
@@ -213,7 +214,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(0.dp),
                     modifier = baseModifier
-                ) { Icon(Icons.Default.Person, "Add Contact") }
+                ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,

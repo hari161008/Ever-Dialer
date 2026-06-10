@@ -1094,12 +1094,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             val biometricsType = remember(prefs.settingsChanged.collectAsState().value) {
                                 prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
                             }
-                            val appLockOn = remember(prefs.settingsChanged.collectAsState().value) {
-                                prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
-                            }
-                            val callLockOn = remember(prefs.settingsChanged.collectAsState().value) {
-                                prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
-                            }
                             val biometricsLabel = when (biometricsType) {
                                 "system"   -> "System Biometrics"
                                 "pin"      -> "Custom PIN"
@@ -1114,32 +1108,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { navigator.navigate(BiometricScreenDestination) }
                             )
-                            AnimatedVisibility(visible = biometricsType.isNotEmpty()) {
-                                Column {
-                                    CardDivider()
-                                    RivoSwitchListItem(
-                                        headline   = "Lock App on Open",
-                                        supporting = "Require auth when opening Ever Dialer",
-                                        leadingIcon = Icons.Default.LockOpen,
-                                        iconContainerColor = ColorBlue,
-                                        checked = appLockOn,
-                                        onCheckedChange = {
-                                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, it)
-                                        }
-                                    )
-                                    CardDivider()
-                                    RivoSwitchListItem(
-                                        headline   = "Lock Call Actions",
-                                        supporting = "Require auth to answer or reject calls",
-                                        leadingIcon = Icons.Default.PhonePaused,
-                                        iconContainerColor = ColorGreen,
-                                        checked = callLockOn,
-                                        onCheckedChange = {
-                                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, it)
-                                        }
-                                    )
-                                }
-                            }
                         }
                     }
                 }

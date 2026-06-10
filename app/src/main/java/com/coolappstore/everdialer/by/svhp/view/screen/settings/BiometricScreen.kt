@@ -186,7 +186,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                     "system" -> {
                         biometricsType = "system"
                         prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "system")
-                        
+                        if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
                     }
                     "pin"      -> showPinSetup = true
                     "password" -> showPasswordSetup = true
@@ -198,7 +198,6 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                         prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
                         prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
                         appLockEnabled = false; callLockEnabled = false
-                        
                     }
                 }
             },
@@ -212,7 +211,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                 biometricsType = "pin"
                 prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
                 prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, pin)
-                
+                if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
                 showPinSetup = false
             },
             onDismiss = { showPinSetup = false }
@@ -225,7 +224,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                 biometricsType = "password"
                 prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
                 prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, password)
-                
+                if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
                 showPasswordSetup = false
             },
             onDismiss = { showPasswordSetup = false }

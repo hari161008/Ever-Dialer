@@ -14,11 +14,14 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Search
@@ -454,11 +457,29 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                // ── Ongoing Call Banner + Main nav host ───────────────────────
+                // ── Biometric blur + lock ─────────────────────────────────
+                val blurRadius by animateDpAsState(
+                    targetValue = if (!isUnlocked) 22.dp else 0.dp,
+                    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+                    label = "biometricBlur"
+                )
+
+                // ── Ongoing Call Banner + Main nav host ───────────────────
                 val callSession by CallService.currentCallSession.collectAsState()
                 val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
 
-                Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Main content — blurred when locked
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (blurRadius > 0.dp)
+                                    Modifier.blur(blurRadius, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                                else
+                                    Modifier
+                            )
+                    ) {
                     // ── Ongoing Call Banner (above all content) ────────────
                     AnimatedVisibility(
                         visible = hasOngoingCall,
@@ -650,67 +671,50 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     }
-                }
+                } // end blurred Column
 
-                // ── Biometric lock — direct prompt, no overlay ─────────────
-                if (!isUnlocked) {
-                    val activity = this@MainActivity
-                    LaunchedEffect(biometricType) {
-                        if (biometricType.isEmpty() || !appLockEnabled) {
-                            isUnlocked = true
-                            return@LaunchedEffect
-                        }
-                        when (biometricType) {
-                            "system" -> {
+                    // ── Biometric overlay (above blur, inside Box) ─────────
+                    if (!isUnlocked) {
+                        val activity = this@MainActivity
+                        LaunchedEffect(biometricType) {
+                            if (biometricType.isEmpty() || !appLockEnabled) {
+                                isUnlocked = true; return@LaunchedEffect
+                            }
+                            if (biometricType == "system") {
                                 val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
                                 val prompt = androidx.biometric.BiometricPrompt(
                                     activity, executor,
                                     object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                                        override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
-                                            isUnlocked = true
-                                        }
-                                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                            finish()
-                                        }
-                                        override fun onAuthenticationFailed() {
-                                            finish()
-                                        }
+                                        override fun onAuthenticationSucceeded(r: androidx.biometric.BiometricPrompt.AuthenticationResult) { isUnlocked = true }
+                                        override fun onAuthenticationError(code: Int, msg: CharSequence) { finish() }
+                                        override fun onAuthenticationFailed() { finish() }
                                     }
                                 )
-                                val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                                    .setTitle("Ever Dialer")
-                                    .setSubtitle("Verify your identity to continue")
-                                    .setNegativeButtonText("Cancel")
-                                    .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
-                                    .build()
-                                prompt.authenticate(info)
-                            }
-                            "pin", "password" -> {
-                                // PIN/password shown inline below — handled by showCustomUnlock
+                                prompt.authenticate(
+                                    androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                        .setTitle("Ever Dialer")
+                                        .setSubtitle("Verify your identity to continue")
+                                        .setNegativeButtonText("Cancel")
+                                        .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                                        .build()
+                                )
                             }
                         }
-                    }
-
-                    if (biometricType == "pin" || biometricType == "password") {
                         if (biometricType == "pin") {
                             com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
-                                title = "Enter PIN",
-                                isVerify = true,
+                                title = "Enter PIN", isVerify = true,
                                 expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
-                                onConfirm = { isUnlocked = true },
-                                onDismiss = { finish() }
+                                onConfirm = { isUnlocked = true }, onDismiss = { finish() }
                             )
-                        } else {
+                        } else if (biometricType == "password") {
                             com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
-                                title = "Enter Password",
-                                isVerify = true,
+                                title = "Enter Password", isVerify = true,
                                 expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
-                                onConfirm = { isUnlocked = true },
-                                onDismiss = { finish() }
+                                onConfirm = { isUnlocked = true }, onDismiss = { finish() }
                             )
                         }
                     }
-                }
+                } // end outer Box
 
                 LaunchedEffect(intent) {
                     handleIntent(intent, navController)

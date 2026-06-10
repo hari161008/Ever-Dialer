@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.*
 import android.telecom.Call
 import android.telecom.CallAudioState
+import android.telecom.DisconnectCause
 import android.telecom.VideoProfile
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp as colorLerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,6 +55,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
@@ -94,6 +97,8 @@ class CallActivity : ComponentActivity() {
     companion object {
         /** FloatingCallService observes this to hide the bubble when CallActivity is visible. */
         val isInForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
+        /** Keep the activity alive while an auto-redial dialog or job is pending. */
+        val keepAliveForRedial = kotlinx.coroutines.flow.MutableStateFlow(false)
     }
 
     // Pocket mode prevention
@@ -173,6 +178,10 @@ class CallActivity : ComponentActivity() {
                     }
                     if (session == null || callState == Call.STATE_DISCONNECTED) {
                         delay(800)
+                        // Wait for any pending auto-redial dialog or job to complete before closing
+                        while (keepAliveForRedial.value) {
+                            delay(300)
+                        }
                         finishAndRemoveTask()
                     }
                 }
@@ -272,7 +281,7 @@ class CallActivity : ComponentActivity() {
         (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
     }
 
-    override fun onDestroy() { super.onDestroy(); releaseProximityLock(); sensorManager?.unregisterListener(proxSensorListener) }
+    override fun onDestroy() { super.onDestroy(); releaseProximityLock(); sensorManager?.unregisterListener(proxSensorListener); keepAliveForRedial.value = false }
 
     override fun onPause() {
         super.onPause()
@@ -300,6 +309,7 @@ fun ExpressiveCallScreen(
     skipIncomingScreen: Boolean = false
 ) {
     val context = LocalView.current.context
+    val ctx = context
     val isMuted = audioState?.isMuted ?: false
     val isSpeakerOn = audioState?.route == CallAudioState.ROUTE_SPEAKER
     val isBluetoothActive = audioState?.route == CallAudioState.ROUTE_BLUETOOTH
@@ -357,7 +367,53 @@ fun ExpressiveCallScreen(
     }
     var callBiometricUnlocked by remember { mutableStateOf(!callLockEnabled) }
     var showCallBiometricUnlock by remember { mutableStateOf(false) }
+    var biometricGatesScreen by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // When answered from notification + call-lock is on → gate the screen immediately
+    LaunchedEffect(Unit) {
+        if (skipIncomingScreen && callLockEnabled && !callBiometricUnlocked) {
+            biometricGatesScreen = true
+            showCallBiometricUnlock = true
+        }
+    }
+
+    // ── Auto-redial state ────────────────────────────────────────────────────
+    val autoRedialEnabled = remember { prefs?.getBoolean(PreferenceManager.KEY_AUTO_REDIAL_ENABLED, false) == true }
+    var showRedialDialog by remember { mutableStateOf(false) }
+    var redialReason by remember { mutableStateOf("") }
+    var wasOutgoingCall by remember { mutableStateOf(false) }
+    var redialCountSelected by remember { mutableIntStateOf(3) }
+    var redialJobActive by remember { mutableStateOf(false) }
+    var redialRemaining by remember { mutableIntStateOf(0) }
+    var redialCountdown by remember { mutableIntStateOf(0) }
+    val redialScope = rememberCoroutineScope()
+
+    // Track if this was an outgoing call (dialing state)
+    // Using a single LaunchedEffect to avoid race between the two callState effects
+    LaunchedEffect(callState) {
+        if (callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING) {
+            wasOutgoingCall = true
+        } else if (callState == Call.STATE_DISCONNECTED && autoRedialEnabled && wasOutgoingCall && !redialJobActive) {
+            val dc = call.details?.disconnectCause?.code ?: DisconnectCause.UNKNOWN
+            // REJECTED=5, BUSY=4, REMOTE=2 (unanswered/remote end), MISSED=7
+            val shouldOffer = dc == DisconnectCause.REJECTED || dc == DisconnectCause.BUSY ||
+                              dc == DisconnectCause.REMOTE   || dc == DisconnectCause.MISSED
+            if (shouldOffer) {
+                redialReason = when (dc) {
+                    DisconnectCause.REJECTED -> "Call was rejected"
+                    DisconnectCause.BUSY     -> "Line was busy"
+                    DisconnectCause.REMOTE,
+                    DisconnectCause.MISSED   -> "Call was not answered"
+                    else                     -> "Call ended"
+                }
+                // Signal the activity to stay alive until the dialog is resolved
+                CallActivity.keepAliveForRedial.value = true
+                showRedialDialog = true
+            }
+        }
+    }
+
 
     var showMergeConfirm by remember { mutableStateOf(false) }
     var showAddPersonSheet by remember { mutableStateOf(false) }
@@ -1048,12 +1104,17 @@ fun ExpressiveCallScreen(
         // ── Call biometric — direct prompt, no overlay ────────────────────
         if (showCallBiometricUnlock && prefs != null) {
             val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
-            val context = LocalContext.current
+            val ctx = LocalContext.current
+            fun onBiometricFail() {
+                showCallBiometricUnlock = false
+                pendingAction = null
+                if (biometricGatesScreen) { try { call.disconnect() } catch (_: Exception) {} }
+            }
             when (biometricType) {
                 "system" -> {
                     LaunchedEffect(showCallBiometricUnlock) {
-                        val activity = context as? androidx.fragment.app.FragmentActivity ?: run {
-                            showCallBiometricUnlock = false; pendingAction = null; return@LaunchedEffect
+                        val activity = ctx as? androidx.fragment.app.FragmentActivity ?: run {
+                            onBiometricFail(); return@LaunchedEffect
                         }
                         val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
                         val prompt = androidx.biometric.BiometricPrompt(
@@ -1061,66 +1122,115 @@ fun ExpressiveCallScreen(
                             object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
                                 override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
                                     callBiometricUnlocked = true
+                                    biometricGatesScreen = false
                                     showCallBiometricUnlock = false
-                                    pendingAction?.invoke()
-                                    pendingAction = null
+                                    pendingAction?.invoke(); pendingAction = null
                                 }
-                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                    showCallBiometricUnlock = false
-                                    pendingAction = null
-                                }
-                                override fun onAuthenticationFailed() {
-                                    showCallBiometricUnlock = false
-                                    pendingAction = null
-                                }
+                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { onBiometricFail() }
+                                override fun onAuthenticationFailed() { onBiometricFail() }
                             }
                         )
-                        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                            .setTitle("Authenticate")
-                            .setSubtitle("Verify your identity to perform this action")
-                            .setNegativeButtonText("Cancel")
-                            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
-                            .build()
-                        prompt.authenticate(info)
+                        prompt.authenticate(
+                            androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                .setTitle("Authenticate")
+                                .setSubtitle("Verify your identity to access this call")
+                                .setNegativeButtonText("Cancel")
+                                .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                                .build()
+                        )
                     }
                 }
                 "pin" -> {
                     com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
-                        title = "Enter PIN",
-                        isVerify = true,
+                        title = "Enter PIN", isVerify = true,
                         expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
                         onConfirm = {
-                            callBiometricUnlocked = true
+                            callBiometricUnlocked = true; biometricGatesScreen = false
                             showCallBiometricUnlock = false
-                            pendingAction?.invoke()
-                            pendingAction = null
+                            pendingAction?.invoke(); pendingAction = null
                         },
-                        onDismiss = {
-                            showCallBiometricUnlock = false
-                            pendingAction = null
-                        }
+                        onDismiss = { onBiometricFail() }
                     )
                 }
                 "password" -> {
                     com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
-                        title = "Enter Password",
-                        isVerify = true,
+                        title = "Enter Password", isVerify = true,
                         expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
                         onConfirm = {
-                            callBiometricUnlocked = true
+                            callBiometricUnlocked = true; biometricGatesScreen = false
                             showCallBiometricUnlock = false
-                            pendingAction?.invoke()
-                            pendingAction = null
+                            pendingAction?.invoke(); pendingAction = null
                         },
-                        onDismiss = {
-                            showCallBiometricUnlock = false
-                            pendingAction = null
-                        }
+                        onDismiss = { onBiometricFail() }
                     )
                 }
             }
         }
 
+        // ── Auto-redial dialog ────────────────────────────────────────────────
+        if (showRedialDialog && phoneNumber.isNotEmpty()) {
+            AutoRedialDialog(
+                reason = redialReason,
+                phoneNumber = phoneNumber,
+                context = LocalContext.current,
+                onConfirm = { count ->
+                    showRedialDialog = false
+                    redialRemaining = count
+                    redialJobActive = true
+                    redialCountSelected = count
+                    // keepAliveForRedial remains true during the redial job
+                    redialScope.launch {
+                        var remaining = count
+                        while (remaining > 0 && redialJobActive) {
+                            for (i in 5 downTo 1) {
+                                redialCountdown = i
+                                kotlinx.coroutines.delay(1000)
+                                if (!redialJobActive) break
+                            }
+                            if (!redialJobActive) break
+                            redialCountdown = 0
+                            com.coolappstore.everdialer.by.svhp.controller.util.makeCall(ctx, phoneNumber)
+                            remaining--
+                            redialRemaining = remaining
+                            // Wait for the new call to connect/disconnect before deciding to redial again
+                            kotlinx.coroutines.delay(35_000)
+                        }
+                        redialJobActive = false
+                        // Allow the activity to close now that all redial attempts are done
+                        CallActivity.keepAliveForRedial.value = false
+                    }
+                },
+                onDismiss = {
+                    showRedialDialog = false
+                    // Allow the activity to close since user dismissed the dialog
+                    CallActivity.keepAliveForRedial.value = false
+                }
+            )
+        }
+
+        // ── Auto-redial countdown overlay ────────────────────────────────────
+        if (redialJobActive && redialCountdown > 0) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                    modifier = Modifier.padding(24.dp).fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text("Redialing in ${redialCountdown}s", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("${redialRemaining} attempt${if (redialRemaining != 1) "s" else ""} remaining", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = { redialJobActive = false; CallActivity.keepAliveForRedial.value = false }) { Text("Cancel") }
+                    }
+                }
+            }
+        }
         // ── Dialpad overlay — last child of main Box, never triggers layout shift ──
         if (showDialpad || dialpadAlpha > 0f) {
             Box(
@@ -1543,21 +1653,41 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
     val handleColor = if (isDark) Color.White else Color.Black.copy(0.85f)
     val handleFg = if (isDark) Color.Black else Color.White
 
-    // pillWidth tracks the actual measured pill width so we can compute real edge travel
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
     val handleSizePx = with(density) { 72.dp.toPx() }
-    val edgeGapPx = with(density) { 9.dp.toPx() }
-    // maxDrag = half of (pillWidth - handleSize) minus edge gap → symmetric gap at both ends
-    val maxDrag = ((pillWidthPx - handleSizePx) / 2f - edgeGapPx).coerceAtLeast(with(density) { 100.dp.toPx() })
+    val edgeGapPx    = with(density) { 9.dp.toPx() }
+    val maxDrag = ((pillWidthPx - handleSizePx) / 2f - edgeGapPx)
+        .coerceAtLeast(with(density) { 100.dp.toPx() })
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Surface(onClick = {}, shape = CircleShape, color = bgColor, modifier = Modifier.height(45.dp).width(140.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+    // Flash-fill progress for confirmed answer/decline (purely cosmetic, fired AFTER action)
+    val answerFlash  = remember { Animatable(0f) }
+    val declineFlash = remember { Animatable(0f) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 110.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        // Message quick-reply pill
+        Surface(
+            onClick = {},
+            shape = CircleShape,
+            color = bgColor,
+            modifier = Modifier.height(45.dp).width(140.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
                 Icon(Icons.Default.ChatBubbleOutline, null, tint = labelColor, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge)
             }
         }
+
+        // Swipe pill
         Box(
             modifier = Modifier
                 .height(90.dp)
@@ -1567,35 +1697,94 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                 .onSizeChanged { pillWidthPx = it.width.toFloat() },
             contentAlignment = Alignment.Center
         ) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge)
-                Text("Answer", color = labelColor, style = MaterialTheme.typography.bodyLarge)
+            // Green answer fill — grows from right on confirm
+            if (answerFlash.value > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(answerFlash.value)
+                        .clip(CircleShape)
+                        .background(Color(0xFF43A047))
+                        .align(Alignment.CenterEnd)
+                )
             }
+            // Red decline fill — grows from left on confirm
+            if (declineFlash.value > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(declineFlash.value)
+                        .clip(CircleShape)
+                        .background(Color(0xFFD32F2F))
+                        .align(Alignment.CenterStart)
+                )
+            }
+
+            // Decline / Answer labels
+            val labelFade = (1f - maxOf(answerFlash.value, declineFlash.value) * 1.8f).coerceIn(0f, 1f)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp).alpha(labelFade),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge)
+                Text("Answer",  color = labelColor, style = MaterialTheme.typography.bodyLarge)
+            }
+
+            // Draggable handle
+            val dragFraction = if (maxDrag > 0f) (offsetX.value / maxDrag).coerceIn(-1f, 1f) else 0f
+            val dynamicHandleColor = when {
+                dragFraction >  0.45f -> colorLerp(handleColor, Color(0xFF4CAF50), ((dragFraction - 0.45f) / 0.55f).coerceIn(0f, 1f))
+                dragFraction < -0.45f -> colorLerp(handleColor, Color(0xFFF44336), ((-dragFraction - 0.45f) / 0.55f).coerceIn(0f, 1f))
+                else -> handleColor
+            }
+            val iconTint = when {
+                dragFraction >  0.45f -> Color(0xFF4CAF50)
+                dragFraction < -0.45f -> Color(0xFFF44336)
+                else -> handleFg
+            }
+            val handleAlpha = (1f - maxOf(answerFlash.value, declineFlash.value) * 2f).coerceIn(0f, 1f)
+
             Box(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(handleColor)
+                    .background(dynamicHandleColor)
+                    .alpha(handleAlpha)
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 coroutineScope.launch {
                                     when {
-                                        offsetX.value >= maxDrag * 0.90f -> onAnswer()
-                                        offsetX.value <= -maxDrag * 0.90f -> onDecline()
-                                        else -> offsetX.animateTo(0f, spring(dampingRatio = 0.8f))
+                                        offsetX.value >= maxDrag * 0.88f -> {
+                                            // Animate fill then fire action
+                                            launch { answerFlash.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
+                                            kotlinx.coroutines.delay(180)
+                                            onAnswer()
+                                        }
+                                        offsetX.value <= -maxDrag * 0.88f -> {
+                                            launch { declineFlash.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
+                                            kotlinx.coroutines.delay(180)
+                                            onDecline()
+                                        }
+                                        else -> offsetX.animateTo(
+                                            0f,
+                                            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+                                        )
                                     }
                                 }
                             },
                             onHorizontalDrag = { change, dragAmount ->
                                 if (!isPocketBlocked()) {
                                     change.consume()
-                                    coroutineScope.launch { offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-maxDrag, maxDrag)) }
+                                    coroutineScope.launch {
+                                        offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-maxDrag, maxDrag))
+                                    }
                                 } else {
-                                    // In pocket: snap back to center and consume event to prevent accidental action
                                     change.consume()
-                                    coroutineScope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.8f)) }
+                                    coroutineScope.launch {
+                                        offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                    }
                                 }
                             }
                         )
@@ -1605,7 +1794,7 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
                 Icon(
                     imageVector = Icons.Default.Call,
                     contentDescription = null,
-                    tint = when { offsetX.value > maxDrag * 0.5f -> Color(0xFF4CAF50); offsetX.value < -maxDrag * 0.5f -> Color(0xFFF44336); else -> handleFg },
+                    tint = iconTint,
                     modifier = Modifier.size(30.dp)
                 )
             }
@@ -1616,4 +1805,118 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, labelColor: Co
 private fun formatDuration(seconds: Long): String {
     val h = seconds / 3600; val m = (seconds % 3600) / 60; val s = seconds % 60
     return if (h > 0) String.format("%02d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AutoRedialDialog(
+    reason: String,
+    phoneNumber: String,
+    context: android.content.Context,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(3, 5, 10, 15)
+    var selectedCount by remember { mutableIntStateOf(3) }
+    var expanded by remember { mutableStateOf(false) }
+
+    var visible by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.88f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "dialogScale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(220),
+        label = "dialogAlpha"
+    )
+    LaunchedEffect(Unit) { visible = true }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth().scale(scale).alpha(alpha)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF2196F3).copy(alpha = 0.15f),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Replay, null, tint = Color(0xFF2196F3), modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Column {
+                        Text("Auto Redial?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Text(
+                    "Automatically redial $phoneNumber until someone answers.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Count picker
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Redial attempts", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
+                        OutlinedTextField(
+                            value = "$selectedCount times",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            options.forEach { count ->
+                                DropdownMenuItem(
+                                    text = { Text("$count times") },
+                                    onClick = { selectedCount = count; expanded = false },
+                                    trailingIcon = if (selectedCount == count) {
+                                        { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary) }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Buttons
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = { onConfirm(selectedCount) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                    ) {
+                        Icon(Icons.Default.Replay, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Redial")
+                    }
+                }
+            }
+        }
+    }
 }

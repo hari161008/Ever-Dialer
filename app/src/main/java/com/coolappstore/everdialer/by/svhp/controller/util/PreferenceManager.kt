@@ -103,5 +103,7 @@ class PreferenceManager(context: Context) {
         const val KEY_BIOMETRICS_PASSWORD      = "biometrics_password"
         const val KEY_BIOMETRICS_APP_LOCK      = "biometrics_app_lock"
         const val KEY_BIOMETRICS_CALL_LOCK     = "biometrics_call_lock"
+        // Auto Redial
+        const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
     }
 }
