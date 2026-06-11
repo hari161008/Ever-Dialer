@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
+import com.coolappstore.everdialer.by.svhp.view.screen.BiometricCallActivity
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -242,11 +243,18 @@ class CallService : InCallService() {
         }
     }
 
-    private fun launchCallActivity(answeredFromNotification: Boolean = false, pendingNotifAction: String? = null) {
+    private fun launchCallActivity(answeredFromNotification: Boolean = false) {
         val intent = Intent(this, CallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             if (answeredFromNotification) putExtra("ANSWERED_FROM_NOTIFICATION", true)
-            pendingNotifAction?.let { putExtra("NOTIFICATION_PENDING_ACTION", it) }
+        }
+        startActivity(intent)
+    }
+
+    private fun launchBiometricCallActivity(action: String) {
+        val intent = Intent(this, BiometricCallActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra("NOTIFICATION_PENDING_ACTION", action)
         }
         startActivity(intent)
     }
@@ -317,7 +325,7 @@ class CallService : InCallService() {
                 val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
                     !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
                 if (biometricEnabled) {
-                    launchCallActivity(pendingNotifAction = "ANSWER")
+                    launchBiometricCallActivity("ANSWER")
                 } else {
                     answerCall(); launchCallActivity(answeredFromNotification = true)
                 }
@@ -326,7 +334,7 @@ class CallService : InCallService() {
                 val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
                     !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
                 if (biometricEnabled) {
-                    launchCallActivity(pendingNotifAction = "DECLINE")
+                    launchBiometricCallActivity("DECLINE")
                 } else {
                     declineCall()
                 }

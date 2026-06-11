@@ -395,7 +395,7 @@ private fun BiometricOptionRow(
 // ─── PIN Setup Dialog ────────────────────────────────────────────────────────
 
 @Composable
-fun PinSetupDialog(
+fun PinDialogContent(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
     title: String = "Set PIN",
@@ -403,7 +403,7 @@ fun PinSetupDialog(
     expectedPin: String = "",
     showCloseButton: Boolean = true
 ) {
-    var phase by remember { mutableIntStateOf(if (isVerify) 2 else 0) } // 0=enter, 1=confirm, 2=done
+    var phase by remember { mutableIntStateOf(if (isVerify) 2 else 0) }
     var pin by remember { mutableStateOf("") }
     var firstPin by remember { mutableStateOf("") }
     var shakeState by remember { mutableIntStateOf(0) }
@@ -445,15 +445,8 @@ fun PinSetupDialog(
         } catch (_: Exception) {}
     }
 
-    fun onDigit(d: String) {
-        if (pin.length >= 12) return
-        pin += d
-    }
-
-    fun onBackspace() {
-        if (pin.isNotEmpty()) pin = pin.dropLast(1)
-    }
-
+    fun onDigit(d: String) { if (pin.length < 12) pin += d }
+    fun onBackspace() { if (pin.isNotEmpty()) pin = pin.dropLast(1) }
     fun onSubmit() {
         when {
             pin.length < 4 -> { shakeState++; vibError() }
@@ -469,6 +462,118 @@ fun PinSetupDialog(
         }
     }
 
+    Column(
+        Modifier.padding(horizontal = 24.dp, vertical = 28.dp).fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        // ── Header ──────────────────────────────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = when {
+                            isVerify -> title
+                            phase == 0 -> "Set PIN"
+                            else -> "Confirm PIN"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = when {
+                            isVerify -> "Enter your PIN to verify"
+                            phase == 0 -> "At least 4 digits"
+                            else -> "Re-enter to confirm"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (showCloseButton) {
+                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // ── PIN dots ────────────────────────────────────────────────────────
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.offset(x = if (shakeState > 0) shake else 0.dp)
+        ) {
+            val maxDots = pin.length.coerceAtLeast(4).coerceAtMost(12)
+            repeat(maxDots) { i ->
+                val filled = i < pin.length
+                val dotScale by animateFloatAsState(
+                    targetValue = if (filled) 1f else 0.45f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "dot$i"
+                )
+                val dotColor by animateColorAsState(
+                    targetValue = if (filled) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    animationSpec = tween(150),
+                    label = "dotColor$i"
+                )
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .scale(dotScale)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // ── Numpad ──────────────────────────────────────────────────────────
+        PinNumpad(
+            onDigit = ::onDigit,
+            onBackspace = ::onBackspace,
+            onSubmit = ::onSubmit
+        )
+    }
+}
+
+@Composable
+fun PinSetupDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "Set PIN",
+    isVerify: Boolean = false,
+    expectedPin: String = "",
+    showCloseButton: Boolean = true
+) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(
@@ -481,71 +586,14 @@ fun PinSetupDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(
-                Modifier.padding(24.dp).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Header
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = when {
-                            isVerify -> title
-                            phase == 0 -> "Enter PIN"
-                            else -> "Confirm PIN"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (showCloseButton) {
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Close, null)
-                        }
-                    }
-                }
-
-                if (!isVerify) {
-                    Text(
-                        text = if (phase == 0) "Enter a PIN of at least 4 digits" else "Re-enter your PIN to confirm",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // PIN dots indicator
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.offset(x = if (shakeState > 0) shake else 0.dp)
-                ) {
-                    val maxDots = pin.length.coerceAtLeast(4).coerceAtMost(12)
-                    repeat(maxDots) { i ->
-                        val filled = i < pin.length
-                        val scale by animateFloatAsState(
-                            targetValue = if (filled) 1f else 0.6f,
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                            label = "dot$i"
-                        )
-                        Box(
-                            Modifier
-                                .size(14.dp)
-                                .scale(scale)
-                                .clip(CircleShape)
-                                .background(
-                                    if (filled) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outlineVariant
-                                )
-                        )
-                    }
-                }
-
-                // Numpad
-                PinNumpad(
-                    onDigit = ::onDigit,
-                    onBackspace = ::onBackspace,
-                    onSubmit = ::onSubmit
-                )
-            }
+            PinDialogContent(
+                onConfirm = onConfirm,
+                onDismiss = onDismiss,
+                title = title,
+                isVerify = isVerify,
+                expectedPin = expectedPin,
+                showCloseButton = showCloseButton
+            )
         }
     }
 }
@@ -562,41 +610,57 @@ private fun PinNumpad(
         listOf("7", "8", "9"),
         listOf("", "0", "⌫")
     )
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         keys.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 row.forEach { key ->
-                    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val interaction = remember { MutableInteractionSource() }
                     val isPressed by interaction.collectIsPressedAsState()
-                    val scale by animateFloatAsState(if (isPressed) 0.88f else 1f, spring(stiffness = Spring.StiffnessMedium), label = "ks")
-                    val radius by animateDpAsState(if (isPressed) 14.dp else 22.dp, spring(stiffness = Spring.StiffnessMedium), label = "kr")
-
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.87f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "ks"
+                    )
+                    val radius by animateDpAsState(
+                        targetValue = if (isPressed) 16.dp else 20.dp,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "kr"
+                    )
                     Box(Modifier.weight(1f)) {
                         when (key) {
-                            "" -> {} // empty cell
+                            "" -> Spacer(Modifier.fillMaxWidth().height(62.dp))
                             "⌫" -> Surface(
                                 onClick = onBackspace,
                                 shape = RoundedCornerShape(radius),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                modifier = Modifier.fillMaxWidth().height(56.dp).scale(scale),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.fillMaxWidth().height(62.dp).scale(scale),
                                 interactionSource = interaction
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Backspace, null, modifier = Modifier.size(20.dp))
+                                    Icon(
+                                        Icons.Default.Backspace,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                             else -> Surface(
                                 onClick = { onDigit(key) },
                                 shape = RoundedCornerShape(radius),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                modifier = Modifier.fillMaxWidth().height(56.dp).scale(scale),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.fillMaxWidth().height(62.dp).scale(scale),
                                 interactionSource = interaction
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(key, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = key,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
                         }
@@ -604,13 +668,15 @@ private fun PinNumpad(
                 }
             }
         }
-        // Confirm row
+        Spacer(Modifier.height(4.dp))
         Button(
             onClick = onSubmit,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(18.dp)
         ) {
-            Text("Confirm", fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Confirm", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -618,7 +684,7 @@ private fun PinNumpad(
 // ─── Password Setup Dialog ───────────────────────────────────────────────────
 
 @Composable
-fun PasswordSetupDialog(
+fun PasswordDialogContent(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
     title: String = "Set Password",
@@ -632,6 +698,129 @@ fun PasswordSetupDialog(
     var showConfirm by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf("") }
 
+    Column(
+        Modifier.padding(24.dp).fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Key,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = if (isVerify) title else "Set Password",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isVerify) "Enter your password to verify" else "Letters, numbers & symbols",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (showCloseButton) {
+                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it; errorText = "" },
+            label = { Text(if (isVerify) "Password" else "Enter Password") },
+            singleLine = true,
+            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                IconButton(onClick = { showPassword = !showPassword }) {
+                    Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            isError = errorText.isNotEmpty()
+        )
+
+        if (!isVerify) {
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it; errorText = "" },
+                label = { Text("Confirm Password") },
+                singleLine = true,
+                visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                trailingIcon = {
+                    IconButton(onClick = { showConfirm = !showConfirm }) {
+                        Icon(if (showConfirm) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                isError = errorText.isNotEmpty()
+            )
+        }
+
+        AnimatedVisibility(visible = errorText.isNotEmpty()) {
+            Text(errorText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showCloseButton) {
+                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
+            }
+            Button(
+                onClick = {
+                    when {
+                        isVerify -> {
+                            if (password == expectedPassword) onConfirm(password)
+                            else errorText = "Incorrect password"
+                        }
+                        password.length < 4 -> errorText = "Password must be at least 4 characters"
+                        password != confirmPassword -> errorText = "Passwords don't match"
+                        else -> onConfirm(password)
+                    }
+                },
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Confirm", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+fun PasswordSetupDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "Set Password",
+    isVerify: Boolean = false,
+    expectedPassword: String = "",
+    showCloseButton: Boolean = true
+) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(
@@ -644,90 +833,14 @@ fun PasswordSetupDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(
-                Modifier.padding(24.dp).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isVerify) title else "Set Password",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (showCloseButton) {
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Close, null)
-                        }
-                    }
-                }
-
-                if (!isVerify) {
-                    Text(
-                        "Enter any password. Supports letters, numbers and special characters.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it; errorText = "" },
-                    label = { Text(if (isVerify) "Password" else "Enter Password") },
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    isError = errorText.isNotEmpty()
-                )
-
-                if (!isVerify) {
-                    OutlinedTextField(
-                        value = confirmPassword,
-                        onValueChange = { confirmPassword = it; errorText = "" },
-                        label = { Text("Confirm Password") },
-                        singleLine = true,
-                        visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { showConfirm = !showConfirm }) {
-                                Icon(if (showConfirm) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        isError = errorText.isNotEmpty()
-                    )
-                }
-
-                AnimatedVisibility(visible = errorText.isNotEmpty()) {
-                    Text(errorText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
-                    Button(
-                        onClick = {
-                            when {
-                                isVerify -> {
-                                    if (password == expectedPassword) onConfirm(password)
-                                    else errorText = "Incorrect password"
-                                }
-                                password.length < 4 -> errorText = "Password must be at least 4 characters"
-                                password != confirmPassword -> errorText = "Passwords don't match"
-                                else -> onConfirm(password)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("Confirm") }
-                }
-            }
+            PasswordDialogContent(
+                onConfirm = onConfirm,
+                onDismiss = onDismiss,
+                title = title,
+                isVerify = isVerify,
+                expectedPassword = expectedPassword,
+                showCloseButton = showCloseButton
+            )
         }
     }
 }

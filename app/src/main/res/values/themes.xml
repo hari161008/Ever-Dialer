@@ -12,4 +12,9 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
     <style name="Theme.EverDialer" parent="Theme.RivoPhone" />
+    <style name="Theme.BiometricCallFloat" parent="Theme.RivoPhone">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

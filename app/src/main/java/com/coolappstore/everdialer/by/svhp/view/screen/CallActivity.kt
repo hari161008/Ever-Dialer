@@ -225,7 +225,6 @@ class CallActivity : FragmentActivity() {
                     }
 
                     val answeredFromNotification = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
-                    val notifPendingAction = intent?.getStringExtra("NOTIFICATION_PENDING_ACTION")
                     ExpressiveCallScreen(
                         call = call,
                         callState = session?.state ?: Call.STATE_ACTIVE,
@@ -239,8 +238,7 @@ class CallActivity : FragmentActivity() {
                         callLogRepo = callLogRepo,
                         prefs = prefs,
                         isPocketBlocked = { isPocketBlocked },
-                        skipIncomingScreen = answeredFromNotification,
-                        notifPendingAction = notifPendingAction
+                        skipIncomingScreen = answeredFromNotification
                     )
                 }
             }
@@ -308,8 +306,7 @@ fun ExpressiveCallScreen(
     callLogRepo: ICallLogRepository? = null,
     prefs: PreferenceManager? = null,
     isPocketBlocked: () -> Boolean = { false },
-    skipIncomingScreen: Boolean = false,
-    notifPendingAction: String? = null
+    skipIncomingScreen: Boolean = false
 ) {
     val context = LocalView.current.context
     val ctx = context
@@ -368,34 +365,16 @@ fun ExpressiveCallScreen(
         prefs?.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) == true &&
         (prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "").isNotEmpty()
     }
-    var callBiometricUnlocked by remember { mutableStateOf(!callLockEnabled) }
+    var callBiometricUnlocked by remember { mutableStateOf(!callLockEnabled || skipIncomingScreen) }
     var showCallBiometricUnlock by remember { mutableStateOf(false) }
     var biometricGatesScreen by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    val notifPendingAnswer = notifPendingAction == "ANSWER"
-    val notifPendingDecline = notifPendingAction == "DECLINE"
-
-    // Show biometric gate immediately when call arrives (ringing or answered from notification)
-    // so the user CANNOT answer or decline without authenticating first
+    // Gate the incoming call screen behind biometric when call arrives ringing
     LaunchedEffect(callState) {
         if (callLockEnabled && !callBiometricUnlocked && !showCallBiometricUnlock) {
-            val isRinging = callState == Call.STATE_RINGING
-            val isGatedFromNotification = skipIncomingScreen
-            if (isRinging || isGatedFromNotification) {
-                when {
-                    notifPendingAnswer -> {
-                        pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
-                        biometricGatesScreen = false
-                    }
-                    notifPendingDecline -> {
-                        pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
-                        biometricGatesScreen = false
-                    }
-                    else -> {
-                        biometricGatesScreen = true
-                    }
-                }
+            if (callState == Call.STATE_RINGING) {
+                biometricGatesScreen = true
                 showCallBiometricUnlock = true
             }
         }
@@ -1131,7 +1110,7 @@ fun ExpressiveCallScreen(
             fun onBiometricFail() {
                 showCallBiometricUnlock = false
                 pendingAction = null
-                if (biometricGatesScreen) { try { call.disconnect() } catch (_: Exception) {} }
+                // Don't disconnect — let the call keep ringing so the user can retry
             }
             when (biometricType) {
                 "system" -> {
