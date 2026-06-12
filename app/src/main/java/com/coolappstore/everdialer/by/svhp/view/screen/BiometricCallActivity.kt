@@ -48,6 +48,25 @@ class BiometricCallActivity : FragmentActivity() {
         val action = intent?.getStringExtra("NOTIFICATION_PENDING_ACTION") ?: run { finish(); return }
         val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
 
+        // Verify we should actually gate this specific call
+        val callPhoneNumber = CallService.currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+        if (!prefs.shouldGateCallWithBiometric(callPhoneNumber) || biometricType.isEmpty()) {
+            // Lock scope excludes this number — perform action directly
+            val call = CallService.currentCallSession.value?.call
+            when (action) {
+                "ANSWER" -> {
+                    try { call?.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                    startActivity(Intent(this, CallActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                        putExtra("ANSWERED_FROM_NOTIFICATION", true)
+                    })
+                }
+                "DECLINE" -> try { call?.disconnect() } catch (_: Exception) {}
+            }
+            finish()
+            return
+        }
+
         setContent {
             Rivo4Theme {
                 val activity = this

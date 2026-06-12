@@ -362,8 +362,7 @@ fun ExpressiveCallScreen(
 
     // ── Call-lock biometric ────────────────────────────────────────────────
     val callLockEnabled = remember {
-        prefs?.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) == true &&
-        (prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "").isNotEmpty()
+        prefs?.shouldGateCallWithBiometric(phoneNumber) == true
     }
     var callBiometricUnlocked by remember { mutableStateOf(!callLockEnabled || skipIncomingScreen) }
     var showCallBiometricUnlock by remember { mutableStateOf(false) }

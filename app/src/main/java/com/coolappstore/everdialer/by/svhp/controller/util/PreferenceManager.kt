@@ -28,6 +28,23 @@ class PreferenceManager(context: Context) {
     fun getFloat(key: String, defaultValue: Float)     = prefs.getFloat(key, defaultValue)
     fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply() }
 
+    /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
+    fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
+        if (!getBoolean(KEY_BIOMETRICS_CALL_LOCK, false)) return false
+        if ((getString(KEY_BIOMETRICS_TYPE, "") ?: "").isEmpty()) return false
+        val mode = getString(KEY_BIOMETRICS_CALL_LOCK_MODE, "all") ?: "all"
+        if (mode == "all") return true
+        if (phoneNumber.isNullOrBlank()) return mode == "skip_specified"
+        val stored = getString(KEY_BIOMETRICS_CALL_LOCK_NUMBERS, "") ?: ""
+        if (stored.isBlank()) return mode == "skip_specified"
+        val incoming = phoneNumber.filter { it.isDigit() }.takeLast(10)
+        val match = stored.split(",").any { raw ->
+            val n = raw.trim().filter { it.isDigit() }.takeLast(10)
+            n.isNotEmpty() && (incoming.endsWith(n) || n.endsWith(incoming))
+        }
+        return if (mode == "specified") match else !match
+    }
+
     companion object {
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
@@ -103,6 +120,8 @@ class PreferenceManager(context: Context) {
         const val KEY_BIOMETRICS_PASSWORD      = "biometrics_password"
         const val KEY_BIOMETRICS_APP_LOCK      = "biometrics_app_lock"
         const val KEY_BIOMETRICS_CALL_LOCK     = "biometrics_call_lock"
+        const val KEY_BIOMETRICS_CALL_LOCK_MODE    = "biometrics_call_lock_mode"    // "all" | "specified" | "skip_specified"
+        const val KEY_BIOMETRICS_CALL_LOCK_NUMBERS = "biometrics_call_lock_numbers" // comma-separated phone numbers
         // Auto Redial
         const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
     }

@@ -11,6 +11,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -45,11 +46,19 @@ import androidx.compose.animation.shrinkVertically
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
+import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.window.DialogProperties
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,12 +66,32 @@ import org.koin.compose.koinInject
 @Composable
 fun BiometricScreen(navigator: DestinationsNavigator) {
     val prefs: PreferenceManager = koinInject()
+    val contactsRepo: IContactsRepository = koinInject()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var biometricsType by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "") }
     var appLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)) }
     var callLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)) }
+    var callLockMode by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "all") ?: "all") }
+    var callLockNumbers by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_NUMBERS, "") ?: "") }
+    var showContactPicker by remember { mutableStateOf(false) }
+    var allContacts by remember { mutableStateOf(emptyList<Contact>()) }
+
+    LaunchedEffect(Unit) {
+        allContacts = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            contactsRepo.getContacts()
+        }
+    }
+
+    val selectedNumbers = remember(callLockNumbers) {
+        if (callLockNumbers.isBlank()) emptySet()
+        else callLockNumbers.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    val selectedContactCount = remember(selectedNumbers, allContacts) {
+        allContacts.count { c -> c.phoneNumbers.any { n -> selectedNumbers.any { s -> n.filter(Char::isDigit).takeLast(10) == s.filter(Char::isDigit).takeLast(10) } } }
+    }
 
     var showTypeSheet by remember { mutableStateOf(false) }
     var showPinSetup by remember { mutableStateOf(false) }
@@ -153,7 +182,6 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                             onCheckedChange = {
                                 appLockEnabled = it
                                 prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, it)
-                                
                             }
                         )
                         CardDivider()
@@ -166,9 +194,77 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                             onCheckedChange = {
                                 callLockEnabled = it
                                 prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, it)
-                                
                             }
                         )
+                    }
+
+                    // ── Call lock scope ────────────────────────────────────
+                    AnimatedVisibility(
+                        visible = callLockEnabled,
+                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+                        exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SectionLabel("Lock Scope")
+                            RivoExpressiveCard {
+                                CallLockModeRow(
+                                    title    = "Lock All Calls",
+                                    subtitle = "Biometric required for every call",
+                                    selected = callLockMode == "all",
+                                    onClick  = {
+                                        callLockMode = "all"
+                                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "all")
+                                    }
+                                )
+                                CardDivider()
+                                CallLockModeRow(
+                                    title    = "Lock Specified Calls",
+                                    subtitle = if (callLockMode == "specified" && selectedContactCount > 0)
+                                        "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} selected"
+                                    else "Only lock calls from chosen contacts",
+                                    selected = callLockMode == "specified",
+                                    onClick  = {
+                                        callLockMode = "specified"
+                                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "specified")
+                                        showContactPicker = true
+                                    }
+                                )
+                                CardDivider()
+                                CallLockModeRow(
+                                    title    = "Don't Lock Specified Calls",
+                                    subtitle = if (callLockMode == "skip_specified" && selectedContactCount > 0)
+                                        "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} excluded"
+                                    else "Skip biometric for chosen contacts",
+                                    selected = callLockMode == "skip_specified",
+                                    onClick  = {
+                                        callLockMode = "skip_specified"
+                                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "skip_specified")
+                                        showContactPicker = true
+                                    }
+                                )
+                            }
+
+                            // Edit selection button
+                            AnimatedVisibility(
+                                visible = callLockMode != "all",
+                                enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+                                exit  = fadeOut(tween(150)) + shrinkVertically(tween(150))
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showContactPicker = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (selectedContactCount > 0)
+                                            "Edit Selection  ·  $selectedContactCount selected"
+                                        else "Select Contacts"
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -229,6 +325,209 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
             },
             onDismiss = { showPasswordSetup = false }
         )
+    }
+
+    // ── Contact Picker ─────────────────────────────────────────────────────
+    if (showContactPicker) {
+        ContactPickerDialog(
+            contacts = allContacts,
+            initialSelectedNumbers = selectedNumbers,
+            onDone = { newNumbers ->
+                val joined = newNumbers.joinToString(",")
+                callLockNumbers = joined
+                prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_NUMBERS, joined)
+                showContactPicker = false
+            },
+            onDismiss = { showContactPicker = false }
+        )
+    }
+}
+
+// ─── Call Lock Mode Row ───────────────────────────────────────────────────────
+
+@Composable
+private fun CallLockModeRow(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val bg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        else Color.Transparent,
+        tween(200), label = "rowBg"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        RadioButton(selected = selected, onClick = onClick, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+// ─── Contact Picker Dialog ────────────────────────────────────────────────────
+
+@Composable
+private fun ContactPickerDialog(
+    contacts: List<Contact>,
+    initialSelectedNumbers: Set<String>,
+    onDone: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // working copy — normalised to last-10-digit strings for matching
+    var selectedNumbers by remember {
+        mutableStateOf(initialSelectedNumbers.map { it.filter(Char::isDigit).takeLast(10) }.toSet())
+    }
+
+    fun normalise(n: String) = n.filter(Char::isDigit).takeLast(10)
+
+    fun isContactSelected(contact: Contact) =
+        contact.phoneNumbers.any { normalise(it) in selectedNumbers }
+
+    fun toggleContact(contact: Contact) {
+        val nums = contact.phoneNumbers.map(::normalise).filter { it.isNotEmpty() }.toSet()
+        selectedNumbers = if (isContactSelected(contact)) selectedNumbers - nums
+        else selectedNumbers + nums
+    }
+
+    fun selectAll() {
+        selectedNumbers = contacts.flatMap { c -> c.phoneNumbers.map(::normalise) }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    val selectedContactCount = contacts.count(::isContactSelected)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Select Contacts", fontWeight = FontWeight.SemiBold) },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                            }
+                        },
+                        actions = {
+                            TextButton(onClick = ::selectAll) {
+                                Text("Select All", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    )
+                },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding)) {
+                    if (contacts.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 96.dp)
+                        ) {
+                            items(contacts.sortedBy { it.name.lowercase() }, key = { it.id }) { contact ->
+                                val checked = isContactSelected(contact)
+                                val rowBg by animateColorAsState(
+                                    if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                    else Color.Transparent,
+                                    tween(180), label = "cb${contact.id}"
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(rowBg)
+                                        .clickable { toggleContact(contact) }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    RivoAvatar(
+                                        name = contact.name,
+                                        photoUri = contact.photoUri,
+                                        modifier = Modifier.size(46.dp)
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            text = contact.name.ifBlank { "Unknown" },
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        if (contact.phoneNumbers.isNotEmpty()) {
+                                            Text(
+                                                text = contact.phoneNumbers.first(),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = { toggleContact(contact) }
+                                    )
+                                }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 76.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Floating Done pill ─────────────────────────────────
+                    AnimatedVisibility(
+                        visible = selectedContactCount > 0,
+                        enter = slideInVertically { it } + fadeIn(tween(200)),
+                        exit  = slideOutVertically { it } + fadeOut(tween(150)),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 28.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                // Persist raw numbers that belong to selected contacts
+                                val finalNumbers = contacts
+                                    .filter(::isContactSelected)
+                                    .flatMap { c -> c.phoneNumbers.map { it.filter(Char::isDigit).takeLast(10) } }
+                                    .filter { it.isNotEmpty() }
+                                    .toSet()
+                                onDone(finalNumbers)
+                            },
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.height(52.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp, pressedElevation = 2.dp)
+                        ) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "Done  ·  $selectedContactCount selected",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

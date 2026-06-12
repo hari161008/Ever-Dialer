@@ -322,18 +322,16 @@ class CallService : InCallService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "ANSWER_CALL"  -> {
-                val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
-                    !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
-                if (biometricEnabled) {
+                val phoneNumber = _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                if (prefs.shouldGateCallWithBiometric(phoneNumber)) {
                     launchBiometricCallActivity("ANSWER")
                 } else {
                     answerCall(); launchCallActivity(answeredFromNotification = true)
                 }
             }
             "DECLINE_CALL" -> {
-                val biometricEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false) &&
-                    !prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "").isNullOrEmpty()
-                if (biometricEnabled) {
+                val phoneNumber = _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                if (prefs.shouldGateCallWithBiometric(phoneNumber)) {
                     launchBiometricCallActivity("DECLINE")
                 } else {
                     declineCall()
