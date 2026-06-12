@@ -140,7 +140,8 @@ private fun BiometricFloatingUi(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = 28.dp)
+                        .widthIn(max = 360.dp)
                         .wrapContentHeight()
                         .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
                     shape = RoundedCornerShape(28.dp),

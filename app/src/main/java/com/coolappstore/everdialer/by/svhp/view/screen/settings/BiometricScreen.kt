@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -204,44 +205,85 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                         enter = fadeIn(tween(250)) + expandVertically(tween(250)),
                         exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             SectionLabel("Lock Scope")
-                            RivoExpressiveCard {
-                                CallLockModeRow(
-                                    title    = "Lock All Calls",
-                                    subtitle = "Biometric required for every call",
+
+                            // Modern segmented control
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                SegmentedButton(
                                     selected = callLockMode == "all",
-                                    onClick  = {
+                                    onClick = {
                                         callLockMode = "all"
                                         prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "all")
-                                    }
-                                )
-                                CardDivider()
-                                CallLockModeRow(
-                                    title    = "Lock Specified Calls",
-                                    subtitle = if (callLockMode == "specified" && selectedContactCount > 0)
-                                        "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} selected"
-                                    else "Only lock calls from chosen contacts",
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                                    icon = { SegmentedButtonDefaults.ActiveIcon() }
+                                ) { Text("All Calls", maxLines = 1) }
+                                SegmentedButton(
                                     selected = callLockMode == "specified",
-                                    onClick  = {
+                                    onClick = {
                                         callLockMode = "specified"
                                         prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "specified")
                                         showContactPicker = true
-                                    }
-                                )
-                                CardDivider()
-                                CallLockModeRow(
-                                    title    = "Don't Lock Specified Calls",
-                                    subtitle = if (callLockMode == "skip_specified" && selectedContactCount > 0)
-                                        "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} excluded"
-                                    else "Skip biometric for chosen contacts",
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                                    icon = { SegmentedButtonDefaults.ActiveIcon() }
+                                ) { Text("Specified", maxLines = 1) }
+                                SegmentedButton(
                                     selected = callLockMode == "skip_specified",
-                                    onClick  = {
+                                    onClick = {
                                         callLockMode = "skip_specified"
                                         prefs.setString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "skip_specified")
                                         showContactPicker = true
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                                    icon = { SegmentedButtonDefaults.ActiveIcon() }
+                                ) { Text("Exclude", maxLines = 1) }
+                            }
+
+                            // Description card
+                            AnimatedContent(targetState = callLockMode, label = "lockModeDesc") { mode ->
+                                RivoExpressiveCard {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = when (mode) {
+                                                        "all" -> Icons.Default.Lock
+                                                        "specified" -> Icons.Default.Person
+                                                        else -> Icons.Default.PersonOff
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = when (mode) {
+                                                "all" -> "Biometric required for every incoming call"
+                                                "specified" -> if (selectedContactCount > 0)
+                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} will require biometric to answer"
+                                                else "Choose contacts that require biometric to answer"
+                                                else -> if (selectedContactCount > 0)
+                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} excluded from biometric lock"
+                                                else "Choose contacts to skip the biometric lock"
+                                            },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-                                )
+                                }
                             }
 
                             // Edit selection button
@@ -250,7 +292,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                                 enter = fadeIn(tween(200)) + expandVertically(tween(200)),
                                 exit  = fadeOut(tween(150)) + shrinkVertically(tween(150))
                             ) {
-                                OutlinedButton(
+                                FilledTonalButton(
                                     onClick = { showContactPicker = true },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(14.dp)
@@ -343,37 +385,6 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
     }
 }
 
-// ─── Call Lock Mode Row ───────────────────────────────────────────────────────
-
-@Composable
-private fun CallLockModeRow(
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val bg by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-        else Color.Transparent,
-        tween(200), label = "rowBg"
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        RadioButton(selected = selected, onClick = onClick, modifier = Modifier.size(20.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
 // ─── Contact Picker Dialog ────────────────────────────────────────────────────
 
 @Composable
@@ -387,6 +398,7 @@ private fun ContactPickerDialog(
     var selectedNumbers by remember {
         mutableStateOf(initialSelectedNumbers.map { it.filter(Char::isDigit).takeLast(10) }.toSet())
     }
+    var searchQuery by remember { mutableStateOf("") }
 
     fun normalise(n: String) = n.filter(Char::isDigit).takeLast(10)
 
@@ -403,6 +415,14 @@ private fun ContactPickerDialog(
         selectedNumbers = contacts.flatMap { c -> c.phoneNumbers.map(::normalise) }.filter { it.isNotEmpty() }.toSet()
     }
 
+    val filteredContacts = remember(contacts, searchQuery) {
+        if (searchQuery.isBlank()) contacts.sortedBy { it.name.lowercase() }
+        else contacts.filter { c ->
+            c.name.contains(searchQuery, ignoreCase = true) ||
+            c.phoneNumbers.any { it.contains(searchQuery) }
+        }.sortedBy { it.name.lowercase() }
+    }
+
     val selectedContactCount = contacts.count(::isContactSelected)
 
     Dialog(
@@ -415,19 +435,48 @@ private fun ContactPickerDialog(
         ) {
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = { Text("Select Contacts", fontWeight = FontWeight.SemiBold) },
-                        navigationIcon = {
-                            IconButton(onClick = onDismiss) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    Column {
+                        TopAppBar(
+                            title = { Text("Select Contacts", fontWeight = FontWeight.SemiBold) },
+                            navigationIcon = {
+                                IconButton(onClick = onDismiss) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                                }
+                            },
+                            actions = {
+                                TextButton(onClick = ::selectAll) {
+                                    Text("Select All", fontWeight = FontWeight.SemiBold)
+                                }
                             }
-                        },
-                        actions = {
-                            TextButton(onClick = ::selectAll) {
-                                Text("Select All", fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    )
+                        )
+                        // Search bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search contacts…") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            },
+                            trailingIcon = {
+                                AnimatedVisibility(visible = searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Clear",
+                                            modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(28.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                            )
+                        )
+                    }
                 },
                 containerColor = MaterialTheme.colorScheme.surface
             ) { padding ->
@@ -436,12 +485,23 @@ private fun ContactPickerDialog(
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
+                    } else if (filteredContacts.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.SearchOff, contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                Text("No contacts found", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 96.dp)
                         ) {
-                            items(contacts.sortedBy { it.name.lowercase() }, key = { it.id }) { contact ->
+                            items(filteredContacts, key = { it.id }) { contact ->
                                 val checked = isContactSelected(contact)
                                 val rowBg by animateColorAsState(
                                     if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -504,7 +564,6 @@ private fun ContactPickerDialog(
                     ) {
                         Button(
                             onClick = {
-                                // Persist raw numbers that belong to selected contacts
                                 val finalNumbers = contacts
                                     .filter(::isContactSelected)
                                     .flatMap { c -> c.phoneNumbers.map { it.filter(Char::isDigit).takeLast(10) } }
@@ -514,7 +573,11 @@ private fun ContactPickerDialog(
                             },
                             shape = RoundedCornerShape(50),
                             modifier = Modifier.height(52.dp),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp, pressedElevation = 2.dp)
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                hoveredElevation = 0.dp
+                            )
                         ) {
                             Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
@@ -762,7 +825,7 @@ fun PinDialogContent(
     }
 
     Column(
-        Modifier.padding(horizontal = 24.dp, vertical = 28.dp).fillMaxWidth(),
+        Modifier.padding(horizontal = 20.dp, vertical = 24.dp).fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
@@ -818,11 +881,11 @@ fun PinDialogContent(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(32.dp))
 
         // ── PIN dots ────────────────────────────────────────────────────────
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.offset(x = if (shakeState > 0) shake else 0.dp)
         ) {
@@ -830,7 +893,7 @@ fun PinDialogContent(
             repeat(maxDots) { i ->
                 val filled = i < pin.length
                 val dotScale by animateFloatAsState(
-                    targetValue = if (filled) 1f else 0.45f,
+                    targetValue = if (filled) 1f else 0.4f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
@@ -845,7 +908,7 @@ fun PinDialogContent(
                 )
                 Box(
                     Modifier
-                        .size(16.dp)
+                        .size(20.dp)
                         .scale(dotScale)
                         .clip(CircleShape)
                         .background(dotColor)
@@ -853,13 +916,14 @@ fun PinDialogContent(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(44.dp))
 
         // ── Numpad ──────────────────────────────────────────────────────────
         PinNumpad(
             onDigit = ::onDigit,
             onBackspace = ::onBackspace,
-            onSubmit = ::onSubmit
+            onSubmit = ::onSubmit,
+            onDismiss = onDismiss
         )
     }
 }
@@ -901,41 +965,40 @@ fun PinSetupDialog(
 private fun PinNumpad(
     onDigit: (String) -> Unit,
     onBackspace: () -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     val keys = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
-        listOf("", "0", "⌫")
+        listOf("⌫", "0", "→")
     )
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         keys.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 row.forEach { key ->
                     val interaction = remember { MutableInteractionSource() }
                     val isPressed by interaction.collectIsPressedAsState()
                     val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.87f else 1f,
+                        targetValue = if (isPressed) 0.85f else 1f,
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "ks"
+                        label = "ks_$key"
                     )
-                    val radius by animateDpAsState(
-                        targetValue = if (isPressed) 16.dp else 20.dp,
-                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                        label = "kr"
-                    )
-                    Box(Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
                         when (key) {
-                            "" -> Spacer(Modifier.fillMaxWidth().height(62.dp))
                             "⌫" -> Surface(
                                 onClick = onBackspace,
-                                shape = RoundedCornerShape(radius),
+                                shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.fillMaxWidth().height(62.dp).scale(scale),
+                                modifier = Modifier.size(64.dp).scale(scale),
                                 interactionSource = interaction
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -947,11 +1010,27 @@ private fun PinNumpad(
                                     )
                                 }
                             }
+                            "→" -> Surface(
+                                onClick = onSubmit,
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(64.dp).scale(scale),
+                                interactionSource = interaction
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = "Confirm",
+                                        modifier = Modifier.size(24.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
                             else -> Surface(
                                 onClick = { onDigit(key) },
-                                shape = RoundedCornerShape(radius),
+                                shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.fillMaxWidth().height(62.dp).scale(scale),
+                                modifier = Modifier.size(64.dp).scale(scale),
                                 interactionSource = interaction
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -966,16 +1045,6 @@ private fun PinNumpad(
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(4.dp))
-        Button(
-            onClick = onSubmit,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Confirm", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
