@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -256,6 +259,29 @@
         <service
             android:name=".controller.FloatingCallService"
             android:exported="false" />
+
+        <!-- Fake Call -->
+        <activity
+            android:name=".view.screen.FakeIncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showForAllUsers="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.RivoPhone" />
+
+        <receiver
+            android:name=".controller.FakeCallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_TRIGGER" />
+                <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_ANSWER" />
+                <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_DECLINE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

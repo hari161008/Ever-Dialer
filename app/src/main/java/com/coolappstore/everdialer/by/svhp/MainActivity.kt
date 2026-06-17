@@ -52,6 +52,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
 import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndScheduleDelete
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
+import com.coolappstore.everdialer.by.svhp.view.components.Android14WelcomeDialog
+import com.coolappstore.everdialer.by.svhp.view.components.TelegramJoinDialog
 import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.rememberLayerBackdrop
@@ -156,183 +158,40 @@ class MainActivity : FragmentActivity() {
                 }
 
                 if (showWelcomeDialog) {
-                    Dialog(onDismissRequest = {}) {
-                        Surface(
-                            shape = RoundedCornerShape(24.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            tonalElevation = 6.dp
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(28.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Text(
-                                    text = "Welcome to Ever Dialer",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "Since this app isn't installed from Playstore, In Android 14+ it is not possible to set as a default dialer without allowing \"Allow restricted settings\"\n\nSo to enable this settings, you have to long press the Ever Dialer App icon in your launcher, Click App info (which opens App info) > On top right corner > Click \"Allow restricted settings\"\n\nThen come back to the app and Enjoy :)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Start
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Surface(
-                                        onClick = {
-                                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                data = Uri.fromParts("package", packageName, null)
-                                            }
-                                            startActivity(intent)
-                                        },
-                                        shape = RoundedCornerShape(50.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "App Info",
-                                            modifier = Modifier.padding(vertical = 12.dp),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            textAlign = TextAlign.Center,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Surface(
-                                        onClick = {
-                                            prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
-                                            showWelcomeDialog = false
-                                            // Re-prompt to set as default dialer if not already set
-                                            requestDefaultDialer()
-                                            // Show Telegram promo dialog after welcome
-                                            if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
-                                                showTelegramDialog = true
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(50.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "Continue",
-                                            modifier = Modifier.padding(vertical = 12.dp),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            textAlign = TextAlign.Center,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
+                    Android14WelcomeDialog(
+                        onAppInfo = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            startActivity(intent)
+                        },
+                        onContinue = {
+                            prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
+                            showWelcomeDialog = false
+                            requestDefaultDialer()
+                            if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
+                                showTelegramDialog = true
                             }
                         }
-                    }
+                    )
                 }
 
                 // On subsequent launches, requestDefaultDialer is called in onCreate
 
                 // ── Telegram Support Dialog ─────────────────────────────────
                 if (showTelegramDialog) {
-                    Dialog(onDismissRequest = {}) {
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            tonalElevation = 6.dp
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(28.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(MaterialTheme.colorScheme.primaryContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Favorite,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(44.dp)
-                                    )
-                                }
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "You can support me only by joining my Telegram Channel and the App Support Group by navigating to Settings > About",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = "Announcements | Updates | Bug Fixes | Feature Requests | Rate | Support",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    TextButton(
-                                        onClick = {
-                                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
-                                            showTelegramDialog = false
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "Continue",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Surface(
-                                        onClick = {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/EverlastingAndroidTweak"))
-                                            startActivity(intent)
-                                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
-                                            showTelegramDialog = false
-                                        },
-                                        shape = RoundedCornerShape(50.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "Join",
-                                            modifier = Modifier.padding(vertical = 12.dp),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            textAlign = TextAlign.Center,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
+                    TelegramJoinDialog(
+                        onJoin = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/EverlastingAndroidTweak"))
+                            startActivity(intent)
+                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
+                            showTelegramDialog = false
+                        },
+                        onSkip = {
+                            prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
+                            showTelegramDialog = false
                         }
-                    }
+                    )
                 }
 
                 var autoUpdateVersion by remember { mutableStateOf<String?>(null) }
@@ -392,69 +251,31 @@ class MainActivity : FragmentActivity() {
                 }
 
                 if (showAutoUpdateDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showAutoUpdateDialog = false },
-                        icon = { Icon(Icons.Default.SystemUpdate, null, tint = Color(0xFF2196F3)) },
-                        title = { Text("Update Available") },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Version v${autoUpdateVersion} is available.")
-                                Text(
-                                    "Would you like to download and install it now?",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    com.coolappstore.everdialer.by.svhp.view.components.UpdateAvailableDialog(
+                        currentVersion = com.coolappstore.everdialer.by.svhp.APP_VERSION,
+                        latestVersion = autoUpdateVersion ?: "",
+                        readyToInstall = false,
+                        onAction = {
+                            showAutoUpdateDialog = false
+                            val url = autoUpdateApkUrl
+                            if (url != null) {
+                                val id = enqueueApkDownload(this@MainActivity, url)
+                                if (id != null) {
+                                    autoDownloadId = id
+                                    autoDownloadProgress = 0f
+                                    showAutoDownloadProgress = true
+                                }
                             }
                         },
-                        confirmButton = {
-                            Button(onClick = {
-                                showAutoUpdateDialog = false
-                                val url = autoUpdateApkUrl
-                                if (url != null) {
-                                    val id = enqueueApkDownload(this@MainActivity, url)
-                                    if (id != null) {
-                                        autoDownloadId = id
-                                        autoDownloadProgress = 0f
-                                        showAutoDownloadProgress = true
-                                    }
-                                }
-                            }) { Text("Download") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showAutoUpdateDialog = false }) { Text("Not Now") }
-                        }
+                        onDismiss = { showAutoUpdateDialog = false }
                     )
                 }
 
                 if (showAutoDownloadProgress) {
-                    Dialog(onDismissRequest = {}) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Icon(Icons.Default.SystemUpdate, null, tint = Color(0xFF2196F3), modifier = Modifier.size(36.dp))
-                                Text("Downloading Update", style = MaterialTheme.typography.titleMedium)
-                                Text("v${autoUpdateVersion ?: ""}", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                                    LinearProgressIndicator(progress = { autoDownloadProgress }, modifier = Modifier.fillMaxWidth())
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("${(autoDownloadProgress * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("Please wait…",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    com.coolappstore.everdialer.by.svhp.view.components.UpdateDownloadingDialog(
+                        latestVersion = autoUpdateVersion ?: "",
+                        progress = autoDownloadProgress
+                    )
                 }
 
                 // ── Biometric blur + lock ─────────────────────────────────

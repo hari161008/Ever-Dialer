@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,6 +48,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.FakeCallScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
@@ -450,6 +452,25 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                                 iconContainerColor = ColorBlue,
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { navigator.navigate(SoundVibrationScreenDestination) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Fake Call ─────────────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 180L) {
+                    Column {
+                        CallSettingsSectionLabel("Fake Call")
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Fake Call",
+                                supporting = "Schedule fake incoming calls without calling the real person",
+                                leadingIcon = Icons.Outlined.PhoneCallback,
+                                iconContainerColor = ColorPink,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { navigator.navigate(FakeCallScreenDestination) }
                             )
                         }
                     }

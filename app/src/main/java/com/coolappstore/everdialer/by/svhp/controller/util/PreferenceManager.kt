@@ -124,5 +124,9 @@ class PreferenceManager(context: Context) {
         const val KEY_BIOMETRICS_CALL_LOCK_NUMBERS = "biometrics_call_lock_numbers" // comma-separated phone numbers
         // Auto Redial
         const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
+        // Updates — version tag of the APK currently sitting in Downloads (if any)
+        const val KEY_DOWNLOADED_UPDATE_VERSION = "downloaded_update_version"
+        // Fake Call — JSON-encoded list of scheduled fake calls
+        const val KEY_FAKE_CALLS                = "fake_calls"
     }
 }
