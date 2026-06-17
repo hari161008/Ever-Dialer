@@ -15,6 +15,7 @@ class RivoApp : Application() {
             modules(appModule)
         }
         restoreSavedAppIcon()
+        com.coolappstore.everdialer.by.svhp.controller.FakeCallConnectionService.ensureRegistered(this)
     }
 
     private fun restoreSavedAppIcon() {

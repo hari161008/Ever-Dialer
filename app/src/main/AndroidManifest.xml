@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -171,6 +172,9 @@
             <meta-data
                 android:name="android.telecom.IN_CALL_SERVICE_UI"
                 android:value="true" />
+            <meta-data
+                android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS"
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.telecom.InCallService" />
             </intent-filter>
@@ -260,25 +264,21 @@
             android:name=".controller.FloatingCallService"
             android:exported="false" />
 
-        <!-- Fake Call -->
-        <activity
-            android:name=".view.screen.FakeIncomingCallActivity"
-            android:exported="false"
-            android:launchMode="singleInstance"
-            android:showForAllUsers="true"
-            android:showOnLockScreen="true"
-            android:turnScreenOn="true"
-            android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.RivoPhone" />
+        <!-- Fake Call: self-managed ConnectionService that places real Telecom calls -->
+        <service
+            android:name=".controller.FakeCallConnectionService"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".controller.FakeCallReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_TRIGGER" />
-                <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_ANSWER" />
-                <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_DECLINE" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>

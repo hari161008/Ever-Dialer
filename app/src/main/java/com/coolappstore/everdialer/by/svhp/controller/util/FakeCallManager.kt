@@ -15,14 +15,13 @@ import java.util.Calendar
  * Persists and schedules "Fake Call" entries.
  *
  * Entries are stored as JSON in [PreferenceManager.KEY_FAKE_CALLS]. Each entry is backed by an
- * [AlarmManager] alarm that fires [FakeCallReceiver], which shows an incoming-call style
- * notification / launches [com.coolappstore.everdialer.by.svhp.view.screen.FakeCallActivity].
+ * [AlarmManager] alarm that fires [FakeCallReceiver], which places a genuine self-managed
+ * Telecom call via [com.coolappstore.everdialer.by.svhp.controller.FakeCallConnectionService] —
+ * so the existing real incoming-call UI and notification are used, unmodified.
  */
 object FakeCallManager {
 
     const val ACTION_TRIGGER = "com.coolappstore.everdialer.by.svhp.FAKE_CALL_TRIGGER"
-    const val ACTION_ANSWER  = "com.coolappstore.everdialer.by.svhp.FAKE_CALL_ANSWER"
-    const val ACTION_DECLINE = "com.coolappstore.everdialer.by.svhp.FAKE_CALL_DECLINE"
     const val ACTION_BOOT    = "com.coolappstore.everdialer.by.svhp.FAKE_CALL_RESCHEDULE"
     const val EXTRA_ID = "fake_call_id"
 
@@ -125,8 +124,6 @@ object FakeCallManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
-
-    fun notificationId(id: String): Int = id.hashCode()
 
     // ── Time math ───────────────────────────────────────────────────────────
 
