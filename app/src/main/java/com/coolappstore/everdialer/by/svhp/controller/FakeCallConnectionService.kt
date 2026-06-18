@@ -2,6 +2,10 @@ package com.coolappstore.everdialer.by.svhp.controller
 
 import android.content.ComponentName
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
 import android.telecom.Connection
@@ -33,12 +37,17 @@ class FakeCallConnectionService : ConnectionService() {
             ?: address?.schemeSpecificPart
             ?: "Unknown"
 
-        val connection = FakeConnection()
+        val connection = FakeConnection(applicationContext)
         connection.setConnectionCapabilities(Connection.CAPABILITY_MUTE or Connection.CAPABILITY_HOLD or Connection.CAPABILITY_SUPPORT_HOLD)
         connection.audioModeIsVoip = true
         connection.setAddress(address, TelecomManager.PRESENTATION_ALLOWED)
         connection.setCallerDisplayName(name, TelecomManager.PRESENTATION_ALLOWED)
         connection.setRinging()
+        // Self-managed connections are never auto-rung by Telecom, and since this app is also
+        // the default dialer, Telecom routes the call straight into our own InCallService UI —
+        // it does NOT call onShowIncomingCallUi() in that case. So start the ringtone ourselves,
+        // right here, the moment the connection enters the ringing state.
+        connection.startRingtonePlayback()
         return connection
     }
 
@@ -93,33 +102,84 @@ class FakeCallConnectionService : ConnectionService() {
 }
 
 /** A [Connection] with no real audio/network backing — just enough to drive the real call UI. */
-class FakeConnection : Connection() {
+class FakeConnection(private val context: Context) : Connection() {
+
+    private var ringtonePlayer: MediaPlayer? = null
+
+    /**
+     * Self-managed connections are never rung by Telecom itself — the ConnectionService is
+     * fully responsible for its own ringing. This plays the device's actual default ringtone
+     * (looped) so the fake call sounds exactly like a real one, respecting the current ringer
+     * mode (silent → no sound).
+     */
+    fun startRingtonePlayback() {
+        if (ringtonePlayer != null) return
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audioManager?.ringerMode != AudioManager.RINGER_MODE_NORMAL) return
+
+            val ringtoneUri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getValidRingtoneUri(context)
+                ?: return
+
+            ringtonePlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(context, ringtoneUri)
+                isLooping = true
+                setOnPreparedListener { it.start() }
+                setOnErrorListener { _, _, _ -> stopRingtonePlayback(); true }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            stopRingtonePlayback()
+        }
+    }
+
+    fun stopRingtonePlayback() {
+        try {
+            ringtonePlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        } catch (_: Exception) {}
+        ringtonePlayer = null
+    }
 
     override fun onAnswer(videoState: Int) {
         super.onAnswer(videoState)
+        stopRingtonePlayback()
         setActive()
     }
 
     override fun onReject() {
         super.onReject()
+        stopRingtonePlayback()
         setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
         destroy()
     }
 
     override fun onDisconnect() {
         super.onDisconnect()
+        stopRingtonePlayback()
         setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
         destroy()
     }
 
     override fun onAbort() {
         super.onAbort()
+        stopRingtonePlayback()
         setDisconnected(DisconnectCause(DisconnectCause.CANCELED))
         destroy()
     }
 
     override fun onHold() {
         super.onHold()
+        stopRingtonePlayback()
         setOnHold()
     }
 
@@ -129,7 +189,10 @@ class FakeConnection : Connection() {
     }
 
     override fun onShowIncomingCallUi() {
-        // No-op: the default dialer's InCallService (CallService → CallActivity) already
-        // provides the real incoming-call UI for this self-managed connection.
+        // The default dialer's InCallService (CallService → CallActivity) already provides the
+        // real incoming-call UI for this self-managed connection. Ringing itself is already
+        // started in onCreateIncomingConnection(); this is just a safety-net in case Telecom
+        // calls it on some OEM/Android version (startRingtonePlayback() is a no-op if already playing).
+        startRingtonePlayback()
     }
 }

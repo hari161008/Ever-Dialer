@@ -36,9 +36,12 @@ class FakeCallReceiver : BroadcastReceiver() {
             number = entry.phoneNumber
         )
 
-        // Re-arm for the next matching day if this is a repeating fake call.
+        // Repeating fake calls re-arm for the next matching day; one-time fake calls (no days
+        // selected) have served their purpose, so flip their toggle off in Settings.
         if (entry.days.isNotEmpty()) {
             FakeCallManager.rescheduleNext(context, prefs, id)
+        } else {
+            FakeCallManager.setEnabled(context, prefs, id, false)
         }
     }
 

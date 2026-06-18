@@ -47,8 +47,8 @@ object FakeCallManager {
 
     // ── CRUD ────────────────────────────────────────────────────────────────
 
-    fun addEntry(context: Context, prefs: PreferenceManager, entry: FakeCallEntry) {
-        val triggerAt = if (entry.enabled) scheduleAlarm(context, entry) else 0L
+    fun addEntry(context: Context, prefs: PreferenceManager, entry: FakeCallEntry, exactTriggerAtOverride: Long? = null) {
+        val triggerAt = if (entry.enabled) scheduleAlarm(context, entry, exactTriggerAtOverride) else 0L
         val updated = entry.copy(triggerAt = triggerAt)
         saveEntries(prefs, loadEntries(prefs) + updated)
     }

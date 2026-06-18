@@ -93,8 +93,8 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
         FakeCallAddSheet(
             mode = addMode!!,
             onDismiss = { showAddSheet = false; addMode = null },
-            onSave = { entry ->
-                FakeCallManager.addEntry(context, prefs, entry)
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
                 entries = FakeCallManager.loadEntries(prefs)
                 showAddSheet = false
                 addMode = null
@@ -253,7 +253,8 @@ private fun FabMiniItem(
         Surface(
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shadowElevation = 4.dp
+            shadowElevation = 4.dp,
+            modifier = Modifier.clickable(onClick = onClick)
         ) {
             Text(
                 label,
@@ -269,7 +270,73 @@ private fun FabMiniItem(
             shape = CircleShape,
             modifier = Modifier.size(44.dp)
         ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+// ─── Pick Time mode tab (Set Clock / Set Timer) ───────────────────────────────
+
+@Composable
+private fun TimeModeTab(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "tabBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "tabContent"
+    )
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = bgColor,
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = contentColor, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = contentColor)
+        }
+    }
+}
+
+// ─── Timer unit toggle (Sec / Min) ─────────────────────────────────────────────
+
+@Composable
+private fun TimerUnitButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+        label = "unitBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "unitContent"
+    )
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = bgColor,
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = contentColor)
         }
     }
 }
@@ -391,13 +458,15 @@ private fun FakeCallCard(
 // ─── Add Sheet ────────────────────────────────────────────────────────────────
 
 enum class AddMode { Contact, Number }
+private enum class TimePickMode { Clock, Timer }
+private enum class TimerUnit { Seconds, Minutes }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FakeCallAddSheet(
     mode: AddMode,
     onDismiss: () -> Unit,
-    onSave: (FakeCallEntry) -> Unit
+    onSave: (FakeCallEntry, Long?) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -410,6 +479,11 @@ private fun FakeCallAddSheet(
     val cal = remember { Calendar.getInstance() }
     var hour by remember { mutableIntStateOf(cal.get(Calendar.HOUR_OF_DAY)) }
     var minute by remember { mutableIntStateOf(cal.get(Calendar.MINUTE)) }
+
+    // Pick Time mode: an absolute clock time, or a relative countdown timer
+    var timePickMode by remember { mutableStateOf(TimePickMode.Clock) }
+    var timerAmountText by remember { mutableStateOf("30") }
+    var timerUnit by remember { mutableStateOf(TimerUnit.Seconds) }
 
     // Day state
     var selectedDays by remember { mutableStateOf(emptySet<Int>()) }
@@ -471,7 +545,20 @@ private fun FakeCallAddSheet(
         SimpleDateFormat("hh:mm a", Locale.getDefault()).format(c.time)
     }
 
-    val canSave = displayName.isNotBlank() && (phoneNumber.isNotBlank() || numberInput.text.isNotBlank())
+    val timerAmount = timerAmountText.toIntOrNull() ?: 0
+    val timerDescription = remember(timerAmount, timerUnit) {
+        val unitLabel = when {
+            timerUnit == TimerUnit.Seconds && timerAmount == 1 -> "second"
+            timerUnit == TimerUnit.Seconds -> "seconds"
+            timerAmount == 1 -> "minute"
+            else -> "minutes"
+        }
+        "$timerAmount $unitLabel"
+    }
+
+    val canSave = displayName.isNotBlank() &&
+        (phoneNumber.isNotBlank() || numberInput.text.isNotBlank()) &&
+        (timePickMode == TimePickMode.Clock || timerAmount > 0)
 
     var scaleIn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { scaleIn = true }
@@ -494,6 +581,7 @@ private fun FakeCallAddSheet(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 8.dp,
+            shadowElevation = 6.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer { alpha = dialogAlpha; scaleX = dialogScale; scaleY = dialogScale }
@@ -505,26 +593,45 @@ private fun FakeCallAddSheet(
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 // Header
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                                )
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             if (mode == AddMode.Contact) Icons.Outlined.Person else Icons.Outlined.Dialpad,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    Text(
-                        if (mode == AddMode.Contact) "Choose Contact" else "Enter Number",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            if (mode == AddMode.Contact) "Choose Contact" else "Enter Number",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Schedule a realistic fake call",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 // Contact display or number input
@@ -616,118 +723,214 @@ private fun FakeCallAddSheet(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                // ── Time Picker ──
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ── Pick Time ──
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Pick Time", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+
+                    // Set Clock / Set Timer toggle
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth().clickable { timePicker.show() }
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Outlined.AccessTime, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                            Text(
-                                timeStr,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                        Row(modifier = Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TimeModeTab(
+                                label = "Set Clock",
+                                icon = Icons.Outlined.AccessTime,
+                                selected = timePickMode == TimePickMode.Clock,
+                                onClick = { timePickMode = TimePickMode.Clock },
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(Modifier.weight(1f))
-                            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                            TimeModeTab(
+                                label = "Set Timer",
+                                icon = Icons.Outlined.Timer,
+                                selected = timePickMode == TimePickMode.Timer,
+                                onClick = { timePickMode = TimePickMode.Timer },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    AnimatedContent(targetState = timePickMode, label = "timeModeContent") { mode ->
+                        when (mode) {
+                            TimePickMode.Clock -> {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth().clickable { timePicker.show() }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.AccessTime, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                        Text(
+                                            timeStr,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(Modifier.weight(1f))
+                                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                            TimePickMode.Timer -> {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                            OutlinedTextField(
+                                                value = timerAmountText,
+                                                onValueChange = { newVal -> timerAmountText = newVal.filter { it.isDigit() }.take(3) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = TextAlign.Center
+                                                ),
+                                                shape = RoundedCornerShape(12.dp),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                modifier = Modifier.width(78.dp)
+                                            )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                                                TimerUnitButton(
+                                                    label = "Sec",
+                                                    selected = timerUnit == TimerUnit.Seconds,
+                                                    onClick = { timerUnit = TimerUnit.Seconds },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                TimerUnitButton(
+                                                    label = "Min",
+                                                    selected = timerUnit == TimerUnit.Minutes,
+                                                    onClick = { timerUnit = TimerUnit.Minutes },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.NotificationsActive, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(13.dp))
+                                        Text(
+                                            "Rings once, in $timerDescription",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // ── Day Selector (optional) ──
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Repeat Days", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                "Optional",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DAY_VALUES.forEachIndexed { i, dayVal ->
-                            val label = DAY_LABELS[i]
-                            val selected = dayVal in selectedDays
-                            val scale by animateFloatAsState(
-                                targetValue = if (selected) 1.12f else 1f,
-                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                                label = "dayScale$i"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .scale(scale)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                    .border(
-                                        width = if (selected) 0.dp else 1.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant,
-                                        shape = CircleShape
-                                    )
-                                    .clickable {
-                                        selectedDays = if (selected) selectedDays - dayVal else selectedDays + dayVal
-                                    },
-                                contentAlignment = Alignment.Center
+                // ── Day Selector (Set Clock mode only — a one-off timer never repeats) ──
+                if (timePickMode == TimePickMode.Clock) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Repeat Days", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                    "Optional",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
                             }
                         }
-                    }
-                    // Weekday/weekend quick selects
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = setOf(2, 3, 4, 5, 6).all { it in selectedDays },
-                            onClick = {
-                                val weekdays = setOf(2, 3, 4, 5, 6)
-                                selectedDays = if (weekdays.all { it in selectedDays })
-                                    selectedDays - weekdays else selectedDays + weekdays
-                            },
-                            label = { Text("Weekdays", style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.height(30.dp)
-                        )
-                        FilterChip(
-                            selected = setOf(1, 7).all { it in selectedDays },
-                            onClick = {
-                                val weekend = setOf(1, 7)
-                                selectedDays = if (weekend.all { it in selectedDays })
-                                    selectedDays - weekend else selectedDays + weekend
-                            },
-                            label = { Text("Weekend", style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.height(30.dp)
-                        )
-                        if (selectedDays.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            DAY_VALUES.forEachIndexed { i, dayVal ->
+                                val label = DAY_LABELS[i]
+                                val selected = dayVal in selectedDays
+                                val scale by animateFloatAsState(
+                                    targetValue = if (selected) 1.08f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    label = "dayScale$i"
+                                )
+                                // The outer 40dp slot reserves fixed, un-scaled layout space; only
+                                // the inner 34dp circle scales on selection, so the bounce effect
+                                // never bleeds into a neighboring day button.
+                                Box(
+                                    modifier = Modifier.size(40.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .scale(scale)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                            .border(
+                                                width = if (selected) 0.dp else 1.dp,
+                                                color = MaterialTheme.colorScheme.outlineVariant,
+                                                shape = CircleShape
+                                            )
+                                            .clickable {
+                                                selectedDays = if (selected) selectedDays - dayVal else selectedDays + dayVal
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (selected) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        // Weekday/weekend quick selects
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
-                                selected = false,
-                                onClick = { selectedDays = emptySet() },
-                                label = { Text("Clear", style = MaterialTheme.typography.labelSmall) },
+                                selected = setOf(2, 3, 4, 5, 6).all { it in selectedDays },
+                                onClick = {
+                                    val weekdays = setOf(2, 3, 4, 5, 6)
+                                    selectedDays = if (weekdays.all { it in selectedDays })
+                                        selectedDays - weekdays else selectedDays + weekdays
+                                },
+                                label = { Text("Weekdays", style = MaterialTheme.typography.labelSmall) },
                                 modifier = Modifier.height(30.dp)
                             )
+                            FilterChip(
+                                selected = setOf(1, 7).all { it in selectedDays },
+                                onClick = {
+                                    val weekend = setOf(1, 7)
+                                    selectedDays = if (weekend.all { it in selectedDays })
+                                        selectedDays - weekend else selectedDays + weekend
+                                },
+                                label = { Text("Weekend", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.height(30.dp)
+                            )
+                            if (selectedDays.isNotEmpty()) {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { selectedDays = emptySet() },
+                                    label = { Text("Clear", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(30.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -737,24 +940,41 @@ private fun FakeCallAddSheet(
                     onClick = {
                         val finalName = displayName.ifBlank { phoneNumber.ifBlank { numberInput.text } }
                         val finalNumber = phoneNumber.ifBlank { numberInput.text }
-                        val entry = FakeCallEntry(
-                            id = UUID.randomUUID().toString(),
-                            displayName = finalName,
-                            phoneNumber = finalNumber,
-                            hour = hour,
-                            minute = minute,
-                            days = selectedDays,
-                            enabled = true
-                        )
-                        onSave(entry)
+
+                        if (timePickMode == TimePickMode.Timer) {
+                            val delayMillis = if (timerUnit == TimerUnit.Seconds) timerAmount * 1_000L else timerAmount * 60_000L
+                            val exactTriggerAt = System.currentTimeMillis() + delayMillis
+                            val targetCal = Calendar.getInstance().apply { timeInMillis = exactTriggerAt }
+                            val entry = FakeCallEntry(
+                                id = UUID.randomUUID().toString(),
+                                displayName = finalName,
+                                phoneNumber = finalNumber,
+                                hour = targetCal.get(Calendar.HOUR_OF_DAY),
+                                minute = targetCal.get(Calendar.MINUTE),
+                                days = emptySet(),
+                                enabled = true
+                            )
+                            onSave(entry, exactTriggerAt)
+                        } else {
+                            val entry = FakeCallEntry(
+                                id = UUID.randomUUID().toString(),
+                                displayName = finalName,
+                                phoneNumber = finalNumber,
+                                hour = hour,
+                                minute = minute,
+                                days = selectedDays,
+                                enabled = true
+                            )
+                            onSave(entry, null)
+                        }
                     },
                     enabled = canSave,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(50)
                 ) {
                     Icon(Icons.Default.Save, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Save Fake Call", fontWeight = FontWeight.SemiBold)
+                    Text("Save Fake Call", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
                 }
 
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {

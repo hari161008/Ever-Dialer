@@ -1139,6 +1139,15 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { navigator.navigate(CallSettingsScreenDestination) }
                             )
+                            CardDivider()
+                            RivoListItem(
+                                headline = "Fake Call",
+                                supporting = "Schedule fake incoming calls without calling the real person",
+                                leadingIcon = Icons.Outlined.PhoneCallback,
+                                iconContainerColor = ColorRed,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { navigator.navigate(FakeCallScreenDestination) }
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
