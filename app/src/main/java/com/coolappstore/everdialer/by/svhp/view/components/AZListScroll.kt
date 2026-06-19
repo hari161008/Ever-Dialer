@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,9 +43,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -273,6 +277,12 @@ private fun ContactListItem(
     var isPressed by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val fakeCallInContextMenu = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
+    var showFakeCallSheet by remember { mutableStateOf(false) }
+
     val scale by animateFloatAsState(
         targetValue = if (showMenu) 0.97f else if (isPressed) 0.97f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
@@ -307,6 +317,19 @@ private fun ContactListItem(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showFakeCallSheet) {
+        FakeCallAddSheet(
+            mode = AddMode.Number,
+            initialNumber = contact.phoneNumbers.firstOrNull() ?: "",
+            initialDisplayName = headline,
+            onDismiss = { showFakeCallSheet = false },
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
+                showFakeCallSheet = false
             }
         )
     }
@@ -470,6 +493,17 @@ private fun ContactListItem(
                     contactsVM.toggleFavorite(contact)
                 }
             )
+            if (fakeCallInContextMenu) {
+                RivoDropdownMenuItem(
+                    text     = "Fake Call",
+                    icon     = Icons.Outlined.PhoneCallback,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick  = {
+                        showMenu = false
+                        showFakeCallSheet = true
+                    }
+                )
+            }
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)

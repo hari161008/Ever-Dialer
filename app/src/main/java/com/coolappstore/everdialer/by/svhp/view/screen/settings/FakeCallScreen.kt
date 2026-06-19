@@ -11,6 +11,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.data.FakeCallEntry
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -76,6 +78,13 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
 
     // FAB mini-menu visibility
     var fabExpanded by remember { mutableStateOf(false) }
+
+    // Top-bar overflow menu ("Fake call in Context menu" toggle)
+    var showOverflowMenu by remember { mutableStateOf(false) }
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val fakeCallInContextMenu = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
 
     // Add sheet state
     var showAddSheet by remember { mutableStateOf(false) }
@@ -109,6 +118,22 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
                 navigationIcon = {
                     IconButton(onClick = { navigator.navigateUp() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        }
+                        RivoDropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                            FakeCallMenuCheckboxItem(
+                                text = "Fake call in Context menu",
+                                checked = fakeCallInContextMenu,
+                                onCheckedChange = { checked ->
+                                    prefs.setBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, checked)
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -224,15 +249,52 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // Scrim for fab menu
+            // Tap-outside catcher for the fab menu — no dimming, just lets you tap away to close it
             if (fabExpanded) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.32f))
-                        .clickable { fabExpanded = false }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { fabExpanded = false }
                 )
             }
+        }
+    }
+}
+
+// ─── Overflow Menu Checkbox Item ───────────────────────────────────────────────
+
+@Composable
+private fun FakeCallMenuCheckboxItem(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(
+        onClick = { onCheckedChange(!checked) },
+        color = Color.Transparent,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Checkbox(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -245,6 +307,19 @@ private fun FabMiniItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
+    // The parent AnimatedVisibility scale/fade-in transform clips elevation shadows while it's
+    // mid-animation, so the pill's shadow is ramped in afterwards — smooth and clearly visible.
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(180)
+        settled = true
+    }
+    val labelShadow by animateDpAsState(
+        targetValue = if (settled) 4.dp else 0.dp,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "fabMiniLabelShadow"
+    )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -253,7 +328,7 @@ private fun FabMiniItem(
         Surface(
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shadowElevation = 4.dp,
+            shadowElevation = labelShadow,
             modifier = Modifier.clickable(onClick = onClick)
         ) {
             Text(
@@ -463,17 +538,21 @@ private enum class TimerUnit { Seconds, Minutes }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FakeCallAddSheet(
+fun FakeCallAddSheet(
     mode: AddMode,
     onDismiss: () -> Unit,
-    onSave: (FakeCallEntry, Long?) -> Unit
+    onSave: (FakeCallEntry, Long?) -> Unit,
+    initialNumber: String = "",
+    initialDisplayName: String = ""
 ) {
     val context = LocalContext.current
 
     // Contact/number state
-    var displayName by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
-    var numberInput by remember { mutableStateOf(TextFieldValue("")) }
+    var displayName by remember {
+        mutableStateOf(initialDisplayName.ifBlank { if (mode == AddMode.Number) initialNumber else "" })
+    }
+    var phoneNumber by remember { mutableStateOf(initialNumber) }
+    var numberInput by remember { mutableStateOf(TextFieldValue(initialNumber)) }
 
     // Time state
     val cal = remember { Calendar.getInstance() }

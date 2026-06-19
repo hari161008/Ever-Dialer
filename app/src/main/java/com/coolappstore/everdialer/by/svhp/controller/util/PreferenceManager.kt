@@ -53,6 +53,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SHOW_PICTURE          = "show_picture"
         const val KEY_ICON_ONLY_NAV         = "icon_only_nav"
         const val KEY_DTMF_TONE             = "dtmf_tone"
+        const val KEY_DIALPAD_TONE_STYLE    = "dialpad_tone_style" // "standard" | "piano" | "water_drop" | "mechanical" | "scifi"
         const val KEY_DIALPAD_VIBRATION     = "dialpad_vibration"
         const val KEY_SPEED_DIAL            = "speed_dial"
         const val KEY_T9_DIALING            = "t9_dialing"
@@ -128,5 +129,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DOWNLOADED_UPDATE_VERSION = "downloaded_update_version"
         // Fake Call — JSON-encoded list of scheduled fake calls
         const val KEY_FAKE_CALLS                = "fake_calls"
+        // Fake Call — show a "Fake Call" entry in the dialpad's long-press context menu
+        const val KEY_FAKE_CALL_IN_CONTEXT_MENU = "fake_call_in_context_menu"
     }
 }

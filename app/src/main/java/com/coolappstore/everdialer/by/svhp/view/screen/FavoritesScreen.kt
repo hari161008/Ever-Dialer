@@ -47,6 +47,7 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithSimPreference
@@ -58,6 +59,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoScrollAnimatedIte
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollHapticsGridEffect
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.material3.Checkbox
@@ -80,6 +83,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.ramcosta.composedestinations.annotation.Destination
@@ -456,6 +460,13 @@ private fun FavoriteContactCard(
     var isDraggingLocally by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val fakeCallInContextMenu = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
+    var showFakeCallSheet by remember { mutableStateOf(false) }
+
     val scale by animateFloatAsState(
         targetValue = when {
             isDragging -> 1.08f
@@ -672,6 +683,17 @@ private fun FavoriteContactCard(
                 navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
             }
         )
+        if (fakeCallInContextMenu) {
+            RivoDropdownMenuItem(
+                text = "Fake Call",
+                icon = Icons.Outlined.PhoneCallback,
+                iconTint = MaterialTheme.colorScheme.primary,
+                onClick = {
+                    showMenu = false
+                    showFakeCallSheet = true
+                }
+            )
+        }
         HorizontalDivider(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -684,6 +706,19 @@ private fun FavoriteContactCard(
             onClick = {
                 showMenu = false
                 contactsVM.toggleFavorite(contact)
+            }
+        )
+    }
+
+    if (showFakeCallSheet) {
+        FakeCallAddSheet(
+            mode = AddMode.Number,
+            initialNumber = contact.phoneNumbers.firstOrNull() ?: "",
+            initialDisplayName = contact.name,
+            onDismiss = { showFakeCallSheet = false },
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
+                showFakeCallSheet = false
             }
         )
     }

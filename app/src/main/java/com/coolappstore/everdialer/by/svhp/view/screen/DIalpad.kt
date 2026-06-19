@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.graphics.Color
@@ -58,6 +60,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
+import com.coolappstore.everdialer.by.svhp.controller.util.DialpadToneStyle
+import com.coolappstore.everdialer.by.svhp.controller.util.DialpadTonePlayer
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
@@ -66,6 +71,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.SingleTile
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.TileGroup
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -161,6 +168,12 @@ fun DialPadContent(
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
     var pendingSearchCallNumber by remember { mutableStateOf<String?>(null) }
 
+    // "Fake Call" entry in the long-press context menu (toggled from the Fake Call screen)
+    val fakeCallInContextMenu = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
+    var showFakeCallSheet by remember { mutableStateOf(false) }
+
     // Helper: place a call respecting the default SIM preference
     fun placeCallWithSimPreference(num: String) {
         val accounts = telecomManager.callCapablePhoneAccounts
@@ -180,7 +193,7 @@ fun DialPadContent(
     }
 
     val clipText = remember {
-        clipboard.getText()?.text?.filter { it.isDigit() || it == '+' } ?: ""
+        clipboard.getText()?.text?.filter { it.isDigit() || it == '+' || it == '*' || it == '#' } ?: ""
     }
     var showClipboardBanner by remember { mutableStateOf(clipText.length in 7..15) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -239,47 +252,42 @@ fun DialPadContent(
         }
     }
 
-    fun initiateCall(num: String) {
-        val cleanNum = num.trim()
-        if (cleanNum.isEmpty() || cleanNum == "Unknown") return
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-            val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-            if (hasPhoneState) {
-                placeCallWithSimPreference(cleanNum)
-            } else makeCall(context, cleanNum)
-        } else {
-            pendingSearchCallNumber = cleanNum
-            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
-        }
-    }
-
     // Auto-process Android hidden/secret codes and MMI codes as the user types
     fun processSecretCodeIfNeeded(input: String): Boolean {
         val code = input.trim()
-        if (code.length < 5) return false
+        if (code.length < 3) return false
 
-        // ── Pattern 1: *#*#DIGITS#*#*  (Android secret activity codes) ───────
+        // ── Pattern 1: *#*#DIGITS#*#*  (Android secret activity codes, e.g. testing menu) ──
         // These end with #*#* so a plain endsWith("#") check misses them entirely
         val secretMatch = Regex("^\\*#\\*#(\\d+)#\\*#\\*$").find(code)
         if (secretMatch != null) {
             val digits = secretMatch.groupValues[1]
-            val uri = android.net.Uri.parse("android_secret_code://$digits")
             try {
-                // Legacy broadcast (pre-Android O / API 25)
-                context.sendBroadcast(
-                    Intent("android.provider.Telephony.SECRET_CODE", uri).apply {
-                        addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-                    }
-                )
-                // Modern broadcast (Android O+ / API 26+)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                // The officially documented way for a default-dialer app to trigger these codes.
+                // Manually broadcasting "android.provider.Telephony.SECRET_CODE" ourselves is
+                // unreliable on Android 8+ — background-broadcast restrictions silently drop it
+                // unless the app is privileged. sendDialerSpecialCode() is the real entry point
+                // AOSP's own Dialer/Phone app calls internally, and it works correctly as long as
+                // this app is set as the default dialer.
+                val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+                telephonyManager?.sendDialerSpecialCode(digits)
+            } catch (_: Exception) {
+                // Fallback for devices/OEMs where sendDialerSpecialCode isn't wired up —
+                // some ROMs still listen for the classic broadcasts directly.
+                val uri = android.net.Uri.parse("android_secret_code://$digits")
+                try {
+                    context.sendBroadcast(
+                        Intent("android.provider.Telephony.SECRET_CODE", uri).apply {
+                            addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                        }
+                    )
                     context.sendBroadcast(
                         Intent("android.telephony.action.SECRET_CODE", uri).apply {
                             addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
                         }
                     )
-                }
-            } catch (_: Exception) {}
+                } catch (_: Exception) {}
+            }
             return true
         }
 
@@ -309,6 +317,27 @@ fun DialPadContent(
         } catch (_: Exception) { false }
     }
 
+    fun initiateCall(num: String) {
+        val cleanNum = num.trim()
+        if (cleanNum.isEmpty() || cleanNum == "Unknown") return
+        // MMI/USSD codes (*#06#, *#*#4636#*#*, *21*1234#, ##002#, etc.) must go through the
+        // dialer's special-code handling (ACTION_CALL with the raw code) — TelecomManager's
+        // placeCall() is for real voice calls only and silently swallows these.
+        if (processSecretCodeIfNeeded(cleanNum)) {
+            number = ""
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+            if (hasPhoneState) {
+                placeCallWithSimPreference(cleanNum)
+            } else makeCall(context, cleanNum)
+        } else {
+            pendingSearchCallNumber = cleanNum
+            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
+        }
+    }
+
     if (showSimPicker) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
@@ -316,6 +345,18 @@ fun DialPadContent(
                 makeCall(context, pendingSearchCallNumber ?: number, handle)
                 pendingSearchCallNumber = null
                 showSimPicker = false
+            }
+        )
+    }
+
+    if (showFakeCallSheet) {
+        FakeCallAddSheet(
+            mode = AddMode.Number,
+            initialNumber = number,
+            onDismiss = { showFakeCallSheet = false },
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
+                showFakeCallSheet = false
             }
         )
     }
@@ -495,19 +536,11 @@ fun DialPadContent(
                             modifier = Modifier.width(96.dp).height(64.dp),
                             isLarge = true
                         )
-                        FadeScaleBox(visible = number.isNotEmpty()) {
-                            DialerActionExpressive(
-                                onLongClick = {
-                                    number = ""
-                                },
-                                onClick = {
-                                    number = number.dropLast(1)
-                                },
-                                icon = Icons.Default.Backspace,
-                                contentDescription = "Backspace",
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        }
+                        BackspaceActionButton(
+                            number = number,
+                            onBackspace = { number = number.dropLast(1) },
+                            onClear = { number = "" }
+                        )
                     }
                 }
             }
@@ -787,7 +820,7 @@ fun DialPadContent(
                                 )
                             }
                             val pasteText = clipboard.getText()?.text
-                                ?.filter { it.isDigit() || it == '+' } ?: ""
+                                ?.filter { it.isDigit() || it == '+' || it == '*' || it == '#' } ?: ""
                             if (pasteText.isNotEmpty()) {
                                 RivoDropdownMenuItem(
                                     text     = "Paste",
@@ -799,10 +832,22 @@ fun DialPadContent(
                                     }
                                 )
                             }
+                            if (fakeCallInContextMenu) {
+                                RivoDropdownMenuItem(
+                                    text     = "Fake Call",
+                                    icon     = Icons.Outlined.PhoneCallback,
+                                    iconTint = MaterialTheme.colorScheme.primary,
+                                    onClick  = {
+                                        showOverflowMenu = false
+                                        showFakeCallSheet = true
+                                    }
+                                )
+                            }
 
                         }
                     }
                 }
+
 
                 // Dialpad keys
                 val keys = listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("*","0","#"))
@@ -882,16 +927,12 @@ fun DialPadContent(
                         blurEnabled = blurDialpadEnabled
                     )
 
-                    FadeScaleBox(visible = number.isNotEmpty()) {
-                        DialerActionExpressive(
-                            onLongClick = { number = "" },
-                            onClick = { number = number.dropLast(1) },
-                            icon = Icons.Default.Backspace,
-                            contentDescription = "Backspace",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.size(actionSize)
-                        )
-                    }
+                    BackspaceActionButton(
+                        number = number,
+                        onBackspace = { number = number.dropLast(1) },
+                        onClear = { number = "" },
+                        size = actionSize
+                    )
                 }
             }
         }
@@ -1039,7 +1080,7 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool)
+            if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
             onClick(number)
         },
         modifier = Modifier.size(width = keyWidth, height = keyHeight).scale(scale),
@@ -1177,27 +1218,9 @@ private fun buildDtmfSoundPool(context: Context): SoundPool {
     return SoundPool.Builder().setMaxStreams(1).setAudioAttributes(attributes).build()
 }
 
-private fun playDtmf(context: Context, key: String, soundPool: SoundPool) {
-    val toneType = when (key) {
-        "0" -> android.media.ToneGenerator.TONE_DTMF_0
-        "1" -> android.media.ToneGenerator.TONE_DTMF_1
-        "2" -> android.media.ToneGenerator.TONE_DTMF_2
-        "3" -> android.media.ToneGenerator.TONE_DTMF_3
-        "4" -> android.media.ToneGenerator.TONE_DTMF_4
-        "5" -> android.media.ToneGenerator.TONE_DTMF_5
-        "6" -> android.media.ToneGenerator.TONE_DTMF_6
-        "7" -> android.media.ToneGenerator.TONE_DTMF_7
-        "8" -> android.media.ToneGenerator.TONE_DTMF_8
-        "9" -> android.media.ToneGenerator.TONE_DTMF_9
-        "*" -> android.media.ToneGenerator.TONE_DTMF_S
-        "#" -> android.media.ToneGenerator.TONE_DTMF_P
-        else -> return
-    }
-    try {
-        val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_DTMF, 80)
-        toneGen.startTone(toneType, 150)
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 200)
-    } catch (_: Exception) {}
+private fun playDtmf(context: Context, key: String, soundPool: SoundPool, prefs: PreferenceManager) {
+    val style = DialpadToneStyle.fromKey(prefs.getString(PreferenceManager.KEY_DIALPAD_TONE_STYLE, DialpadToneStyle.STANDARD.key))
+    DialpadTonePlayer.play(context, key, style)
 }
 
 @Composable
@@ -1206,5 +1229,40 @@ private fun FadeScaleBox(visible: Boolean, content: @Composable () -> Unit) {
         AnimatedVisibility(visible = visible, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
             content()
         }
+    }
+}
+
+/**
+ * A backspace button that — unlike [FadeScaleBox]-wrapped actions — stays in the composition at
+ * all times. [FadeScaleBox] fully removes/re-adds its content via AnimatedVisibility, which means
+ * a tap that lands during the fade-out/fade-in transition (e.g. while rapidly deleting digits)
+ * can be dropped because the hit target is mid-animation-out of the tree. Here the button is
+ * always present and always hit-testable; only its visual alpha/scale animate, and the action
+ * itself is simply a no-op once the number is empty — so every tap reliably registers.
+ */
+@Composable
+private fun BackspaceActionButton(
+    number: String,
+    onBackspace: () -> Unit,
+    onClear: () -> Unit,
+    size: Dp = 64.dp
+) {
+    val hasContent = number.isNotEmpty()
+    val alpha by animateFloatAsState(if (hasContent) 1f else 0f, label = "BackspaceAlpha")
+    val scale by animateFloatAsState(if (hasContent) 1f else 0.7f, label = "BackspaceScale")
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .graphicsLayer { this.alpha = alpha; scaleX = scale; scaleY = scale },
+        contentAlignment = Alignment.Center
+    ) {
+        DialerActionExpressive(
+            onLongClick = { if (hasContent) onClear() },
+            onClick = { if (hasContent) onBackspace() },
+            icon = Icons.Default.Backspace,
+            contentDescription = "Backspace",
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(size)
+        )
     }
 }

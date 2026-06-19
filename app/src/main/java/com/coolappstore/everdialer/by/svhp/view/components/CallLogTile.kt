@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.*
@@ -24,8 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
+import org.koin.compose.koinInject
 
 @Composable
 fun CallLogTileSimple(log: CallLogEntry) {
@@ -63,6 +69,13 @@ fun CallLogTile(
     val context   = LocalContext.current
     val isContact = log.name != null && log.name != log.number
     var showMenu  by remember { mutableStateOf(false) }
+
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val fakeCallInContextMenu = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
+    var showFakeCallSheet by remember { mutableStateOf(false) }
 
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(
@@ -163,6 +176,17 @@ fun CallLogTile(
                     Toast.makeText(context, "Number blocked", Toast.LENGTH_SHORT).show()
                 }
             )
+            if (fakeCallInContextMenu) {
+                RivoDropdownMenuItem(
+                    text     = "Fake Call",
+                    icon     = Icons.Outlined.PhoneCallback,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick  = {
+                        showMenu = false
+                        showFakeCallSheet = true
+                    }
+                )
+            }
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -189,5 +213,18 @@ fun CallLogTile(
             )
         }
         }
+    }
+
+    if (showFakeCallSheet) {
+        FakeCallAddSheet(
+            mode = AddMode.Number,
+            initialNumber = log.number,
+            initialDisplayName = log.name ?: log.number,
+            onDismiss = { showFakeCallSheet = false },
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
+                showFakeCallSheet = false
+            }
+        )
     }
 }
