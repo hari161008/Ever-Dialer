@@ -12,6 +12,7 @@ import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import androidx.core.app.NotificationCompat
+import com.coolappstore.everdialer.by.svhp.MainActivity
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
@@ -32,10 +33,95 @@ class CallService : InCallService() {
     private val contactsRepository: IContactsRepository by inject()
     private val prefs: PreferenceManager by inject()
 
+    // ── Missed call notifications ───────────────────────────────────────────
+    // Since Android 7.0 the default dialer is solely responsible for posting
+    // missed-call notifications — Telecom no longer does this for us — so we
+    // track each incoming call and notify if it's never answered.
+    private data class IncomingCallInfo(var wasAnswered: Boolean = false)
+    private val incomingCallTracking = mutableMapOf<Call, IncomingCallInfo>()
+
+    private fun trackIncomingCallState(call: Call, state: Int) {
+        val info = incomingCallTracking[call] ?: return
+        when (state) {
+            Call.STATE_ACTIVE -> info.wasAnswered = true
+            Call.STATE_DISCONNECTED -> {
+                incomingCallTracking.remove(call)
+                if (!info.wasAnswered) {
+                    val cause = try { call.details?.disconnectCause?.code } catch (_: Exception) { null }
+                    if (cause != android.telecom.DisconnectCause.REJECTED) {
+                        showMissedCallNotification(call)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showMissedCallNotification(call: Call) {
+        try {
+            val number = call.details?.handle?.schemeSpecificPart ?: ""
+            val contact = if (number.isNotEmpty()) try { contactsRepository.getContactByNumber(number) } catch (_: Exception) { null } else null
+            val displayName = contact?.name ?: number.ifEmpty { "Unknown" }
+
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(
+                    NotificationChannel(MISSED_CHANNEL_ID, "Missed Calls", NotificationManager.IMPORTANCE_HIGH).apply {
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        enableVibration(true)
+                    }
+                )
+            }
+
+            val contentIntent = PendingIntent.getActivity(
+                this,
+                number.hashCode(),
+                Intent(this, MainActivity::class.java).apply {
+                    action = "com.coolappstore.everdialer.OPEN_RECENTS"
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = NotificationCompat.Builder(this, MISSED_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_phone_call)
+                .setContentTitle("Missed call")
+                .setContentText(displayName)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
+                .setWhen(System.currentTimeMillis())
+
+            if (number.isNotEmpty()) {
+                val callBackIntent = PendingIntent.getActivity(
+                    this,
+                    number.hashCode() + 1,
+                    Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:$number")),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    NotificationCompat.Action.Builder(android.R.drawable.sym_action_call, "Call back", callBackIntent).build()
+                )
+            }
+
+            nm.notify(MISSED_CALL_BASE_ID + (number.hashCode() and 0xFFFF), builder.build())
+        } catch (_: Exception) {}
+    }
+
     companion object {
         private const val CHANNEL_ID = "call_channel"
         private const val CHANNEL_INCOMING_ID = "call_incoming_channel"
         private const val NOTIFICATION_ID = 101
+        private const val MISSED_CHANNEL_ID = "missed_call_channel"
+        private const val MISSED_CALL_BASE_ID = 2000
+
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+
+        /** True if [call] is a self-managed call placed/received by WhatsApp. */
+        private fun isWhatsAppCall(call: Call): Boolean {
+            val pkg = call.details?.accountHandle?.componentName?.packageName ?: return false
+            return pkg in WHATSAPP_PACKAGES
+        }
 
         private val _currentCallSession = MutableStateFlow<CallSession?>(null)
         val currentCallSession = _currentCallSession.asStateFlow()
@@ -93,6 +179,7 @@ class CallService : InCallService() {
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
+            trackIncomingCallState(call, state)
 
             // "Add to call" flow — watch the outgoing 3rd-party call
             if (isAddingToCall && _currentCallSession.value?.call == call) {
@@ -165,6 +252,7 @@ class CallService : InCallService() {
     private val heldCallCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
+            trackIncomingCallState(call, state)
             _heldCallSession.value = CallSession(call, state)
             if (state == Call.STATE_DISCONNECTED) {
                 _heldCallSession.value = null
@@ -178,6 +266,15 @@ class CallService : InCallService() {
         super.onCallRemoved(call)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
+
+        // Safety net: if Telecom removed this call without ever delivering a
+        // STATE_DISCONNECTED callback to us, still check for a missed call.
+        incomingCallTracking.remove(call)?.let { info ->
+            if (!info.wasAnswered) {
+                val cause = try { call.details?.disconnectCause?.code } catch (_: Exception) { null }
+                if (cause != android.telecom.DisconnectCause.REJECTED) showMissedCallNotification(call)
+            }
+        }
 
         if (isMerging) {
             if (_currentCallSession.value?.call == call) _currentCallSession.value = null
@@ -263,6 +360,14 @@ class CallService : InCallService() {
         super.onCallAdded(call)
         instance = this
 
+        // WhatsApp registers its voice/video calls as a self-managed Telecom
+        // connection. Because this InCallService declares
+        // INCLUDE_SELF_MANAGED_CALLS, Telecom hands those calls to us too —
+        // but Ever Dialer must never touch them: no callback, no notification,
+        // no CallActivity, no missed-call alert. Bail out immediately so
+        // WhatsApp's own call UI is left completely alone.
+        if (isWhatsAppCall(call)) return
+
         val number = call.details.handle?.schemeSpecificPart ?: ""
 
         if (prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false) && number.isBlank()) {
@@ -270,6 +375,10 @@ class CallService : InCallService() {
         }
         if (number.isNotBlank() && isNumberBlocked(number)) {
             call.disconnect(); return
+        }
+
+        if (call.state == Call.STATE_RINGING) {
+            incomingCallTracking[call] = IncomingCallInfo()
         }
 
         if (isMerging) {

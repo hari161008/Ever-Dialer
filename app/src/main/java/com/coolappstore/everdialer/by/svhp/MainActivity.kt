@@ -555,6 +555,12 @@ class MainActivity : FragmentActivity() {
         val action = intent.action
 
         when (action) {
+            "com.coolappstore.everdialer.OPEN_RECENTS" -> {
+                navController.navigate(RecentScreenDestination.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                }
+            }
             Intent.ACTION_DIAL, Intent.ACTION_VIEW -> {
                 if (data?.scheme == "tel") {
                     val number = data.schemeSpecificPart
