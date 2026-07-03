@@ -1,0 +1,15 @@
+{
+  "uniqueId": "com.coolappstore.evercallrecorder.by.svhp",
+  "developers": [
+    {
+      "name": "Kitsumed",
+      "organisationUrl": "https://github.com/kitsumed"
+    }
+  ],
+  "description": "FOSS Call recording powered through Shizuku!",
+  "name": "ShizuCallRecorder",
+  "website": "https://github.com/kitsumed/ShizuCallRecorder",
+  "licenses": [
+    "shizucallrecorder-gpl-3.0"
+  ]
+}

@@ -1,0 +1,307 @@
+<!--
+  ~ ShizuCallRecorder: FOSS Call recording powered through ADB/Shizuku!
+  ~  Copyright (C) 2026-present kitsumed (Med)
+  ~  This software is licensed under the GNU General Public License v3 or later, with additional terms as permitted under Section 7.
+  ~  The full license text is available in the LICENSE file at the root of this project.
+  ~  This software is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  -->
+
+<resources>
+    <!-- ========================================== -->
+    <!-- GENERAL MESSAGES & APP LEVEL               -->
+    <!-- ========================================== -->
+    <string name="app_name" translatable="false">Ever Call Recorder</string>
+    <string name="general_close">Close</string>
+    <string name="general_continue">Continue</string>
+    <string name="general_ok">OK</string>
+    <string name="general_cancel">Cancel</string>
+    <string name="general_settings">Settings</string>
+    <string name="general_licenses">Licenses</string>
+    <string name="general_copied_to_clipboard">Copied to clipboard</string>
+    <string name="general_record">Record</string>
+    <string name="general_pause">Pause</string>
+    <string name="general_resume">Resume</string>
+    <string name="general_incoming">incoming</string>
+    <string name="general_outgoing">outgoing</string>
+    <string name="general_reset">Reset</string>
+    <string name="general_system_limitation">System Limitation</string>
+    <string name="general_system_limitation_message">Ever Call Recorder will not work on this device as your shell application does not have the required permissions:\n\n%1$s\n\nThere is nothing you can do about this, the app cannot function and will now close.</string>
+
+    <!-- ========================================== -->
+    <!-- UI SECTIONS                                -->
+    <!-- ========================================== -->
+
+    <!-- Disclaimer Screen -->
+    <string name="disclaimer_title">Welcome to Ever Call Recorder</string>
+    <string name="disclaimer_wiki_link_KEYWORD">Wiki</string>
+    <string name="disclaimer_introduction">Please open and read the setup instructions on our Wiki before proceeding. Then, read the disclaimer below.</string>
+    <string name="disclaimer_body" translatable="false">
+        By using this application, you confirm that you have read this disclaimer and acknowledge that this software is licensed under the GNU General Public License v3.0 with additional clauses under Section 7.\n\n
+
+        Copyright © 2026 Kitsumed (Med)\n\n
+
+        This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\n
+
+        This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.\n\n
+
+        You should have received a copy of the GNU General Public License along with this program. If not, see https://github.com/kitsumed/ShizuCallRecorder/blob/main/LICENSE/.\n\n
+
+        ----------------------Disclaimer---------------------------\n\n
+
+        Recording phone calls may be subject to complex and varying laws in different countries and jurisdictions. For example, you may need to ensure you have consent from all parties before recording conversations. The developers and contributors are not responsible for any misuse or legal consequences arising from the use of this application.\n
+        You can learn more on Wikipedia at:\n https://en.wikipedia.org/wiki/Telephone_call_recording_laws.\n\n
+
+        If you are legally required to inform or ask someone for consent before recording, please note that the application DOES NOT handle this for you.\n
+        In some cases, certain features, like automatic call recording, may not be legally allowed. It is your responsibility to ensure compliance with applicable laws. This is not legal advice. Please consult a legal professional for guidance regarding your specific situation.\n\n
+
+        APPLICATION BEHAVIOR\n
+        Due to the evolving Android ecosystem and varying hardware (OEMs), this software is subject to non-deterministic behavior:\n\n
+        * Concurrent Calls: The app may fail to detect transitions (e.g., while in a call, a second incoming call arrives, or switching between held calls). In these scenarios, the application may continue to record audio into a single continuous file without separate notifications or new notifications prompts for subsequent callers.\n\n
+        * Filter Logic Limitations: Due to Android privacy-driven restrictions on real-time phone number access, the app relies on fetching a deprecated value when it receives a phone state updates. We are not aware of other rational workaround for standard apps (alternatives are restrictive or incompatible). This initial check is used to decide whether to automatically record based on your settings. In cases where we receive the value too late, receive invalid data, or receive no data, the application is likely to consider the call as anonymous in its decision process. This should not affect the final file name since we can read the device call logs after the call ended.\n\n
+        * Unforeseen Failures: Future OS updates, bugs, design choices in the app, or undocumented system behaviors may cause the app to start and/or continue recording, or fail, in a unexpected manner.\n\n
+
+        USER AWARENESS\n
+        Because deterministic behavior in the application cannot be guaranteed, it is your responsibility to:\n\n
+        1. Ensure the recording behavior and your application settings aligns with your intent and the specific requirements in your jurisdiction.\n\n
+        2. Monitor the app behavior on your specific device. If you observe any behavior that does not comply with your local laws, you must immediately cease any activity that constitutes a legal infraction (For example, hanging up the call, deleting the audio files, etc).
+    </string>
+    <string name="disclaimer_checkbox_label">I have read the disclaimer and understand the legal requirements, responsibilities, and technical limitations of this software.</string>
+    <string name="disclaimer_wait">Wait %1$ds</string>
+    <string name="disclaimer_must_read">You must read the disclaimer.</string>
+
+    <!-- Permissions Screen -->
+    <string name="permissions_title">Permissions Setup</string>
+    <string name="permissions_intro">We need a few permissions to start recoding. Tap "Grant Access" and approve each item.</string>
+    <string name="permissions_grant_access">Grant Access</string>
+    <string name="permissions_status_granted">Granted</string>
+    <string name="permissions_status_required">Required</string>
+
+    <string name="permission_notifications_label">Notifications</string>
+    <string name="permission_notifications_description">Used for recording status and error alerts.</string>
+
+    <string name="permission_contacts_label">Contacts</string>
+    <string name="permission_contacts_description">Used to filter known contacts for ignore rules.</string>
+
+    <string name="permission_phone_state_label">Phone State</string>
+    <string name="permission_phone_state_description">Required to detect when a call starts or ends.</string>
+
+    <string name="permission_call_log_label">Call Log</string>
+    <string name="permission_call_log_description">Required so we receive the unredacted phone number on phone state events.</string>
+
+    <string name="permission_battery_label">Battery Optimization</string>
+    <string name="permission_battery_description">Keeps the app alive when it needs and allow to bypass possible background startup limitations.</string>
+
+    <!-- Same label as settings_recording_folder_label -->
+    <string name="permission_storage_description">Select where recordings will be saved.</string>
+
+    <string name="permission_shizuku_label" translatable="false">Shizuku</string>
+    <string name="permission_shizuku_description">Required to start the audio recording (ShellService) with scrcpy.</string>
+    <string name="permission_shizuku_not_running">Not running</string>
+    <string name="permission_shizuku_open">Open Shizuku</string>
+
+    <!-- Settings Screen: Section Titles -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_section_recording">Recording</string>
+    <string name="settings_section_visual">Visual settings</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_language">Languages</string>
+    <string name="settings_section_audio">Audio configuration</string>
+    <string name="settings_section_debug">Debug Options</string>
+    <string name="settings_section_security">Security</string>
+    <string name="settings_section_updates">Updates</string>
+    <string name="settings_updates_check">Check for Updates</string>
+    <string name="settings_updates_up_to_date">App is up to date</string>
+    <string name="settings_updates_description">Check for the latest version on GitHub</string>
+    <!-- Record on Answer -->
+    <string name="settings_record_on_answer">Record when Call is Answered</string>
+    <string name="settings_record_on_answer_desc">Start recording only after the call is answered</string>
+    <!-- Accent Color -->
+    <string name="settings_accent_color">Accent Color</string>
+    <string name="settings_accent_color_hex">Hex Code</string>
+
+    <!-- Settings Screen: Security Section -->
+    <string name="settings_shizuku_auto_manage">Manage Shizuku</string>
+    <string name="settings_shizuku_auto_manage_desc">Automatically start and stop Shizuku</string>
+    <string name="settings_shizuku_auth_key">Shizuku Intents Auth Key</string>
+    <string name="settings_shizuku_start_on_record">Start only when recording</string>
+    <string name="settings_shizuku_start_on_record_desc">Shizuku will only start when you press record or an auto-recording rule matches</string>
+    <string name="settings_shizuku_keep_alive">Keep Shizuku alive</string>
+    <string name="settings_shizuku_keep_alive_desc">Do not send the stop intent</string>
+
+    <!-- Settings Screen: Recording Section -->
+    <string name="settings_tap_to_select_folder">Tap to choose storage…</string>
+    <string name="settings_recording_folder_label">Recording Storage</string>
+    <string name="storage_mode_private_label">Private app storage</string>
+
+    <!-- Storage location choice popup (shown on first-time setup and from Settings) -->
+    <string name="storage_choice_title">Choose Recording Storage</string>
+    <string name="storage_choice_description">Pick where your call recordings should be saved. You can change this anytime in Settings.</string>
+    <string name="storage_choice_folder_title">Choose a Folder</string>
+    <string name="storage_choice_folder_description">Pick a folder on your device. Recordings can be browsed and shared with any file manager.</string>
+    <string name="storage_choice_private_title">Save Privately In-App</string>
+    <string name="storage_choice_private_description">Recordings stay inside Ever Call Recorder\'s own private storage, for extra privacy. Only this app can access them.</string>
+
+    <string name="settings_file_name_template">File Name Template</string>
+    <string name="settings_file_name_template_placeholders">Placeholders:</string>
+    <string name="settings_file_name_template_placeholders_preview">Preview: %1$s</string>
+    <string name="placeholder_date_desc">The current date and time</string>
+    <string name="placeholder_direction_desc">The call direction (in/out)</string>
+    <string name="placeholder_phone_number_desc">The phone number</string>
+    <string name="placeholder_contact_name_desc">The contact name, if available</string>
+    <string name="placeholder_cross_country_desc">Indicates if the call is cross-country (true/false)</string>
+    <string name="placeholder_app_source_desc">The originating app (e.g. WhatsApp), empty for normal calls</string>
+
+    <!-- Settings Screen: Record calls from apps -->
+    <string name="settings_app_call_recording_label">Record calls from apps</string>
+    <string name="settings_app_call_recording_off">Off</string>
+    <string name="settings_app_call_recording_dialog_title">Record Calls From Apps</string>
+    <string name="settings_app_call_recording_dialog_description">Automatically record voice and video calls placed through the apps below, using the same privileged audio capture mechanism this app already uses for normal calls.</string>
+    <string name="settings_app_call_recording_permission_title">Notification access required</string>
+    <string name="settings_app_call_recording_permission_description">To detect when a call starts in these apps, Ever Call Recorder needs permission to read notifications.</string>
+    <string name="settings_app_call_recording_grant_access">Grant Access</string>
+    <string name="settings_app_call_recording_access_granted">Notification access granted</string>
+    <string name="app_call_target_whatsapp" translatable="false">WhatsApp</string>
+    <string name="app_call_target_telegram" translatable="false">Telegram</string>
+    <string name="recording_notification_via_app">Recording call via %1$s</string>
+    <string name="settings_app_call_recording_unavailable_message">This feature doesn\'t work right now</string>
+
+    <string name="settings_auto_record_incoming">Automatically record incoming calls</string>
+    <string name="settings_auto_record_outgoing">Automatically record outgoing calls</string>
+    <string name="settings_ignore_anonymous_incoming">Ignore anonymous incoming calls</string>
+    <string name="settings_ignore_cross_country_incoming">Ignore cross-country incoming calls</string>
+    <string name="settings_ignore_cross_country_outgoing">Ignore cross-country outgoing calls</string>
+    <string name="settings_ignore_contacts_incoming">Ignore contacts (incoming)</string>
+    <string name="settings_ignore_contacts_outgoing">Ignore contacts (outgoing)</string>
+    <string name="settings_ignore_contacts_none">Record all contacts</string>
+    <string name="settings_ignore_contacts_all">Ignore all contacts</string>
+    <string name="settings_ignore_contacts_selected">Ignore selected contacts</string>
+    <string name="settings_select_contacts">Select contacts (%1$d)</string>
+    <string name="settings_select_contacts_incoming">Select incoming contacts</string>
+    <string name="settings_select_contacts_outgoing">Select outgoing contacts</string>
+
+    <!-- Settings Screen: Visual Section -->
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System Default</string>
+    <string name="settings_theme_mode">Theme mode</string>
+    <string name="settings_dynamic_color">Dynamic Theme Color</string>
+    <string name="settings_show_toasts">Show Toast Notifications</string>
+    <string name="settings_vibration_enabled">Vibrate on start/stop</string>
+
+    <string name="settings_theme_mode_system">System default</string>
+    <string name="settings_theme_mode_light">Light</string>
+    <string name="settings_theme_mode_dark">Dark</string>
+    <string name="settings_theme_mode_white">White</string>
+    <string name="settings_theme_mode_black">Black</string>
+    <string name="settings_theme_mode_auto_wb">Auto W/B</string>
+
+    <!-- Settings Screen: Audio Section -->
+    <string name="settings_audio_codec">Audio codec</string>
+    <string name="settings_audio_bitrate_recommendation">If you have difficulties, try AAC, it is widely supported by OEMs.</string>
+    <string name="audio_codec_opus" translatable="false">Opus</string>
+    <string name="audio_codec_aac" translatable="false">AAC</string>
+
+    <string name="settings_audio_bitrate">Audio bit rate</string>
+    <string name="audio_bitrate_kbps" translatable="false">%1$d kbps</string>
+
+    <string name="settings_audio_source">Audio source</string>
+    <string name="audio_source_voice_comm" translatable="false">Voice communication mic</string>
+    <string name="audio_source_voice_comm_description">Microphone audio source tuned for voice communications. Built-in echo cancellation.</string>
+
+    <string name="audio_source_mic" translatable="false">Standard microphone</string>
+    <string name="audio_source_mic_description">Captures audio directly from the device main microphone. Minor noise reduction.</string>
+
+    <string name="audio_source_voice_call" translatable="false">Voice call</string>
+    <string name="audio_source_voice_call_description">Records both sides of a phone calls. The raw audio, with phone tones.</string>
+
+    <string name="audio_source_playback" translatable="false">Audio playback</string>
+    <string name="audio_source_playback_description">Capture audio from other apps, except those that restrict recording (respects app opt-out flags).</string>
+
+    <string name="audio_source_output" translatable="false">Audio output (remote submix)</string>
+    <string name="audio_source_output_description">Captures the final, combined audio exactly as it is sent to your speakers.</string>
+
+    <string name="audio_source_mic_unprocessed" translatable="false">Unprocessed mic</string>
+    <string name="audio_source_mic_unprocessed_description">Captures raw, natural microphone audio without any automatic filtering or enhancement.</string>
+
+    <string name="audio_source_mic_camcorder" translatable="false">Camcorder mic</string>
+    <string name="audio_source_mic_camcorder_description">Tuned for video recording, focusing on audio from the direction of the camera.</string>
+
+    <string name="audio_source_mic_voice_recognition" translatable="false">Voice recognition mic</string>
+    <string name="audio_source_mic_voice_recognition_description">Microphone with processing tuned for speech recognition (reduced noise).</string>
+
+    <string name="audio_source_voice_call_uplink" translatable="false">Voice call uplink</string>
+    <string name="audio_source_voice_call_uplink_description">Records only your side of a phone call (uplink).</string>
+
+    <string name="audio_source_voice_call_downlink" translatable="false">Voice call downlink</string>
+    <string name="audio_source_voice_call_downlink_description">Records only the other person side of a phone call (downlink).</string>
+
+    <string name="audio_source_voice_performance" translatable="false">Voice performance</string>
+    <string name="audio_source_voice_performance_description">High-speed microphone mode designed for live music and real-time audio apps.</string>
+
+    <!-- Settings Screen: Debug Section -->
+    <string name="settings_debug_logging_enabled">Enable log recording</string>
+    <string name="settings_debug_logging_enabled_description">To report a bug, enable this, restart the app, and reproduce the issue.</string>
+    <string name="settings_debug_logging_title">Bug Reporting Steps</string>
+    <string name="settings_debug_logging_steps">
+        1. Check if your issue has already been reported on GitHub, if not, continue.\n
+        2. Reproduce the bug while keeping log recording enabled.\n
+        3. Press Generate Report below to save the logs to your phone.\n
+        4. Press Report on GitHub to open a new issue, fill up the fields, and attach the log file.
+    </string>
+    <string name="settings_debug_logging_step_warning">Please review the generated file for sensitive info before sharing. Disable log recording once done.</string>
+    <string name="settings_debug_logging_step_warning_no_redaction">⚠️ Debug Mode is ON. Log redaction is disabled.</string>
+    <string name="settings_debug_logging_generate_report">Generate Report</string>
+    <string name="settings_debug_logging_report_on_github">Report on GitHub</string>
+    <string name="settings_debug_mode">Enable debug mode</string>
+    <string name="settings_debug_mode_description">Show developers options, disable log redaction.</string>
+    <string name="settings_debug_caller_number">Debug phone number</string>
+    <string name="settings_debug_action_ringing" translatable="false">Ringing</string>
+    <string name="settings_debug_action_offhook" translatable="false">Off Hook</string>
+    <string name="settings_debug_action_idle" translatable="false">Idle / End</string>
+
+    <!-- Settings Screen: About/Server Section -->
+    <string name="settings_copy_version">Copy Version</string>
+    <string name="settings_view_licenses">View Licenses</string>
+    <string name="settings_scrcpy_server" translatable="false">Scrcpy-Server: %1$s</string>
+    <string name="settings_open_github">Source Code</string>
+    <string name="settings_open_github_description">Open Source | Source Code</string>
+    <string name="settings_telegram_support">App Support Group In Telegram</string>
+    <string name="settings_telegram_support_description">Bug Report | Feature Requests | Announcements</string>
+    <string name="settings_telegram_channel">App Recommending Channel In Telegram</string>
+    <string name="settings_telegram_channel_description">Discover | Explore | Cool Apps</string>
+
+    <!-- ContactSelection Dialog -->
+    <string name="contact_search_hint">Search by name or number...</string>
+    <string name="contact_select_all">Select all</string>
+    <string name="contact_unselect_all">Unselect all</string>
+
+    <!-- ========================================== -->
+    <!-- SERVICES & BACKGROUND                      -->
+    <!-- ========================================== -->
+
+    <!-- Recording Service: Notifications -->
+    <string name="recording_standby_notification_title">Call in progress</string>
+    <string name="recording_notification_cross_country_tip">🌐Cross-Country</string>
+    <string name="recording_notification_current_country_tip">🏠Home-Country</string>
+    <string name="recording_notification_title">Recording in progress</string>
+    <string name="recording_notification_press_to_start">Press to start recording</string>
+    <string name="recording_notification_waiting_shizuku">Waiting for Shizuku Server to start...</string>
+    <string name="recording_notification_press_to_pause">Press to pause recording</string>
+    <string name="recording_notification_press_to_resume">Press to resume recording</string>
+    <string name="recording_toast_standby">Entering standby for %1$s call.</string>
+    <string name="recording_toast_ended">Call ended. Recording stopped.</string>
+    <string name="recording_toast_paused">Recording paused.</string>
+    <string name="recording_toast_resumed">Recording resumed.</string>
+    <string name="recording_started">Recording started.</string>
+    <!-- Recording Service: Errors -->
+    <string name="recording_error_title">Recording Error</string>
+    <string name="recording_error_folder_missing">Selected output folder is missing, invalid, or we do not have permission to write to it. Select one in the app settings.</string>
+    <string name="recording_error_server_missing">Scrcpy-server binary is missing or the security SHA256 check failed. This should not happen, please report this.</string>
+    <string name="recording_error_file_creation">Failed to create recording file. Please check the storage permissions and/or select a new recording folder in the app settings.</string>
+    <string name="recording_error_start_failed">Failed to start the recording. An error occurred when calling the ShellService binder method.</string>
+    <string name="recording_unexpected_error">An unexpected error occurred during recording. Please report this with the steps to reproduce and the apps logs.</string>
+    <!-- Recording Service: Errors Shizuku -->
+    <string name="recording_error_shizuku_disconnected_unexpectedly">Shizuku disconnected unexpectedly, causing the recording process to stop. (Shizuku-Server process died)</string>
+    <string name="recording_shizuku_not_started">Shizuku-Server process is stopped. Please start Shizuku and ensure it is always able to run when the app wants to record audio.</string>
+    <string name="recording_shizuku_permission_denied">Please allow the application to use Shizuku. Permission was denied.</string>
+    <string name="recording_shizuku_auth_key_missing">Shizuku Intents authentication key is missing. Please enter it in the app settings.</string>
+</resources>

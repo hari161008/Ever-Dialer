@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Ever Call Recorder module requires API 30+; Dialer itself still supports API 26+ -->
+    <uses-sdk tools:overrideLibrary="com.coolappstore.evercallrecorder.by.svhp" />
+
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -32,7 +35,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+        android:maxSdkVersion="29"
+        tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -170,6 +174,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Ever Call Recorder's MainActivity is bundled as a screen inside this app now,
+             not a separate launcher entry, so strip its own MAIN/LAUNCHER intent-filter. -->
+        <activity
+            android:name="com.coolappstore.evercallrecorder.by.svhp.MainActivity"
+            tools:node="merge">
+            <intent-filter tools:node="removeAll" />
+        </activity>
 
         <service
             android:name=".controller.CallService"

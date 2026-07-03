@@ -451,6 +451,10 @@ fun ExpressiveCallScreen(
     var showRedialDialog by remember { mutableStateOf(false) }
     var redialReason by remember { mutableStateOf("") }
     var wasOutgoingCall by remember { mutableStateOf(false) }
+    // Tracks whether the call ever reached STATE_ACTIVE (i.e. actually connected).
+    // Auto-redial should only be offered for calls that never connected — not for
+    // a completed call that the other party simply hung up on afterwards.
+    var callWasConnected by remember { mutableStateOf(false) }
     var redialCountSelected by remember { mutableIntStateOf(3) }
     var redialJobActive by remember { mutableStateOf(false) }
     var redialRemaining by remember { mutableIntStateOf(0) }
@@ -462,17 +466,23 @@ fun ExpressiveCallScreen(
     LaunchedEffect(callState) {
         if (callState == Call.STATE_DIALING || callState == Call.STATE_CONNECTING) {
             wasOutgoingCall = true
-        } else if (callState == Call.STATE_DISCONNECTED && autoRedialEnabled && wasOutgoingCall && !redialJobActive) {
+        } else if (callState == Call.STATE_ACTIVE) {
+            callWasConnected = true
+        } else if (callState == Call.STATE_DISCONNECTED && autoRedialEnabled && wasOutgoingCall &&
+                   !callWasConnected && !redialJobActive) {
             val dc = call.details?.disconnectCause?.code ?: DisconnectCause.UNKNOWN
             // REJECTED=5, BUSY=4, REMOTE=2 (unanswered/remote end), MISSED=7
+            // Only offered when the call never connected in the first place.
             val shouldOffer = dc == DisconnectCause.REJECTED || dc == DisconnectCause.BUSY ||
-                              dc == DisconnectCause.REMOTE   || dc == DisconnectCause.MISSED
+                              dc == DisconnectCause.REMOTE   || dc == DisconnectCause.MISSED ||
+                              dc == DisconnectCause.ERROR    || dc == DisconnectCause.UNKNOWN
             if (shouldOffer) {
                 redialReason = when (dc) {
                     DisconnectCause.REJECTED -> "Call was rejected"
                     DisconnectCause.BUSY     -> "Line was busy"
                     DisconnectCause.REMOTE,
                     DisconnectCause.MISSED   -> "Call was not answered"
+                    DisconnectCause.ERROR    -> "Call failed"
                     else                     -> "Call ended"
                 }
                 // Signal the activity to stay alive until the dialog is resolved

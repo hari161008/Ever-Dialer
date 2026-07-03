@@ -1,0 +1,19 @@
+{
+  "uniqueId": "com.genymobile.scrcpy.Server",
+  "developers": [
+    {
+      "name": "Genymobile",
+      "organisationUrl": "https://github.com/Genymobile"
+    },
+    {
+      "name": "rom1v (Romain Vimont)",
+      "organisationUrl": "https://github.com/rom1v"
+    }
+  ],
+  "description": "Display and control your Android device. Mirrors video and audio via USB or TCP/IP.",
+  "name": "scrcpy (server binary only)",
+  "website": "https://github.com/genymobile/scrcpy",
+  "licenses": [
+    "Apache-2.0"
+  ]
+}
