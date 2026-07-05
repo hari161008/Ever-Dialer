@@ -17,7 +17,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.createBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -25,7 +28,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.coolappstore.everdialer.by.svhp.R
+// painterResource() cannot load the launcher mipmap because on API 26+ it's an AdaptiveIconDrawable
+// (<adaptive-icon> XML), which is neither a VectorDrawable nor a rasterized PNG/WEBP — it throws
+// IllegalArgumentException and crashes. Rendering the resolved application icon Drawable onto a
+// Bitmap works for any icon type, adaptive or not.
+@Composable
+private fun rememberAppIconPainter(): BitmapPainter {
+    val context = LocalContext.current
+    return remember {
+        val drawable = context.packageManager.getApplicationIcon(context.packageName)
+        val width = drawable.intrinsicWidth.coerceAtLeast(1)
+        val height = drawable.intrinsicHeight.coerceAtLeast(1)
+        val bitmap = createBitmap(width, height)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        BitmapPainter(bitmap.asImageBitmap())
+    }
+}
 
 // ─── Shared pop-in wrapper ────────────────────────────────────────────────────
 
@@ -89,31 +109,14 @@ private fun DialogBanner(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Ring then icon — fixed equal padding all around
-            Box(contentAlignment = Alignment.Center) {
-                // Outer ring
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                )
-                // Inner ring
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                )
-                // App icon
-                Image(
-                    painter = painterResource(R.mipmap.ic_launcher),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                )
-            }
+            // App icon
+            Image(
+                painter = rememberAppIconPainter(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(18.dp))
+            )
             Spacer(Modifier.height(10.dp))
             Text(
                 title,
@@ -276,27 +279,13 @@ fun TelegramJoinDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                    )
-                    Image(
-                        painter = painterResource(R.mipmap.ic_launcher),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                    )
-                }
+                Image(
+                    painter = rememberAppIconPainter(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "Join the Community",
@@ -326,11 +315,11 @@ fun TelegramJoinDialog(
                 lineHeight = 20.sp
             )
 
-            // Feature chips — evenly spaced, no wrapping issue
-            Row(
+            // Feature chips — wraps to a second line instead of squishing when there isn't enough width
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FeatureChip(icon = Icons.Outlined.Announcement, label = "Announcements")
                 FeatureChip(icon = Icons.Outlined.BugReport,    label = "Bug Fixes")
@@ -400,7 +389,9 @@ private fun FeatureChip(icon: ImageVector, label: String) {
                 label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

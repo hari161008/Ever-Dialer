@@ -31,7 +31,7 @@ class AppPreferences(context: Context) {
         const val VIBRATION_ENABLED = true
         const val AUTO_RECORD_INCOMING = true
         const val AUTO_RECORD_OUTGOING = true
-        const val RECORD_ON_ANSWER = false
+        const val RECORD_ON_ANSWER = true
         const val IGNORE_ANONYMOUS_INCOMING = false
         const val IGNORE_CROSS_COUNTRY_INCOMING = false
         const val IGNORE_CROSS_COUNTRY_OUTGOING = false

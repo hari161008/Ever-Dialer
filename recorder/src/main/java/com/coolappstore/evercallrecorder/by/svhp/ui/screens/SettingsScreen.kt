@@ -934,6 +934,8 @@ private fun RecordingSection(
     val ignoredContactsOutgoingCount = remember(updateTrigger) { preferences.getIgnoredContactsOutgoing().size }
     var showFileNameFormatDialog by remember { mutableStateOf(false) }
 
+    val recordOnAnswer = remember(updateTrigger) { preferences.isRecordOnAnswerEnabled() }
+
     val appLockEnabled = remember(updateTrigger) { preferences.isAppLockEnabled() }
     val appLockMethod  = remember(updateTrigger) { preferences.getAppLockMethod() }
     var showAppLockSetupDialog by remember { mutableStateOf(false) }
@@ -960,6 +962,23 @@ private fun RecordingSection(
     val storageIcon = if (storageMode == AppPreferences.StorageMode.PRIVATE) Icons.Outlined.Lock else Icons.Outlined.Folder
 
     SettingsSection(title = stringResource(R.string.settings_section_recording), icon = Icons.Outlined.FiberManualRecord) {
+        ListItem(
+            leadingContent = {
+                Icon(
+                    imageVector = Icons.Outlined.PhoneCallback,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            },
+            headlineContent = { Text(stringResource(R.string.settings_record_on_answer), style = MaterialTheme.typography.bodyMedium) },
+            supportingContent = { Text(stringResource(R.string.settings_record_on_answer_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            trailingContent = {
+                Switch(checked = recordOnAnswer, onCheckedChange = { actions.setRecordOnAnswer(it) })
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
         ListItem(
             modifier = Modifier.clickable {
                 if (appLockEnabled) {
@@ -1448,6 +1467,7 @@ private fun SettingsScreenPreview() {
         val dummyActions = object : SettingsActions {
             override fun setAutoRecordIncoming(enabled: Boolean) {}
             override fun setAutoRecordOutgoing(enabled: Boolean) {}
+            override fun setRecordOnAnswer(enabled: Boolean) {}
             override fun setVibrationEnabled(enabled: Boolean) {}
             override fun setIgnoreAnonymousIncoming(enabled: Boolean) {}
             override fun setIgnoreCrossCountryIncoming(enabled: Boolean) {}

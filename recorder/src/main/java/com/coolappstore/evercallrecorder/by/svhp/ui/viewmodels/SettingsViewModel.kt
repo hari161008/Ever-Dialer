@@ -29,6 +29,7 @@ enum class DebugAction { RINGING, OFFHOOK, IDLE }
 interface SettingsActions {
     fun setAutoRecordIncoming(enabled: Boolean)
     fun setAutoRecordOutgoing(enabled: Boolean)
+    fun setRecordOnAnswer(enabled: Boolean)
     fun setVibrationEnabled(enabled: Boolean)
     fun setIgnoreAnonymousIncoming(enabled: Boolean)
     fun setIgnoreCrossCountryIncoming(enabled: Boolean)
@@ -99,6 +100,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     override fun setAutoRecordIncoming(enabled: Boolean) { preferences.setAutoRecordIncomingEnabled(enabled); refresh() }
     override fun setAutoRecordOutgoing(enabled: Boolean) { preferences.setAutoRecordOutgoingEnabled(enabled); refresh() }
+    override fun setRecordOnAnswer(enabled: Boolean) { preferences.setRecordOnAnswerEnabled(enabled); refresh() }
     override fun setVibrationEnabled(enabled: Boolean) { preferences.setVibrationEnabled(enabled); refresh() }
     override fun setIgnoreAnonymousIncoming(enabled: Boolean) {
         preferences.setIgnoreAnonymousIncomingEnabled(enabled)

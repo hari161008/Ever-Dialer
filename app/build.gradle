@@ -26,6 +26,10 @@ android {
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
             }
         }
     }
@@ -62,15 +66,6 @@ android {
 
     buildFeatures {
         compose = true
-    }
-
-    splits {
-        abi {
-            enable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            universalApk = true
-        }
     }
 }
 

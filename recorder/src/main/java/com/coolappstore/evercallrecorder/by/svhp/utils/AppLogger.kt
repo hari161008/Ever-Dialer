@@ -85,8 +85,30 @@ object AppLogger {
         get() {
             // The main process name accurately matches the APPLICATION_ID.
             // Any other process (Shizuku, :remote service, etc.) will have a different or suffixed name.
-            return android.app.Application.getProcessName() != BuildConfig.APPLICATION_ID
+            // If the process name can't be resolved at all (e.g. Shizuku's app_process-hosted
+            // ShellService, which isn't attached to a normal ActivityThread), treat it as remote —
+            // only the main app process reliably resolves its own name.
+            val currentProcessName = currentProcessNameCompat()
+            return currentProcessName == null || currentProcessName != BuildConfig.APPLICATION_ID
         }
+
+    /**
+     * Returns the current process name in a way that's safe across all supported API levels.
+     * [android.app.Application.getProcessName] only exists on API 28+, but this app supports
+     * minSdk 26, so calling it unconditionally throws [NoSuchMethodError] on Android 8.0/8.1
+     * devices and crashes the app immediately on every launch. We fall back to reading
+     * /proc/self/cmdline (available since the earliest Android versions) on older API levels.
+     */
+    private fun currentProcessNameCompat(): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return android.app.Application.getProcessName()
+        }
+        return try {
+            File("/proc/self/cmdline").readText().trim { it <= ' ' || it == '\u0000' }
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     /**
      * Helper to gracefully determine if log redaction is active without relying solely on AppPreferences,

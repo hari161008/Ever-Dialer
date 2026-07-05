@@ -171,6 +171,14 @@ class CallService : InCallService() {
                 _heldCallSession.value?.call == call   -> _heldCallSession.value   = CallSession(call, state)
             }
 
+            // Call reached its "answered/connected" state through this dialer (outgoing: call timer started;
+            // incoming: accepted here). Lets the recorder module start recording when the
+            // "Record Only When Call Answered" preference is enabled. Safe to call multiple times.
+            if (state == Call.STATE_ACTIVE) {
+                com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(this@CallService)
+                    .notifyCallAnsweredInDialer()
+            }
+
             if (state == Call.STATE_DISCONNECTED) {
                 if (_currentCallSession.value?.call == call) {
                     _currentCallSession.value = null

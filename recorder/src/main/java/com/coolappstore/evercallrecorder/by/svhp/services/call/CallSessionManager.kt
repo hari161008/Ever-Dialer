@@ -111,10 +111,24 @@ class CallSessionManager private constructor(context: Context) {
             }
 
         /**
-         * Flag to track whether we've already sent a recording service intent for the current session.
-         * This helps prevent duplicate intents in edge dual-call cases.
+         * Flag to track whether we've already sent an initial recording service intent (START or STANDBY)
+         * for the current session. This helps prevent duplicate intents in edge dual-call cases.
          */
         var wasRecordingServiceStartIntentSend: Boolean = false
+
+        /**
+         * True once an ACTION_START_RECORDING intent has actually been sent for this session.
+         * Unlike [wasRecordingServiceStartIntentSend], this stays false while we are holding a call
+         * in standby (e.g. waiting for the call to be answered, see [answeredViaDialer]).
+         */
+        var isRecordingStarted: Boolean = false
+
+        /**
+         * True once the dialer app has reported that the call reached its "answered/connected" state
+         * (outgoing: call timer started; incoming: accepted through this app's dialer). Used to gate
+         * recording start when the "Record Only When Call Answered" preference is enabled.
+         */
+        var answeredViaDialer: Boolean = false
 
         /**
          * Indicates whether we are currently in an active call session (i.e., we've seen a non-IDLE state and haven't reset yet).
@@ -130,6 +144,8 @@ class CallSessionManager private constructor(context: Context) {
         fun clear() {
             currentMetadata = null
             wasRecordingServiceStartIntentSend = false
+            isRecordingStarted = false
+            answeredViaDialer = false
             temporaryCache.clear()
         }
     }
@@ -267,22 +283,62 @@ class CallSessionManager private constructor(context: Context) {
     /**
      * Evaluates user preferences and contact filtering to decide whether to start recording immediately or go to standby mode,
      * then sends the appropriate command to the recording service.
+     *
+     * When the "Record Only When Call Answered" preference is enabled, a call that would otherwise auto-record is instead
+     * held in standby until [notifyCallAnsweredInDialer] is called (outgoing: the dialer's call timer started;
+     * incoming: the call was accepted through this app's dialer).
      */
     private fun evaluateAndStartService() {
-        if (session.wasRecordingServiceStartIntentSend) {
-            AppLogger.d(TAG, "Current call session has already sent a intent that started RecordingForegroundService. Skipping duplicate intent.")
+        if (session.isRecordingStarted) {
+            AppLogger.d(TAG, "Current call session is already recording. Skipping duplicate intent.")
             return
         }
         val sessionMetadata = session.currentMetadata ?: throw IllegalStateException("Metadata should have been determined by now. There is a logic error.")
 
-        if (shouldAutoRecord(sessionMetadata)) {
+        val wantsAutoRecord = shouldAutoRecord(sessionMetadata)
+        val waitingForDialerAnswer = wantsAutoRecord && preferences.isRecordOnAnswerEnabled() && !session.answeredViaDialer
+
+        if (waitingForDialerAnswer) {
+            if (!session.wasRecordingServiceStartIntentSend) {
+                AppLogger.i(TAG, "\"Record Only When Call Answered\" is enabled. Holding ${sessionMetadata.direction} call in standby until answered via the dialer.")
+                sendServiceCommand(RecordingForegroundService.ACTION_STANDBY, sessionMetadata)
+                session.wasRecordingServiceStartIntentSend = true
+            }
+            return
+        }
+
+        if (session.wasRecordingServiceStartIntentSend && !wantsAutoRecord) {
+            // We already sent standby earlier, and preferences still say not to auto-record. Nothing further to do.
+            return
+        }
+
+        if (wantsAutoRecord) {
             AppLogger.i(TAG, "Sending start INTENT for ${sessionMetadata.direction} call to RecordingForegroundService.")
             sendServiceCommand(RecordingForegroundService.ACTION_START_RECORDING, sessionMetadata)
+            session.isRecordingStarted = true
         } else {
             AppLogger.i(TAG, "Sending standby INTENT for ${sessionMetadata.direction} call to RecordingForegroundService.")
             sendServiceCommand(RecordingForegroundService.ACTION_STANDBY, sessionMetadata)
         }
         session.wasRecordingServiceStartIntentSend = true
+    }
+
+    /**
+     * Called by the dialer app when a call reaches its "answered/connected" state:
+     * - Outgoing call: the call timer on the call screen has started.
+     * - Incoming call: the call was accepted through this app's dialer.
+     *
+     * If a call session is active and is being held in standby because "Record Only When Call Answered"
+     * is enabled, this re-evaluates and starts recording now.
+     */
+    @Synchronized
+    fun notifyCallAnsweredInDialer() {
+        if (!session.isSessionActive) {
+            AppLogger.d(TAG, "notifyCallAnsweredInDialer() called but no active call session. Ignoring.")
+            return
+        }
+        session.answeredViaDialer = true
+        evaluateAndStartService()
     }
 
     @Synchronized

@@ -113,7 +113,7 @@
     <string name="settings_updates_up_to_date">App is up to date</string>
     <string name="settings_updates_description">Check for the latest version on GitHub</string>
     <!-- Record on Answer -->
-    <string name="settings_record_on_answer">Record when Call is Answered</string>
+    <string name="settings_record_on_answer">Record Only When Call Answered</string>
     <string name="settings_record_on_answer_desc">Start recording only after the call is answered</string>
     <!-- Accent Color -->
     <string name="settings_accent_color">Accent Color</string>
