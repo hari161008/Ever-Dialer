@@ -32,6 +32,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.roundToInt
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import android.os.Build
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
@@ -121,17 +127,103 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var defaultTab           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") }
 
     var showTabSectionsDialog by remember { mutableStateOf(false) }
-    var tabShowFavorites by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)) }
-    var tabShowCalls     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,     true)) }
-    var tabShowContacts  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,  true)) }
-    var tabShowNotes     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,     true)) }
+    var tabShowFavorites  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)) }
+    var tabShowCalls      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)) }
+    var tabShowContacts   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)) }
+    var tabShowRecordings by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)) }
+    var tabShowNotes      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)) }
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val tabOptions = listOf(
-        TabOption("favorites", "Favourites", Icons.Outlined.FavoriteBorder),
-        TabOption("calls",     "Calls",      Icons.Outlined.History),
-        TabOption("contacts",  "Contacts",   Icons.Outlined.Person),
-        TabOption("notes",     "Note",       Icons.Outlined.Note)
+        TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
+        TabOption("calls",      "Calls",      Icons.Outlined.History),
+        TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
+        TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
+        TabOption("notes",      "Note",       Icons.Outlined.Note)
     )
+
+    // Custom order of tab keys, persisted as a comma-separated string. Any tab keys
+    // missing from a previously-saved (older) order are appended so new tabs always show.
+    val tabOrder = remember {
+        mutableStateListOf<String>().apply {
+            val saved = prefs.getString(PreferenceManager.KEY_TAB_ORDER, null)
+            val savedKeys = saved?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            val validKeys = tabOptions.map { it.key }
+            addAll(savedKeys.filter { it in validKeys })
+            validKeys.forEach { key -> if (key !in this) add(key) }
+        }
+    }
+    fun persistTabOrder() {
+        prefs.setString(PreferenceManager.KEY_TAB_ORDER, tabOrder.joinToString(","))
+    }
+
+    // ── Context Menu Elements ──────────────────────────────────────────────
+    // Top level: 3 fixed sections (Favourites, Call Logs, Contacts) — these are just
+    // navigation rows (no checkbox/drag here). Tapping one opens a sub-dialog listing
+    // that section's actual long-press context menu entries, each with a checkbox to
+    // show/hide it and a drag handle to reorder it (same pattern as Tab Sections).
+    var showContextMenuDialog by remember { mutableStateOf(false) }
+    var activeContextMenuSection by remember { mutableStateOf<String?>(null) }
+
+    data class ContextMenuSection(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+    val contextMenuSections = listOf(
+        ContextMenuSection("favorites", "Favourites", Icons.Outlined.FavoriteBorder),
+        ContextMenuSection("call_logs", "Call Logs",  Icons.Outlined.History),
+        ContextMenuSection("contacts",  "Contacts",   Icons.Outlined.Person)
+    )
+
+    data class ContextMenuItemOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+    val contextMenuItemsBySection = mapOf(
+        "favorites" to listOf(
+            ContextMenuItemOption("select",          "Select",                    Icons.Default.CheckBox),
+            ContextMenuItemOption("call",             "Call",                      Icons.Default.Call),
+            ContextMenuItemOption("send_sms",         "Send SMS",                  Icons.Default.Message),
+            ContextMenuItemOption("view_details",     "View Details",              Icons.Default.Info),
+            ContextMenuItemOption("fake_call",        "Fake Call",                 Icons.Outlined.PhoneCallback),
+            ContextMenuItemOption("remove_favorite",  "Remove from Favourites",    Icons.Default.Favorite)
+        ),
+        "call_logs" to listOf(
+            ContextMenuItemOption("select",           "Select",                    Icons.Default.CheckBox),
+            ContextMenuItemOption("call_back",         "Call back",                 Icons.Default.Call),
+            ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
+            ContextMenuItemOption("add_to_contacts",   "Add to contacts",           Icons.Default.PersonAdd),
+            ContextMenuItemOption("block_number",      "Block number",              Icons.Default.Block),
+            ContextMenuItemOption("fake_call",         "Fake Call",                 Icons.Outlined.PhoneCallback),
+            ContextMenuItemOption("delete_call_log",   "Delete from call log",      Icons.Default.Delete)
+        ),
+        "contacts" to listOf(
+            ContextMenuItemOption("select",           "Select",                    Icons.Default.CheckBox),
+            ContextMenuItemOption("view_contact",      "View contact",              Icons.Default.Person),
+            ContextMenuItemOption("edit_contact",      "Edit contact",              Icons.Default.Edit),
+            ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
+            ContextMenuItemOption("share_contact",     "Share contact",             Icons.Default.Share),
+            ContextMenuItemOption("toggle_favorite",   "Add/Remove Favourites",     Icons.Default.Favorite),
+            ContextMenuItemOption("fake_call",         "Fake Call",                 Icons.Outlined.PhoneCallback),
+            ContextMenuItemOption("delete_contact",    "Delete contact",            Icons.Default.Delete)
+        )
+    )
+
+    fun contextMenuShowKey(section: String, itemKey: String) = "context_menu_${section}_show_$itemKey"
+    fun contextMenuOrderKey(section: String) = "context_menu_${section}_order"
+
+    // Per-section ordered key list, persisted as a comma-separated string. Any item keys
+    // missing from a previously-saved (older) order are appended so new entries always show.
+    val contextMenuOrders = remember {
+        mutableStateMapOf<String, MutableList<String>>().apply {
+            contextMenuSections.forEach { section ->
+                val validKeys = contextMenuItemsBySection[section.key].orEmpty().map { it.key }
+                val saved = prefs.getString(contextMenuOrderKey(section.key), null)
+                val savedKeys = saved?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+                val list = mutableStateListOf<String>()
+                list.addAll(savedKeys.filter { it in validKeys })
+                validKeys.forEach { key -> if (key !in list) list.add(key) }
+                this[section.key] = list
+            }
+        }
+    }
+    fun persistContextMenuOrder(section: String) {
+        val order = contextMenuOrders[section] ?: return
+        prefs.setString(contextMenuOrderKey(section), order.joinToString(","))
+    }
 
     var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
     var hexError by remember { mutableStateOf(false) }
@@ -314,6 +406,30 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
 
     // ── Tab Sections Dialog ──────────────────────────────────────────────────
     if (showTabSectionsDialog) {
+        val density = LocalDensity.current
+        val rowHeightDp = 52.dp
+        val rowHeightPx = with(density) { rowHeightDp.toPx() }
+        var draggedIndex by remember { mutableStateOf(-1) }
+        var dragOffsetY by remember { mutableStateOf(0f) }
+
+        fun tabChecked(key: String): Boolean = when (key) {
+            "favorites"  -> tabShowFavorites
+            "calls"      -> tabShowCalls
+            "contacts"   -> tabShowContacts
+            "recordings" -> tabShowRecordings
+            "notes"      -> tabShowNotes
+            else         -> true
+        }
+        fun setTabChecked(key: String, value: Boolean) {
+            when (key) {
+                "favorites"  -> { tabShowFavorites = value;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  value) }
+                "calls"      -> { tabShowCalls = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      value) }
+                "contacts"   -> { tabShowContacts = value;   prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   value) }
+                "recordings" -> { tabShowRecordings = value; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, value) }
+                "notes"      -> { tabShowNotes = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      value) }
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { showTabSectionsDialog = false },
             icon = { Icon(Icons.Default.ViewWeek, null, tint = ColorIndigo) },
@@ -321,43 +437,92 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Choose which tabs are visible in the navigation bar.",
+                        "Choose which tabs are visible, and drag the handle to reorder them in the navigation bar.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    listOf(
-                        Triple("Favourites", tabShowFavorites) { v: Boolean ->
-                            tabShowFavorites = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, v)
-                        },
-                        Triple("Calls", tabShowCalls) { v: Boolean ->
-                            tabShowCalls = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, v)
-                        },
-                        Triple("Contacts", tabShowContacts) { v: Boolean ->
-                            tabShowContacts = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, v)
-                        },
-                        Triple("Notes", tabShowNotes) { v: Boolean ->
-                            tabShowNotes = v; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, v)
-                        }
-                    ).forEach { (label, checked, onChange) ->
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                    Column {
+                        tabOrder.forEachIndexed { index, tabKey ->
+                            val option = tabOptions.firstOrNull { it.key == tabKey } ?: return@forEachIndexed
+                            val isDragging = draggedIndex == index
+                            key(tabKey) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                tonalElevation = if (isDragging) 4.dp else 0.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                                    .zIndex(if (isDragging) 1f else 0f)
+                                    .graphicsLayer {
+                                        translationY = if (isDragging) dragOffsetY else 0f
+                                    }
                             ) {
-                                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = onChange,
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.primary,
-                                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(rowHeightDp)
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = option.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(option.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                    Checkbox(
+                                        checked = tabChecked(tabKey),
+                                        onCheckedChange = { setTabChecked(tabKey, it) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = MaterialTheme.colorScheme.primary,
+                                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Filled.DragHandle,
+                                        contentDescription = "Reorder ${option.label}",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(start = 4.dp)
+                                            .pointerInput(tabKey) {
+                                                detectDragGestures(
+                                                    onDragStart = {
+                                                        draggedIndex = index
+                                                        dragOffsetY = 0f
+                                                    },
+                                                    onDragEnd = {
+                                                        draggedIndex = -1
+                                                        dragOffsetY = 0f
+                                                        persistTabOrder()
+                                                    },
+                                                    onDragCancel = {
+                                                        draggedIndex = -1
+                                                        dragOffsetY = 0f
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        change.consume()
+                                                        dragOffsetY += dragAmount.y
+                                                        val moveBy = (dragOffsetY / rowHeightPx).roundToInt()
+                                                        if (moveBy != 0 && draggedIndex >= 0) {
+                                                            val newIndex = (draggedIndex + moveBy).coerceIn(0, tabOrder.lastIndex)
+                                                            if (newIndex != draggedIndex) {
+                                                                val moving = tabOrder.removeAt(draggedIndex)
+                                                                tabOrder.add(newIndex, moving)
+                                                                dragOffsetY -= moveBy * rowHeightPx
+                                                                draggedIndex = newIndex
+                                                            }
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                    )
+                                }
+                            }
                             }
                         }
                     }
@@ -367,6 +532,194 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                 TextButton(onClick = { showTabSectionsDialog = false }) { Text("Done") }
             }
         )
+    }
+
+    // ── Context Menu Elements: top-level section list (no checkbox/drag here) ─
+    if (showContextMenuDialog) {
+        AlertDialog(
+            onDismissRequest = { showContextMenuDialog = false },
+            icon = { Icon(Icons.Default.ViewWeek, null, tint = ColorOrange) },
+            title = { Text("Context Menu Elements") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Choose a section to view and customize its long-press context menu.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Column {
+                        contextMenuSections.forEach { section ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                                    .clickable {
+                                        showContextMenuDialog = false
+                                        activeContextMenuSection = section.key
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp)
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = section.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(section.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showContextMenuDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
+    // ── Context Menu Elements: per-section entries (checkbox + drag to reorder) ─
+    activeContextMenuSection?.let { sectionKey ->
+        val section = contextMenuSections.firstOrNull { it.key == sectionKey }
+        val sectionItems = contextMenuItemsBySection[sectionKey].orEmpty()
+        val sectionOrder = contextMenuOrders[sectionKey]
+
+        if (section != null && sectionOrder != null) {
+            val density = LocalDensity.current
+            val rowHeightDp = 52.dp
+            val rowHeightPx = with(density) { rowHeightDp.toPx() }
+            var draggedIndex by remember(sectionKey) { mutableStateOf(-1) }
+            var dragOffsetY by remember(sectionKey) { mutableStateOf(0f) }
+
+            fun itemChecked(itemKey: String) = prefs.getBoolean(contextMenuShowKey(sectionKey, itemKey), true)
+            fun setItemChecked(itemKey: String, value: Boolean) {
+                prefs.setBoolean(contextMenuShowKey(sectionKey, itemKey), value)
+            }
+
+            AlertDialog(
+                onDismissRequest = { activeContextMenuSection = null },
+                icon = { Icon(section.icon, null, tint = ColorOrange) },
+                title = { Text("${section.label} Context Menu") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "Choose which entries are visible, and drag the handle to reorder them in the context menu.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Column {
+                            sectionOrder.forEachIndexed { index, itemKey ->
+                                val option = sectionItems.firstOrNull { it.key == itemKey } ?: return@forEachIndexed
+                                val isDragging = draggedIndex == index
+                                key(itemKey) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    tonalElevation = if (isDragging) 4.dp else 0.dp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp)
+                                        .zIndex(if (isDragging) 1f else 0f)
+                                        .graphicsLayer {
+                                            translationY = if (isDragging) dragOffsetY else 0f
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(rowHeightDp)
+                                            .padding(horizontal = 16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = option.icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(option.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                        Checkbox(
+                                            checked = itemChecked(itemKey),
+                                            onCheckedChange = { setItemChecked(itemKey, it) },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = MaterialTheme.colorScheme.primary,
+                                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Filled.DragHandle,
+                                            contentDescription = "Reorder ${option.label}",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .padding(start = 4.dp)
+                                                .pointerInput(itemKey) {
+                                                    detectDragGestures(
+                                                        onDragStart = {
+                                                            draggedIndex = index
+                                                            dragOffsetY = 0f
+                                                        },
+                                                        onDragEnd = {
+                                                            draggedIndex = -1
+                                                            dragOffsetY = 0f
+                                                            persistContextMenuOrder(sectionKey)
+                                                        },
+                                                        onDragCancel = {
+                                                            draggedIndex = -1
+                                                            dragOffsetY = 0f
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
+                                                            dragOffsetY += dragAmount.y
+                                                            val moveBy = (dragOffsetY / rowHeightPx).roundToInt()
+                                                            if (moveBy != 0 && draggedIndex >= 0) {
+                                                                val newIndex = (draggedIndex + moveBy).coerceIn(0, sectionOrder.lastIndex)
+                                                                if (newIndex != draggedIndex) {
+                                                                    val moving = sectionOrder.removeAt(draggedIndex)
+                                                                    sectionOrder.add(newIndex, moving)
+                                                                    dragOffsetY -= moveBy * rowHeightPx
+                                                                    draggedIndex = newIndex
+                                                                }
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                        )
+                                    }
+                                }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { activeContextMenuSection = null }) { Text("Done") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        activeContextMenuSection = null
+                        showContextMenuDialog = true
+                    }) { Text("Back") }
+                }
+            )
+        }
     }
 
     Scaffold(
@@ -725,8 +1078,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoListItem(
+                                    headline = "Context Menu Elements",
+                                    supporting = "Customize Favourites, Call Logs, and Contacts context menus",
+                                    leadingIcon = Icons.Default.ViewWeek,
+                                    iconContainerColor = ColorOrange,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showContextMenuDialog = true }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
                                     headline = "Tab Sections",
-                                    supporting = "Toggle which tabs appear in the navigation bar",
+                                    supporting = "Toggle and drag to reorder tabs in the navigation bar",
                                     leadingIcon = Icons.Default.ViewWeek,
                                     iconContainerColor = ColorIndigo,
                                     trailingIcon = Icons.Default.ChevronRight,

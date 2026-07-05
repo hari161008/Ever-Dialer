@@ -515,12 +515,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun resolveContactName(context: Context, phoneNumber: String): String? {
         return try {
-            val lookupUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, phoneNumber)
+            // The raw phone number parsed from a recording's filename can still contain
+            // formatting characters (spaces, dashes, parentheses, etc). Passing that raw
+            // string straight into PhoneLookup's filter URI makes the underlying loose
+            // number-matching unreliable, and it can end up matching a *different*
+            // contact that merely shares some of the same digits — which is exactly why
+            // the wrong contact name/photo could show up for a recording. Normalising the
+            // number first (digits only, keeping a leading '+') and safely encoding it
+            // before appending it to the URI ensures each recording is looked up against
+            // its own, correct number.
+            val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
+            if (normalized.isBlank()) return null
+            val lookupUri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(normalized)
+            )
             context.contentResolver.query(
                 lookupUri,
-                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.NUMBER),
                 null, null, null
-            )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                // Defensive check: only trust the match if the returned contact number
+                // actually shares the normalized digits with the number we looked up,
+                // guarding against loose-match false positives returning an unrelated contact.
+                val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
+                val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
+                val queryDigits   = normalized.filter { it.isDigit() }
+                val isPlausibleMatch = matchedDigits.isEmpty() || queryDigits.isEmpty() ||
+                    matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7))
+                if (!isPlausibleMatch) return@use null
+                cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+            }
         } catch (_: Exception) { null }
     }
 
@@ -605,16 +631,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun loadContactPhoto(context: Context, phoneNumber: String): ImageBitmap? =
         withContext(Dispatchers.IO) {
             try {
+                // See resolveContactName() for why the number must be normalized and
+                // encoded before being appended to the PhoneLookup URI — otherwise a
+                // recording can end up showing a different contact's photo.
+                val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
+                if (normalized.isBlank()) return@withContext null
                 val lookupUri = Uri.withAppendedPath(
-                    ContactsContract.PhoneLookup.CONTENT_FILTER_URI, phoneNumber
+                    ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(normalized)
                 )
                 context.contentResolver.query(
                     lookupUri,
-                    arrayOf(ContactsContract.PhoneLookup.PHOTO_URI),
+                    arrayOf(ContactsContract.PhoneLookup.PHOTO_URI, ContactsContract.PhoneLookup.NUMBER),
                     null, null, null
                 )?.use { cursor ->
                     if (!cursor.moveToFirst()) return@withContext null
-                    val photoUriStr = cursor.getString(0) ?: return@withContext null
+                    val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
+                    val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
+                    val queryDigits   = normalized.filter { it.isDigit() }
+                    val isPlausibleMatch = matchedDigits.isEmpty() || queryDigits.isEmpty() ||
+                        matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7))
+                    if (!isPlausibleMatch) return@withContext null
+                    val photoUriStr = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.PHOTO_URI)) ?: return@withContext null
                     val stream = context.contentResolver.openInputStream(Uri.parse(photoUriStr))
                         ?: return@withContext null
                     BitmapFactory.decodeStream(stream)?.asImageBitmap()

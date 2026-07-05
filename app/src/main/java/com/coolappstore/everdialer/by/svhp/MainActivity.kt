@@ -76,10 +76,12 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -87,6 +89,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactScreenDest
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import org.koin.core.context.GlobalContext
 
 class MainActivity : FragmentActivity() {
@@ -132,10 +135,11 @@ class MainActivity : FragmentActivity() {
                 // Compute start destination from prefs — done once so no flash
                 val startDestination = remember {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
-                        "favorites" -> FavoritesScreenDestination
-                        "contacts"  -> ContactScreenDestination
-                        "notes"     -> NotesScreenDestination
-                        else        -> RecentScreenDestination
+                        "favorites"  -> FavoritesScreenDestination
+                        "contacts"   -> ContactScreenDestination
+                        "recordings" -> RecordingsScreenDestination
+                        "notes"      -> NotesScreenDestination
+                        else         -> RecentScreenDestination
                     }
                 }
 
@@ -385,6 +389,7 @@ class MainActivity : FragmentActivity() {
                     val currentDest = navBackStack?.destination
                     val prefs2 = remember { GlobalContext.get().get<PreferenceManager>() }
                     val showNotesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
+                    val showRecordingsRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
 
                     fun navTo(route: String) {
                         navController.navigate(route) {
@@ -450,6 +455,16 @@ class MainActivity : FragmentActivity() {
                                             paddingEnd = railPaddingEnd,
                                             onClick = { navTo(ContactScreenDestination.route) }
                                         )
+                                        if (showRecordingsRail) {
+                                            RailItem(
+                                                selected = currentDest?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true,
+                                                icon = { sel -> Icon(if (sel) Icons.Filled.FiberManualRecord else Icons.Outlined.FiberManualRecord, "Recordings", modifier = Modifier.size(24.dp)) },
+                                                label = "Recordings",
+                                                paddingStart = railPaddingStart,
+                                                paddingEnd = railPaddingEnd,
+                                                onClick = { navTo(RecordingsScreenDestination.route) }
+                                            )
+                                        }
                                         if (showNotesRail) {
                                             RailItem(
                                                 selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,

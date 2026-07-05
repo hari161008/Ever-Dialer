@@ -85,7 +85,7 @@ private fun popExitTransition() =
     fadeOut(tween(DURATION_OUT - 40, easing = NavEasing))
 
 @Composable
-fun AppNavigationScreen() {
+fun AppNavigationScreen(openSettingsDirectly: Boolean = false) {
     val activityContext = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val appNavViewModel: AppNavigationViewModel = viewModel()
@@ -96,7 +96,7 @@ fun AppNavigationScreen() {
     val isAppLockUnlocked by appLockViewModel.isUnlocked.collectAsState()
     val preferences = settingsViewModel.preferences
 
-    var subScreen by rememberSaveable { mutableStateOf(SubScreen.None) }
+    var subScreen by rememberSaveable { mutableStateOf(if (openSettingsDirectly) SubScreen.Settings else SubScreen.None) }
     var selectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
     var highlightQuery by remember { mutableStateOf("") }
     var webViewUrl by remember { mutableStateOf("") }

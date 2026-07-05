@@ -24,10 +24,12 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Note
 import androidx.compose.material.icons.outlined.Person
@@ -54,6 +56,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactScreenDest
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import androidx.compose.ui.platform.LocalConfiguration
@@ -72,8 +75,32 @@ private val TAB_ROUTES = setOf(
     FavoritesScreenDestination.route,
     RecentScreenDestination.route,
     ContactScreenDestination.route,
+    RecordingsScreenDestination.route,
     NotesScreenDestination.route
 )
+
+/** Describes a single bottom-navigation tab, driving both the pill-style and standard nav bars. */
+private data class TabSpec(
+    val key: String,
+    val route: String,
+    val label: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector,
+    val selected: Boolean,
+    val onClick: () -> Unit
+)
+
+/** Parses the user-configured tab order preference into an ordered list of tab keys. */
+private fun parseTabOrder(raw: String?): List<String> {
+    val fallback = PreferenceManager.DEFAULT_TAB_ORDER.split(",")
+    if (raw.isNullOrBlank()) return fallback
+    val parsed = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    // Ensure any tab keys missing from a stale/older saved order are still appended,
+    // so newly-added tabs (like Recordings) always show up even for existing users.
+    val merged = parsed.toMutableList()
+    fallback.forEach { key -> if (key !in merged) merged.add(key) }
+    return merged.filter { it in fallback }
+}
 
 @Composable
 fun BottomBar(navController: NavController) {
@@ -91,45 +118,58 @@ fun BottomBar(navController: NavController) {
     val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false) }
     val blurEffects  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
     val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, false) }
-    val showFavoritesTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true) }
-    val showCallsTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,     true) }
-    val showContactsTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,  true) }
-    val showNotesTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,     true) }
+    val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
+    val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
+    val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
+    val showRecordingsTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
+    val showNotesTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true) }
+    val tabOrder          = remember(settingsState) { parseTabOrder(prefs.getString(PreferenceManager.KEY_TAB_ORDER, null)) }
     val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
     val navBackStackEntry  by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentRoute       = currentDestination?.route ?: ""
 
-    val isFavoritesSelected = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
-    val isRecentsSelected   = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
-    val isContactsSelected  = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
-    val isNotesSelected     = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    val isFavoritesSelected  = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
+    val isRecentsSelected    = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
+    val isContactsSelected   = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isRecordingsSelected = currentDestination?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true
+    val isNotesSelected      = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
 
     // Build visible tab routes dynamically based on prefs
-    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showNotesTab) {
+    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showRecordingsTab, showNotesTab) {
         buildSet {
-            if (showFavoritesTab) add(FavoritesScreenDestination.route)
-            if (showCallsTab)     add(RecentScreenDestination.route)
-            if (showContactsTab)  add(ContactScreenDestination.route)
-            if (showNotesTab)     add(NotesScreenDestination.route)
+            if (showFavoritesTab)  add(FavoritesScreenDestination.route)
+            if (showCallsTab)      add(RecentScreenDestination.route)
+            if (showContactsTab)   add(ContactScreenDestination.route)
+            if (showRecordingsTab) add(RecordingsScreenDestination.route)
+            if (showNotesTab)      add(NotesScreenDestination.route)
         }
     }
 
-    // Only render pill when a visible tab screen is active
-    val isOnTabScreen = visibleTabRoutes.any { currentRoute.contains(it, ignoreCase = true) }
+    // Only render pill when a visible tab screen is active, and not while a tab screen
+    // (e.g. Recordings) is showing its own full-screen onboarding content.
+    val isOnTabScreen = visibleTabRoutes.any { currentRoute.contains(it, ignoreCase = true) } &&
+        !NavBarVisibilityState.hideForOnboarding
 
     // If current tab is now hidden, redirect to first visible tab
     val isOnHiddenTab = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) } && !isOnTabScreen
+    fun routeForTabKey(key: String): String? = when (key) {
+        "favorites"  -> FavoritesScreenDestination.route
+        "calls"      -> RecentScreenDestination.route
+        "contacts"   -> ContactScreenDestination.route
+        "recordings" -> RecordingsScreenDestination.route
+        "notes"      -> NotesScreenDestination.route
+        else         -> null
+    }
+
     LaunchedEffect(isOnHiddenTab) {
         if (isOnHiddenTab) {
-            val firstVisible = when {
-                showCallsTab     -> RecentScreenDestination.route
-                showFavoritesTab -> FavoritesScreenDestination.route
-                showContactsTab  -> ContactScreenDestination.route
-                showNotesTab     -> NotesScreenDestination.route
-                else             -> RecentScreenDestination.route
-            }
+            val firstVisible = tabOrder
+                .asSequence()
+                .mapNotNull { routeForTabKey(it) }
+                .firstOrNull { it in visibleTabRoutes }
+                ?: RecentScreenDestination.route
             navController.navigate(firstVisible) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = false }
                 launchSingleTop = true
@@ -179,6 +219,47 @@ fun BottomBar(navController: NavController) {
         }
     }
 
+    val orderedTabs: List<TabSpec> = remember(
+        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showRecordingsTab, showNotesTab,
+        isFavoritesSelected, isRecentsSelected, isContactsSelected, isRecordingsSelected, isNotesSelected
+    ) {
+        tabOrder.mapNotNull { key ->
+            when (key) {
+                "favorites" -> if (showFavoritesTab) TabSpec(
+                    key = key, route = FavoritesScreenDestination.route, label = "Favourites",
+                    selectedIcon = Icons.Filled.Favorite, unselectedIcon = Icons.Outlined.FavoriteBorder,
+                    selected = isFavoritesSelected,
+                    onClick = { doHaptic(); navigate(FavoritesScreenDestination.route) }
+                ) else null
+                "calls" -> if (showCallsTab) TabSpec(
+                    key = key, route = RecentScreenDestination.route, label = "Calls",
+                    selectedIcon = Icons.Filled.History, unselectedIcon = Icons.Outlined.History,
+                    selected = isRecentsSelected,
+                    onClick = { doHaptic(); navigate(RecentScreenDestination.route) }
+                ) else null
+                "contacts" -> if (showContactsTab) TabSpec(
+                    key = key, route = ContactScreenDestination.route, label = "Contacts",
+                    selectedIcon = Icons.Filled.Person, unselectedIcon = Icons.Outlined.Person,
+                    selected = isContactsSelected,
+                    onClick = { doHaptic(); navigate(ContactScreenDestination.route) }
+                ) else null
+                "recordings" -> if (showRecordingsTab) TabSpec(
+                    key = key, route = RecordingsScreenDestination.route, label = "Recordings",
+                    selectedIcon = Icons.Filled.FiberManualRecord, unselectedIcon = Icons.Outlined.FiberManualRecord,
+                    selected = isRecordingsSelected,
+                    onClick = { doHaptic(); navigate(RecordingsScreenDestination.route) }
+                ) else null
+                "notes" -> if (showNotesTab) TabSpec(
+                    key = key, route = NotesScreenDestination.route, label = "Notes",
+                    selectedIcon = Icons.Filled.Note, unselectedIcon = Icons.Outlined.Note,
+                    selected = isNotesSelected,
+                    onClick = { doHaptic(); navigate(NotesScreenDestination.route) }
+                ) else null
+                else -> null
+            }
+        }
+    }
+
     if (pillNav) {
         if (!isOnTabScreen && !pillVisible) return
 
@@ -211,44 +292,14 @@ fun BottomBar(navController: NavController) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
-                        if (showFavoritesTab) {
+                        orderedTabs.forEach { tab ->
                             PillNavItem(
-                                selected       = isFavoritesSelected,
-                                selectedIcon   = Icons.Filled.Favorite,
-                                unselectedIcon = Icons.Outlined.FavoriteBorder,
-                                label          = "Favourites",
+                                selected       = tab.selected,
+                                selectedIcon   = tab.selectedIcon,
+                                unselectedIcon = tab.unselectedIcon,
+                                label          = tab.label,
                                 iconOnly       = iconOnly,
-                                onClick        = { doHaptic(); navigate(FavoritesScreenDestination.route) }
-                            )
-                        }
-                        if (showCallsTab) {
-                            PillNavItem(
-                                selected       = isRecentsSelected,
-                                selectedIcon   = Icons.Filled.History,
-                                unselectedIcon = Icons.Outlined.History,
-                                label          = "Calls",
-                                iconOnly       = iconOnly,
-                                onClick        = { doHaptic(); navigate(RecentScreenDestination.route) }
-                            )
-                        }
-                        if (showContactsTab) {
-                            PillNavItem(
-                                selected       = isContactsSelected,
-                                selectedIcon   = Icons.Filled.Person,
-                                unselectedIcon = Icons.Outlined.Person,
-                                label          = "Contacts",
-                                iconOnly       = iconOnly,
-                                onClick        = { doHaptic(); navigate(ContactScreenDestination.route) }
-                            )
-                        }
-                        if (showNotesTab) {
-                            PillNavItem(
-                                selected       = isNotesSelected,
-                                selectedIcon   = Icons.Filled.Note,
-                                unselectedIcon = Icons.Outlined.Note,
-                                label          = "Notes",
-                                iconOnly       = iconOnly,
-                                onClick        = { doHaptic(); navigate(NotesScreenDestination.route) }
+                                onClick        = tab.onClick
                             )
                         }
                     }
@@ -313,48 +364,15 @@ fun BottomBar(navController: NavController) {
                 .wrapContentHeight()
                 .graphicsLayer { alpha = navBarAlpha }
         ) {
-            if (showFavoritesTab) {
+            orderedTabs.forEach { tab ->
                 AnimatedNavBarItem(
-                    selected       = isFavoritesSelected,
-                    selectedIcon   = Icons.Filled.Favorite,
-                    unselectedIcon = Icons.Outlined.FavoriteBorder,
-                    label          = "Favourites",
+                    selected       = tab.selected,
+                    selectedIcon   = tab.selectedIcon,
+                    unselectedIcon = tab.unselectedIcon,
+                    label          = tab.label,
                     iconOnly       = iconOnly,
                     labelStyle     = labelStyle,
-                    onClick        = { doHaptic(); navigate(FavoritesScreenDestination.route) }
-                )
-            }
-            if (showCallsTab) {
-                AnimatedNavBarItem(
-                    selected       = isRecentsSelected,
-                    selectedIcon   = Icons.Filled.History,
-                    unselectedIcon = Icons.Outlined.History,
-                    label          = "Calls",
-                    iconOnly       = iconOnly,
-                    labelStyle     = labelStyle,
-                    onClick        = { doHaptic(); navigate(RecentScreenDestination.route) }
-                )
-            }
-            if (showContactsTab) {
-                AnimatedNavBarItem(
-                    selected       = isContactsSelected,
-                    selectedIcon   = Icons.Filled.Person,
-                    unselectedIcon = Icons.Outlined.Person,
-                    label          = "Contacts",
-                    iconOnly       = iconOnly,
-                    labelStyle     = labelStyle,
-                    onClick        = { doHaptic(); navigate(ContactScreenDestination.route) }
-                )
-            }
-            if (showNotesTab) {
-                AnimatedNavBarItem(
-                    selected       = isNotesSelected,
-                    selectedIcon   = Icons.Filled.Note,
-                    unselectedIcon = Icons.Outlined.Note,
-                    label          = "Notes",
-                    iconOnly       = iconOnly,
-                    labelStyle     = labelStyle,
-                    onClick        = { doHaptic(); navigate(NotesScreenDestination.route) }
+                    onClick        = tab.onClick
                 )
             }
         }
@@ -395,10 +413,23 @@ private fun RowScope.AnimatedNavBarItem(
             tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
+    // Fade the selected-state highlight pill in/out smoothly instead of the
+    // default indicator's abrupt show/hide.
+    val indicatorAlpha by animateFloatAsState(
+        targetValue   = if (selected) 1f else 0f,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label         = "${label}IndicatorAlpha"
+    )
 
     NavigationBarItem(
         icon = {
-            Box(modifier = Modifier.scale(scale)) {
+            Box(
+                modifier = Modifier
+                    .scale(scale)
+                    .clip(RoundedCornerShape(50.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = indicatorAlpha))
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
                 Crossfade(
                     targetState   = selected,
                     animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
@@ -418,7 +449,7 @@ private fun RowScope.AnimatedNavBarItem(
         interactionSource = interactionSource,
         colors          = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            indicatorColor    = MaterialTheme.colorScheme.primaryContainer
+            indicatorColor    = Color.Transparent
         ),
         onClick = onClick
     )
