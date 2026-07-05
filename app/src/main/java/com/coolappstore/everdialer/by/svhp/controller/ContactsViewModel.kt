@@ -86,12 +86,21 @@ class ContactsViewModel(
         }
     }
 
-    fun saveContact(contact: Contact) {
+    fun saveContact(contact: Contact, accountType: String? = null, accountName: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
-            contactsRepo.saveContact(contact)
+            contactsRepo.saveContact(contact, accountType, accountName)
             fetchContacts()
         }
     }
+
+    fun saveContactToSim(contact: Contact, simSlotIndex: Int, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = contactsRepo.saveContactToSim(contact, simSlotIndex)
+            kotlinx.coroutines.withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
+    fun getSaveTargets() = contactsRepo.getSaveTargets()
 
     fun deleteContact(contactId: String) {
         viewModelScope.launch(Dispatchers.IO) {

@@ -203,6 +203,72 @@ fun Android14WelcomeDialog(
 }
 
 @Composable
+fun FullScreenIntentDialog(
+    onEnable: () -> Unit,
+    onSkip: () -> Unit
+) {
+    LaunchDialogSurface {
+        DialogBanner(
+            title = "One More Step",
+            subtitle = "Enable full-screen incoming calls"
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp).padding(top = 1.dp)
+                    )
+                    Text(
+                        "Android disables full-screen notifications for new apps by default. Without it, the incoming call screen won't show when your phone is locked.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            StepRow(number = "1", icon = Icons.Default.TouchApp,    text = "Tap \"Enable\" below to open system settings")
+            StepRow(number = "2", icon = Icons.Default.ToggleOn,    text = "Turn on \"Allow full screen notifications\"")
+            StepRow(number = "3", icon = Icons.Default.Celebration, text = "Return here — incoming calls will now show full-screen")
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSkip,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("Later") }
+
+                Button(
+                    onClick = onEnable,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("Enable") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun StepRow(number: String, icon: ImageVector, text: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,

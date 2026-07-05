@@ -24,3 +24,17 @@ data class ContactAccount(
     val accountName: String,
     val contactCount: Int = 0
 )
+
+/**
+ * A destination the user can choose to save a new contact to, shown in the
+ * "Save contact to..." popup after tapping Save on a new contact.
+ */
+data class ContactSaveTarget(
+    val label: String,
+    val subLabel: String? = null,
+    // null accountType/accountName = device/phone storage
+    val accountType: String? = null,
+    val accountName: String? = null,
+    val isSim: Boolean = false,
+    val simSlotIndex: Int = 0
+)

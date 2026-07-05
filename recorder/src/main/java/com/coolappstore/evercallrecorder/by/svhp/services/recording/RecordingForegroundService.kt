@@ -428,6 +428,12 @@ class RecordingForegroundService : Service() {
     private fun updateNotification() {
         val notification = notificationHelper.getNotification(currentState)
         startForegroundWithType(notification)
+        if (!AppPreferences(this).isRecordingNotificationsEnabled()) {
+            // startForeground() must still be called to satisfy the OS requirement for a service
+            // started via startForegroundService, but we immediately dismiss the notification so
+            // nothing is shown to the user when "Enable recording notifications" is off.
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        }
     }
 
 

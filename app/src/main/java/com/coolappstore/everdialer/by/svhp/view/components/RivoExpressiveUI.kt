@@ -477,6 +477,7 @@ fun RivoListItem(
     leadingIcon: ImageVector? = null,
     iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
+    trailingText: String? = null,
     avatarName: String? = null,
     photoUri: String? = null,
     onClick: () -> Unit,
@@ -559,6 +560,17 @@ fun RivoListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            if (trailingText != null) {
+                Text(
+                    text = trailingText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
             }
 
             if (trailingIcon != null) {

@@ -42,6 +42,7 @@ interface SettingsActions {
     fun setThemeMode(mode: AppPreferences.ThemeMode)
     fun setDynamicColorEnabled(enabled: Boolean)
     fun setShowToastsEnabled(enabled: Boolean)
+    fun setRecordingNotificationsEnabled(enabled: Boolean)
     fun setAppLanguage(languageCode: String)
     fun setLoggingEnabled(enabled: Boolean)
     fun setDebugEnabled(enabled: Boolean)
@@ -122,6 +123,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     override fun setThemeMode(mode: AppPreferences.ThemeMode) { preferences.setThemeMode(mode); refresh() }
     override fun setDynamicColorEnabled(enabled: Boolean) { preferences.setDynamicColorEnabled(enabled); refresh() }
     override fun setShowToastsEnabled(enabled: Boolean) { preferences.setShowToastsEnabled(enabled); refresh() }
+    override fun setRecordingNotificationsEnabled(enabled: Boolean) {
+        preferences.setRecordingNotificationsEnabled(enabled)
+        com.coolappstore.evercallrecorder.by.svhp.services.recording.RecordingNotificationHelper(getApplication())
+            .createNotificationChannels()
+        refresh()
+    }
     override fun setAccentColor(argb: Int) { preferences.setAccentColor(argb); refresh() }
     override fun setAutoDeleteByTimeEnabled(enabled: Boolean)  { preferences.setAutoDeleteByTimeEnabled(enabled); refresh() }
     override fun setAutoDeleteByTimeValue(value: Int)          { preferences.setAutoDeleteByTimeValue(value); refresh() }

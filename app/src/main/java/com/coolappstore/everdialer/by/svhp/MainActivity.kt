@@ -2,6 +2,7 @@ package com.coolappstore.everdialer.by.svhp
 
 import android.Manifest
 import android.app.DownloadManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -54,6 +55,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import com.coolappstore.everdialer.by.svhp.view.components.Android14WelcomeDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TelegramJoinDialog
+import com.coolappstore.everdialer.by.svhp.view.components.FullScreenIntentDialog
 import com.coolappstore.everdialer.by.svhp.view.components.BottomBar
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.rememberLayerBackdrop
@@ -145,6 +147,7 @@ class MainActivity : FragmentActivity() {
                 // Show AFTER the default dialer prompt (which fires in onCreate)
                 var showWelcomeDialog by remember { mutableStateOf(false) }
                 var showTelegramDialog by remember { mutableStateOf(false) }
+                var showFullScreenIntentDialog by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (isFirstLaunch) {
                         // Small delay so the default dialer system dialog appears first
@@ -154,6 +157,9 @@ class MainActivity : FragmentActivity() {
                         // Welcome already done but Telegram dialog not yet shown — show it
                         kotlinx.coroutines.delay(800)
                         showTelegramDialog = true
+                    } else if (needsFullScreenIntentPermission()) {
+                        kotlinx.coroutines.delay(800)
+                        showFullScreenIntentDialog = true
                     }
                 }
 
@@ -171,6 +177,8 @@ class MainActivity : FragmentActivity() {
                             requestDefaultDialer()
                             if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
                                 showTelegramDialog = true
+                            } else if (needsFullScreenIntentPermission()) {
+                                showFullScreenIntentDialog = true
                             }
                         }
                     )
@@ -186,11 +194,38 @@ class MainActivity : FragmentActivity() {
                             startActivity(intent)
                             prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
                             showTelegramDialog = false
+                            if (needsFullScreenIntentPermission()) {
+                                showFullScreenIntentDialog = true
+                            }
                         },
                         onSkip = {
                             prefs.setBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, true)
                             showTelegramDialog = false
+                            if (needsFullScreenIntentPermission()) {
+                                showFullScreenIntentDialog = true
+                            }
                         }
+                    )
+                }
+
+                // ── Full-Screen Intent Permission Dialog ─────────────────────
+                if (showFullScreenIntentDialog) {
+                    FullScreenIntentDialog(
+                        onEnable = {
+                            showFullScreenIntentDialog = false
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            try {
+                                startActivity(intent)
+                            } catch (_: Exception) {
+                                val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", packageName, null)
+                                }
+                                startActivity(fallback)
+                            }
+                        },
+                        onSkip = { showFullScreenIntentDialog = false }
                     )
                 }
 
@@ -619,6 +654,12 @@ class MainActivity : FragmentActivity() {
                 requestRoleLauncher.launch(intent)
             }
         }
+    }
+
+    fun needsFullScreenIntentPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        val nm = getSystemService(NotificationManager::class.java)
+        return !nm.canUseFullScreenIntent()
     }
 
     private fun requestRequiredPermissions() {

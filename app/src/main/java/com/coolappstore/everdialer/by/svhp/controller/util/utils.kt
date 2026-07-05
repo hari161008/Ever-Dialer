@@ -49,6 +49,10 @@ fun formatDate(timestamp: Long): String {
     return if (relative != null) "$relative, $time" else "${formatDateHeader(timestamp)}, $time"
 }
 
+fun formatTimeOnly(timestamp: Long): String {
+    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
+}
+
 fun formatDuration(durationSeconds: Long): String {
     return DateUtils.formatElapsedTime(durationSeconds)
 }

@@ -5,6 +5,8 @@ import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -17,10 +19,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
@@ -84,6 +89,11 @@ fun ContactEditScreen(
         onResult = { uri -> if (uri != null) photoUri = uri.toString() }
     )
 
+    val context = LocalContext.current
+    var showSaveTargetDialog by remember { mutableStateOf(false) }
+    var pendingContact by remember { mutableStateOf<Contact?>(null) }
+    val isNewContact = contactId == null || contactId == "0"
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -109,8 +119,13 @@ fun ContactEditScreen(
                                 addresses = addresses.filter { it.isNotBlank() },
                                 photoUri = photoUri
                             )
-                            contactsVM.saveContact(contactToSave)
-                            navigator.navigateUp()
+                            if (isNewContact) {
+                                pendingContact = contactToSave
+                                showSaveTargetDialog = true
+                            } else {
+                                contactsVM.saveContact(contactToSave)
+                                navigator.navigateUp()
+                            }
                         },
                         enabled = name.isNotBlank() && phoneNumbers.any { it.isNotBlank() },
                         modifier = Modifier.padding(end = 8.dp),
@@ -279,6 +294,88 @@ fun ContactEditScreen(
             }
             
             item { Spacer(modifier = Modifier.height(100.dp)) }
+        }
+    }
+
+    if (showSaveTargetDialog && pendingContact != null) {
+        val saveTargets = remember { contactsVM.getSaveTargets() }
+        SaveContactToDialog(
+            targets = saveTargets,
+            onSelect = { target ->
+                val contactToSave = pendingContact!!
+                if (target.isSim) {
+                    contactsVM.saveContactToSim(contactToSave, target.simSlotIndex) { success ->
+                        Toast.makeText(
+                            context,
+                            if (success) "Saved to ${target.label}" else "Couldn't save to ${target.label}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    contactsVM.saveContact(contactToSave, target.accountType, target.accountName)
+                }
+                showSaveTargetDialog = false
+                navigator.navigateUp()
+            },
+            onDismiss = { showSaveTargetDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun SaveContactToDialog(
+    targets: List<ContactSaveTarget>,
+    onSelect: (ContactSaveTarget) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                Text(
+                    "Save contact to",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                )
+                targets.forEach { target ->
+                    val icon: ImageVector = when {
+                        target.isSim -> Icons.Default.SimCard
+                        target.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
+                        target.accountType != null -> Icons.Default.Sync
+                        else -> Icons.Default.PhoneAndroid
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(target) }
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            if (target.subLabel != null) {
+                                Text(
+                                    target.subLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
+                ) { Text("Cancel") }
+            }
         }
     }
 }

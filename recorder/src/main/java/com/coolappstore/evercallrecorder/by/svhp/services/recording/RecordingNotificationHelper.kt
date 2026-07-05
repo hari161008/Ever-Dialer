@@ -43,13 +43,21 @@ class RecordingNotificationHelper(private val context: Context) {
 
     fun createNotificationChannels() {
         val manager = context.getSystemService(NotificationManager::class.java)
+        val notificationsEnabled = AppPreferences(context).isRecordingNotificationsEnabled()
 
         val groupId = "recording_channel_group"
         val group = NotificationChannelGroup(groupId, "Recording Channel")
         manager.createNotificationChannelGroup(group)
 
+        // Recreate the channels so importance changes take effect immediately when the
+        // "Enable recording notifications" toggle is flipped (channel importance can't be
+        // changed in-place once created).
+        manager.deleteNotificationChannel(CHANNEL_ID_SERVICE)
+        manager.deleteNotificationChannel(CHANNEL_ID_ERROR)
+
+        val serviceImportance = if (notificationsEnabled) NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_MIN
         val serviceChannel = NotificationChannel(
-            CHANNEL_ID_SERVICE, "Foreground Recording Service", NotificationManager.IMPORTANCE_HIGH
+            CHANNEL_ID_SERVICE, "Foreground Recording Service", serviceImportance
         ).apply {
             this.group = groupId
             // Alert channel should be visible but we handle vibration manually
@@ -57,17 +65,18 @@ class RecordingNotificationHelper(private val context: Context) {
             enableLights(false)
             enableVibration(false)
             setShowBadge(false)
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+            lockscreenVisibility = if (notificationsEnabled) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_SECRET
         }
         manager.createNotificationChannel(serviceChannel)
 
+        val errorImportance = if (notificationsEnabled) NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_MIN
         val errorChannel = NotificationChannel(
-            CHANNEL_ID_ERROR, "Recording Errors", NotificationManager.IMPORTANCE_HIGH
+            CHANNEL_ID_ERROR, "Recording Errors", errorImportance
         ).apply {
             this.group = groupId
             enableVibration(false) // We handle vibration manually
-            setShowBadge(true)
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
+            setShowBadge(notificationsEnabled)
+            lockscreenVisibility = if (notificationsEnabled) NotificationCompat.VISIBILITY_PRIVATE else NotificationCompat.VISIBILITY_SECRET
         }
         manager.createNotificationChannel(errorChannel)
     }
@@ -125,6 +134,8 @@ class RecordingNotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val notificationsEnabled = AppPreferences(context).isRecordingNotificationsEnabled()
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID_SERVICE)
             .setSmallIcon(R.drawable.ic_mic)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher))
@@ -133,11 +144,12 @@ class RecordingNotificationHelper(private val context: Context) {
             .setSubText(subText)
             .setOngoing(true) // Almost useless starting Android 14+ :)
             .setDeleteIntent(deletePendingIntent) // Android 14+ workaround :)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // Nothing sensible here, and we want to show it on lockscreen.
+            .setVisibility(if (notificationsEnabled) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_SECRET)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
-            .setSilent(state is RecordingServiceState.Active || state is RecordingServiceState.Starting) // Don't do a screen-incursion if we are already recording.
+            .setSilent(!notificationsEnabled || state is RecordingServiceState.Active || state is RecordingServiceState.Starting) // Don't do a screen-incursion if we are already recording.
+            .setPriority(if (notificationsEnabled) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_MIN)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
         if (actionText != null && actionIntentAction != null && actionIcon != null) {
@@ -211,6 +223,7 @@ class RecordingNotificationHelper(private val context: Context) {
      * @param message Human-readable error description to show in the notification body.
      */
     fun showErrorNotification(message: String) {
+        if (!AppPreferences(context).isRecordingNotificationsEnabled()) return
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_ERROR)
             .setSmallIcon(R.drawable.ic_mic)
             .setContentTitle(context.getString(R.string.recording_error_title))

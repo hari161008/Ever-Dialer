@@ -614,6 +614,7 @@ private fun RateAndReviewSection(
 private fun AppearanceSection(preferences: AppPreferences, updateTrigger: Int, actions: SettingsActions) {
     val currentThemeMode     = remember(updateTrigger) { preferences.getThemeMode() }
     val isDynamicColorEnabled= remember(updateTrigger) { preferences.isDynamicColorEnabled() }
+    val isRecordingNotificationsEnabled = remember(updateTrigger) { preferences.isRecordingNotificationsEnabled() }
     val isShowToastsEnabled  = remember(updateTrigger) { preferences.isShowToastsEnabled() }
     val isVibrationEnabled   = remember(updateTrigger) { preferences.isVibrationEnabled() }
     val accentArgb           = remember(updateTrigger) { preferences.getAccentColor() }
@@ -646,6 +647,11 @@ private fun AppearanceSection(preferences: AppPreferences, updateTrigger: Int, a
                 Spacer(Modifier.height(8.dp))
             }
         }
+        ToggleListItem(
+            label = stringResource(R.string.settings_recording_notifications),
+            checked = isRecordingNotificationsEnabled,
+            onCheckedChange = { actions.setRecordingNotificationsEnabled(it) }
+        )
         ToggleListItem(label = stringResource(R.string.settings_show_toasts), checked = isShowToastsEnabled, onCheckedChange = { actions.setShowToastsEnabled(it) })
         ToggleListItem(label = stringResource(R.string.settings_vibration_enabled), checked = isVibrationEnabled, onCheckedChange = { actions.setVibrationEnabled(it) })
     }
@@ -1480,6 +1486,7 @@ private fun SettingsScreenPreview() {
             override fun setThemeMode(mode: AppPreferences.ThemeMode) {}
             override fun setDynamicColorEnabled(enabled: Boolean) {}
             override fun setShowToastsEnabled(enabled: Boolean) {}
+            override fun setRecordingNotificationsEnabled(enabled: Boolean) {}
             override fun setAppLanguage(languageCode: String) {}
             override fun setLoggingEnabled(enabled: Boolean) {}
             override fun setDebugEnabled(enabled: Boolean) {}

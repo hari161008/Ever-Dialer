@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
+import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
@@ -117,6 +118,7 @@ fun CallLogTile(
             },
             avatarName  = displayName,
             photoUri    = log.photoUri,
+            trailingText = formatTimeOnly(log.date),
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived

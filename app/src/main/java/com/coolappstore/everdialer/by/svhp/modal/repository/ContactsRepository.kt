@@ -11,6 +11,7 @@ import androidx.annotation.RequiresApi
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactEvent
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 
 class ContactsRepository(private val contentResolver: ContentResolver, private val context: Context) : IContactsRepository {
@@ -240,15 +241,15 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         contentResolver.update(updateUri, contentValue, null, null)
     }
 
-    override fun saveContact(contact: Contact) {
+    override fun saveContact(contact: Contact, accountType: String?, accountName: String?) {
         val ops = ArrayList<ContentProviderOperation>()
         
         if (contact.id.isEmpty() || contact.id == "0") {
             
             val rawContactIndex = ops.size
             ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
-                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
-                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, accountType)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, accountName)
                 .build())
 
             ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
@@ -320,6 +321,75 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 contactCount = info.contactIds.size
             )
         }.filter { it.contactCount > 0 }.sortedByDescending { it.contactCount }
+    }
+
+    override fun getSaveTargets(): List<ContactSaveTarget> {
+        val targets = mutableListOf<ContactSaveTarget>()
+        targets.add(ContactSaveTarget(label = "Device", subLabel = "This phone only"))
+
+        try {
+            getAvailableAccounts()
+                .filter { !it.key.startsWith("sim_") && !it.key.equals("whatsapp", ignoreCase = true) }
+                .forEach { acc ->
+                    targets.add(
+                        ContactSaveTarget(
+                            label = acc.displayName,
+                            subLabel = acc.accountName.ifBlank { null },
+                            accountType = acc.accountType,
+                            accountName = acc.accountName
+                        )
+                    )
+                }
+        } catch (_: Exception) { }
+
+        try {
+            val simCount = getActiveSimCount()
+            for (slot in 0 until simCount) {
+                targets.add(
+                    ContactSaveTarget(
+                        label = if (simCount > 1) "SIM ${slot + 1}" else "SIM Card",
+                        subLabel = "Name & number only",
+                        isSim = true,
+                        simSlotIndex = slot
+                    )
+                )
+            }
+        } catch (_: Exception) { }
+
+        return targets
+    }
+
+    override fun saveContactToSim(contact: Contact, simSlotIndex: Int): Boolean {
+        val number = contact.phoneNumbers.firstOrNull { it.isNotBlank() } ?: return false
+        return try {
+            val values = ContentValues().apply {
+                put("tag", contact.name)
+                put("number", number)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    put("subscription_id", getSubscriptionIdForSlot(simSlotIndex))
+                }
+            }
+            val uri = contentResolver.insert(Uri.parse("content://icc/adn"), values)
+            uri != null
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Resolves the subscription_id for a given 0-based SIM slot index, or -1 if unknown. */
+    private fun getSubscriptionIdForSlot(slotIndex: Int): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1
+        return try {
+            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                    as? SubscriptionManager ?: return -1
+            val subs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                sm.activeSubscriptionInfoList ?: emptyList()
+            } else {
+                @Suppress("DEPRECATION")
+                SubscriptionManager.from(context).activeSubscriptionInfoList ?: emptyList()
+            }
+            subs.firstOrNull { it.simSlotIndex == slotIndex }?.subscriptionId ?: -1
+        } catch (_: Exception) { -1 }
     }
 
     private fun buildAccountKey(type: String, name: String): String = when {

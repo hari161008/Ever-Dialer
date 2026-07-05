@@ -49,6 +49,7 @@ class AppPreferences(context: Context) {
         val THEME_MODE = ThemeMode.SYSTEM
         const val DYNAMIC_COLOR = true
         const val SHOW_TOASTS = true
+        const val RECORDING_NOTIFICATIONS_ENABLED = true
         const val SHIZUKU_AUTO_MANAGE = false
         const val SHIZUKU_START_ON_RECORD = false
         const val SHIZUKU_KEEP_ALIVE = false
@@ -99,6 +100,7 @@ class AppPreferences(context: Context) {
         THEME_MODE("theme_mode"),
         DYNAMIC_COLOR("dynamic_color"),
         SHOW_TOASTS("show_toasts"),
+        RECORDING_NOTIFICATIONS_ENABLED("recording_notifications_enabled"),
         SHIZUKU_AUTO_MANAGE("shizuku_auto_manage"),
         SHIZUKU_START_ON_RECORD("shizuku_start_on_record"),
         SHIZUKU_KEEP_ALIVE("shizuku_keep_alive"),
@@ -239,6 +241,8 @@ class AppPreferences(context: Context) {
     fun setDynamicColorEnabled(enabled: Boolean) = setBoolean(Key.DYNAMIC_COLOR, enabled)
     fun isShowToastsEnabled() = getBoolean(Key.SHOW_TOASTS, DefaultsValue.SHOW_TOASTS)
     fun setShowToastsEnabled(enabled: Boolean) = setBoolean(Key.SHOW_TOASTS, enabled)
+    fun isRecordingNotificationsEnabled() = getBoolean(Key.RECORDING_NOTIFICATIONS_ENABLED, DefaultsValue.RECORDING_NOTIFICATIONS_ENABLED)
+    fun setRecordingNotificationsEnabled(enabled: Boolean) = setBoolean(Key.RECORDING_NOTIFICATIONS_ENABLED, enabled)
     fun isShizukuAutoManageEnabled() = getBoolean(Key.SHIZUKU_AUTO_MANAGE, DefaultsValue.SHIZUKU_AUTO_MANAGE)
     fun setShizukuAutoManageEnabled(enabled: Boolean) = setBoolean(Key.SHIZUKU_AUTO_MANAGE, enabled)
     fun isShizukuStartOnRecordEnabled() = getBoolean(Key.SHIZUKU_START_ON_RECORD, DefaultsValue.SHIZUKU_START_ON_RECORD)
