@@ -121,20 +121,25 @@ fun ContactsToDisplayDialog(
                     subs.forEach { sub ->
                         val simName = sub.displayName?.toString()?.takeIf { it.isNotBlank() }
                             ?: "SIM ${sub.simSlotIndex + 1}"
+                        // Key must match ContactsRepository's slot-based scheme ("sim_1", "sim_2", ...
+                        // where the number is simSlotIndex + 1), not the raw subscriptionId — the two
+                        // are usually different numbers. Using subscriptionId here meant this filter
+                        // could never actually match any raw contact, so toggling SIM sources always
+                        // silently produced zero contacts.
                         list.add(ContactSourceItem(
-                            key = "sim_${sub.subscriptionId}",
+                            key = "sim_${sub.simSlotIndex + 1}",
                             label = "SIM",
                             subLabel = simName
                         ))
                     }
                 } else {
-                    list.add(ContactSourceItem(key = "sim_1", label = "SIM", subLabel = "SIM 1"))
+                    list.add(ContactSourceItem(key = "sim_0", label = "SIM", subLabel = "Device Storage"))
                 }
             } else {
-                list.add(ContactSourceItem(key = "sim_1", label = "SIM", subLabel = "SIM 1"))
+                list.add(ContactSourceItem(key = "sim_0", label = "SIM", subLabel = "Device Storage"))
             }
         } catch (_: Exception) {
-            list.add(ContactSourceItem(key = "sim_1", label = "SIM", subLabel = "SIM 1"))
+            list.add(ContactSourceItem(key = "sim_0", label = "SIM", subLabel = "Device Storage"))
         }
 
         // WhatsApp

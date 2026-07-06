@@ -7,7 +7,9 @@ import android.content.Intent
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
@@ -24,7 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
@@ -34,6 +39,30 @@ import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import org.koin.compose.koinInject
+
+/**
+ * A small colored circular badge that shows the SIM slot number (1 or 2) so the SIM can be
+ * identified at a glance by color AND number, instead of relying on color alone.
+ */
+@Composable
+fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier) {
+    val color = if (slot == 0) Color(0xFF1B5E20) else Color(0xFFB71C1C)
+    Box(
+        modifier = modifier
+            .size(16.dp)
+            .background(color = color, shape = CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (slot == 0) "1" else "2",
+            color = Color.White,
+            fontSize = 9.sp,
+            lineHeight = 9.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
 
 @Composable
 fun CallLogTileSimple(log: CallLogEntry) {
@@ -120,11 +149,9 @@ fun CallLogTile(
             avatarName  = displayName,
             photoUri    = log.photoUri,
             trailingStartContent = if (showSimBadge) ({
-                Icon(
-                    imageVector = Icons.Default.SimCard,
-                    contentDescription = if (log.simSlot == 0) "SIM 1" else "SIM 2",
-                    tint = if (log.simSlot == 0) Color(0xFF1B5E20) else Color(0xFFB71C1C),
-                    modifier = Modifier.padding(end = 6.dp).size(16.dp)
+                SimSlotBadge(
+                    slot = log.simSlot,
+                    modifier = Modifier.padding(end = 6.dp)
                 )
             }) else null,
             trailingText = formatTimeOnly(log.date),

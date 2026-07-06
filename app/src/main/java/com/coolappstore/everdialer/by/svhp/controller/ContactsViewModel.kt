@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,12 @@ class ContactsViewModel(
     private val _availableAccounts = MutableStateFlow<List<ContactAccount>>(emptyList())
     val availableAccounts: StateFlow<List<ContactAccount>> = _availableAccounts.asStateFlow()
 
+    // Tracks the in-flight fetch job so a fast follow-up filter change (e.g. tapping SIM, then
+    // Gmail, then WhatsApp in quick succession) cancels the older, still-running fetch instead
+    // of letting it race the newer one and potentially overwrite fresh results with stale ones
+    // — or leave the loading spinner stuck if it never completes.
+    private var fetchJob: Job? = null
+
     init {
         fetchContacts()
         fetchAvailableAccounts()
@@ -43,11 +50,13 @@ class ContactsViewModel(
         val ctx = getApplication<Application>()
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) {
+            fetchJob?.cancel()
             _isLoading.value = false
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            _isLoading.value = true
+        fetchJob?.cancel()
+        _isLoading.value = true
+        fetchJob = viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val sessionKey = _selectedAccountKey.value
                 val raw = if (sessionKey != null) {

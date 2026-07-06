@@ -305,6 +305,156 @@ fun ContactContent(
             val contacts = contactsVM.allContacts.collectAsState().value
             val isLoadingContacts by contactsVM.isLoading.collectAsState()
 
+            // ── Contact count / account-switcher pill ─────────────────────
+            // This row (and the sheet it opens) must always stay visible whenever contacts
+            // permission is granted — regardless of whether the current filter is still loading
+            // or came back with zero contacts. Previously this whole block lived inside the
+            // "else" branch below (only shown once loaded AND non-empty), which meant picking a
+            // source with few/no contacts, or being mid-load, made the switcher disappear
+            // entirely — looking like the app was stuck.
+            var chipVisible by remember { mutableStateOf(false) }
+            val chipAlpha by animateFloatAsState(
+                targetValue = if (chipVisible) 1f else 0f,
+                animationSpec = tween(500),
+                label = "chipAlpha"
+            )
+            val chipScale by animateFloatAsState(
+                targetValue = if (chipVisible) 1f else 0.8f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "chipScale"
+            )
+            LaunchedEffect(Unit) { chipVisible = true }
+
+            val availableAccounts by contactsVM.availableAccounts.collectAsState()
+            val selectedAccountKey by contactsVM.selectedAccountKey.collectAsState()
+            var showAccountSheet by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) { contactsVM.fetchAvailableAccounts() }
+
+            val contactsCountText = when {
+                isLoadingContacts -> "Loading…"
+                selectedAccountKey != null -> {
+                    val acc = availableAccounts.find { it.key == selectedAccountKey }
+                    "${acc?.displayName ?: selectedAccountKey} · ${contacts.size}"
+                }
+                else -> "${contacts.size} contacts"
+            }
+
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .alpha(chipAlpha)
+                    .scale(chipScale),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // ── Contacts count + account switcher pill ─────────────
+                Surface(
+                    onClick = { showAccountSheet = true },
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (selectedAccountKey != null)
+                        MaterialTheme.colorScheme.secondaryContainer
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (isLoadingContacts) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = if (selectedAccountKey != null)
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (selectedAccountKey != null)
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Text(
+                            text = contactsCountText,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selectedAccountKey != null)
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            else
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Icon(
+                            Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedAccountKey != null)
+                                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                // ── Sources pill (separate, non-interactive summary) ───
+                if (selectedAccountKey == null && availableAccounts.isNotEmpty()) {
+                    val sourceLabels = availableAccounts.joinToString(" · ") { acc ->
+                        when {
+                            acc.key.startsWith("google_") -> acc.accountName.substringBefore("@").take(10)
+                            acc.key == "sim_1" -> "SIM 1"
+                            acc.key == "sim_2" -> "SIM 2"
+                            acc.key == "whatsapp" -> "WhatsApp"
+                            else -> acc.displayName.take(10)
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = sourceLabels,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showAccountSheet) {
+                AccountSwitcherSheet(
+                    accounts = availableAccounts,
+                    selectedKey = selectedAccountKey,
+                    totalCount = availableAccounts.sumOf { it.contactCount }.takeIf { it > 0 } ?: contacts.size,
+                    onSelect = { key ->
+                        contactsVM.setAccountFilter(key)
+                        showAccountSheet = false
+                    },
+                    onDismiss = { showAccountSheet = false }
+                )
+            }
+
+            // ── Body: loading indicator, empty state, or the actual list ──
             if (isLoadingContacts) {
                 RivoLoadingIndicatorView()
             } else if (contacts.isEmpty()) {
@@ -325,137 +475,6 @@ fun ContactContent(
                     }
                 }
             } else {
-                // ── Contact count / account-switcher pill ─────────────────
-                var chipVisible by remember { mutableStateOf(false) }
-                val chipAlpha by animateFloatAsState(
-                    targetValue = if (chipVisible) 1f else 0f,
-                    animationSpec = tween(500),
-                    label = "chipAlpha"
-                )
-                val chipScale by animateFloatAsState(
-                    targetValue = if (chipVisible) 1f else 0.8f,
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    label = "chipScale"
-                )
-                LaunchedEffect(contacts.size) { chipVisible = true }
-
-                val availableAccounts by contactsVM.availableAccounts.collectAsState()
-                val selectedAccountKey by contactsVM.selectedAccountKey.collectAsState()
-                var showAccountSheet by remember { mutableStateOf(false) }
-
-                LaunchedEffect(Unit) { contactsVM.fetchAvailableAccounts() }
-
-                val contactsCountText = when {
-                    selectedAccountKey != null -> {
-                        val acc = availableAccounts.find { it.key == selectedAccountKey }
-                        "${acc?.displayName ?: selectedAccountKey} · ${contacts.size}"
-                    }
-                    else -> "${contacts.size} contacts"
-                }
-
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp, vertical = 6.dp)
-                        .alpha(chipAlpha)
-                        .scale(chipScale),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // ── Contacts count + account switcher pill ─────────────
-                    Surface(
-                        onClick = { showAccountSheet = true },
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (selectedAccountKey != null)
-                            MaterialTheme.colorScheme.secondaryContainer
-                        else
-                            MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = if (selectedAccountKey != null)
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = contactsCountText,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (selectedAccountKey != null)
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Icon(
-                                Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = if (selectedAccountKey != null)
-                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                else
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-
-                    // ── Sources pill (separate, non-interactive summary) ───
-                    if (selectedAccountKey == null && availableAccounts.isNotEmpty()) {
-                        val sourceLabels = availableAccounts.joinToString(" · ") { acc ->
-                            when {
-                                acc.key.startsWith("google_") -> acc.accountName.substringBefore("@").take(10)
-                                acc.key == "sim_1" -> "SIM 1"
-                                acc.key == "sim_2" -> "SIM 2"
-                                acc.key == "whatsapp" -> "WhatsApp"
-                                else -> acc.displayName.take(10)
-                            }
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.AccountCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(13.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = sourceLabels,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (showAccountSheet) {
-                    AccountSwitcherSheet(
-                        accounts = availableAccounts,
-                        selectedKey = selectedAccountKey,
-                        totalCount = availableAccounts.sumOf { it.contactCount }.takeIf { it > 0 } ?: contacts.size,
-                        onSelect = { key ->
-                            contactsVM.setAccountFilter(key)
-                            showAccountSheet = false
-                        },
-                        onDismiss = { showAccountSheet = false }
-                    )
-                }
-
                 ScrollHapticsEffect(listState = listState)
                 AZListScroll(
                                 contacts = contacts,

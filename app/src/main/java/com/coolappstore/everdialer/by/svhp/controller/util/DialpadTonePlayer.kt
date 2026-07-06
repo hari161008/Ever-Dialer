@@ -2,12 +2,15 @@ package com.coolappstore.everdialer.by.svhp.controller.util
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFormat
 import android.media.AudioManager
-import android.media.AudioTrack
+import android.media.SoundPool
 import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
+import java.io.File
+import java.io.RandomAccessFile
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sign
@@ -29,14 +32,45 @@ enum class DialpadToneStyle(val key: String, val label: String, val description:
 
 /**
  * Plays the sound that accompanies a dialpad keypress. "Standard" reuses the system's real
- * [ToneGenerator] DTMF tones unchanged. Every other style is a tiny PCM clip synthesized in code
- * — no audio assets needed — and cached per key, so it's generated once and replayed instantly
- * on every later press.
+ * [ToneGenerator] DTMF tones unchanged — fast and non-blocking, since it's just a native call.
+ *
+ * Every other style is a tiny PCM clip synthesized in code (no audio assets needed). The
+ * synthesis, WAV encoding, and [SoundPool] loading all happen once per key on a background
+ * thread and are cached; every later press is just a [SoundPool.play] call, which is as cheap
+ * as the standard tone. This avoids doing CPU-heavy synthesis or allocating a new AudioTrack
+ * on the caller's thread (the UI thread) on every single keypress, which is what made the
+ * dialpad feel slow/jittery whenever a non-default tone style was selected.
  */
 object DialpadTonePlayer {
 
     private const val SAMPLE_RATE = 44100
-    private val bufferCache = mutableMapOf<String, ShortArray>()
+
+    private val ioExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // key = "${style.key}:$digit" -> loaded SoundPool sound id (once ready to play)
+    private val soundIdCache = ConcurrentHashMap<String, Int>()
+    // Guards against kicking off the same synth+load job twice while it's in flight
+    private val inFlight = ConcurrentHashMap.newKeySet<String>()
+
+    private var soundPool: SoundPool? = null
+
+    private fun soundPoolFor(context: Context): SoundPool {
+        soundPool?.let { return it }
+        synchronized(this) {
+            soundPool?.let { return it }
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            val pool = SoundPool.Builder()
+                .setMaxStreams(4)
+                .setAudioAttributes(attributes)
+                .build()
+            soundPool = pool
+            return pool
+        }
+    }
 
     /** Plays the keypress sound for [digit] (one of 0-9, *, #) in the given [style]. */
     fun play(context: Context, digit: String, style: DialpadToneStyle) {
@@ -44,10 +78,43 @@ object DialpadTonePlayer {
             toneTypeFor(digit)?.let { playTone(it) }
             return
         }
-        try {
-            val pcm = bufferCache.getOrPut("${style.key}:$digit") { synthesize(style, digit) }
-            if (pcm.isNotEmpty()) playPcm(pcm)
-        } catch (_: Exception) {}
+
+        val cacheKey = "${style.key}:$digit"
+        val appContext = context.applicationContext
+        val pool = soundPoolFor(appContext)
+
+        val cachedId = soundIdCache[cacheKey]
+        if (cachedId != null) {
+            // Already loaded — this is just a native call, same cost as the standard tone.
+            pool.play(cachedId, 1f, 1f, 1, 0, 1f)
+            return
+        }
+
+        // Not loaded yet: kick off synthesis + loading on a background thread, never on the
+        // caller's (UI) thread. If it's already in flight for this key, don't queue it twice.
+        if (!inFlight.add(cacheKey)) return
+        ioExecutor.execute {
+            try {
+                val pcm = synthesize(style, digit)
+                if (pcm.isNotEmpty()) {
+                    val wavFile = File(appContext.cacheDir, "dtmf_${style.key}_${digit.hashCode()}.wav")
+                    writeWav(wavFile, pcm)
+                    val soundId = pool.load(wavFile.absolutePath, 1)
+                    pool.setOnLoadCompleteListener { sp, id, status ->
+                        if (status == 0 && id == soundId) {
+                            soundIdCache[cacheKey] = soundId
+                            // Play the very press that triggered the load, once it's ready.
+                            mainHandler.post { sp.play(soundId, 1f, 1f, 1, 0, 1f) }
+                        }
+                        inFlight.remove(cacheKey)
+                    }
+                } else {
+                    inFlight.remove(cacheKey)
+                }
+            } catch (_: Exception) {
+                inFlight.remove(cacheKey)
+            }
+        }
     }
 
     private fun toneTypeFor(digit: String): Int? = when (digit) {
@@ -70,37 +137,51 @@ object DialpadTonePlayer {
         try {
             val toneGen = ToneGenerator(AudioManager.STREAM_DTMF, 80)
             toneGen.startTone(toneType, 150)
-            Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, 200)
+            mainHandler.postDelayed({ toneGen.release() }, 200)
         } catch (_: Exception) {}
     }
 
-    // ── PCM playback for the fun styles ─────────────────────────────────────
+    // ── Minimal WAV encoding so SoundPool can load our synthesized PCM ──────
 
-    private fun playPcm(pcm: ShortArray) {
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        val format = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .setSampleRate(SAMPLE_RATE)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .build()
-        val track = AudioTrack(
-            attributes,
-            format,
-            pcm.size * 2,
-            AudioTrack.MODE_STATIC,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-        )
-        track.write(pcm, 0, pcm.size)
-        track.play()
-        val durationMs = (pcm.size * 1000L / SAMPLE_RATE) + 100L
-        Handler(Looper.getMainLooper()).postDelayed({
-            try { track.stop() } catch (_: Exception) {}
-            try { track.release() } catch (_: Exception) {}
-        }, durationMs)
+    private fun writeWav(file: File, pcm: ShortArray) {
+        val dataSize = pcm.size * 2
+        val byteRate = SAMPLE_RATE * 2
+        RandomAccessFile(file, "rw").use { raf ->
+            raf.setLength(0)
+            raf.writeBytes("RIFF")
+            raf.write(intLE(36 + dataSize))
+            raf.writeBytes("WAVE")
+            raf.writeBytes("fmt ")
+            raf.write(intLE(16))
+            raf.write(shortLE(1))              // PCM
+            raf.write(shortLE(1))              // mono
+            raf.write(intLE(SAMPLE_RATE))
+            raf.write(intLE(byteRate))
+            raf.write(shortLE(2))               // block align
+            raf.write(shortLE(16))              // bits per sample
+            raf.writeBytes("data")
+            raf.write(intLE(dataSize))
+            val bytes = ByteArray(dataSize)
+            for (i in pcm.indices) {
+                val v = pcm[i].toInt()
+                bytes[i * 2] = (v and 0xFF).toByte()
+                bytes[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
+            }
+            raf.write(bytes)
+        }
     }
+
+    private fun intLE(v: Int) = byteArrayOf(
+        (v and 0xFF).toByte(),
+        ((v shr 8) and 0xFF).toByte(),
+        ((v shr 16) and 0xFF).toByte(),
+        ((v shr 24) and 0xFF).toByte()
+    )
+
+    private fun shortLE(v: Int) = byteArrayOf(
+        (v and 0xFF).toByte(),
+        ((v shr 8) and 0xFF).toByte()
+    )
 
     // ── Synthesis dispatch ───────────────────────────────────────────────────
 
