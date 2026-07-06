@@ -57,6 +57,18 @@ fun formatDuration(durationSeconds: Long): String {
     return DateUtils.formatElapsedTime(durationSeconds)
 }
 
+/** Returns true if the device currently has 2 or more call-capable SIMs (dual/multi-SIM). */
+fun hasDualSim(context: Context): Boolean {
+    return try {
+        val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        if (!hasPhoneState) return false
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
+        telecomManager.callCapablePhoneAccounts.size >= 2
+    } catch (_: Exception) {
+        false
+    }
+}
+
 fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null) {
     val sanitized = number.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     if (sanitized.isEmpty()) return

@@ -152,8 +152,13 @@ fun BottomBar(navController: NavController) {
     val isOnTabScreen = visibleTabRoutes.any { currentRoute.contains(it, ignoreCase = true) } &&
         !NavBarVisibilityState.hideForOnboarding
 
-    // If current tab is now hidden, redirect to first visible tab
-    val isOnHiddenTab = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) } && !isOnTabScreen
+    // If current tab is now hidden, redirect to first visible tab. This must only fire for
+    // tabs the user actually disabled in Settings > Tab Sections — not for a visible tab that's
+    // just temporarily hiding the nav bar for its own onboarding content (e.g. Recordings'
+    // disclaimer/permissions gate), otherwise tapping that tab would immediately get redirected
+    // away again in a loop.
+    val isOnHiddenTab = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) } &&
+        visibleTabRoutes.none { currentRoute.contains(it, ignoreCase = true) }
     fun routeForTabKey(key: String): String? = when (key) {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route
@@ -421,38 +426,40 @@ private fun RowScope.AnimatedNavBarItem(
         label         = "${label}IndicatorAlpha"
     )
 
-    NavigationBarItem(
-        icon = {
-            Box(
-                modifier = Modifier
-                    .scale(scale)
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = indicatorAlpha))
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            ) {
-                Crossfade(
-                    targetState   = selected,
-                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
-                    label         = "${label}IconCrossfade"
-                ) { sel ->
-                    Icon(
-                        imageVector        = if (sel) selectedIcon else unselectedIcon,
-                        contentDescription = label,
-                        modifier           = Modifier.size(iconSize)
-                    )
+    CompositionLocalProvider(LocalRippleConfiguration provides null) {
+        NavigationBarItem(
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .scale(scale)
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = indicatorAlpha))
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Crossfade(
+                        targetState   = selected,
+                        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                        label         = "${label}IconCrossfade"
+                    ) { sel ->
+                        Icon(
+                            imageVector        = if (sel) selectedIcon else unselectedIcon,
+                            contentDescription = label,
+                            modifier           = Modifier.size(iconSize)
+                        )
+                    }
                 }
-            }
-        },
-        label           = if (iconOnly) null else ({ Text(label, style = labelStyle) }),
-        alwaysShowLabel = !iconOnly,
-        selected        = selected,
-        interactionSource = interactionSource,
-        colors          = NavigationBarItemDefaults.colors(
-            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            indicatorColor    = Color.Transparent
-        ),
-        onClick = onClick
-    )
+            },
+            label           = if (iconOnly) null else ({ Text(label, style = labelStyle) }),
+            alwaysShowLabel = !iconOnly,
+            selected        = selected,
+            interactionSource = interactionSource,
+            colors          = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                indicatorColor    = Color.Transparent
+            ),
+            onClick = onClick
+        )
+    }
 }
 
 // ── Pill nav item ─────────────────────────────────────────────────────────────

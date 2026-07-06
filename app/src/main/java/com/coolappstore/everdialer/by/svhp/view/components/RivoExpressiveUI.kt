@@ -478,6 +478,7 @@ fun RivoListItem(
     iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
     trailingText: String? = null,
+    trailingStartContent: (@Composable () -> Unit)? = null,
     avatarName: String? = null,
     photoUri: String? = null,
     onClick: () -> Unit,
@@ -560,6 +561,10 @@ fun RivoListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            if (trailingStartContent != null) {
+                trailingStartContent()
             }
 
             if (trailingText != null) {

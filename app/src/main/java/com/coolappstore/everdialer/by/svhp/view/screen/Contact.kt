@@ -303,9 +303,27 @@ fun ContactContent(
             }
 
             val contacts = contactsVM.allContacts.collectAsState().value
+            val isLoadingContacts by contactsVM.isLoading.collectAsState()
 
-            if (contacts.isEmpty()) {
+            if (isLoadingContacts) {
                 RivoLoadingIndicatorView()
+            } else if (contacts.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "No contacts here",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             } else {
                 // ── Contact count / account-switcher pill ─────────────────
                 var chipVisible by remember { mutableStateOf(false) }

@@ -108,6 +108,7 @@ fun CallLogTile(
             )
         }
         Box(modifier = Modifier.weight(1f)) {
+        val showSimBadge = remember { com.coolappstore.everdialer.by.svhp.controller.util.hasDualSim(context) } && log.simSlot in 0..1
         RivoListItem(
             headline = buildString {
                 append(displayName)
@@ -118,6 +119,14 @@ fun CallLogTile(
             },
             avatarName  = displayName,
             photoUri    = log.photoUri,
+            trailingStartContent = if (showSimBadge) ({
+                Icon(
+                    imageVector = Icons.Default.SimCard,
+                    contentDescription = if (log.simSlot == 0) "SIM 1" else "SIM 2",
+                    tint = if (log.simSlot == 0) Color(0xFF1B5E20) else Color(0xFFB71C1C),
+                    modifier = Modifier.padding(end = 6.dp).size(16.dp)
+                )
+            }) else null,
             trailingText = formatTimeOnly(log.date),
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
@@ -137,99 +146,118 @@ fun CallLogTile(
             }
         )
 
+        // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
+        val callLogContextMenuKeys = remember(settingsVer, isContact, fakeCallInContextMenu) {
+            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+                prefs,
+                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
+                listOf("select", "call_back", "copy_number", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
+            ).filter { key ->
+                when (key) {
+                    "add_to_contacts" -> !isContact
+                    "fake_call" -> fakeCallInContextMenu
+                    else -> true
+                }
+            }
+        }
+
         RivoDropdownMenu(
             expanded          = showMenu,
             onDismissRequest  = { showMenu = false }
         ) {
-            RivoDropdownMenuItem(
-                text     = "Select",
-                icon     = Icons.Default.CheckBox,
-                iconTint = Color(0xFF9C27B0),
-                onClick  = {
-                    showMenu = false
-                    onSelectMode?.invoke(log)
+            callLogContextMenuKeys.forEachIndexed { index, key ->
+                if (key == "delete_call_log" && index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                 }
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            RivoDropdownMenuItem(
-                text     = "Call back",
-                icon     = Icons.Default.Call,
-                iconTint = Color(0xFF4CAF50),
-                onClick  = { showMenu = false; onButtonClick(log) }
-            )
-            RivoDropdownMenuItem(
-                text     = "Copy number",
-                icon     = Icons.Default.ContentCopy,
-                iconTint = Color(0xFF2196F3),
-                onClick  = {
-                    showMenu = false
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
-                    Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
-                }
-            )
-            if (!isContact) {
-                RivoDropdownMenuItem(
-                    text     = "Add to contacts",
-                    icon     = Icons.Default.PersonAdd,
-                    iconTint = Color(0xFF9C27B0),
-                    onClick  = {
-                        showMenu = false
-                        val intent = Intent(Intent.ACTION_INSERT).apply {
-                            type = ContactsContract.RawContacts.CONTENT_TYPE
-                            putExtra(ContactsContract.Intents.Insert.PHONE, log.number)
+                when (key) {
+                    "select" -> RivoDropdownMenuItem(
+                        text     = "Select",
+                        icon     = Icons.Default.CheckBox,
+                        iconTint = Color(0xFF9C27B0),
+                        onClick  = {
+                            showMenu = false
+                            onSelectMode?.invoke(log)
                         }
-                        context.startActivity(intent)
-                    }
-                )
-            }
-            RivoDropdownMenuItem(
-                text     = "Block number",
-                icon     = Icons.Default.Block,
-                iconTint = Color(0xFFFF9800),
-                onClick  = {
-                    showMenu = false
-                    Toast.makeText(context, "Number blocked", Toast.LENGTH_SHORT).show()
+                    )
+                    "call_back" -> RivoDropdownMenuItem(
+                        text     = "Call back",
+                        icon     = Icons.Default.Call,
+                        iconTint = Color(0xFF4CAF50),
+                        onClick  = { showMenu = false; onButtonClick(log) }
+                    )
+                    "copy_number" -> RivoDropdownMenuItem(
+                        text     = "Copy number",
+                        icon     = Icons.Default.ContentCopy,
+                        iconTint = Color(0xFF2196F3),
+                        onClick  = {
+                            showMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
+                            Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    "add_to_contacts" -> RivoDropdownMenuItem(
+                        text     = "Add to contacts",
+                        icon     = Icons.Default.PersonAdd,
+                        iconTint = Color(0xFF9C27B0),
+                        onClick  = {
+                            showMenu = false
+                            val intent = Intent(Intent.ACTION_INSERT).apply {
+                                type = ContactsContract.RawContacts.CONTENT_TYPE
+                                putExtra(ContactsContract.Intents.Insert.PHONE, log.number)
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+                    "block_number" -> RivoDropdownMenuItem(
+                        text     = "Block number",
+                        icon     = Icons.Default.Block,
+                        iconTint = Color(0xFFFF9800),
+                        onClick  = {
+                            showMenu = false
+                            Toast.makeText(context, "Number blocked", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    "fake_call" -> RivoDropdownMenuItem(
+                        text     = "Fake Call",
+                        icon     = Icons.Outlined.PhoneCallback,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick  = {
+                            showMenu = false
+                            showFakeCallSheet = true
+                        }
+                    )
+                    "delete_call_log" -> RivoDropdownMenuItem(
+                        text          = "Delete from call log",
+                        icon          = Icons.Default.Delete,
+                        isDestructive = true,
+                        onClick       = {
+                            showMenu = false
+                            try {
+                                // Delete only this specific call log entry by its exact timestamp
+                                context.contentResolver.delete(
+                                    CallLog.Calls.CONTENT_URI,
+                                    "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
+                                    arrayOf(log.number, log.date.toString())
+                                )
+                                onDelete?.invoke()
+                                Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
                 }
-            )
-            if (fakeCallInContextMenu) {
-                RivoDropdownMenuItem(
-                    text     = "Fake Call",
-                    icon     = Icons.Outlined.PhoneCallback,
-                    iconTint = MaterialTheme.colorScheme.primary,
-                    onClick  = {
-                        showMenu = false
-                        showFakeCallSheet = true
-                    }
-                )
-            }
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            RivoDropdownMenuItem(
-                text          = "Delete from call log",
-                icon          = Icons.Default.Delete,
-                isDestructive = true,
-                onClick       = {
-                    showMenu = false
-                    try {
-                        // Delete only this specific call log entry by its exact timestamp
-                        context.contentResolver.delete(
-                            CallLog.Calls.CONTENT_URI,
-                            "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
-                            arrayOf(log.number, log.date.toString())
-                        )
-                        onDelete?.invoke()
-                        Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
-                    }
+                if (key == "select" && index < callLogContextMenuKeys.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                 }
-            )
+            }
         }
         }
     }

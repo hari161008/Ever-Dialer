@@ -633,81 +633,102 @@ private fun FavoriteContactCard(
         }
     }
 
+    // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
+    val phoneNumber = contact.phoneNumbers.firstOrNull()
+    val favContextMenuKeys = remember(settingsVer, phoneNumber, fakeCallInContextMenu) {
+        com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+            prefs,
+            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_FAVORITES,
+            listOf("select", "call", "send_sms", "view_details", "fake_call", "remove_favorite")
+        ).filter { key ->
+            when (key) {
+                "send_sms" -> !phoneNumber.isNullOrEmpty()
+                "fake_call" -> fakeCallInContextMenu
+                else -> true
+            }
+        }
+    }
+
     RivoDropdownMenu(
         expanded = showMenu,
         onDismissRequest = { showMenu = false }
     ) {
-        RivoDropdownMenuItem(
-            text = "Select",
-            icon = Icons.Default.CheckBox,
-            iconTint = Color(0xFF9C27B0),
-            onClick = {
-                showMenu = false
-                onSelectMode?.invoke()
+        favContextMenuKeys.forEachIndexed { index, key ->
+            // A divider separates the destructive "Remove from Favourites" action from
+            // everything above it.
+            if (key == "remove_favorite" && index > 0) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
             }
-        )
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
-        RivoDropdownMenuItem(
-            text = "Call",
-            icon = Icons.Default.Call,
-            iconTint = Color(0xFF4CAF50),
-            onClick = {
-                showMenu = false
-                onClick()
-            }
-        )
-        val phoneNumber = contact.phoneNumbers.firstOrNull()
-        if (!phoneNumber.isNullOrEmpty()) {
-            RivoDropdownMenuItem(
-                text = "Send SMS",
-                icon = Icons.Default.Message,
-                iconTint = Color(0xFF009688),
-                onClick = {
-                    showMenu = false
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                        data = android.net.Uri.parse("sms:$phoneNumber")
+            when (key) {
+                "select" -> RivoDropdownMenuItem(
+                    text = "Select",
+                    icon = Icons.Default.CheckBox,
+                    iconTint = Color(0xFF9C27B0),
+                    onClick = {
+                        showMenu = false
+                        onSelectMode?.invoke()
                     }
-                    context.startActivity(intent)
-                }
-            )
-        }
-        RivoDropdownMenuItem(
-            text = "View Details",
-            icon = Icons.Default.Info,
-            iconTint = Color(0xFF2196F3),
-            onClick = {
-                showMenu = false
-                navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                )
+                "call" -> RivoDropdownMenuItem(
+                    text = "Call",
+                    icon = Icons.Default.Call,
+                    iconTint = Color(0xFF4CAF50),
+                    onClick = {
+                        showMenu = false
+                        onClick()
+                    }
+                )
+                "send_sms" -> RivoDropdownMenuItem(
+                    text = "Send SMS",
+                    icon = Icons.Default.Message,
+                    iconTint = Color(0xFF009688),
+                    onClick = {
+                        showMenu = false
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            data = android.net.Uri.parse("sms:$phoneNumber")
+                        }
+                        context.startActivity(intent)
+                    }
+                )
+                "view_details" -> RivoDropdownMenuItem(
+                    text = "View Details",
+                    icon = Icons.Default.Info,
+                    iconTint = Color(0xFF2196F3),
+                    onClick = {
+                        showMenu = false
+                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                    }
+                )
+                "fake_call" -> RivoDropdownMenuItem(
+                    text = "Fake Call",
+                    icon = Icons.Outlined.PhoneCallback,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        showMenu = false
+                        showFakeCallSheet = true
+                    }
+                )
+                "remove_favorite" -> RivoDropdownMenuItem(
+                    text = "Remove from Favourites",
+                    icon = Icons.Default.Favorite,
+                    iconTint = Color(0xFFF44336),
+                    isDestructive = true,
+                    onClick = {
+                        showMenu = false
+                        contactsVM.toggleFavorite(contact)
+                    }
+                )
             }
-        )
-        if (fakeCallInContextMenu) {
-            RivoDropdownMenuItem(
-                text = "Fake Call",
-                icon = Icons.Outlined.PhoneCallback,
-                iconTint = MaterialTheme.colorScheme.primary,
-                onClick = {
-                    showMenu = false
-                    showFakeCallSheet = true
-                }
-            )
-        }
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
-        RivoDropdownMenuItem(
-            text = "Remove from Favourites",
-            icon = Icons.Default.Favorite,
-            iconTint = Color(0xFFF44336),
-            isDestructive = true,
-            onClick = {
-                showMenu = false
-                contactsVM.toggleFavorite(contact)
+            if (key == "select" && index < favContextMenuKeys.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
             }
-        )
+        }
     }
 
     if (showFakeCallSheet) {

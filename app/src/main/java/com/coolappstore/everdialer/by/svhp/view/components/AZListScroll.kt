@@ -418,106 +418,125 @@ private fun ContactListItem(
             )
         }
 
+        val hasNumber = !contact.phoneNumbers.firstOrNull().isNullOrEmpty()
+        val contactContextMenuKeys = remember(settingsVer, hasNumber, fakeCallInContextMenu, contact.isFavorite) {
+            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+                prefs,
+                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
+                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "toggle_favorite", "fake_call", "delete_contact")
+            ).filter { key ->
+                when (key) {
+                    "copy_number" -> hasNumber
+                    "fake_call" -> fakeCallInContextMenu
+                    else -> true
+                }
+            }
+        }
+
         RivoDropdownMenu(
             expanded         = showMenu && !selectionMode,
             onDismissRequest = { showMenu = false }
         ) {
-            RivoDropdownMenuItem(
-                text     = "Select",
-                icon     = Icons.Default.CheckBox,
-                iconTint = Color(0xFF9C27B0),
-                onClick  = {
-                    showMenu = false
-                    onSelectMode()
-                }
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            RivoDropdownMenuItem(
-                text     = "View contact",
-                icon     = Icons.Default.Person,
-                iconTint = Color(0xFF2196F3),
-                onClick  = {
-                    showMenu = false
-                    navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
-                }
-            )
-            RivoDropdownMenuItem(
-                text     = "Edit contact",
-                icon     = Icons.Default.Edit,
-                iconTint = Color(0xFF9C27B0),
-                onClick  = {
-                    showMenu = false
-                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
-                }
-            )
-            if (!contact.phoneNumbers.firstOrNull().isNullOrEmpty()) {
-                RivoDropdownMenuItem(
-                    text     = "Copy number",
-                    icon     = Icons.Default.ContentCopy,
-                    iconTint = Color(0xFF009688),
-                    onClick  = {
-                        showMenu = false
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", contact.phoneNumbers.first()))
-                        Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
-                    }
-                )
+            fun groupOf(key: String) = when (key) {
+                "select" -> 0
+                "view_contact", "edit_contact", "copy_number", "share_contact" -> 1
+                "toggle_favorite", "fake_call" -> 2
+                "delete_contact" -> 3
+                else -> 1
             }
-            RivoDropdownMenuItem(
-                text     = "Share contact",
-                icon     = Icons.Default.Share,
-                iconTint = Color(0xFFFF9800),
-                onClick  = {
-                    showMenu = false
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${contact.phoneNumbers.joinToString(", ")}")
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share contact"))
+            var previousGroup: Int? = null
+            contactContextMenuKeys.forEach { key ->
+                val group = groupOf(key)
+                if (previousGroup != null && group != previousGroup) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                 }
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            RivoDropdownMenuItem(
-                text     = if (contact.isFavorite) "Remove from Favourites" else "Add to Favourites",
-                icon     = Icons.Default.Favorite,
-                iconTint = if (contact.isFavorite) Color(0xFFF44336) else Color(0xFFE91E63),
-                isDestructive = contact.isFavorite,
-                onClick  = {
-                    showMenu = false
-                    contactsVM.toggleFavorite(contact)
+                previousGroup = group
+                when (key) {
+                    "select" -> RivoDropdownMenuItem(
+                        text     = "Select",
+                        icon     = Icons.Default.CheckBox,
+                        iconTint = Color(0xFF9C27B0),
+                        onClick  = {
+                            showMenu = false
+                            onSelectMode()
+                        }
+                    )
+                    "view_contact" -> RivoDropdownMenuItem(
+                        text     = "View contact",
+                        icon     = Icons.Default.Person,
+                        iconTint = Color(0xFF2196F3),
+                        onClick  = {
+                            showMenu = false
+                            navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                        }
+                    )
+                    "edit_contact" -> RivoDropdownMenuItem(
+                        text     = "Edit contact",
+                        icon     = Icons.Default.Edit,
+                        iconTint = Color(0xFF9C27B0),
+                        onClick  = {
+                            showMenu = false
+                            navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                        }
+                    )
+                    "copy_number" -> RivoDropdownMenuItem(
+                        text     = "Copy number",
+                        icon     = Icons.Default.ContentCopy,
+                        iconTint = Color(0xFF009688),
+                        onClick  = {
+                            showMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", contact.phoneNumbers.first()))
+                            Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    "share_contact" -> RivoDropdownMenuItem(
+                        text     = "Share contact",
+                        icon     = Icons.Default.Share,
+                        iconTint = Color(0xFFFF9800),
+                        onClick  = {
+                            showMenu = false
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${contact.phoneNumbers.joinToString(", ")}")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share contact"))
+                        }
+                    )
+                    "toggle_favorite" -> RivoDropdownMenuItem(
+                        text     = if (contact.isFavorite) "Remove from Favourites" else "Add to Favourites",
+                        icon     = Icons.Default.Favorite,
+                        iconTint = if (contact.isFavorite) Color(0xFFF44336) else Color(0xFFE91E63),
+                        isDestructive = contact.isFavorite,
+                        onClick  = {
+                            showMenu = false
+                            contactsVM.toggleFavorite(contact)
+                        }
+                    )
+                    "fake_call" -> RivoDropdownMenuItem(
+                        text     = "Fake Call",
+                        icon     = Icons.Outlined.PhoneCallback,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick  = {
+                            showMenu = false
+                            showFakeCallSheet = true
+                        }
+                    )
+                    "delete_contact" -> RivoDropdownMenuItem(
+                        text     = "Delete contact",
+                        icon     = Icons.Default.Delete,
+                        iconTint = Color(0xFFF44336),
+                        isDestructive = true,
+                        onClick  = {
+                            showMenu = false
+                            showDeleteConfirm = true
+                        }
+                    )
                 }
-            )
-            if (fakeCallInContextMenu) {
-                RivoDropdownMenuItem(
-                    text     = "Fake Call",
-                    icon     = Icons.Outlined.PhoneCallback,
-                    iconTint = MaterialTheme.colorScheme.primary,
-                    onClick  = {
-                        showMenu = false
-                        showFakeCallSheet = true
-                    }
-                )
             }
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            RivoDropdownMenuItem(
-                text     = "Delete contact",
-                icon     = Icons.Default.Delete,
-                iconTint = Color(0xFFF44336),
-                isDestructive = true,
-                onClick  = {
-                    showMenu = false
-                    showDeleteConfirm = true
-                }
-            )
         }
     }
 } // end AZListContent

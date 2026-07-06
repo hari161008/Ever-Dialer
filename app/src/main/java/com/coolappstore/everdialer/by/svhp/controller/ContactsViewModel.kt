@@ -25,6 +25,9 @@ class ContactsViewModel(
     private val _allContacts = MutableStateFlow<List<Contact>>(emptyList())
     val allContacts: StateFlow<List<Contact>> = _allContacts.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val _selectedAccountKey = MutableStateFlow<String?>(null)
     val selectedAccountKey: StateFlow<String?> = _selectedAccountKey.asStateFlow()
 
@@ -39,8 +42,12 @@ class ContactsViewModel(
     fun fetchContacts() {
         val ctx = getApplication<Application>()
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
-            != PackageManager.PERMISSION_GRANTED) return
+            != PackageManager.PERMISSION_GRANTED) {
+            _isLoading.value = false
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
             runCatching {
                 val sessionKey = _selectedAccountKey.value
                 val raw = if (sessionKey != null) {
@@ -55,7 +62,12 @@ class ContactsViewModel(
                 val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
                                else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                 if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
-            }.onSuccess { _allContacts.value = it }
+            }.onSuccess {
+                _allContacts.value = it
+                _isLoading.value = false
+            }.onFailure {
+                _isLoading.value = false
+            }
         }
     }
 

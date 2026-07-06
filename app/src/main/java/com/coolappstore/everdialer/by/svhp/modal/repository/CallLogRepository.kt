@@ -1,13 +1,17 @@
 package com.coolappstore.everdialer.by.svhp.modal.repository
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.telephony.SubscriptionManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 
 class CallLogRepository(
+    private val context: Context,
     private val contentResolver: ContentResolver
 ) : ICallLogRepository {
 
@@ -19,7 +23,8 @@ class CallLogRepository(
             CallLog.Calls.CACHED_NAME,
             CallLog.Calls.TYPE,
             CallLog.Calls.DATE,
-            CallLog.Calls.DURATION
+            CallLog.Calls.DURATION,
+            CallLog.Calls.PHONE_ACCOUNT_ID
         )
 
         contentResolver.query(
@@ -35,16 +40,21 @@ class CallLogRepository(
             val typeIdx = cursor.getColumnIndex(CallLog.Calls.TYPE)
             val dateIdx = cursor.getColumnIndex(CallLog.Calls.DATE)
             val durationIdx = cursor.getColumnIndex(CallLog.Calls.DURATION)
+            val phoneAccountIdIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
 
             
             val contactInfoCache =
                 mutableMapOf<String, Triple<String?, String?, Long?>>()
+            val simSlotCache = mutableMapOf<String, Int>()
 
             while (cursor.moveToNext()) {
                 val number = cursor.getString(numberIdx) ?: "Unknown"
                 val type = cursor.getInt(typeIdx)
                 val date = cursor.getLong(dateIdx)
                 val duration = cursor.getLong(durationIdx)
+                val phoneAccountId = if (phoneAccountIdIdx >= 0) cursor.getString(phoneAccountIdIdx) else null
+                val simSlot = if (phoneAccountId.isNullOrBlank()) -1 else
+                    simSlotCache.getOrPut(phoneAccountId) { getSimSlotForPhoneAccountId(phoneAccountId) }
 
                 val (contactName, photoUri, contactId) =
                     contactInfoCache.getOrPut(number) {
@@ -73,7 +83,8 @@ class CallLogRepository(
                             photoUri = photoUri,
                             contactId = contactId?.toString(),
                             types = listOf(type),
-                            isCallerIdName = isCallerIdName
+                            isCallerIdName = isCallerIdName,
+                            simSlot = simSlot
                         )
                     )
                 }
@@ -81,6 +92,19 @@ class CallLogRepository(
         }
 
         return callLogs
+    }
+
+    /** Resolves a call log's PHONE_ACCOUNT_ID (the telecom PhoneAccountHandle id) to a
+     *  0-based SIM slot index via SubscriptionManager, or -1 if it can't be determined. */
+    private fun getSimSlotForPhoneAccountId(phoneAccountId: String): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1
+        return try {
+            val subId = phoneAccountId.toIntOrNull() ?: return -1
+            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                    as? SubscriptionManager ?: return -1
+            val info = sm.getActiveSubscriptionInfo(subId) ?: return -1
+            info.simSlotIndex
+        } catch (_: Exception) { -1 }
     }
 
     private fun getContactDataByNumber(

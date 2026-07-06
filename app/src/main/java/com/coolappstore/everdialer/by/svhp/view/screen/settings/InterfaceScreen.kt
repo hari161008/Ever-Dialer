@@ -1080,8 +1080,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                 RivoListItem(
                                     headline = "Context Menu Elements",
                                     supporting = "Customize Favourites, Call Logs, and Contacts context menus",
-                                    leadingIcon = Icons.Default.ViewWeek,
-                                    iconContainerColor = ColorOrange,
+                                    leadingIcon = Icons.Default.MoreVert,
+                                    iconContainerColor = ColorPurple,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showContextMenuDialog = true }
                                 )

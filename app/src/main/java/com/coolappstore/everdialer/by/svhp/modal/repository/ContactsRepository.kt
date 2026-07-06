@@ -143,13 +143,16 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                             // SIM/device contacts have blank or local account type
                             val isLocalType = accountType.isBlank() ||
                                 accountType.equals("com.android.local", ignoreCase = true) ||
-                                accountType.equals("com.android.contacts", ignoreCase = true)
+                                accountType.equals("com.android.contacts", ignoreCase = true) ||
+                                accountType.contains("sim", ignoreCase = true) ||
+                                accountType.contains("icc", ignoreCase = true)
                             if (!isLocalType) return@any false
-                            // If multiple SIMs, further disambiguate by slot
                             val slotNum = key.removePrefix("sim_").toIntOrNull() ?: 0
-                            val slot = getSimSlotForAccount(accountName)
-                            // slot == -1 means device storage (slot 0 by default), slotNum 0 == device
-                            if (slot == -1) slotNum == 0 || slotNum == 1
+                            val slot = getSimSlotForAccount(accountType, accountName)
+                            // slot == -1 means genuine device/local storage (maps to key "sim_0");
+                            // slot 0/1/... map to "sim_1"/"sim_2"/... — a raw contact can only ever
+                            // satisfy exactly one of these, never fall through into SIM1/SIM2 by default.
+                            if (slot == -1) slotNum == 0
                             else (slot + 1) == slotNum
                         }
                         key == "whatsapp" -> {
@@ -397,7 +400,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         type.contains("whatsapp", ignoreCase = true) -> "whatsapp"
         else -> {
             // SIM / local / device storage — assign per-SIM keys using SubscriptionManager
-            val simSlot = getSimSlotForAccount(name)
+            val simSlot = getSimSlotForAccount(type, name)
             if (simSlot >= 0) "sim_${simSlot + 1}" else "sim_0"
         }
     }
@@ -406,7 +409,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         type.contains("google", ignoreCase = true) -> name.ifBlank { "Google" }
         type.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
         else -> {
-            val simSlot = getSimSlotForAccount(name)
+            val simSlot = getSimSlotForAccount(type, name)
             when {
                 simSlot == 0 -> "SIM 1"
                 simSlot == 1 -> "SIM 2"
@@ -416,8 +419,16 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         }
     }
 
-    /** Returns 0-based SIM slot index if the account name matches a SIM subscription, else -1. */
-    private fun getSimSlotForAccount(accountName: String): Int {
+    /** Returns 0-based SIM slot index if this raw contact's account is actually a SIM account
+     *  and its name matches a currently active subscription, else -1 (treated as Device Storage). */
+    private fun getSimSlotForAccount(accountType: String, accountName: String): Int {
+        // Only raw contacts whose account type explicitly denotes SIM/ICC storage should ever be
+        // considered for a SIM slot. Plain device/local contacts (accountType blank/null on AOSP,
+        // or OEM-specific non-SIM types) must never be guessed into a SIM bucket just because their
+        // account name happens to contain a digit that matches a subscription id.
+        val isSimAccountType = accountType.contains("sim", ignoreCase = true) ||
+            accountType.contains("icc", ignoreCase = true)
+        if (!isSimAccountType) return -1
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1
         return try {
             val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
@@ -428,12 +439,15 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 @Suppress("DEPRECATION")
                 SubscriptionManager.from(context).activeSubscriptionInfoList ?: emptyList()
             }
+            if (subs.isEmpty()) return -1
             // Match by display name or ICC ID that may be embedded in accountName
-            subs.firstOrNull { sub ->
-                sub.displayName?.toString()?.equals(accountName, ignoreCase = true) == true ||
-                sub.iccId?.equals(accountName, ignoreCase = true) == true ||
-                accountName.contains(sub.subscriptionId.toString())
-            }?.simSlotIndex ?: -1
+            val matched = subs.firstOrNull { sub ->
+                (accountName.isNotBlank() && sub.displayName?.toString()?.equals(accountName, ignoreCase = true) == true) ||
+                (accountName.isNotBlank() && sub.iccId?.let { accountName.equals(it, ignoreCase = true) } == true)
+            }
+            // If we couldn't disambiguate which specific SIM this account belongs to but we do
+            // know it's a SIM account and there's exactly one active SIM, it must be that one.
+            matched?.simSlotIndex ?: if (subs.size == 1) subs[0].simSlotIndex else -1
         } catch (_: Exception) { -1 }
     }
 

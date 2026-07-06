@@ -16,6 +16,7 @@ private val TAB_ROUTES = listOf(
     "favorites_screen",
     "recent_screen",
     "contact_screen",
+    "recordings_screen",
     "notes_screen"
 )
 

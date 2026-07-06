@@ -293,6 +293,19 @@ class CallSessionManager private constructor(context: Context) {
             AppLogger.d(TAG, "Current call session is already recording. Skipping duplicate intent.")
             return
         }
+
+        // If the user has never gone through the recorder's onboarding/disclaimer (e.g. a fresh
+        // install where call recording hasn't been set up at all), or has every recording source
+        // disabled, don't start the foreground service at all — not even in standby. Starting it
+        // in that state has nothing to actually do and was the source of spurious "Error
+        // recording" notifications appearing on calls the user never asked to be recorded.
+        val recordingConfigured = preferences.isDisclaimerAccepted() &&
+            (preferences.isAutoRecordIncomingEnabled() || preferences.isAutoRecordOutgoingEnabled() || preferences.isAnyAppCallRecordingEnabled())
+        if (!recordingConfigured) {
+            AppLogger.d(TAG, "Call recording has not been set up / is fully disabled. Not starting the recording service for this call.")
+            return
+        }
+
         val sessionMetadata = session.currentMetadata ?: throw IllegalStateException("Metadata should have been determined by now. There is a logic error.")
 
         val wantsAutoRecord = shouldAutoRecord(sessionMetadata)

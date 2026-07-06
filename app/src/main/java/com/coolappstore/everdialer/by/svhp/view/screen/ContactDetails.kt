@@ -227,7 +227,17 @@ fun ContactDetailsScreen(
                     RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
                         if (contact != null) {
                             contact.phoneNumbers.forEachIndexed { index, number ->
-                                RivoListItem(headline = number, supporting = "Mobile", leadingIcon = Icons.Default.Phone, onClick = { initiateCall(number) })
+                                RivoListItem(
+                                    headline = number,
+                                    supporting = "Mobile",
+                                    leadingIcon = Icons.Default.Phone,
+                                    onClick = { initiateCall(number) },
+                                    onLongClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", number))
+                                        android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                )
                                 if (index < contact.phoneNumbers.size - 1 || contact.emails.isNotEmpty()) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
@@ -241,7 +251,17 @@ fun ContactDetailsScreen(
                                 }
                             }
                         } else if (phoneNumber != null && phoneNumber != "Unknown") {
-                            RivoListItem(headline = phoneNumber, supporting = "Unknown Number", leadingIcon = Icons.Default.Phone, onClick = { initiateCall(phoneNumber) })
+                            RivoListItem(
+                                headline = phoneNumber,
+                                supporting = "Unknown Number",
+                                leadingIcon = Icons.Default.Phone,
+                                onClick = { initiateCall(phoneNumber) },
+                                onLongClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", phoneNumber))
+                                    android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         }
                     }
                 }
