@@ -379,6 +379,54 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         }
     }
 
+    override fun moveContact(contact: Contact, target: ContactSaveTarget): Boolean {
+        return try {
+            if (target.isSim) {
+                val saved = saveContactToSim(contact, target.simSlotIndex)
+                if (saved) deleteRawContactsForContact(contact.id)
+                saved
+            } else {
+                // Create the copy at the destination first, then remove only the raw contact(s)
+                // that lived under the original account(s) — not the aggregate — so we don't risk
+                // deleting the copy we just made if Android merges the two by matching name/number.
+                val originalRawIds = getRawContactIdsForContact(contact.id)
+                saveContact(contact.copy(id = ""), target.accountType, target.accountName)
+                originalRawIds.forEach { deleteRawContact(it) }
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun getRawContactIdsForContact(contactId: String): List<Long> {
+        val ids = mutableListOf<Long>()
+        contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(ContactsContract.RawContacts._ID),
+            "${ContactsContract.RawContacts.CONTACT_ID} = ?",
+            arrayOf(contactId),
+            null
+        )?.use { cursor ->
+            val idIdx = cursor.getColumnIndex(ContactsContract.RawContacts._ID)
+            while (cursor.moveToNext()) ids.add(cursor.getLong(idIdx))
+        }
+        return ids
+    }
+
+    private fun deleteRawContactsForContact(contactId: String) {
+        getRawContactIdsForContact(contactId).forEach { deleteRawContact(it) }
+    }
+
+    private fun deleteRawContact(rawContactId: Long) {
+        try {
+            val uri = ContactsContract.RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(rawContactId.toString())
+                .build()
+            contentResolver.delete(uri, null, null)
+        } catch (_: Exception) {}
+    }
+
     /** Resolves the subscription_id for a given 0-based SIM slot index, or -1 if unknown. */
     private fun getSubscriptionIdForSlot(slotIndex: Int): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1

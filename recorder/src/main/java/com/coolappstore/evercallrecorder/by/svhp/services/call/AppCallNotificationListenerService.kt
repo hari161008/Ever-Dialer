@@ -104,6 +104,7 @@ class AppCallNotificationListenerService : NotificationListenerService() {
 
     private fun isTargetEnabled(target: AppCallTarget): Boolean {
         val preferences = AppPreferences(applicationContext)
+        if (!preferences.isCallRecordingEnabled()) return false
         return when (target) {
             AppCallTarget.WHATSAPP -> preferences.isRecordWhatsAppCallsEnabled()
             AppCallTarget.TELEGRAM -> preferences.isRecordTelegramCallsEnabled()

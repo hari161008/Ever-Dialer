@@ -196,6 +196,10 @@ class CallSessionManager private constructor(context: Context) {
      */
     @Synchronized
     fun handlePhoneState(stateString: String, phoneNumber: String?) {
+        // Universal master switch: if the user hasn't turned call recording on, do nothing at
+        // all — no session tracking, no metadata parsing, no service intents.
+        if (!preferences.isCallRecordingEnabled()) return
+
         val receivedCallState = when (stateString) {
             TelephonyManager.EXTRA_STATE_RINGING  -> TelephonyManager.CALL_STATE_RINGING
             TelephonyManager.EXTRA_STATE_OFFHOOK  -> TelephonyManager.CALL_STATE_OFFHOOK
@@ -299,7 +303,7 @@ class CallSessionManager private constructor(context: Context) {
         // disabled, don't start the foreground service at all — not even in standby. Starting it
         // in that state has nothing to actually do and was the source of spurious "Error
         // recording" notifications appearing on calls the user never asked to be recorded.
-        val recordingConfigured = preferences.isDisclaimerAccepted() &&
+        val recordingConfigured = preferences.isCallRecordingEnabled() && preferences.isDisclaimerAccepted() &&
             (preferences.isAutoRecordIncomingEnabled() || preferences.isAutoRecordOutgoingEnabled() || preferences.isAnyAppCallRecordingEnabled())
         if (!recordingConfigured) {
             AppLogger.d(TAG, "Call recording has not been set up / is fully disabled. Not starting the recording service for this call.")

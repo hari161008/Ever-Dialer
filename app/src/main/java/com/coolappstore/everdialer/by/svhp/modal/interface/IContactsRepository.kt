@@ -17,4 +17,8 @@ interface IContactsRepository {
     fun getSaveTargets(): List<ContactSaveTarget>
     /** Saves a contact's name + first phone number directly to a SIM card's contact storage. */
     fun saveContactToSim(contact: Contact, simSlotIndex: Int): Boolean
+    /** Moves an existing contact to a different storage/account: creates it at the destination
+     *  and removes only the raw contact(s) tied to its current account(s), leaving any other
+     *  raw contacts merged into the same aggregate (e.g. from a different account) untouched. */
+    fun moveContact(contact: Contact, target: ContactSaveTarget): Boolean
 }

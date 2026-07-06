@@ -103,7 +103,18 @@ fun AppNavigationScreen(openSettingsDirectly: Boolean = false) {
     var webViewEnableDownloads by remember { mutableStateOf(false) }
     var webViewBottomPadding by remember { mutableStateOf(24) } // dp value
 
-    val goBack: () -> Unit = { subScreen = SubScreen.None }
+    val goBack: () -> Unit = {
+        // When this Activity was launched to jump straight to Settings (Ever Dialer's
+        // Recordings tab → gear icon), there is no "Home" screen of this module to fall back
+        // to — this whole Activity only exists for that Settings shortcut. Pressing back from
+        // Settings in that case should finish the Activity and return to Ever Dialer's own
+        // Recordings tab, not reveal this module's own (separate/duplicate) recordings list.
+        if (subScreen == SubScreen.Settings && openSettingsDirectly) {
+            (activityContext as? Activity)?.finish()
+        } else {
+            subScreen = SubScreen.None
+        }
+    }
 
     // ── Auto update check on startup ──────────────────────────────────────────
     var showAutoUpdateDialog    by remember { mutableStateOf(false) }

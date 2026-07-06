@@ -27,6 +27,7 @@ import com.coolappstore.evercallrecorder.by.svhp.utils.AppLogger
 enum class DebugAction { RINGING, OFFHOOK, IDLE }
 
 interface SettingsActions {
+    fun setCallRecordingEnabled(enabled: Boolean)
     fun setAutoRecordIncoming(enabled: Boolean)
     fun setAutoRecordOutgoing(enabled: Boolean)
     fun setRecordOnAnswer(enabled: Boolean)
@@ -99,6 +100,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun refresh() { _updateTrigger.update { it + 1 } }
 
+    override fun setCallRecordingEnabled(enabled: Boolean) { preferences.setCallRecordingEnabled(enabled); refresh() }
     override fun setAutoRecordIncoming(enabled: Boolean) { preferences.setAutoRecordIncomingEnabled(enabled); refresh() }
     override fun setAutoRecordOutgoing(enabled: Boolean) { preferences.setAutoRecordOutgoingEnabled(enabled); refresh() }
     override fun setRecordOnAnswer(enabled: Boolean) { preferences.setRecordOnAnswerEnabled(enabled); refresh() }

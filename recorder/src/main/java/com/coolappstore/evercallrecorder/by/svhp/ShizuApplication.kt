@@ -18,5 +18,8 @@ open class ShizuApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppLogger.init(applicationContext)
+        // Make sure the telephony receiver / notification listener are enabled or disabled to
+        // match the universal call recording switch, in case they drifted (e.g. after an update).
+        com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(applicationContext)
     }
 }

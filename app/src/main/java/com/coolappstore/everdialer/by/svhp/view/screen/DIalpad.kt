@@ -91,6 +91,16 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import androidx.activity.compose.BackHandler
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
+/**
+ * Keeps the in-progress dialed digits alive across the dialpad bottom sheet being dismissed
+ * (e.g. by swiping down on the drag handle) and reopened. The sheet's composable is fully torn
+ * down on dismiss, so a plain `remember` loses the typed number; this small in-memory holder
+ * survives that as long as the process is alive, matching what users expect from a dialer.
+ */
+private object DialpadDraftHolder {
+    var pendingNumber: String = ""
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Destination<RootGraph>
 @Composable
@@ -161,7 +171,10 @@ fun DialPadContent(
     val settingsState by prefs.settingsChanged.collectAsState()
 
     val allContacts by contactsVM.allContacts.collectAsState()
-    var number by remember { mutableStateOf(initialNumber ?: "") }
+    var number by remember { mutableStateOf(initialNumber ?: DialpadDraftHolder.pendingNumber) }
+    // Keep the draft holder in sync so dismissing the sheet (including swipe-down-to-dismiss)
+    // and reopening it restores whatever digits were typed, instead of clearing them.
+    LaunchedEffect(number) { DialpadDraftHolder.pendingNumber = number }
 
     // Collect USSD / MMI responses from CallService and show inline dialog
     val ussdResult by UssdRepository.response.collectAsState()

@@ -274,6 +274,7 @@ private fun ContactListItem(
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
@@ -331,6 +332,25 @@ private fun ContactListItem(
                 FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
                 showFakeCallSheet = false
             }
+        )
+    }
+
+    if (showMoveDialog) {
+        val moveTargets = remember { contactsVM.getSaveTargets() }
+        MoveContactDialog(
+            contactName = headline,
+            targets = moveTargets,
+            onSelect = { target ->
+                showMoveDialog = false
+                contactsVM.moveContact(contact, target) { success ->
+                    Toast.makeText(
+                        context,
+                        if (success) "Moved to ${target.label}" else "Couldn't move contact",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onDismiss = { showMoveDialog = false }
         )
     }
 
@@ -423,7 +443,7 @@ private fun ContactListItem(
             com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                 prefs,
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
-                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "toggle_favorite", "fake_call", "delete_contact")
+                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "move_contact", "toggle_favorite", "fake_call", "delete_contact")
             ).filter { key ->
                 when (key) {
                     "copy_number" -> hasNumber
@@ -440,7 +460,7 @@ private fun ContactListItem(
             fun groupOf(key: String) = when (key) {
                 "select" -> 0
                 "view_contact", "edit_contact", "copy_number", "share_contact" -> 1
-                "toggle_favorite", "fake_call" -> 2
+                "move_contact", "toggle_favorite", "fake_call" -> 2
                 "delete_contact" -> 3
                 else -> 1
             }
@@ -514,6 +534,15 @@ private fun ContactListItem(
                         onClick  = {
                             showMenu = false
                             contactsVM.toggleFavorite(contact)
+                        }
+                    )
+                    "move_contact" -> RivoDropdownMenuItem(
+                        text     = "Move contact",
+                        icon     = Icons.Default.DriveFileMove,
+                        iconTint = Color(0xFF00897B),
+                        onClick  = {
+                            showMenu = false
+                            showMoveDialog = true
                         }
                     )
                     "fake_call" -> RivoDropdownMenuItem(

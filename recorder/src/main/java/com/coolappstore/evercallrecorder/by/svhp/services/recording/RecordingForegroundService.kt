@@ -154,6 +154,14 @@ class RecordingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
 
+        // Universal master switch: if the user has call recording turned off, this service must
+        // not run at all — not even in standby / notification-only mode. Bail out immediately.
+        if (!appPreferences.isCallRecordingEnabled()) {
+            AppLogger.d(TAG, "Call recording is disabled by the universal switch. Refusing to start/continue and stopping service.")
+            stopRecordingSessionAndService()
+            return START_NOT_STICKY
+        }
+
         var currentMeta = currentState.metadata
 
         // Parse metadata if present in the intent (START/STANDBY)

@@ -2,8 +2,10 @@ package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.accounts.AccountManager
 import android.app.DownloadManager
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import java.io.File
@@ -37,6 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.RaiseToAnswerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
@@ -83,6 +89,7 @@ data class ContactSourceItem(
     val subLabel: String? = null
 )
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ContactsToDisplayDialog(
     onDismiss: () -> Unit,
@@ -90,8 +97,19 @@ fun ContactsToDisplayDialog(
 ) {
     val context = LocalContext.current
 
+    // Enumerating active SIMs via SubscriptionManager requires READ_PHONE_STATE. Without it,
+    // activeSubscriptionInfoList silently comes back null/empty on most OEMs (no exception),
+    // so the dialog would always fall back to a single generic "Device Storage" row and real
+    // SIM 1 / SIM 2 entries would never show up. Request it here so SIMs actually appear.
+    val phoneStatePermission = rememberPermissionState(Manifest.permission.READ_PHONE_STATE)
+    LaunchedEffect(Unit) {
+        if (!phoneStatePermission.status.isGranted) {
+            phoneStatePermission.launchPermissionRequest()
+        }
+    }
+
     // Build sources list: Google accounts + SIMs + WhatsApp
-    val sources = remember {
+    val sources = remember(phoneStatePermission.status.isGranted) {
         val list = mutableListOf<ContactSourceItem>()
 
         // Google accounts
@@ -113,8 +131,10 @@ fun ContactsToDisplayDialog(
         }
 
         // SIM accounts
+        val hasPhonePermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 && hasPhonePermission) {
                 val subManager = context.getSystemService(SubscriptionManager::class.java)
                 val subs = subManager?.activeSubscriptionInfoList
                 if (!subs.isNullOrEmpty()) {
@@ -128,7 +148,7 @@ fun ContactsToDisplayDialog(
                         // silently produced zero contacts.
                         list.add(ContactSourceItem(
                             key = "sim_${sub.simSlotIndex + 1}",
-                            label = "SIM",
+                            label = if (subs.size > 1) "SIM ${sub.simSlotIndex + 1}" else "SIM",
                             subLabel = simName
                         ))
                     }

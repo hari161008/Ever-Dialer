@@ -123,6 +123,16 @@ class ContactsViewModel(
 
     fun getSaveTargets() = contactsRepo.getSaveTargets()
 
+    /** Moves [contact] to a different account/storage (e.g. Google, a SIM, or device storage). */
+    fun moveContact(contact: Contact, target: com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = runCatching { contactsRepo.moveContact(contact, target) }.getOrDefault(false)
+            fetchContacts()
+            fetchAvailableAccounts()
+            kotlinx.coroutines.withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
     fun deleteContact(contactId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             contactsRepo.deleteContact(contactId)

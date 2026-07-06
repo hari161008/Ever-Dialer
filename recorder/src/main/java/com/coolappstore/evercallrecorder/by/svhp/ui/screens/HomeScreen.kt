@@ -86,10 +86,16 @@ fun HomeScreen(
         focusManager.clearFocus()
     }
 
+    var recordingEnabledState by remember {
+        mutableStateOf(com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences(context).isCallRecordingEnabled())
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) vm.refresh()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                vm.refresh()
+                recordingEnabledState = com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences(context).isCallRecordingEnabled()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -156,6 +162,14 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {
+                if (!recordingEnabledState) {
+                    item {
+                        CallRecordingDisabledBanner(
+                            onClick = onSettingsClick,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
                 item {
                     SearchBar(
                         query = query,
@@ -769,6 +783,50 @@ private fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.4f))
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(0.6f), textAlign = TextAlign.End, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ── Call recording disabled banner ─────────────────────────────────────────────
+
+@Composable
+private fun CallRecordingDisabledBanner(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFB71C1C),
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Call recording is turned off",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+                Text(
+                    text = "Calls aren't being monitored or recorded. Tap to turn it on in Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.8f)
+            )
+        }
     }
 }
 

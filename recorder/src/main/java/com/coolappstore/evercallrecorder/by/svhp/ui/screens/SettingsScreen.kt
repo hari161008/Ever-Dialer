@@ -169,7 +169,8 @@ fun SettingsContent(
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Spacer(Modifier.height(8.dp))
-                    // ORDER: Rate And Review → Appearance → Recording → Audio → Security → Languages → About → Debug
+                    // ORDER: Call Recording Switch → Rate And Review → Appearance → Recording → Audio → Security → Languages → About → Debug
+                    CallRecordingMasterSwitchSection(preferences, updateTrigger, actions)
                     RateAndReviewSection(onOpenWebView = onOpenWebView)
                     AppearanceSection(preferences, updateTrigger, actions)
                     RecordingSection(preferences, updateTrigger, actions, onStorageClick, onOpenContactsIncoming, onOpenContactsOutgoing)
@@ -208,6 +209,24 @@ fun SettingsContent(
             initialSelection = picker.selectedNumbers,
             onConfirm = onConfirmContacts,
             onDismiss = onDismissContacts
+        )
+    }
+}
+
+// ── Universal call recording master switch ────────────────────────────────────
+
+@Composable
+private fun CallRecordingMasterSwitchSection(preferences: AppPreferences, updateTrigger: Int, actions: SettingsActions) {
+    val enabled = remember(updateTrigger) { preferences.isCallRecordingEnabled() }
+    SettingsSection(title = "Call Recording", icon = Icons.Outlined.FiberManualRecord) {
+        ToggleListItem(
+            label = "Enable Call Recording",
+            description = if (enabled)
+                "Call recording is active. Turn off to fully stop all call monitoring."
+            else
+                "Off — nothing about your calls is monitored or recorded.",
+            checked = enabled,
+            onCheckedChange = { actions.setCallRecordingEnabled(it) }
         )
     }
 }
@@ -1106,6 +1125,7 @@ private fun SettingsScreenPreview() {
         val mockContext = LocalContext.current
         val dummyPreferences = AppPreferences(mockContext)
         val dummyActions = object : SettingsActions {
+            override fun setCallRecordingEnabled(enabled: Boolean) {}
             override fun setAutoRecordIncoming(enabled: Boolean) {}
             override fun setAutoRecordOutgoing(enabled: Boolean) {}
             override fun setRecordOnAnswer(enabled: Boolean) {}

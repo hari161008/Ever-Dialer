@@ -83,6 +83,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_PILL_NAV              = "pill_style_nav"
+        const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
         const val KEY_FIRST_LAUNCH_DONE     = "first_launch_done"
         // Hangup button width fraction (0.4f .. 1.0f)
         const val KEY_HANGUP_WIDTH          = "hangup_button_width"

@@ -15,7 +15,7 @@ import androidx.core.net.toUri
 import com.coolappstore.evercallrecorder.by.svhp.integrations.scrcpy.ScrcpyAudioCodec
 import com.coolappstore.evercallrecorder.by.svhp.integrations.scrcpy.ScrcpyAudioSource
 
-class AppPreferences(context: Context) {
+class AppPreferences(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "evercallrecorder_prefs"
@@ -28,6 +28,10 @@ class AppPreferences(context: Context) {
         const val DISCLAIMER_ACCEPTED = false
         val RECORDING_FOLDER_URI: String? = null
         val STORAGE_MODE: String? = null
+        // Universal master switch: recording (and everything that monitors calls to make it
+        // possible — phone state listening, the app-call notification listener, the recording
+        // foreground service) is entirely off until the user explicitly turns this on.
+        const val CALL_RECORDING_ENABLED = false
         const val VIBRATION_ENABLED = true
         const val AUTO_RECORD_INCOMING = true
         const val AUTO_RECORD_OUTGOING = true
@@ -78,6 +82,7 @@ class AppPreferences(context: Context) {
     enum class Key(val id: String) {
         DISCLAIMER_ACCEPTED("disclaimer_accepted"),
         RECORDING_FOLDER_URI("recording_folder_uri"),
+        CALL_RECORDING_ENABLED("call_recording_enabled"),
         STORAGE_MODE("storage_mode"),
         VIBRATION_ENABLED("vibration_enabled"),
         AUTO_RECORD_INCOMING("auto_record_incoming"),
@@ -181,6 +186,17 @@ class AppPreferences(context: Context) {
 
     fun isDisclaimerAccepted() = getBoolean(Key.DISCLAIMER_ACCEPTED, DefaultsValue.DISCLAIMER_ACCEPTED)
     fun setDisclaimerAccepted(accepted: Boolean) = setBoolean(Key.DISCLAIMER_ACCEPTED, accepted)
+    /**
+     * The universal master switch for call recording. Off by default. While off, nothing in
+     * this module should monitor calls, listen for phone state, or run any background service —
+     * see [isAnyAppCallRecordingEnabled] callers and the call-monitoring entry points, which all
+     * check this first.
+     */
+    fun isCallRecordingEnabled() = getBoolean(Key.CALL_RECORDING_ENABLED, DefaultsValue.CALL_RECORDING_ENABLED)
+    fun setCallRecordingEnabled(enabled: Boolean) {
+        setBoolean(Key.CALL_RECORDING_ENABLED, enabled)
+        com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(context)
+    }
     fun getRecordingFolderUri(): Uri? = getString(Key.RECORDING_FOLDER_URI, DefaultsValue.RECORDING_FOLDER_URI)?.toUri()
     fun setRecordingFolderUri(uri: Uri?) = setString(Key.RECORDING_FOLDER_URI, uri?.toString())
     /**
@@ -329,14 +345,20 @@ class AppPreferences(context: Context) {
      * the same way normal phone calls are. Off (unticked) by default.
      */
     fun isRecordWhatsAppCallsEnabled() = getBoolean(Key.RECORD_WHATSAPP_CALLS, DefaultsValue.RECORD_WHATSAPP_CALLS)
-    fun setRecordWhatsAppCallsEnabled(enabled: Boolean) = setBoolean(Key.RECORD_WHATSAPP_CALLS, enabled)
+    fun setRecordWhatsAppCallsEnabled(enabled: Boolean) {
+        setBoolean(Key.RECORD_WHATSAPP_CALLS, enabled)
+        com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(context)
+    }
 
     /**
      * Whether calls placed/received through Telegram should be automatically recorded,
      * the same way normal phone calls are. Off (unticked) by default.
      */
     fun isRecordTelegramCallsEnabled() = getBoolean(Key.RECORD_TELEGRAM_CALLS, DefaultsValue.RECORD_TELEGRAM_CALLS)
-    fun setRecordTelegramCallsEnabled(enabled: Boolean) = setBoolean(Key.RECORD_TELEGRAM_CALLS, enabled)
+    fun setRecordTelegramCallsEnabled(enabled: Boolean) {
+        setBoolean(Key.RECORD_TELEGRAM_CALLS, enabled)
+        com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(context)
+    }
 
     /** True if at least one "record calls from apps" target is enabled. */
     fun isAnyAppCallRecordingEnabled() = isRecordWhatsAppCallsEnabled() || isRecordTelegramCallsEnabled()

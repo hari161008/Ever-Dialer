@@ -107,6 +107,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
+    var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, true)) }
     var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
@@ -196,6 +197,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
             ContextMenuItemOption("edit_contact",      "Edit contact",              Icons.Default.Edit),
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
             ContextMenuItemOption("share_contact",     "Share contact",             Icons.Default.Share),
+            ContextMenuItemOption("move_contact",      "Move contact",              Icons.Default.DriveFileMove),
             ContextMenuItemOption("toggle_favorite",   "Add/Remove Favourites",     Icons.Default.Favorite),
             ContextMenuItemOption("fake_call",         "Fake Call",                 Icons.Outlined.PhoneCallback),
             ContextMenuItemOption("delete_contact",    "Delete contact",            Icons.Default.Delete)
@@ -1151,6 +1153,19 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     onCheckedChange = {
                                         pillNav = it
                                         prefs.setBoolean(PreferenceManager.KEY_PILL_NAV, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show Sims In Call Logs",
+                                    supporting = "Show a SIM icon with its number on calls in Call Logs",
+                                    leadingIcon = Icons.Outlined.SimCard,
+                                    iconContainerColor = ColorGreen,
+                                    checked = showSimsInCallLogs,
+                                    onCheckedChange = {
+                                        showSimsInCallLogs = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, it)
                                     }
                                 )
                             }
