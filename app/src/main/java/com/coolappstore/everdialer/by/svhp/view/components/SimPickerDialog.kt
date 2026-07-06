@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp.view.components
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import androidx.compose.foundation.layout.*
@@ -33,7 +34,22 @@ fun SimPickerDialog(
     val phoneAccounts = remember {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
             try {
-                telecomManager.callCapablePhoneAccounts
+                val raw = telecomManager.callCapablePhoneAccounts
+                val seen = HashSet<String>()
+                raw.filter { handle ->
+                    val info = try {
+                        telecomManager.getPhoneAccount(handle)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    val isSimAccount = info != null &&
+                        info.isEnabled &&
+                        info.hasCapabilities(PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION)
+                    if (!isSimAccount) return@filter false
+
+                    val key = info!!.label?.toString().orEmpty() + "|" + info.address?.toString().orEmpty()
+                    seen.add(key)
+                }
             } catch (e: SecurityException) {
                 emptyList()
             }

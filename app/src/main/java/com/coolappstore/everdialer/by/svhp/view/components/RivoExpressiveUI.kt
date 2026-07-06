@@ -565,12 +565,13 @@ fun RivoListItem(
 
             if (trailingStartContent != null) {
                 trailingStartContent()
+                Spacer(modifier = Modifier.width(8.dp))
             }
 
             if (trailingText != null) {
                 Text(
                     text = trailingText,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

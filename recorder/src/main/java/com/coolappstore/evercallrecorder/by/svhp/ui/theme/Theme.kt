@@ -16,8 +16,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 
 // ── Static fallback schemes (original green) ──────────────────────────────────
 
@@ -171,6 +173,7 @@ fun ShizucallrecorderTheme(
     accentArgb: Int? = null,
     isPureWhite: Boolean = false,
     isPureBlack: Boolean = false,
+    fontFamily: FontFamily = FontFamily.Default,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -226,9 +229,11 @@ fun ShizucallrecorderTheme(
         else -> LightColorScheme
     }
 
+    val typography = remember(fontFamily) { buildTypography(fontFamily) }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = typography,
         content = content
     )
 }

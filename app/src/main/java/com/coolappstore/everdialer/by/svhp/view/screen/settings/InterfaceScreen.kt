@@ -1168,6 +1168,29 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, it)
                                     }
                                 )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Icon-Only Bottom Bar",
+                                    supporting = "Removes text labels from navigation",
+                                    leadingIcon = Icons.Outlined.ViewStream,
+                                    iconContainerColor = ColorTeal,
+                                    checked = iconOnlyNav,
+                                    onCheckedChange = { iconOnlyNav = it; prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Open Dialpad by Default",
+                                    supporting = "Show dialpad automatically when app starts",
+                                    leadingIcon = Icons.Outlined.Dialpad,
+                                    iconContainerColor = ColorAmber,
+                                    checked = openDialpadDefault,
+                                    onCheckedChange = {
+                                        openDialpadDefault = it
+                                        prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, it)
+                                    }
+                                )
                             }
                         }
                     }
@@ -1208,40 +1231,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorGreen,
                                     checked = showPicture,
                                     onCheckedChange = { showPicture = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ── Navigation ───────────────────────────────────────
-                item {
-                    RivoAnimatedSection(delayMs = 220L) {
-                        Column {
-                            Text("Navigation", style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
-                            RivoExpressiveCard {
-                                RivoSwitchListItem(
-                                    headline = "Icon-Only Bottom Bar",
-                                    supporting = "Removes text labels from navigation",
-                                    leadingIcon = Icons.Outlined.ViewStream,
-                                    iconContainerColor = ColorTeal,
-                                    checked = iconOnlyNav,
-                                    onCheckedChange = { iconOnlyNav = it; prefs.setBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, it) }
-                                )
-                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoSwitchListItem(
-                                    headline = "Open Dialpad by Default",
-                                    supporting = "Show dialpad automatically when app starts",
-                                    leadingIcon = Icons.Outlined.Dialpad,
-                                    iconContainerColor = ColorAmber,
-                                    checked = openDialpadDefault,
-                                    onCheckedChange = {
-                                        openDialpadDefault = it
-                                        prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, it)
-                                    }
                                 )
                             }
                         }

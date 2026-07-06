@@ -7,7 +7,9 @@ import android.content.Intent
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
@@ -22,6 +24,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,31 +42,38 @@ import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import org.koin.compose.koinInject
 
 /**
- * A small SIM-card-shaped badge (the real SIM card icon, tinted per-slot) with the SIM slot
- * number layered on top, so the SIM can be identified at a glance by both icon shape/color
- * AND number — not just a plain colored circle.
+ * A small, clean SIM-card-chip badge (a rectangle with a clipped corner, like a real SIM card)
+ * with the slot number in bold — solid flat color instead of stacking text over a busy vector
+ * icon, so the number stays clearly legible at small sizes instead of reading as a blurry dot.
  */
+private val SimChipShape = GenericShape { size, _ ->
+    val notch = size.minDimension * 0.42f
+    moveTo(notch, 0f)
+    lineTo(size.width, 0f)
+    lineTo(size.width, size.height)
+    lineTo(0f, size.height)
+    lineTo(0f, notch)
+    close()
+}
+
 @Composable
 fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier) {
-    val color = if (slot == 0) Color(0xFF1B5E20) else Color(0xFFB71C1C)
+    val color = if (slot == 0) Color(0xFF2E7D32) else Color(0xFFC62828)
     Box(
-        modifier = modifier.size(26.dp),
+        modifier = modifier
+            .size(width = 22.dp, height = 26.dp)
+            .clip(SimChipShape)
+            .background(color),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.SimCard,
-            contentDescription = if (slot == 0) "SIM 1" else "SIM 2",
-            tint = color,
-            modifier = Modifier.matchParentSize()
-        )
         Text(
             text = if (slot == 0) "1" else "2",
             color = Color.White,
-            fontSize = 12.sp,
-            lineHeight = 12.sp,
+            fontSize = 14.sp,
+            lineHeight = 14.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = 3.dp)
         )
     }
 }
@@ -142,7 +152,7 @@ fun CallLogTile(
         }
         Box(modifier = Modifier.weight(1f)) {
         val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, true) }
-        val showSimBadge = showSimsSetting && remember { com.coolappstore.everdialer.by.svhp.controller.util.hasDualSim(context) } && log.simSlot in 0..1
+        val showSimBadge = showSimsSetting && log.simSlot in 0..1
         RivoListItem(
             headline = buildString {
                 append(displayName)
@@ -154,10 +164,7 @@ fun CallLogTile(
             avatarName  = displayName,
             photoUri    = log.photoUri,
             trailingStartContent = if (showSimBadge) ({
-                SimSlotBadge(
-                    slot = log.simSlot,
-                    modifier = Modifier.padding(end = 6.dp)
-                )
+                SimSlotBadge(slot = log.simSlot)
             }) else null,
             trailingText = formatTimeOnly(log.date),
             trailingIcon = when (log.type) {

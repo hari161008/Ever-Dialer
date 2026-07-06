@@ -294,6 +294,25 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         data class AccInfo(val type: String, val name: String, val contactIds: MutableSet<Long> = mutableSetOf())
         val accountMap = mutableMapOf<String, AccInfo>()
 
+        // Only contacts with at least one phone number are ever shown in the contacts list
+        // (see the `.filter { it.phoneNumbers.isNotEmpty() }` in getContacts()). Counting here
+        // must use the exact same criteria, otherwise the "N contacts" badge shown on each
+        // account button won't match how many contacts actually appear once that account is
+        // selected.
+        val contactIdsWithPhoneNumber = mutableSetOf<Long>()
+        contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
+            null, null, null
+        )?.use { cursor ->
+            val idIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+            if (idIdx >= 0) {
+                while (cursor.moveToNext()) {
+                    contactIdsWithPhoneNumber.add(cursor.getLong(idIdx))
+                }
+            }
+        }
+
         contentResolver.query(
             ContactsContract.RawContacts.CONTENT_URI,
             arrayOf(
@@ -309,13 +328,15 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             val nameIdx      = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
             while (cursor.moveToNext()) {
                 val contactId = if (contactIdIdx >= 0) cursor.getLong(contactIdIdx) else continue
+                if (contactId !in contactIdsWithPhoneNumber) continue
                 val type = cursor.getString(typeIdx) ?: ""
                 val name = cursor.getString(nameIdx) ?: ""
                 val key = buildAccountKey(type, name)
                 accountMap.getOrPut(key) { AccInfo(type, name) }.contactIds.add(contactId)
             }
         }
-        return accountMap.map { (key, info) ->
+
+        val fromRawContacts = accountMap.map { (key, info) ->
             ContactAccount(
                 key          = key,
                 displayName  = buildAccountDisplayName(info.type, info.name),
@@ -323,7 +344,32 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 accountName  = info.name,
                 contactCount = info.contactIds.size
             )
-        }.filter { it.contactCount > 0 }.sortedByDescending { it.contactCount }
+        }.filter { it.contactCount > 0 }
+
+        // Always surface a button for every active SIM slot — even one that currently holds
+        // zero contacts — so the user can still tap into "SIM 1"/"SIM 2" (e.g. to save a new
+        // contact there). Without this, a SIM with 0 contacts would simply be missing from the
+        // list below since entries with contactCount == 0 are otherwise filtered out above.
+        val merged = LinkedHashMap<String, ContactAccount>()
+        fromRawContacts.forEach { merged[it.key] = it }
+        try {
+            val simCount = getActiveSimCount()
+            for (slot in 0 until simCount) {
+                val key = "sim_${slot + 1}"
+                merged.putIfAbsent(
+                    key,
+                    ContactAccount(
+                        key = key,
+                        displayName = if (simCount > 1) "SIM ${slot + 1}" else "SIM Card",
+                        accountType = "sim",
+                        accountName = "",
+                        contactCount = 0
+                    )
+                )
+            }
+        } catch (_: Exception) { }
+
+        return merged.values.sortedByDescending { it.contactCount }
     }
 
     override fun getSaveTargets(): List<ContactSaveTarget> {

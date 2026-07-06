@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.coolappstore.everdialer.by.svhp.controller.CallService
+import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -530,6 +531,15 @@ fun ExpressiveCallScreen(
     val hangupWidthFraction = remember(settingsVersion) {
         prefs?.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f) ?: 0.5f
     }
+    // Feature Buttons order/visibility from Settings → Appearance → Caller UI
+    val activeButtonIds = remember(settingsVersion) {
+        prefs?.let { CallButtonPrefs.getActiveActionIds(it) } ?: listOf(
+            CallButtonPrefs.ID_HOLD, CallButtonPrefs.ID_ADD, CallButtonPrefs.ID_DIALPAD,
+            CallButtonPrefs.ID_NOTE, CallButtonPrefs.ID_MUTE, CallButtonPrefs.ID_SPEAKER,
+            CallButtonPrefs.ID_BLUETOOTH
+        )
+    }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
 
     LaunchedEffect(phoneNumber) {
@@ -612,6 +622,98 @@ fun ExpressiveCallScreen(
     val controlBtnActiveColor = if (isDark) Color.White else Color.Black
     val controlBtnActiveFg = if (isDark) Color.Black else Color.White
     val controlBtnFg = onBgColor
+
+    // ── Feature Buttons — renders one configurable ongoing-call button by id, honoring the
+    // order/visibility chosen in Settings → Appearance → Caller UI → Feature Buttons ──
+    @Composable
+    fun RenderFeatureButton(id: String) {
+        when (id) {
+            CallButtonPrefs.ID_HOLD -> AnimatedCallButton(
+                icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause,
+                label = "Hold", isActive = isOnHold,
+                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+            ) {
+                isOnHold = !isOnHold
+                if (isOnHold) call.hold() else call.unhold()
+            }
+            CallButtonPrefs.ID_ADD -> if (canShowMerge) {
+                AnimatedCallButton(
+                    icon = Icons.Default.CallMerge, label = "Merge", isActive = true,
+                    btnColor = controlBtnColor, activeBtnColor = Color(0xFF4CAF50),
+                    fgColor = controlBtnFg, activeFgColor = Color.White,
+                    onClick = { showMergeConfirm = true }
+                )
+            } else {
+                AnimatedCallButton(
+                    icon = Icons.Default.PersonAdd, label = "Add Person", isActive = false,
+                    btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                    fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg,
+                    onClick = { showAddPersonSheet = true }
+                )
+            }
+            CallButtonPrefs.ID_DIALPAD -> AnimatedCallButton(
+                icon = Icons.Default.Dialpad, label = "Dialpad", isActive = showDialpad,
+                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+            ) { showDialpad = !showDialpad }
+            CallButtonPrefs.ID_NOTE -> AnimatedCallButton(
+                icon = Icons.Default.EditNote, label = "Note", isActive = showNoteWindow,
+                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+            ) { showNoteWindow = !showNoteWindow }
+            CallButtonPrefs.ID_MUTE -> AnimatedCallButton(
+                icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                label = "Mute", isActive = isMuted,
+                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+            ) { CallService.setMuted(!isMuted) }
+            CallButtonPrefs.ID_SPEAKER -> AnimatedCallButton(
+                icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown,
+                label = "Speaker", isActive = isSpeakerOn,
+                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+            ) {
+                CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+            }
+            CallButtonPrefs.ID_BLUETOOTH -> if (isBluetoothConnected) {
+                AnimatedCallButton(
+                    icon = if (isBluetoothActive) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
+                    label = "Bluetooth", isActive = isBluetoothActive,
+                    btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                    fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+                ) {
+                    if (isBluetoothActive) CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                    else CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+                }
+            }
+            CallButtonPrefs.ID_MORE -> Box {
+                AnimatedCallButton(
+                    icon = Icons.Default.MoreHoriz, label = "More", isActive = showMoreMenu,
+                    btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                    fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
+                ) { showMoreMenu = true }
+                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (showNoteWindow) "Hide Note" else "Note") },
+                        leadingIcon = { Icon(Icons.Default.EditNote, null) },
+                        onClick = { showMoreMenu = false; showNoteWindow = !showNoteWindow }
+                    )
+                    if (isBluetoothConnected) {
+                        DropdownMenuItem(
+                            text = { Text(if (isBluetoothActive) "Switch to Earpiece" else "Switch to Bluetooth") },
+                            leadingIcon = { Icon(Icons.Default.Bluetooth, null) },
+                            onClick = {
+                                showMoreMenu = false
+                                if (isBluetoothActive) CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                                else CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "bg")
     val driftX by infiniteTransition.animateFloat(-35f, 35f, infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Reverse), label = "x")
@@ -769,39 +871,11 @@ fun ExpressiveCallScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                        isOnHold = !isOnHold
-                                        if (isOnHold) call.hold() else call.unhold()
+                                activeButtonIds.chunked(3).forEach { rowIds ->
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                        rowIds.forEach { id -> RenderFeatureButton(id) }
                                     }
-                                    if (hasHeldCall) {
-                                        AnimatedCallButton(icon = Icons.Default.CallMerge, label = "Merge", isActive = true, btnColor = controlBtnColor, activeBtnColor = Color(0xFF4CAF50), fgColor = controlBtnFg, activeFgColor = Color.White, onClick = { showMergeConfirm = true })
-                                    } else {
-                                        AnimatedCallButton(icon = Icons.Default.PersonAdd, label = "Add", isActive = false, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg, onClick = { showAddPersonSheet = true })
-                                    }
-                                    AnimatedCallButton(icon = Icons.Default.Dialpad, label = "Dialpad", isActive = showDialpad, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { showDialpad = !showDialpad }
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    AnimatedCallButton(icon = Icons.Default.EditNote, label = "Note", isActive = showNoteWindow, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { showNoteWindow = !showNoteWindow }
-                                    AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
-                                    AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                        CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
-                                    }
-                                    if (isBluetoothConnected) {
-                                        AnimatedCallButton(
-                                            icon = if (isBluetoothActive) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
-                                            label = "Bluetooth",
-                                            isActive = isBluetoothActive,
-                                            btnColor = controlBtnColor,
-                                            activeBtnColor = controlBtnActiveColor,
-                                            fgColor = controlBtnFg,
-                                            activeFgColor = controlBtnActiveFg
-                                        ) {
-                                            if (isBluetoothActive) CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
-                                            else CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
-                                        }
-                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
                                 AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
@@ -963,92 +1037,11 @@ fun ExpressiveCallScreen(
                             color = overlayColor
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                // Top row: Hold, Add Person, Dialpad
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    AnimatedCallButton(icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause, label = "Hold", isActive = isOnHold, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                        isOnHold = !isOnHold
-                                        if (isOnHold) call.hold() else call.unhold()
-                                    }
-
-                                    if (canShowMerge) {
-                                        AnimatedCallButton(
-                                            icon = Icons.Default.CallMerge,
-                                            label = "Merge",
-                                            isActive = true,
-                                            btnColor = controlBtnColor,
-                                            activeBtnColor = Color(0xFF4CAF50),
-                                            fgColor = controlBtnFg,
-                                            activeFgColor = Color.White,
-                                            onClick = { showMergeConfirm = true }
-                                        )
-                                    } else {
-                                        AnimatedCallButton(
-                                            icon = Icons.Default.PersonAdd,
-                                            label = "Add Person",
-                                            isActive = false,
-                                            btnColor = controlBtnColor,
-                                            activeBtnColor = controlBtnActiveColor,
-                                            fgColor = controlBtnFg,
-                                            activeFgColor = controlBtnActiveFg,
-                                            onClick = { showAddPersonSheet = true }
-                                        )
-                                    }
-
-                                    AnimatedCallButton(
-                                        icon = Icons.Default.Dialpad,
-                                        label = "Dialpad",
-                                        isActive = showDialpad,
-                                        btnColor = controlBtnColor,
-                                        activeBtnColor = controlBtnActiveColor,
-                                        fgColor = controlBtnFg,
-                                        activeFgColor = controlBtnActiveFg
-                                    ) { showDialpad = !showDialpad }
-                                }
-
-                                Spacer(modifier = Modifier.height(20.dp))
-
-                                // Bottom row: Note, Mute, Speaker
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    AnimatedCallButton(
-                                        icon = Icons.Default.EditNote,
-                                        label = "Note",
-                                        isActive = showNoteWindow,
-                                        btnColor = controlBtnColor,
-                                        activeBtnColor = controlBtnActiveColor,
-                                        fgColor = controlBtnFg,
-                                        activeFgColor = controlBtnActiveFg
-                                    ) { showNoteWindow = !showNoteWindow }
-                                    AnimatedCallButton(icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, label = "Mute", isActive = isMuted, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) { CallService.setMuted(!isMuted) }
-                                    AnimatedCallButton(icon = if (isSpeakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeDown, label = "Speaker", isActive = isSpeakerOn, btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor, fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg) {
-                                        CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
-                                    }
-                                }
-
-                                // Bluetooth row — only visible when a BT device is connected
-                                AnimatedVisibility(
-                                    visible = isBluetoothConnected,
-                                    enter = fadeIn() + expandVertically(),
-                                    exit = fadeOut() + shrinkVertically()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        AnimatedCallButton(
-                                            icon = if (isBluetoothActive) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
-                                            label = "Bluetooth",
-                                            isActive = isBluetoothActive,
-                                            btnColor = controlBtnColor,
-                                            activeBtnColor = controlBtnActiveColor,
-                                            fgColor = controlBtnFg,
-                                            activeFgColor = controlBtnActiveFg
-                                        ) {
-                                            if (isBluetoothActive) {
-                                                CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
-                                            } else {
-                                                CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
-                                            }
-                                        }
+                                // Feature Buttons — order & visibility from Settings → Appearance → Caller UI
+                                activeButtonIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
+                                    if (rowIndex > 0) Spacer(modifier = Modifier.height(20.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                        rowIds.forEach { id -> RenderFeatureButton(id) }
                                     }
                                 }
 
