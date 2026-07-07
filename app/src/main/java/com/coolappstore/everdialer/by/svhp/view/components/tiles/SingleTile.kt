@@ -80,6 +80,8 @@ fun SingleTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
                     onClick = {
                         if (horizontalDragDetected) return@combinedClickable
                         isPressed = false

@@ -329,7 +329,9 @@ fun ContactContent(
             val selectedAccountKey by contactsVM.selectedAccountKey.collectAsState()
             var showAccountSheet by remember { mutableStateOf(false) }
 
-            LaunchedEffect(Unit) { contactsVM.fetchAvailableAccounts() }
+            LaunchedEffect(settingsVersion) {
+                contactsVM.fetchAvailableAccounts()
+            }
 
             val contactsCountText = when {
                 isLoadingContacts -> "Loading…"

@@ -347,6 +347,28 @@ fun ContactDetailsScreen(
                     }
                 }
 
+                // Saved In — shows the user which account(s) this contact actually lives in
+                // (Google account(s), SIM, phone storage, etc.), since a contact merged across
+                // multiple sources can be stored in more than one place at once.
+                if (contact != null && contact.sourceAccounts.isNotEmpty()) {
+                    item {
+                        RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage) {
+                            contact.sourceAccounts.forEachIndexed { index, source ->
+                                val icon = when {
+                                    source.startsWith("SIM", ignoreCase = true) -> Icons.Default.SimCard
+                                    source.equals("Device Storage", ignoreCase = true) -> Icons.Default.PhoneAndroid
+                                    source.equals("WhatsApp", ignoreCase = true) -> Icons.Default.Chat
+                                    else -> Icons.Default.AccountCircle
+                                }
+                                RivoListItem(headline = source, leadingIcon = icon, onClick = {})
+                                if (index < contact.sourceAccounts.size - 1) {
+                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
 

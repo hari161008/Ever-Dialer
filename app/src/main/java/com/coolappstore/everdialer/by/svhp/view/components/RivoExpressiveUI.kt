@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -505,9 +506,10 @@ fun RivoListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
                 .combinedClickable(
                     interactionSource = interactionSource,
-                    indication = ripple(),
+                    indication = null,
                     onClick = {
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                             performAppHaptic(
@@ -613,20 +615,26 @@ fun RivoSwitchListItem(
     )
 
     Surface(
-        onClick = {
-            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                performAppHaptic(
-                    context,
-                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                )
-            }
-            onCheckedChange(!checked)
-        },
         color = Color.Transparent,
-        modifier = modifier.fillMaxWidth().scale(scale),
-        shadowElevation = 0.dp,
-        interactionSource = interactionSource
+        modifier = modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(
+                            context,
+                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                        )
+                    }
+                    onCheckedChange(!checked)
+                }
+            ),
+        shape = RoundedCornerShape(16.dp),
+        shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier

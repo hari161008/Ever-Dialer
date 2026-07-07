@@ -785,12 +785,15 @@ fun ExpressiveCallScreen(
         label = "dialpadAlpha"
     )
 
-    Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor)
+            .offset(y = disconnectOffset)
+            .alpha(disconnectAlpha)
+    ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .offset(y = disconnectOffset)
-                .alpha(disconnectAlpha)
+            modifier = Modifier.fillMaxSize()
         ) {
             // Blurred background photo
             if (!photoUri.isNullOrEmpty()) {

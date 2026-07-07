@@ -38,6 +38,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -172,6 +175,30 @@ fun DialPadContent(
 
     val allContacts by contactsVM.allContacts.collectAsState()
     var number by remember { mutableStateOf(initialNumber ?: DialpadDraftHolder.pendingNumber) }
+    // Where new digits get inserted / backspace deletes from. Defaults to the end of the number
+    // (normal typing behaviour), but the user can tap anywhere in the number to move it, so they
+    // can fill in a missing digit in the middle without having to delete and retype everything.
+    var cursorPosition by remember { mutableIntStateOf(number.length) }
+
+    // Route every edit through these so the cursor position stays correct and consistent no
+    // matter where the edit originates from (dialpad keys, backspace, paste, clipboard banner,
+    // clearing on secret-code detection, etc.)
+    fun insertAtCursor(text: String) {
+        val at = cursorPosition.coerceIn(0, number.length)
+        number = number.substring(0, at) + text + number.substring(at)
+        cursorPosition = at + text.length
+    }
+    fun backspaceAtCursor() {
+        val at = cursorPosition.coerceIn(0, number.length)
+        if (at > 0) {
+            number = number.removeRange(at - 1, at)
+            cursorPosition = at - 1
+        }
+    }
+    fun replaceNumber(text: String) {
+        number = text
+        cursorPosition = text.length
+    }
     // Keep the draft holder in sync so dismissing the sheet (including swipe-down-to-dismiss)
     // and reopening it restores whatever digits were typed, instead of clearing them.
     LaunchedEffect(number) { DialpadDraftHolder.pendingNumber = number }
@@ -371,7 +398,7 @@ fun DialPadContent(
         // Check Contacts Hider secret code first
         val secretCode = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_CODE, "") ?: ""
         if (secretCode.isNotEmpty() && cleanNum == secretCode) {
-            number = ""
+            replaceNumber("")
             navigator?.navigate(HiddenContactsScreenDestination)
             return
         }
@@ -379,7 +406,7 @@ fun DialPadContent(
         // by processSecretCodeIfNeeded which uses telecomManager.placeCall() with the raw URI
         // for proper carrier-stack routing without looping back to this app.
         if (processSecretCodeIfNeeded(cleanNum)) {
-            number = ""
+            replaceNumber("")
             return
         }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
@@ -479,7 +506,9 @@ fun DialPadContent(
                 ) {
                     DialpadNumberDisplay(
                         number = number,
-                        fontSize = if (number.length > 11) 24 else 30
+                        fontSize = if (number.length > 11) 24 else 30,
+                        cursorPosition = cursorPosition,
+                        onCursorPositionChange = { cursorPosition = it }
                     )
                 }
 
@@ -547,7 +576,7 @@ fun DialPadContent(
                                     soundPool = soundPool,
                                     context = context,
                                     onClick = { digit ->
-                                        number += digit
+                                        insertAtCursor(digit)
                                     },
                                     compact = true
                                 )
@@ -589,8 +618,8 @@ fun DialPadContent(
                         )
                         BackspaceActionButton(
                             number = number,
-                            onBackspace = { number = number.dropLast(1) },
-                            onClear = { number = "" }
+                            onBackspace = { backspaceAtCursor() },
+                            onClear = { replaceNumber("") }
                         )
                     }
                 }
@@ -762,7 +791,7 @@ fun DialPadContent(
                 ) {
                     Icon(Icons.Default.ContentPaste, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
                     Text(text = clipText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); number = clipText; showClipboardBanner = false }) {
+                    TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); replaceNumber(clipText); showClipboardBanner = false }) {
                         Text("Use", color = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { showClipboardBanner = false }, modifier = Modifier.size(28.dp)) {
@@ -855,7 +884,13 @@ fun DialPadContent(
                         ) {
                             DialpadNumberDisplay(
                                 number = number,
-                                fontSize = ((if (number.length > 11) 28 else 36) * scaleFactor).coerceIn(18f, 40f).toInt()
+                                fontSize = ((if (number.length > 11) 28 else 36) * scaleFactor).coerceIn(18f, 40f).toInt(),
+                                cursorPosition = cursorPosition,
+                                onCursorPositionChange = { cursorPosition = it },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showOverflowMenu = true
+                                }
                             )
                         }
                         RivoDropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
@@ -878,7 +913,7 @@ fun DialPadContent(
                                     icon     = Icons.Default.ContentPaste,
                                     iconTint = MaterialTheme.colorScheme.primary,
                                     onClick  = {
-                                        number = pasteText
+                                        replaceNumber(pasteText)
                                         showOverflowMenu = false
                                     }
                                 )
@@ -913,7 +948,7 @@ fun DialPadContent(
                                 soundPool = soundPool,
                                 context = context,
                                 onClick = { digit ->
-                                    number += digit
+                                    insertAtCursor(digit)
                                 },
                                 overrideWidth = keyWidth,
                                 overrideHeight = keyHeight,
@@ -976,8 +1011,8 @@ fun DialPadContent(
 
                     BackspaceActionButton(
                         number = number,
-                        onBackspace = { number = number.dropLast(1) },
-                        onClear = { number = "" },
+                        onBackspace = { backspaceAtCursor() },
+                        onClear = { replaceNumber("") },
                         size = actionSize
                     )
                 }
@@ -1150,6 +1185,11 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
  * - Deleted chars slide down + fade + scale out
  * - Existing chars animate their horizontal position smoothly when neighbours appear/disappear
  *
+ * Also renders a movable, blinking text cursor at [cursorPosition]. Tapping a digit moves the
+ * cursor to just before or after it (whichever half was tapped), and tapping the trailing empty
+ * space moves the cursor to the end — so a missing/wrong digit in the middle of the number can be
+ * fixed in place instead of having to delete and retype everything after it.
+ *
  * Uses a stable monotonically-increasing ID per character insertion so Compose can
  * distinguish "same char shifted left" from "new char at this slot".
  */
@@ -1157,7 +1197,10 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
 @Composable
 private fun DialpadNumberDisplay(
     number: String,
-    fontSize: Int
+    fontSize: Int,
+    cursorPosition: Int = number.length,
+    onCursorPositionChange: (Int) -> Unit = {},
+    onLongPress: () -> Unit = {}
 ) {
     val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
     val textColor   = MaterialTheme.colorScheme.onSurface
@@ -1173,24 +1216,49 @@ private fun DialpadNumberDisplay(
 
     LaunchedEffect(number) {
         val current = stableChars.map { it.second }.joinToString("")
-        if (number.length > current.length) {
-            // Characters appended
-            val added = number.drop(current.length)
-            added.forEach { ch ->
-                stableChars.add(Pair(idCounter.value++, ch))
-            }
-        } else if (number.length < current.length) {
-            // Characters removed from end (backspace)
-            val removeCount = current.length - number.length
-            repeat(removeCount) {
-                if (stableChars.isNotEmpty()) stableChars.removeAt(stableChars.lastIndex)
-            }
-        } else if (number != current) {
-            // Full replacement (e.g. paste) — rebuild
-            stableChars.clear()
-            number.forEach { ch -> stableChars.add(Pair(idCounter.value++, ch)) }
+        if (number == current) return@LaunchedEffect
+
+        // Diff by common prefix/suffix so an insert or delete anywhere in the middle of the
+        // string (not just at the end) only touches the characters that actually changed —
+        // everything else keeps its stable id and simply slides over.
+        val minLen = minOf(current.length, number.length)
+        var prefixLen = 0
+        while (prefixLen < minLen && current[prefixLen] == number[prefixLen]) prefixLen++
+
+        var suffixLen = 0
+        val maxSuffix = minLen - prefixLen
+        while (suffixLen < maxSuffix &&
+            current[current.length - 1 - suffixLen] == number[number.length - 1 - suffixLen]
+        ) suffixLen++
+
+        val removeCount = current.length - prefixLen - suffixLen
+        repeat(removeCount) {
+            if (stableChars.size > prefixLen) stableChars.removeAt(prefixLen)
+        }
+        val insertText = number.substring(prefixLen, number.length - suffixLen)
+        insertText.forEachIndexed { i, ch ->
+            stableChars.add(prefixLen + i, Pair(idCounter.value++, ch))
         }
     }
+
+    // Blinking caret alpha
+    val cursorBlink = rememberInfiniteTransition(label = "cursorBlink")
+    val cursorAlpha by cursorBlink.animateFloat(
+        initialValue = 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1000
+                1f at 0
+                1f at 500
+                0f at 501
+                0f at 999
+            }
+        ),
+        label = "cursorAlpha"
+    )
+
+    val clampedCursor = cursorPosition.coerceIn(0, stableChars.size)
 
     LazyRow(
         horizontalArrangement = Arrangement.Center,
@@ -1201,7 +1269,7 @@ private fun DialpadNumberDisplay(
         itemsIndexed(
             items = stableChars,
             key   = { _, pair -> pair.first }
-        ) { _, pair ->
+        ) { index, pair ->
             var appeared by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { appeared = true }
 
@@ -1221,20 +1289,70 @@ private fun DialpadNumberDisplay(
                 label = "charScale"
             )
 
-            Text(
-                text     = pair.second.toString(),
-                style    = textStyle,
-                color    = textColor,
-                modifier = Modifier
-                    .animateItem(
-                        placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                        fadeInSpec     = tween(360, easing = easeOutExpo),
-                        fadeOutSpec    = tween(220)
+            Box(contentAlignment = Alignment.CenterStart) {
+                // A thin blinking bar rendered just before this character when the cursor sits
+                // here, so it visually sits between the two adjacent digits.
+                if (clampedCursor == index) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = (-2).dp)
+                            .width(2.dp)
+                            .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 0.9f })
+                            .align(Alignment.CenterStart)
+                            .graphicsLayer { this.alpha = cursorAlpha }
+                            .background(MaterialTheme.colorScheme.primary)
                     )
-                    .offset(y = offsetY)
-                    .alpha(alpha)
-                    .scale(scale)
-            )
+                }
+                Text(
+                    text     = pair.second.toString(),
+                    style    = textStyle,
+                    color    = textColor,
+                    modifier = Modifier
+                        .animateItem(
+                            placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                            fadeInSpec     = tween(360, easing = easeOutExpo),
+                            fadeOutSpec    = tween(220)
+                        )
+                        .offset(y = offsetY)
+                        .alpha(alpha)
+                        .scale(scale)
+                        .pointerInput(pair.first) {
+                            detectTapGestures(
+                                onLongPress = { onLongPress() }
+                            ) { tapOffset ->
+                                // Tapping the left half of a digit places the cursor before it,
+                                // the right half places it after — like a normal text field.
+                                val newPos = if (tapOffset.x < size.width / 2f) index else index + 1
+                                onCursorPositionChange(newPos)
+                            }
+                        }
+                )
+            }
+        }
+        // Trailing tap target so the user can move the cursor to the very end even when there's
+        // no character there (e.g. an empty number, or after the last digit).
+        item(key = "trailing_cursor_area") {
+            Box(
+                modifier = Modifier
+                    .fillParentMaxWidth(0.15f)
+                    .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 1.4f })
+                    .pointerInput(stableChars.size) {
+                        detectTapGestures(
+                            onLongPress = { onLongPress() }
+                        ) { onCursorPositionChange(stableChars.size) }
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (clampedCursor == stableChars.size) {
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 0.9f })
+                            .graphicsLayer { this.alpha = cursorAlpha }
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
         }
     }
 }

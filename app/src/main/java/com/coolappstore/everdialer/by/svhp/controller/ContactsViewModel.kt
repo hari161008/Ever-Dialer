@@ -85,7 +85,10 @@ class ContactsViewModel(
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) return
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { contactsRepo.getAvailableAccounts() }
+            val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
+                           else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+            runCatching { contactsRepo.getAvailableAccounts(hiddenIds) }
                 .onSuccess { _availableAccounts.value = it }
         }
     }

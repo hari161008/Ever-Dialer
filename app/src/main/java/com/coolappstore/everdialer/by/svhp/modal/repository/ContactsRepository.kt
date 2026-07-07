@@ -16,6 +16,61 @@ import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 
 class ContactsRepository(private val contentResolver: ContentResolver, private val context: Context) : IContactsRepository {
 
+    /** Distinct, human-readable source labels (Google account(s), SIM, phone storage, etc.)
+     *  for every contact_id, built from the raw contacts table in one bulk query. */
+    private fun buildSourceAccountsByContactId(): Map<String, List<String>> {
+        val result = mutableMapOf<String, MutableList<String>>()
+        val seenAccountKeyByContactId = mutableMapOf<String, MutableSet<String>>()
+        contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(
+                ContactsContract.RawContacts.CONTACT_ID,
+                ContactsContract.RawContacts.ACCOUNT_TYPE,
+                ContactsContract.RawContacts.ACCOUNT_NAME
+            ),
+            "${ContactsContract.RawContacts.DELETED} = 0",
+            null, null
+        )?.use { cursor ->
+            val contactIdIdx = cursor.getColumnIndex(ContactsContract.RawContacts.CONTACT_ID)
+            val typeIdx      = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)
+            val nameIdx      = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
+            while (cursor.moveToNext()) {
+                val contactId = if (contactIdIdx >= 0) cursor.getString(contactIdIdx) ?: continue else continue
+                val type = cursor.getString(typeIdx) ?: ""
+                val name = cursor.getString(nameIdx) ?: ""
+                val key = buildAccountKey(type, name)
+                val seen = seenAccountKeyByContactId.getOrPut(contactId) { mutableSetOf() }
+                if (seen.add(key)) {
+                    result.getOrPut(contactId) { mutableListOf() }.add(buildAccountDisplayName(type, name))
+                }
+            }
+        }
+        return result
+    }
+
+    /** Source-account labels for a single contact_id (see [buildSourceAccountsByContactId]). */
+    private fun getSourceAccountsForContact(contactId: String): List<String> {
+        val labels = mutableListOf<String>()
+        val seenKeys = mutableSetOf<String>()
+        contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(ContactsContract.RawContacts.ACCOUNT_TYPE, ContactsContract.RawContacts.ACCOUNT_NAME),
+            "${ContactsContract.RawContacts.CONTACT_ID} = ? AND ${ContactsContract.RawContacts.DELETED} = 0",
+            arrayOf(contactId),
+            null
+        )?.use { cursor ->
+            val typeIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)
+            val nameIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
+            while (cursor.moveToNext()) {
+                val type = cursor.getString(typeIdx) ?: ""
+                val name = cursor.getString(nameIdx) ?: ""
+                val key = buildAccountKey(type, name)
+                if (seenKeys.add(key)) labels.add(buildAccountDisplayName(type, name))
+            }
+        }
+        return labels
+    }
+
     override fun getContacts(): List<Contact> = getContacts(emptySet())
 
     override fun getContacts(enabledAccountKeys: Set<String>): List<Contact> {
@@ -23,6 +78,11 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         val allowedRawContactIds: Set<Long>? = if (enabledAccountKeys.isNotEmpty()) {
             buildAllowedRawContactIds(enabledAccountKeys)
         } else null // null = no filter, show all
+
+        // Build contact_id -> distinct source-account labels (Google account(s), SIM, phone
+        // storage, etc.) once up front, so ContactDetails can show the user where a contact is
+        // actually stored/synced without a separate per-contact query.
+        val sourceAccountsByContactId = buildSourceAccountsByContactId()
 
         val contactsMap = mutableMapOf<String, Contact>()
 
@@ -73,7 +133,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                         id = id,
                         name = cursor.getString(nameIdx) ?: "Unknown",
                         photoUri = cursor.getString(photoIdx),
-                        isFavorite = isStarred
+                        isFavorite = isStarred,
+                        sourceAccounts = sourceAccountsByContactId[id]?.toList() ?: emptyList()
                     )
                 }
 
@@ -208,7 +269,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     id = id,
                     name = cursor.getString(nameIdx) ?: "Unknown",
                     photoUri = cursor.getString(photoIdx),
-                    isFavorite = isStarred
+                    isFavorite = isStarred,
+                    sourceAccounts = getSourceAccountsForContact(id)
                 )
 
                 contact = when (mimeType) {
@@ -290,7 +352,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         contentResolver.delete(uri, null, null)
     }
 
-    override fun getAvailableAccounts(): List<ContactAccount> {
+    override fun getAvailableAccounts(excludedContactIds: Set<String>): List<ContactAccount> {
         data class AccInfo(val type: String, val name: String, val contactIds: MutableSet<Long> = mutableSetOf())
         val accountMap = mutableMapOf<String, AccInfo>()
 
@@ -329,6 +391,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             while (cursor.moveToNext()) {
                 val contactId = if (contactIdIdx >= 0) cursor.getLong(contactIdIdx) else continue
                 if (contactId !in contactIdsWithPhoneNumber) continue
+                if (contactId.toString() in excludedContactIds) continue
                 val type = cursor.getString(typeIdx) ?: ""
                 val name = cursor.getString(nameIdx) ?: ""
                 val key = buildAccountKey(type, name)

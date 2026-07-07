@@ -12,7 +12,7 @@ interface IContactsRepository {
     fun toggleFavorite(contactId: String, isFavorite: Boolean)
     fun saveContact(contact: Contact, accountType: String? = null, accountName: String? = null)
     fun deleteContact(contactId: String)
-    fun getAvailableAccounts(): List<ContactAccount>
+    fun getAvailableAccounts(excludedContactIds: Set<String> = emptySet()): List<ContactAccount>
     /** Destinations the user can save a brand-new contact to (Device, Google accounts, SIM cards, etc). */
     fun getSaveTargets(): List<ContactSaveTarget>
     /** Saves a contact's name + first phone number directly to a SIM card's contact storage. */

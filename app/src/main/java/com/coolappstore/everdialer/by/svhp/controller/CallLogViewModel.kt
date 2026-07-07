@@ -136,6 +136,8 @@ class CallLogViewModel(
                 obj.put("duration", e.duration)
                 obj.put("photoUri", e.photoUri ?: "")
                 obj.put("contactId", e.contactId ?: "")
+                obj.put("isCallerIdName", e.isCallerIdName)
+                obj.put("simSlot", e.simSlot)
                 val typesArr = JSONArray()
                 e.types.forEach { typesArr.put(it) }
                 obj.put("types", typesArr)
@@ -166,7 +168,9 @@ class CallLogViewModel(
                         duration = obj.getLong("duration"),
                         photoUri = obj.getString("photoUri").ifEmpty { null },
                         contactId = obj.getString("contactId").ifEmpty { null },
-                        types = types
+                        types = types,
+                        isCallerIdName = obj.optBoolean("isCallerIdName", false),
+                        simSlot = obj.optInt("simSlot", -1)
                     )
                 )
             }

@@ -15,6 +15,10 @@ data class Contact(
     val events: List<ContactEvent> = emptyList(),
     val photoUri: String? = null,
     val isFavorite: Boolean = false,
+    // Human-readable labels for every account this contact is stored in/synced with, e.g.
+    // "jane@gmail.com", "SIM 1", "Device Storage" — a contact merged across multiple sources
+    // (e.g. saved on the SIM and also synced to a Google account) will show more than one.
+    val sourceAccounts: List<String> = emptyList(),
 )
 
 data class ContactAccount(
