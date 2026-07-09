@@ -398,12 +398,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val date        = parseDate(parsed.dateStr)
             val phoneNumber = parsed.phoneNumber.trim().ifBlank { "Unknown" }
             // Prefer contact name embedded in filename (if template uses {contact_name}),
-            // then fall back to a live contacts-db lookup.
+            // then fall back to a live contacts-db lookup by phone number.
+            //
+            // Bug fix: previously this only ever consulted contactFromFile/resolveContactName
+            // when phoneNumber != "Unknown", which meant a contact name embedded directly in
+            // the filename (via {contact_name}) was thrown away and shown as "Unknown" on any
+            // template that doesn't also include {phone_number} — e.g. the default template.
+            // contactFromFile is now checked first, independent of whether a phone number was
+            // parsed, and the live lookup is only attempted when we actually have a number.
             val contactFromFile = if (template.contains("{contact_name}"))
                 parsed.contactName.ifBlank { null } else null
-            val contactName = if (phoneNumber != "Unknown")
-                contactFromFile ?: resolveContactName(context, phoneNumber)
-            else null
+            val contactName = contactFromFile
+                ?: if (phoneNumber != "Unknown") resolveContactName(context, phoneNumber) else null
             val noteText = notesPrefs.getString(entry.uri.toString(), "") ?: ""
             val fileSize = entry.length
             val durationMs = resolveAudioDuration(context, entry.uri, fileSize)
@@ -539,11 +545,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // Defensive check: only trust the match if the returned contact number
                 // actually shares the normalized digits with the number we looked up,
                 // guarding against loose-match false positives returning an unrelated contact.
+                //
+                // Bug fix: this used to also treat a *blank/unverifiable* matchedNumber as
+                // automatically "plausible", which is backwards — if PhoneLookup's loose
+                // matching returns a result we can't actually verify against our own query
+                // number, that's exactly the case that should be rejected, not trusted. That
+                // loophole is what let an unrelated contact's name get shown for a recording
+                // (a "misplaced" contact name). Both digit strings are already guaranteed
+                // non-blank at this point (queryDigits comes from a normalized, non-blank
+                // number; matchedNumber blank now falls through to "not plausible" instead).
                 val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
                 val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
                 val queryDigits   = normalized.filter { it.isDigit() }
-                val isPlausibleMatch = matchedDigits.isEmpty() || queryDigits.isEmpty() ||
-                    matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7))
+                val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
+                    (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
                 if (!isPlausibleMatch) return@use null
                 cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
             }
@@ -648,8 +663,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
                     val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
                     val queryDigits   = normalized.filter { it.isDigit() }
-                    val isPlausibleMatch = matchedDigits.isEmpty() || queryDigits.isEmpty() ||
-                        matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7))
+                    val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
+                        (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
                     if (!isPlausibleMatch) return@withContext null
                     val photoUriStr = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.PHOTO_URI)) ?: return@withContext null
                     val stream = context.contentResolver.openInputStream(Uri.parse(photoUriStr))

@@ -43,14 +43,21 @@ fun formatDateHeader(timestamp: Long): String {
     return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
 }
 
-fun formatDate(timestamp: Long): String {
+fun formatDate(timestamp: Long, use24Hour: Boolean = false): String {
     val relative = getRelativeDay(timestamp)
-    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
+    val timePattern = if (use24Hour) "HH:mm" else "h:mm a"
+    val time = SimpleDateFormat(timePattern, Locale.getDefault()).format(Date(timestamp))
     return if (relative != null) "$relative, $time" else "${formatDateHeader(timestamp)}, $time"
 }
 
-fun formatTimeOnly(timestamp: Long): String {
-    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
+/**
+ * Formats just the time portion of a call log entry, respecting the
+ * Settings → Appearance → "Call Time Format in call logs" preference
+ * (12-hour "h:mm a" by default, or 24-hour "HH:mm" when [use24Hour] is true).
+ */
+fun formatTimeOnly(timestamp: Long, use24Hour: Boolean = false): String {
+    val timePattern = if (use24Hour) "HH:mm" else "h:mm a"
+    return SimpleDateFormat(timePattern, Locale.getDefault()).format(Date(timestamp))
 }
 
 fun formatDuration(durationSeconds: Long): String {

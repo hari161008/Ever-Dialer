@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -17,11 +18,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * persistence layer for its visibility/ordering, shared between the
  * Settings → Appearance → Caller UI screen and the actual [CallActivity] UI so that any change
  * made in Settings is reflected immediately on the real call screen.
+ *
+ * [color] is only used for the Settings-side previews (icon chips, drag grid) so each button is
+ * easy to tell apart at a glance — the live call screen keeps its own deliberate monochrome style.
  */
 data class CallButtonSpec(
     val id: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val color: Color
 )
 
 object CallButtonPrefs {
@@ -40,15 +45,15 @@ object CallButtonPrefs {
     val ALWAYS_ENABLED = setOf(ID_HANGUP)
 
     val SPECS: List<CallButtonSpec> = listOf(
-        CallButtonSpec(ID_HOLD,      "Hold",       Icons.Default.Pause),
-        CallButtonSpec(ID_ADD,       "Add Person", Icons.Default.PersonAdd),
-        CallButtonSpec(ID_DIALPAD,   "Dialpad",    Icons.Default.Dialpad),
-        CallButtonSpec(ID_NOTE,      "Note",       Icons.Default.EditNote),
-        CallButtonSpec(ID_MUTE,      "Mute",       Icons.Default.Mic),
-        CallButtonSpec(ID_SPEAKER,   "Speaker",    Icons.Default.VolumeDown),
-        CallButtonSpec(ID_BLUETOOTH, "Bluetooth",  Icons.Default.Bluetooth),
-        CallButtonSpec(ID_MORE,      "More",       Icons.Default.MoreHoriz),
-        CallButtonSpec(ID_HANGUP,    "Hang Up",    Icons.Default.CallEnd)
+        CallButtonSpec(ID_HOLD,      "Hold",       Icons.Default.Pause,      Color(0xFFFFA000)),
+        CallButtonSpec(ID_ADD,       "Add Person", Icons.Default.PersonAdd,  Color(0xFF009688)),
+        CallButtonSpec(ID_DIALPAD,   "Dialpad",    Icons.Default.Dialpad,    Color(0xFF3F51B5)),
+        CallButtonSpec(ID_NOTE,      "Note",       Icons.Default.EditNote,   Color(0xFF2196F3)),
+        CallButtonSpec(ID_MUTE,      "Mute",       Icons.Default.Mic,        Color(0xFFE53935)),
+        CallButtonSpec(ID_SPEAKER,   "Speaker",    Icons.Default.VolumeDown, Color(0xFF4CAF50)),
+        CallButtonSpec(ID_BLUETOOTH, "Bluetooth",  Icons.Default.Bluetooth,  Color(0xFF1976D2)),
+        CallButtonSpec(ID_MORE,      "More",       Icons.Default.MoreHoriz,  Color(0xFF757575)),
+        CallButtonSpec(ID_HANGUP,    "Hang Up",    Icons.Default.CallEnd,    Color(0xFFD32F2F))
     )
 
     val ALL_IDS: List<String> = SPECS.map { it.id }

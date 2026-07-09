@@ -1266,6 +1266,12 @@ private fun DialpadNumberDisplay(
         userScrollEnabled     = false,
         modifier = Modifier.fillMaxWidth()
     ) {
+        // Leading spacer matching the trailing tap zone's width below, so the digits (and the
+        // cursor) are actually centered in the box instead of being pulled off-center by an
+        // unbalanced zone that only exists on the trailing side.
+        item(key = "leading_cursor_area") {
+            Box(modifier = Modifier.width(28.dp))
+        }
         itemsIndexed(
             items = stableChars,
             key   = { _, pair -> pair.first }
@@ -1334,7 +1340,7 @@ private fun DialpadNumberDisplay(
         item(key = "trailing_cursor_area") {
             Box(
                 modifier = Modifier
-                    .fillParentMaxWidth(0.15f)
+                    .width(28.dp)
                     .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 1.4f })
                     .pointerInput(stableChars.size) {
                         detectTapGestures(

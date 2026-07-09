@@ -80,6 +80,10 @@ fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier) {
 
 @Composable
 fun CallLogTileSimple(log: CallLogEntry) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+
     val icon = when (log.type) {
         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
         CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
@@ -93,7 +97,7 @@ fun CallLogTileSimple(log: CallLogEntry) {
             CallLog.Calls.MISSED_TYPE   -> "Missed"
             else                        -> "Call"
         },
-        supporting = "${formatDate(log.date)}${if (log.duration > 0) " • ${android.text.format.DateUtils.formatElapsedTime(log.duration)}" else ""}",
+        supporting = "${formatDate(log.date, use24HourTime)}${if (log.duration > 0) " • ${android.text.format.DateUtils.formatElapsedTime(log.duration)}" else ""}",
         leadingIcon = icon,
         onClick = { }
     )
@@ -120,6 +124,7 @@ fun CallLogTile(
     val fakeCallInContextMenu = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
+    val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
     var showFakeCallSheet by remember { mutableStateOf(false) }
 
     // Contacts Hider: mask name if enabled and this contact is hidden
@@ -166,7 +171,7 @@ fun CallLogTile(
             trailingStartContent = if (showSimBadge) ({
                 SimSlotBadge(slot = log.simSlot)
             }) else null,
-            trailingText = formatTimeOnly(log.date),
+            trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived

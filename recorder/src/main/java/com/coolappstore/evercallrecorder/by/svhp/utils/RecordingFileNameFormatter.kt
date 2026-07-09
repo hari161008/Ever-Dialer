@@ -101,19 +101,40 @@ object RecordingFileNameFormatter {
         return "$finalName${codec.containerExtension}"
     }
 
+    /**
+     * Looks up the display name for [phoneNumber], used to embed a contact name into the
+     * recording's filename via {contact_name}.
+     *
+     * Bug fix: this previously queried PhoneLookup with the raw, unnormalized phone number and
+     * trusted whatever contact it returned without checking that the match's own number
+     * actually corresponds to the number being looked up. PhoneLookup's matching is loose, so
+     * that could — and did — end up embedding a *different* contact's name into the recording,
+     * i.e. the "misplaced contact name" bug. This mirrors the same normalize-then-verify
+     * approach used for reading recordings back in HomeViewModel.resolveContactName().
+     */
     private fun getContactName(context: Context, phoneNumber: String): String? {
         if (!PermissionChecks.hasContactsPermission(context)) return null
 
-        val lookupUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber))
-        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+        val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
+        if (normalized.isBlank()) return null
+
+        val lookupUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(normalized))
+        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.NUMBER)
 
         return context.contentResolver.query(lookupUri, projection, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
-                if (nameIndex != -1) {
-                    cursor.getString(nameIndex)
-                } else null
-            } else null
+            if (!cursor.moveToFirst()) return@use null
+
+            // Only trust the match if the returned contact's own number actually shares the
+            // normalized digits with the number we looked up.
+            val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
+            val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
+            val queryDigits   = normalized.filter { it.isDigit() }
+            val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
+                (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
+            if (!isPlausibleMatch) return@use null
+
+            val nameIndex = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
+            if (nameIndex != -1) cursor.getString(nameIndex) else null
         }
     }
 }

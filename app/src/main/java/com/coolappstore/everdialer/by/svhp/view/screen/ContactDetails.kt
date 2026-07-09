@@ -98,6 +98,19 @@ fun ContactDetailsScreen(
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var showQrDialog by remember { mutableStateOf(false) }
     var showNoteEditor by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
+    // so the actions shown here always match what's configured for the contact's context menu.
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val contactInfoActionKeys = remember(settingsVer) {
+        com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+            prefs,
+            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
+            listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "move_contact", "toggle_favorite", "fake_call", "delete_contact")
+        ).filter { it in setOf("copy_number", "share_contact", "move_contact", "delete_contact") }
+    }
 
     val contactLogs = remember(contact, phoneNumber, allLogs) {
         allLogs.filter { log ->
@@ -159,6 +172,40 @@ fun ContactDetailsScreen(
     if (showNoteEditor) {
         NoteEditorDialog(contactName = displayName, phoneNumber = displayPhone, onDismiss = { showNoteEditor = false })
     }
+    if (showMoveDialog && contact != null) {
+        val moveTargets = remember { contactsViewModel.getSaveTargets() }
+        MoveContactDialog(
+            contactName = displayName,
+            targets = moveTargets,
+            onSelect = { target ->
+                showMoveDialog = false
+                contactsViewModel.moveContact(contact, target) { success ->
+                    android.widget.Toast.makeText(
+                        context,
+                        if (success) "Moved to ${target.label}" else "Couldn't move contact",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onDismiss = { showMoveDialog = false }
+        )
+    }
+    if (showDeleteConfirm && contact != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFFF44336)) },
+            title = { Text("Delete Contact") },
+            text = { Text("Are you sure you want to permanently delete \"$displayName\"? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    contactsViewModel.deleteContact(contact.id)
+                    navigateBack()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -219,6 +266,24 @@ fun ContactDetailsScreen(
                         RivoExpressiveButton(icon = Icons.AutoMirrored.Filled.Message, label = "Text", containerColor = MaterialTheme.colorScheme.secondaryContainer, onClick = {
                             if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
                         })
+                        // Contact through WhatsApp / Telegram — only actually redirects into the
+                        // app when it's installed on the device; otherwise lets the user know
+                        // instead of silently doing nothing or bouncing out to a browser.
+                        RivoExpressiveButton(icon = Icons.Default.Chat, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                            if (displayPhone == "Unknown") return@RivoExpressiveButton
+                            if (!openWhatsAppChat(context, displayPhone)) {
+                                android.widget.Toast.makeText(context, "WhatsApp isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                        // Telegram has many third-party clients/forks, so rather than forcing one
+                        // specific app this opens Android's own chooser sheet listing every
+                        // installed app that can handle it, letting the user pick their client.
+                        RivoExpressiveButton(icon = Icons.Default.Send, label = "Telegram", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                            if (displayPhone == "Unknown") return@RivoExpressiveButton
+                            if (!openTelegramChat(context, displayPhone)) {
+                                android.widget.Toast.makeText(context, "No Telegram app is installed", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        })
                     }
                 }
 
@@ -262,6 +327,70 @@ fun ContactDetailsScreen(
                                     android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
+                        }
+
+                        // Copy / Share / Move / Delete — the same actions available from the
+                        // contact's long-press context menu, surfaced here too since a contact
+                        // opened straight from search/details had no way to reach them otherwise.
+                        // Visibility follows Settings → Appearance → Context Menu Elements (Contacts).
+                        if (contact != null && contactInfoActionKeys.isNotEmpty()) {
+                            HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                contactInfoActionKeys.forEach { key ->
+                                    when (key) {
+                                        "copy_number" -> RivoExpressiveButton(
+                                            icon = Icons.Default.ContentCopy,
+                                            label = "Copy",
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            contentColor = MaterialTheme.colorScheme.onSurface,
+                                            size = 52.dp,
+                                            iconSize = 20.dp,
+                                            onClick = {
+                                                val number = contact.phoneNumbers.firstOrNull() ?: displayPhone
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", number))
+                                                android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        "share_contact" -> RivoExpressiveButton(
+                                            icon = Icons.Default.Share,
+                                            label = "Share",
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            contentColor = MaterialTheme.colorScheme.onSurface,
+                                            size = 52.dp,
+                                            iconSize = 20.dp,
+                                            onClick = {
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, "$displayName\n${contact.phoneNumbers.joinToString(", ")}")
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                            }
+                                        )
+                                        "move_contact" -> RivoExpressiveButton(
+                                            icon = Icons.Default.DriveFileMove,
+                                            label = "Move",
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            contentColor = MaterialTheme.colorScheme.onSurface,
+                                            size = 52.dp,
+                                            iconSize = 20.dp,
+                                            onClick = { showMoveDialog = true }
+                                        )
+                                        "delete_contact" -> RivoExpressiveButton(
+                                            icon = Icons.Default.Delete,
+                                            label = "Delete",
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                            size = 52.dp,
+                                            iconSize = 20.dp,
+                                            onClick = { showDeleteConfirm = true }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -417,4 +546,48 @@ private fun buildClickableAnnotatedString(text: String): AnnotatedString {
         }
         append(text.substring(lastIdx))
     }
+}
+
+// ── WhatsApp / Telegram "contact through" quick actions ────────────────────
+// Only ever redirects into the target app when it's actually installed — if it's not
+// present, the caller is told (return false) instead of silently doing nothing or bouncing
+// out to a browser/web fallback the user never asked for.
+
+private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+
+private fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
+    packages.any { pkg ->
+        try {
+            context.packageManager.getPackageInfo(pkg, 0)
+            true
+        } catch (_: Exception) { false }
+    }
+
+/** Opens a WhatsApp chat with [phoneNumber]. Returns false (does nothing) if WhatsApp isn't installed. */
+private fun openWhatsAppChat(context: Context, phoneNumber: String): Boolean {
+    if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    return try {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$clean"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        true
+    } catch (_: Exception) { false }
+}
+
+/** Opens a Telegram chat with [phoneNumber] via Android's own app chooser, so the user can pick
+ *  whichever Telegram client/fork they have installed rather than the request being forced into
+ *  one specific app. Returns false (does nothing) if no Telegram-capable app is installed. */
+private fun openTelegramChat(context: Context, phoneNumber: String): Boolean {
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=$clean"))
+    val handlers = try { context.packageManager.queryIntentActivities(intent, 0) } catch (_: Exception) { emptyList() }
+    if (handlers.isEmpty()) return false
+    return try {
+        context.startActivity(
+            Intent.createChooser(intent, "Open with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        true
+    } catch (_: Exception) { false }
 }

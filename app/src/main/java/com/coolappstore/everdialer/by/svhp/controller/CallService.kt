@@ -34,6 +34,16 @@ class CallService : InCallService() {
     private val contactsRepository: IContactsRepository by inject()
     private val prefs: PreferenceManager by inject()
 
+    // Bug fix: the ongoing-call notification's elapsed-time display was driven off whatever
+    // System.currentTimeMillis() happened to be at the moment updateNotification() rebuilt the
+    // notification (setWhen() was never set, so NotificationCompat.Builder defaulted it to
+    // "now"). updateNotification() gets called for lots of things besides the call actually
+    // connecting — mute toggle, speaker toggle, held-call updates — so every one of those
+    // silently reset the notification's start time and made the displayed call duration drift
+    // away from the real one. This map remembers the real moment each call became ACTIVE once,
+    // so every later rebuild reuses that same timestamp instead of a fresh "now".
+    private val callConnectTimes = mutableMapOf<Call, Long>()
+
     
 
     
@@ -129,6 +139,7 @@ class CallService : InCallService() {
                     Call.STATE_ACTIVE -> {
                         // 3rd person answered — update current state and auto-merge
                         isAddingToCall = false
+                        callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
                         _currentCallSession.value = CallSession(call, state)
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                             mergeCalls()
@@ -175,6 +186,7 @@ class CallService : InCallService() {
             // incoming: accepted here). Lets the recorder module start recording when the
             // "Record Only When Call Answered" preference is enabled. Safe to call multiple times.
             if (state == Call.STATE_ACTIVE) {
+                callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
                 com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(this@CallService)
                     .notifyCallAnsweredInDialer()
             }
@@ -203,6 +215,7 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
+            if (state == Call.STATE_ACTIVE) callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
             _heldCallSession.value = CallSession(call, state)
             if (state == Call.STATE_DISCONNECTED) {
                 _heldCallSession.value = null
@@ -217,6 +230,7 @@ class CallService : InCallService() {
         RaiseToAnswerManager.stop(this)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
+        callConnectTimes.remove(call)
 
         if (isMerging) {
             if (_currentCallSession.value?.call == call) _currentCallSession.value = null
@@ -475,6 +489,13 @@ class CallService : InCallService() {
         val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
         val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ID
 
+        // Use the call's real, authoritative connect time from Telecom (the same source
+        // CallActivity's on-screen timer already trusts) — not "now" — so the notification's
+        // elapsed-time chronometer stays correct across every later rebuild (mute/speaker
+        // toggles, held-call updates, etc.) instead of restarting from zero each time.
+        val connectTime = call.details?.connectTimeMillis?.takeIf { it > 0L }
+            ?: callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
+
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(contactName)
@@ -488,6 +509,9 @@ class CallService : InCallService() {
             .setAutoCancel(false)
             .setSilent(!isRinging)
             .setDefaults(if (isRinging) NotificationCompat.DEFAULT_ALL else 0)
+            .setWhen(connectTime)
+            .setShowWhen(!isRinging)
+            .setUsesChronometer(!isRinging)
             .setStyle(
                 if (isRinging) NotificationCompat.CallStyle.forIncomingCall(person, declinePi, answerPi)
                 else           NotificationCompat.CallStyle.forOngoingCall(person, declinePi)

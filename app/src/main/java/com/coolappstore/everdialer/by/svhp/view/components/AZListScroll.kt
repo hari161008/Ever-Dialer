@@ -259,9 +259,16 @@ fun AZListContent(
     }
 }
 
+/**
+ * Renders a single contact row with the full long-press context menu (Select, View, Edit,
+ * Copy number, Share, Move, Favourite, Fake Call, Delete). Used both by the main A-Z contacts
+ * list ([AZListContent]) and by [com.coolappstore.everdialer.by.svhp.view.screen.ContactSearchContent]
+ * so that contacts found via search get the exact same context menu — including the same
+ * Settings → Appearance → "Context Menu Elements" (Contacts) show/hide + ordering.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ContactListItem(
+fun ContactListItem(
     contact: Contact,
     navigator: DestinationsNavigator,
     selectionMode: Boolean = false,

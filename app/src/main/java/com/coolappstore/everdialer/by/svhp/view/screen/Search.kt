@@ -223,15 +223,16 @@ fun ContactSearchContent(
                         RivoSectionHeader(title = "${filteredContacts.size} Result${if (filteredContacts.size != 1) "s" else ""}")
                         Spacer(modifier = Modifier.height(8.dp))
                         RivoExpressiveCard {
+                            // Same long-press context menu as the main Contacts list (Select, View,
+                            // Edit, Copy number, Share, Move, Favourite, Fake Call, Delete) — this
+                            // was previously missing here, so searched contacts couldn't be
+                            // moved/deleted/etc. without opening the full contact list. Visibility
+                            // and ordering stay in sync with Settings → Appearance → Context Menu
+                            // Elements (Contacts), since ContactListItem reads the same preferences.
                             filteredContacts.forEachIndexed { index, contact ->
-                                RivoListItem(
-                                    headline = contact.name,
-                                    supporting = contact.phoneNumbers.firstOrNull(),
-                                    avatarName = contact.name,
-                                    photoUri = contact.photoUri,
-                                    onClick = {
-                                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
-                                    }
+                                ContactListItem(
+                                    contact = contact,
+                                    navigator = navigator
                                 )
                                 if (index < filteredContacts.size - 1) {
                                     HorizontalDivider(

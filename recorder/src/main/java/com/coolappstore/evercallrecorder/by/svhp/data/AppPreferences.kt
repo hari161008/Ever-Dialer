@@ -60,7 +60,10 @@ class AppPreferences(private val context: Context) {
         val AUDIO_SOURCE = ScrcpyAudioSource.VOICE_CALL.cliKey
         val AUDIO_CODEC = ScrcpyAudioCodec.OPUS.cliKey
         val AUDIO_BITRATE = ScrcpyAudioCodec.OPUS.defaultBitRate
-        const val FILE_NAME_TEMPLATE = "{date}_{direction}_{phone_number}"
+        // Default: contact name first (falls back to blank when unknown), then date, then
+        // call direction — replaces the old phone-number-first default so recordings list/sort
+        // by who they're with at a glance instead of a raw number.
+        const val FILE_NAME_TEMPLATE = "{contact_name}_{date}_{direction}"
         val THEME_MODE = ThemeMode.SYSTEM
         const val DYNAMIC_COLOR = true
         const val SHOW_TOASTS = true

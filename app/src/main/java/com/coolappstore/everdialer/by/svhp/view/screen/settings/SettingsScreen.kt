@@ -1028,11 +1028,11 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Biometrics ───────────────────────────────────────────────────
+            // ── Authentication ───────────────────────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 110L) {
                     Column {
-                        SectionLabel("Biometrics")
+                        SectionLabel("Authentication")
                         RivoExpressiveCard {
                             val biometricsType = remember(prefs.settingsChanged.collectAsState().value) {
                                 prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
@@ -1044,7 +1044,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 else       -> "Not configured"
                             }
                             RivoListItem(
-                                headline   = "Biometrics",
+                                headline   = "Authentication",
                                 supporting = biometricsLabel,
                                 leadingIcon = Icons.Default.Fingerprint,
                                 iconContainerColor = Color(0xFF6750A4),

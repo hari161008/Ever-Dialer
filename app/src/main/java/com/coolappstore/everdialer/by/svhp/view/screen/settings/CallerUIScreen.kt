@@ -13,11 +13,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -123,11 +128,20 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                             buttonOrder.forEach { id ->
                                                 val spec = CallButtonPrefs.specFor(id) ?: return@forEach
                                                 val locked = id in CallButtonPrefs.ALWAYS_ENABLED
+                                                val itemEnabled = enabledMap[id] ?: true
                                                 DropdownMenuItem(
                                                     text = { Text(spec.label) },
                                                     leadingIcon = {
+                                                        Icon(
+                                                            spec.icon,
+                                                            contentDescription = null,
+                                                            tint = if (itemEnabled) spec.color else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    },
+                                                    trailingIcon = {
                                                         Checkbox(
-                                                            checked = enabledMap[id] ?: true,
+                                                            checked = itemEnabled,
                                                             onCheckedChange = null,
                                                             enabled = !locked
                                                         )
@@ -311,10 +325,23 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
 }
 
 /**
- * Draggable, live preview of the ongoing-call button layout. Reordering here is written straight
- * back to [buttonOrder] (backed by prefs via [onOrderChanged]) so the real call screen picks it up
- * immediately. The Hang Up row can only be dragged when [hangupWidth] is 50% or less, since above
- * that it needs the full row to itself.
+ * Draggable, live preview of the ongoing-call button layout — laid out exactly like the real
+ * call screen (a 3-per-row grid of circular icon buttons with a label underneath, plus the red
+ * Hang Up pill at the bottom) so what you see here is what you'll see on an actual call.
+ *
+ * Bug fix: the previous version only accepted drags starting on a tiny 20dp drag-handle icon,
+ * detected via `detectDragGesturesAfterLongPress` nested inside the settings screen's scrolling
+ * list — the outer scroll routinely won the gesture before the long-press even registered, so
+ * dragging effectively never worked. This version makes the *entire* button tile a drag target
+ * and reorders by continuously comparing the dragged tile's live position against every other
+ * tile's on-screen position (via [onGloballyPositioned]) rather than assuming a fixed 1-column
+ * layout, so it works correctly across the multi-column grid too.
+ *
+ * Hang Up is intentionally excluded from the draggable grid: [CallButtonPrefs.getOrder] always
+ * forces it back to the last position and [CallButtonPrefs.getActiveActionIds] excludes it
+ * entirely, since the real call screen always renders it separately as the dedicated end-call
+ * action — so it's shown here the same way, as a fixed preview matching the current width
+ * setting rather than a reorderable tile.
  */
 @Composable
 private fun FeatureButtonsPreview(
@@ -323,124 +350,148 @@ private fun FeatureButtonsPreview(
     hangupWidth: Float,
     onOrderChanged: () -> Unit
 ) {
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val itemHeightDp = 56.dp
-    val itemHeightPx = with(density) { itemHeightDp.toPx() }
+    val gridIds = buttonOrder.filter { it != CallButtonPrefs.ID_HANGUP }
 
     var draggingId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragTotal by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    // Each tile's last-measured on-screen bounds, used to hit-test the dragged tile's current
+    // position against every other tile while dragging.
+    val tileBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        buttonOrder.forEach { id ->
-            val spec = CallButtonPrefs.specFor(id) ?: return@forEach
-            val isHangup = id == CallButtonPrefs.ID_HANGUP
-            val isEnabled = enabledMap[id] ?: true
-            val canDrag = !isHangup || hangupWidth <= 0.5f
-            val isDragging = draggingId == id
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF2E2622) // approximates the ongoing-call screen's dark overlay so the preview reads the same as the real thing
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
+                if (rowIndex > 0) Spacer(Modifier.height(20.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    rowIds.forEach { id ->
+                        val spec = CallButtonPrefs.specFor(id) ?: return@forEach
+                        val isEnabled = enabledMap[id] ?: true
+                        val isDragging = draggingId == id
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
-                    .zIndex(if (isDragging) 1f else 0f),
-                shape = RoundedCornerShape(14.dp),
-                color = if (isDragging) MaterialTheme.colorScheme.surfaceContainerHighest
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = if (isDragging) 4.dp else 0.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeightDp)
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        Icons.Default.DragHandle,
-                        contentDescription = "Drag to reorder",
-                        tint = if (canDrag) MaterialTheme.colorScheme.onSurfaceVariant
-                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        modifier = Modifier
-                            .size(20.dp)
-                            .then(
-                                if (canDrag) Modifier.pointerInput(id) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .onGloballyPositioned { coords ->
+                                    tileBounds[id] = androidx.compose.ui.geometry.Rect(
+                                        offset = coords.positionInWindow(),
+                                        size = coords.size.toSize()
+                                    )
+                                }
+                                .graphicsLayer {
+                                    translationX = if (isDragging) dragTotal.x else 0f
+                                    translationY = if (isDragging) dragTotal.y else 0f
+                                    scaleX = if (isDragging) 1.08f else 1f
+                                    scaleY = if (isDragging) 1.08f else 1f
+                                }
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .pointerInput(id) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             draggingId = id
-                                            dragOffset = 0f
+                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
                                         },
                                         onDrag = { change, amount ->
                                             change.consume()
-                                            dragOffset += amount.y
-                                            val currentIndex = buttonOrder.indexOf(id)
-                                            if (currentIndex == -1) return@detectDragGesturesAfterLongPress
-                                            val shift = (dragOffset / itemHeightPx).roundToInt()
-                                            if (shift != 0) {
-                                                val targetIndex = (currentIndex + shift).coerceIn(0, buttonOrder.lastIndex)
-                                                if (targetIndex != currentIndex) {
-                                                    val item = buttonOrder.removeAt(currentIndex)
-                                                    buttonOrder.add(targetIndex, item)
-                                                    dragOffset -= (targetIndex - currentIndex) * itemHeightPx
+                                            dragTotal += amount
+                                            val myBounds = tileBounds[id] ?: return@detectDragGesturesAfterLongPress
+                                            val currentCenter = myBounds.center + dragTotal
+                                            val targetId = tileBounds
+                                                .filterKeys { it != id }
+                                                .minByOrNull { (_, rect) -> (rect.center - currentCenter).getDistance() }
+                                                ?.key
+                                            if (targetId != null) {
+                                                val targetRect = tileBounds.getValue(targetId)
+                                                if ((targetRect.center - currentCenter).getDistance() < targetRect.width / 2f) {
+                                                    val fromIndex = buttonOrder.indexOf(id)
+                                                    val toIndex = buttonOrder.indexOf(targetId)
+                                                    if (fromIndex != -1 && toIndex != -1 && fromIndex != toIndex) {
+                                                        val item = buttonOrder.removeAt(fromIndex)
+                                                        buttonOrder.add(toIndex, item)
+                                                        // Re-anchor so the drag continues smoothly from here
+                                                        // instead of jumping once tiles reflow.
+                                                        dragTotal = currentCenter - myBounds.center
+                                                    }
                                                 }
                                             }
                                         },
                                         onDragEnd = {
                                             draggingId = null
-                                            dragOffset = 0f
+                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
                                             onOrderChanged()
                                         },
                                         onDragCancel = {
                                             draggingId = null
-                                            dragOffset = 0f
+                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
                                         }
                                     )
-                                } else Modifier
-                            )
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                spec.icon,
-                                contentDescription = null,
-                                tint = if (isEnabled) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                modifier = Modifier.size(16.dp)
+                                }
+                                .width(76.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isEnabled) spec.color.copy(alpha = if (isDragging) 0.9f else 0.75f)
+                                        else Color.White.copy(alpha = 0.10f),
+                                tonalElevation = if (isDragging) 6.dp else 0.dp,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        spec.icon,
+                                        contentDescription = null,
+                                        tint = if (isEnabled) Color.White else Color.White.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                spec.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isEnabled) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
+                                maxLines = 1,
+                                modifier = Modifier.padding(top = 6.dp)
                             )
                         }
                     }
-
-                    Text(
-                        spec.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isEnabled) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    if (!isEnabled) {
-                        Text(
-                            "Hidden",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
+                    // Pad out the row with invisible spacers so a partial last row still aligns
+                    // left-to-right the same way the real call screen's SpaceEvenly row does.
+                    repeat(3 - rowIds.size) {
+                        Spacer(modifier = Modifier.width(76.dp))
                     }
-                    if (isHangup && !canDrag) {
-                        Text(
-                            "≤50% width to drag",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
+                }
+            }
+
+            Spacer(Modifier.height(28.dp))
+
+            // Fixed (non-draggable) Hang Up preview, matching the current width setting below.
+            val isCircle = hangupWidth <= 0.1f
+            Surface(
+                shape = if (isCircle) CircleShape else RoundedCornerShape(28.dp),
+                color = Color(0xFFD32F2F),
+                modifier = if (isCircle) Modifier.size(56.dp)
+                    else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        if (hangupWidth > 0.5f) {
+                            Text("End Call", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
         }
     }
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "Long-press and drag a button to reorder it. Hang Up always stays last, matching the real call screen.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }

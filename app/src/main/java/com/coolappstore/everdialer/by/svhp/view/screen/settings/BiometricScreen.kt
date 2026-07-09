@@ -133,7 +133,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Biometrics", fontWeight = FontWeight.SemiBold) },
+                title = { Text("Authentication", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = ::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
@@ -156,7 +156,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
             SectionLabel("Authentication Method")
             RivoExpressiveCard {
                 RivoListItem(
-                    headline = "Biometric Method",
+                    headline = "Authentication Method",
                     supporting = typeLabel,
                     leadingIcon = Icons.Default.Fingerprint,
                     iconContainerColor = Color(0xFF6750A4),
@@ -172,7 +172,7 @@ fun BiometricScreen(navigator: DestinationsNavigator) {
                 exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SectionLabel("Biometrics")
+                    SectionLabel("Authentication")
                     RivoExpressiveCard {
                         RivoSwitchListItem(
                             headline = "Lock App on Open",

@@ -67,6 +67,21 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" />
         </intent>
+        <!-- Needed so PackageManager.getPackageInfo() can reliably detect whether WhatsApp/
+             Telegram are installed (Contact Info screen's "contact through WhatsApp/Telegram"
+             quick actions) — without these, package visibility restrictions on Android 11+
+             make the app appear "not installed" even when it is. -->
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <!-- Broader than the specific packages above: makes every installed app that can open
+             a tg:// link visible to queryIntentActivities, so any Telegram client/fork shows up
+             in the "contact through Telegram" chooser sheet, not just the official app. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tg" />
+        </intent>
     </queries>
 
     <application

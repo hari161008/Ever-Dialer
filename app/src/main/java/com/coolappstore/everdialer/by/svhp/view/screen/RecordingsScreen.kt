@@ -58,6 +58,7 @@ fun RecordingsScreen(navController: NavController, navigator: DestinationsNaviga
 
     var selectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
     var highlightQuery by remember { mutableStateOf("") }
+    var isRecordingSelectionMode by remember { mutableStateOf(false) }
 
     BackHandler(enabled = selectedRecording != null) {
         selectedRecording = null
@@ -82,6 +83,14 @@ fun RecordingsScreen(navController: NavController, navigator: DestinationsNaviga
     DisposableEffect(isShowingOnboarding) {
         NavBarVisibilityState.hideForOnboarding = isShowingOnboarding
         onDispose { NavBarVisibilityState.hideForOnboarding = false }
+    }
+
+    // Smoothly slide the main bottom navigation pill out of the way while the recordings
+    // list's own selection pill (Favourite / Recover / Assign contact / Recordings / Share)
+    // is showing, so the two pills never overlap.
+    DisposableEffect(isRecordingSelectionMode) {
+        NavBarVisibilityState.hideForSelectionMode = isRecordingSelectionMode
+        onDispose { NavBarVisibilityState.hideForSelectionMode = false }
     }
 
     val appVersion = remember {
@@ -133,7 +142,8 @@ fun RecordingsScreen(navController: NavController, navigator: DestinationsNaviga
                             onRecordingClick = { recordingItem, query ->
                                 selectedRecording = recordingItem
                                 highlightQuery = query
-                            }
+                            },
+                            onSelectionModeChanged = { isRecordingSelectionMode = it }
                         )
                     }
                 }

@@ -12,4 +12,11 @@ import androidx.compose.runtime.setValue
  */
 object NavBarVisibilityState {
     var hideForOnboarding by mutableStateOf(false)
+
+    /**
+     * True while the Recordings tab's own selection pill (Favourite / Recover / Assign
+     * contact / Recordings / Share, shown on long-pressing a recording) is visible, so the
+     * bottom nav pill can smoothly slide away instead of overlapping it.
+     */
+    var hideForSelectionMode by mutableStateOf(false)
 }

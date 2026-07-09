@@ -64,6 +64,7 @@ fun HomeScreen(
     appVersion: String,
     onSettingsClick: () -> Unit,
     onRecordingClick: (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem, String) -> Unit = { _, _ -> },
+    onSelectionModeChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vm: HomeViewModel = viewModel()
@@ -75,6 +76,12 @@ fun HomeScreen(
     val selectedUris   by vm.selectedUris.collectAsState()
     val isSelectionMode = selectedUris.isNotEmpty()
     val context = LocalContext.current
+
+    // Let the host (Ever Dialer's Recordings tab) know when the recording-selection pill is
+    // showing, so it can smoothly animate its own bottom navigation pill out of the way instead
+    // of the two pills overlapping.
+    LaunchedEffect(isSelectionMode) { onSelectionModeChanged(isSelectionMode) }
+    DisposableEffect(Unit) { onDispose { onSelectionModeChanged(false) } }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
