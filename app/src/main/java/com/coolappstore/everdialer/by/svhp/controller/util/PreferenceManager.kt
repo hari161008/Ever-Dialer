@@ -86,6 +86,9 @@ class PreferenceManager(context: Context) {
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
         // Call Time Format in call logs — false = 12-hour (default), true = 24-hour
         const val KEY_CALL_TIME_FORMAT_24H  = "call_time_format_24h"
+        // Whether the ongoing-call screen smoothly slides away when a call ends. Default true;
+        // when false, the call screen should close immediately instead.
+        const val KEY_HANGUP_ANIMATION      = "hangup_animation"
         const val KEY_FIRST_LAUNCH_DONE     = "first_launch_done"
         // Hangup button width fraction (0.4f .. 1.0f)
         const val KEY_HANGUP_WIDTH          = "hangup_button_width"

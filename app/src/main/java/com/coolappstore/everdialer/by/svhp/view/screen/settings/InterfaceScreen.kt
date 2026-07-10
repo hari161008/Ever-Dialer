@@ -116,6 +116,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
     var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
     var blurEffects         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false)) }
+    var hangupAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)) }
 
     // Call UI section checkboxes dialog
     var showCallUIDialog   by remember { mutableStateOf(false) }
@@ -1031,6 +1032,23 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Hangup Animation",
+                                    supporting = if (hangupAnimation)
+                                        "The call screen smoothly slides away when a call ends"
+                                    else
+                                        "The call screen closes immediately when a call ends, with no slide animation",
+                                    leadingIcon = Icons.Default.CallEnd,
+                                    iconContainerColor = Color(0xFFE53935),
+                                    checked = hangupAnimation,
+                                    onCheckedChange = {
+                                        hangupAnimation = it
+                                        prefs.setBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, it)
                                     }
                                 )
                             }

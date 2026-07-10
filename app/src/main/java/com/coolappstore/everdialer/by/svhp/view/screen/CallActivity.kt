@@ -570,14 +570,19 @@ fun ExpressiveCallScreen(
     }
 
     var isDisconnecting by remember { mutableStateOf(false) }
+    // Settings → Appearance → Visual Effects → "Hangup Animation". When off, the call screen
+    // should close immediately instead of smoothly sliding/fading away.
+    val hangupAnimationEnabled = remember(settingsVersion) {
+        prefs?.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true) ?: true
+    }
     val disconnectOffset by animateDpAsState(
         if (isDisconnecting) 120.dp else 0.dp,
-        tween(600),
+        if (hangupAnimationEnabled) tween(600) else snap(),
         label = "disconnectSlide"
     )
     val disconnectAlpha by animateFloatAsState(
         if (isDisconnecting) 0f else 1f,
-        tween(600),
+        if (hangupAnimationEnabled) tween(600) else snap(),
         label = "disconnectAlpha"
     )
 

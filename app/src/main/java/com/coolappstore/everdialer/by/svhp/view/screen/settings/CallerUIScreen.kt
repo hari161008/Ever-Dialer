@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -20,11 +21,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
+import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonSpec
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
@@ -33,6 +37,12 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
+
+/** State for the floating "ghost" copy of a button shown while it's being dragged. */
+private data class DragGhostState(
+    val spec: CallButtonSpec,
+    val windowPosition: Offset
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -53,6 +63,21 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
     }
     var showButtonsMenu by remember { mutableStateOf(false) }
 
+    // Drag-ghost overlay state: while a button is being dragged, a floating copy of it is drawn
+    // in a layer above *everything* (including the card that would otherwise clip it), so it can
+    // be dragged anywhere on screen — not just within the small preview card's bounds.
+    var dragGhost by remember { mutableStateOf<DragGhostState?>(null) }
+    var overlayRootWindowOffset by remember { mutableStateOf(Offset.Zero) }
+
+    fun resetButtonLayout() {
+        buttonOrder.clear()
+        buttonOrder.addAll(CallButtonPrefs.DEFAULT_ORDER.split(",").map { it.trim() })
+        val defaultDisabled = CallButtonPrefs.DEFAULT_DISABLED.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        CallButtonPrefs.ALL_IDS.forEach { enabledMap[it] = it !in defaultDisabled }
+        CallButtonPrefs.setOrder(prefs, buttonOrder)
+        CallButtonPrefs.setDisabled(prefs, defaultDisabled)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,9 +91,14 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .padding(padding)
+                .fillMaxSize()
+                .onGloballyPositioned { overlayRootWindowOffset = it.positionInWindow() }
+        ) {
+        LazyColumn(
+            modifier = Modifier
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -135,7 +165,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                                         Icon(
                                                             spec.icon,
                                                             contentDescription = null,
-                                                            tint = if (itemEnabled) spec.color else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                            tint = if (itemEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                                             modifier = Modifier.size(20.dp)
                                                         )
                                                     },
@@ -167,7 +197,9 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     buttonOrder = buttonOrder,
                                     enabledMap = enabledMap,
                                     hangupWidth = hangupWidth,
-                                    onOrderChanged = { CallButtonPrefs.setOrder(prefs, buttonOrder) }
+                                    onOrderChanged = { CallButtonPrefs.setOrder(prefs, buttonOrder) },
+                                    onResetLayout = ::resetButtonLayout,
+                                    onDragGhostChange = { dragGhost = it }
                                 )
                             }
                         }
@@ -321,6 +353,34 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                 }
             }
         }
+
+        // Floating drag-ghost — deliberately rendered as a sibling of (not nested inside) the
+        // scrollable content and the card that clips it, at the top of this Box's z-order, so a
+        // dragged button is visible anywhere on screen instead of being clipped to the card.
+        dragGhost?.let { ghost ->
+            val density = LocalDensity.current
+            val localPos = ghost.windowPosition - overlayRootWindowOffset
+            val sizeDp = 64.dp
+            val sizePx = with(density) { sizeDp.toPx() }
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset((localPos.x - sizePx / 2f).roundToInt(), (localPos.y - sizePx / 2f).roundToInt()) }
+                    .size(sizeDp)
+                    .zIndex(100f)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+                    shadowElevation = 12.dp,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(ghost.spec.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+        }
+        }
     }
 }
 
@@ -348,15 +408,39 @@ private fun FeatureButtonsPreview(
     buttonOrder: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
     enabledMap: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     hangupWidth: Float,
-    onOrderChanged: () -> Unit
+    onOrderChanged: () -> Unit,
+    onResetLayout: () -> Unit,
+    onDragGhostChange: (DragGhostState?) -> Unit
 ) {
     val gridIds = buttonOrder.filter { it != CallButtonPrefs.ID_HANGUP }
 
     var draggingId by remember { mutableStateOf<String?>(null) }
-    var dragTotal by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    // Each tile's last-measured on-screen bounds, used to hit-test the dragged tile's current
-    // position against every other tile while dragging.
-    val tileBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    // Absolute (window-coordinate) center of the floating ghost while a drag is in progress.
+    // Deliberately kept at this stable parent scope (not inside the per-tile Column below) so it
+    // survives tiles being reordered/recomposed mid-drag instead of resetting to zero.
+    var currentGhostCenter by remember { mutableStateOf(Offset.Zero) }
+    // Each tile's last-measured on-screen bounds (in window coordinates), used both to hit-test
+    // the dragged tile's current position against every other tile, and to know where to start
+    // the floating ghost from.
+    val tileBounds = remember { mutableStateMapOf<String, Rect>() }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "Preview",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onResetLayout) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Reset Layout")
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -378,56 +462,51 @@ private fun FeatureButtonsPreview(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .onGloballyPositioned { coords ->
-                                    tileBounds[id] = androidx.compose.ui.geometry.Rect(
+                                    tileBounds[id] = Rect(
                                         offset = coords.positionInWindow(),
                                         size = coords.size.toSize()
                                     )
                                 }
-                                .graphicsLayer {
-                                    translationX = if (isDragging) dragTotal.x else 0f
-                                    translationY = if (isDragging) dragTotal.y else 0f
-                                    scaleX = if (isDragging) 1.08f else 1f
-                                    scaleY = if (isDragging) 1.08f else 1f
-                                }
-                                .zIndex(if (isDragging) 1f else 0f)
+                                // The original tile fades out while its floating ghost (rendered
+                                // above everything, unclipped by this card) takes over showing
+                                // where it's being dragged to.
+                                .alpha(if (isDragging) 0f else 1f)
                                 .pointerInput(id) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             draggingId = id
-                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
+                                            currentGhostCenter = tileBounds[id]?.center ?: Offset.Zero
+                                            onDragGhostChange(DragGhostState(spec, currentGhostCenter))
                                         },
                                         onDrag = { change, amount ->
                                             change.consume()
-                                            dragTotal += amount
-                                            val myBounds = tileBounds[id] ?: return@detectDragGesturesAfterLongPress
-                                            val currentCenter = myBounds.center + dragTotal
+                                            currentGhostCenter += amount
+                                            onDragGhostChange(DragGhostState(spec, currentGhostCenter))
+
                                             val targetId = tileBounds
                                                 .filterKeys { it != id }
-                                                .minByOrNull { (_, rect) -> (rect.center - currentCenter).getDistance() }
+                                                .minByOrNull { (_, rect) -> (rect.center - currentGhostCenter).getDistance() }
                                                 ?.key
                                             if (targetId != null) {
                                                 val targetRect = tileBounds.getValue(targetId)
-                                                if ((targetRect.center - currentCenter).getDistance() < targetRect.width / 2f) {
+                                                if ((targetRect.center - currentGhostCenter).getDistance() < targetRect.width / 2f) {
                                                     val fromIndex = buttonOrder.indexOf(id)
                                                     val toIndex = buttonOrder.indexOf(targetId)
                                                     if (fromIndex != -1 && toIndex != -1 && fromIndex != toIndex) {
                                                         val item = buttonOrder.removeAt(fromIndex)
                                                         buttonOrder.add(toIndex, item)
-                                                        // Re-anchor so the drag continues smoothly from here
-                                                        // instead of jumping once tiles reflow.
-                                                        dragTotal = currentCenter - myBounds.center
                                                     }
                                                 }
                                             }
                                         },
                                         onDragEnd = {
                                             draggingId = null
-                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
+                                            onDragGhostChange(null)
                                             onOrderChanged()
                                         },
                                         onDragCancel = {
                                             draggingId = null
-                                            dragTotal = androidx.compose.ui.geometry.Offset.Zero
+                                            onDragGhostChange(null)
                                         }
                                     )
                                 }
@@ -435,9 +514,8 @@ private fun FeatureButtonsPreview(
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = if (isEnabled) spec.color.copy(alpha = if (isDragging) 0.9f else 0.75f)
-                                        else Color.White.copy(alpha = 0.10f),
-                                tonalElevation = if (isDragging) 6.dp else 0.dp,
+                                color = if (isEnabled) Color.White.copy(alpha = 0.16f)
+                                        else Color.White.copy(alpha = 0.08f),
                                 modifier = Modifier.size(56.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -490,7 +568,7 @@ private fun FeatureButtonsPreview(
 
     Spacer(Modifier.height(8.dp))
     Text(
-        "Long-press and drag a button to reorder it. Hang Up always stays last, matching the real call screen.",
+        "Long-press and drag a button anywhere to reorder it. Hang Up always stays last, matching the real call screen.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )

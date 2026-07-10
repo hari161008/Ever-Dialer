@@ -266,24 +266,6 @@ fun ContactDetailsScreen(
                         RivoExpressiveButton(icon = Icons.AutoMirrored.Filled.Message, label = "Text", containerColor = MaterialTheme.colorScheme.secondaryContainer, onClick = {
                             if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
                         })
-                        // Contact through WhatsApp / Telegram — only actually redirects into the
-                        // app when it's installed on the device; otherwise lets the user know
-                        // instead of silently doing nothing or bouncing out to a browser.
-                        RivoExpressiveButton(icon = Icons.Default.Chat, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                            if (displayPhone == "Unknown") return@RivoExpressiveButton
-                            if (!openWhatsAppChat(context, displayPhone)) {
-                                android.widget.Toast.makeText(context, "WhatsApp isn't installed", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        })
-                        // Telegram has many third-party clients/forks, so rather than forcing one
-                        // specific app this opens Android's own chooser sheet listing every
-                        // installed app that can handle it, letting the user pick their client.
-                        RivoExpressiveButton(icon = Icons.Default.Send, label = "Telegram", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                            if (displayPhone == "Unknown") return@RivoExpressiveButton
-                            if (!openTelegramChat(context, displayPhone)) {
-                                android.widget.Toast.makeText(context, "No Telegram app is installed", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        })
                     }
                 }
 
@@ -428,6 +410,31 @@ fun ContactDetailsScreen(
                             Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(if (currentNote.isBlank()) "Add note..." else "Edit note")
+                        }
+                    }
+                }
+
+                // Social — contact through WhatsApp / Telegram. Only actually redirects into the
+                // app when it's installed on the device; otherwise lets the user know instead of
+                // silently doing nothing or bouncing out to a browser.
+                item {
+                    RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            RivoExpressiveButton(icon = Icons.Default.Chat, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                if (!openWhatsAppChat(context, displayPhone)) {
+                                    android.widget.Toast.makeText(context, "WhatsApp isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                            // Telegram has many third-party clients/forks, so rather than forcing
+                            // one specific app this opens Android's own chooser sheet listing
+                            // every installed app that can handle it, letting the user pick theirs.
+                            RivoExpressiveButton(icon = Icons.Default.Send, label = "Telegram", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                if (!openTelegramChat(context, displayPhone)) {
+                                    android.widget.Toast.makeText(context, "No Telegram app is installed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            })
                         }
                     }
                 }
