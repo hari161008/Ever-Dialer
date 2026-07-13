@@ -411,6 +411,33 @@ fun ContactDetailsScreen(
                             Spacer(Modifier.width(6.dp))
                             Text(if (currentNote.isBlank()) "Add note..." else "Edit note")
                         }
+
+                        // When "Integrate Notes Section" is turned OFF in Settings → Calls & System,
+                        // this app Notes section and the call recording notes (kept inside Ever Call
+                        // Recorder's playback screen) are merged: surface a quick link here so both
+                        // notes live in one place from the user's perspective. When the toggle is ON
+                        // (default) the two notes sections stay fully separate, as before.
+                        val integrateNotes = remember(settingsVer) {
+                            prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)
+                        }
+                        if (!integrateNotes) {
+                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            TextButton(
+                                onClick = {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                        val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
+                                        try { context.startActivity(launch) } catch (_: Exception) {}
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.width(6.dp))
+                                Text("View call recording notes for this contact")
+                            }
+                        }
                     }
                 }
 

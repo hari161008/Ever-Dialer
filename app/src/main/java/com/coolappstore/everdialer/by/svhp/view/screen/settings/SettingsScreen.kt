@@ -20,6 +20,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -41,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -102,6 +105,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
     var silenceUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)) }
     var notesEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)) }
+    var integrateNotes by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)) }
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
@@ -452,39 +456,74 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             }
         }
 
+        val maxDialogHeightDp = LocalConfiguration.current.screenHeightDp.dp * 0.82f
         Dialog(onDismissRequest = { showBlockedNumbersDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 440.dp)
+                    .heightIn(max = maxDialogHeightDp)
             ) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
-                        Text("Blocked Numbers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(20.dp))
+                        Text("Block a Number", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
 
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search name or number…") },
-                        leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(20.dp)) },
-                        trailingIcon = {
-                            if (searchQuery.isNotBlank()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp)) }
-                        },
-                        singleLine = true,
+                    Surface(
                         shape = RoundedCornerShape(50),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                    )
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search name or number…", style = MaterialTheme.typography.bodyMedium) },
+                            leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            trailingIcon = {
+                                AnimatedVisibility(
+                                    visible = searchQuery.isNotBlank(),
+                                    enter = fadeIn() + scaleIn(),
+                                    exit = fadeOut() + scaleOut()
+                                ) {
+                                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp)) }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent
+                            )
+                        )
+                    }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Call Logs", "Contacts", "Manual").forEachIndexed { index, label ->
                             val selected = blockedNumbersTab == index
+                            val bgColor by animateColorAsState(
+                                targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                label = "tabBg"
+                            )
+                            val txtColor by animateColorAsState(
+                                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                label = "tabTxt"
+                            )
                             Surface(
                                 onClick = { blockedNumbersTab = index },
                                 shape = RoundedCornerShape(50),
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                color = bgColor,
                                 modifier = Modifier.weight(1f).height(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -492,7 +531,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                         label,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = txtColor
                                     )
                                 }
                             }
@@ -502,95 +541,132 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
                     Box(modifier = Modifier.heightIn(min = 80.dp, max = 320.dp)) {
-                        when (blockedNumbersTab) {
-                            0 -> {
-                                if (isLoading) {
-                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                                    }
-                                } else if (filteredRecents.isEmpty()) {
-                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                        Text(if (searchQuery.isBlank()) "No call logs found." else "No results for \"$searchQuery\"",
-                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                        AnimatedContent(
+                            targetState = blockedNumbersTab,
+                            transitionSpec = {
+                                if (targetState > initialState) {
+                                    (slideInHorizontally { it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 3 } + fadeOut())
                                 } else {
-                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        items(filteredRecents, key = { it.first }) { (number, name, photoUri) ->
-                                            val alreadyBlocked = blockedContactsList.contains(number)
-                                            Surface(shape = RoundedCornerShape(10.dp), color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant) {
-                                                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                    RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(38.dp))
-                                                    Spacer(Modifier.width(10.dp))
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                                                        if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                                                    }
-                                                    TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                                                        Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                    (slideInHorizontally { -it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { it / 3 } + fadeOut())
+                                }
+                            },
+                            label = "blockedNumbersTabContent"
+                        ) { tab ->
+                            when (tab) {
+                                0 -> {
+                                    Crossfade(targetState = isLoading, label = "recentsLoading") { loading ->
+                                        if (loading) {
+                                            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                                                    Text("Loading call logs…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        } else if (filteredRecents.isEmpty()) {
+                                            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                                Text(if (searchQuery.isBlank()) "No call logs found." else "No results for \"$searchQuery\"",
+                                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        } else {
+                                            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                items(filteredRecents, key = { it.first }) { (number, name, photoUri) ->
+                                                    val alreadyBlocked = blockedContactsList.contains(number)
+                                                    Surface(
+                                                        modifier = Modifier.animateItem(),
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant
+                                                    ) {
+                                                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                            RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(34.dp))
+                                                            Spacer(Modifier.width(10.dp))
+                                                            Column(modifier = Modifier.weight(1f)) {
+                                                                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+                                                                if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                                            }
+                                                            TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                                                                Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            1 -> {
-                                if (isLoading) {
-                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                                    }
-                                } else if (filteredContacts.isEmpty()) {
-                                    Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                        Text(if (searchQuery.isBlank()) "No contacts found." else "No results for \"$searchQuery\"",
-                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                } else {
-                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        items(filteredContacts, key = { it.first }) { (number, name, photoUri) ->
-                                            val alreadyBlocked = blockedContactsList.contains(number)
-                                            Surface(shape = RoundedCornerShape(10.dp), color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant) {
-                                                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                    RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(38.dp))
-                                                    Spacer(Modifier.width(10.dp))
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                                                        if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                                                    }
-                                                    TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                                                        Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                1 -> {
+                                    Crossfade(targetState = isLoading, label = "contactsLoading") { loading ->
+                                        if (loading) {
+                                            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                                                    Text("Loading contacts…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        } else if (filteredContacts.isEmpty()) {
+                                            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                                Text(if (searchQuery.isBlank()) "No contacts found." else "No results for \"$searchQuery\"",
+                                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        } else {
+                                            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                items(filteredContacts, key = { it.first }) { (number, name, photoUri) ->
+                                                    val alreadyBlocked = blockedContactsList.contains(number)
+                                                    Surface(
+                                                        modifier = Modifier.animateItem(),
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = if (alreadyBlocked) MaterialTheme.colorScheme.errorContainer.copy(0.3f) else MaterialTheme.colorScheme.surfaceVariant
+                                                    ) {
+                                                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                            RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(34.dp))
+                                                            Spacer(Modifier.width(10.dp))
+                                                            Column(modifier = Modifier.weight(1f)) {
+                                                                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+                                                                if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                                            }
+                                                            TextButton(onClick = { blockNumber(number) }, enabled = !alreadyBlocked, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                                                                Text(if (alreadyBlocked) "Blocked" else "Block", style = MaterialTheme.typography.labelSmall, color = if (alreadyBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            2 -> {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = blockedNumberInput,
-                                        onValueChange = { blockedNumberInput = it },
-                                        label = { Text("Enter number to block") },
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                        trailingIcon = {
-                                            if (blockedNumberInput.isNotBlank()) {
-                                                IconButton(onClick = {
-                                                    val num = blockedNumberInput.trim()
-                                                    if (num.isNotBlank()) blockNumber(num)
-                                                    blockedNumberInput = ""
-                                                }) { Icon(Icons.Default.Add, "Add", tint = MaterialTheme.colorScheme.primary) }
+                                else -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = blockedNumberInput,
+                                            onValueChange = { blockedNumberInput = it },
+                                            label = { Text("Enter number to block") },
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                            trailingIcon = {
+                                                AnimatedVisibility(
+                                                    visible = blockedNumberInput.isNotBlank(),
+                                                    enter = fadeIn() + scaleIn(),
+                                                    exit = fadeOut() + scaleOut()
+                                                ) {
+                                                    IconButton(onClick = {
+                                                        val num = blockedNumberInput.trim()
+                                                        if (num.isNotBlank()) blockNumber(num)
+                                                        blockedNumberInput = ""
+                                                    }) { Icon(Icons.Default.Add, "Add", tint = MaterialTheme.colorScheme.primary) }
+                                                }
                                             }
-                                        }
-                                    )
-                                    if (searchQuery.isNotBlank()) {
+                                        )
                                         Button(
-                                            onClick = { blockNumber(searchQuery.trim()); searchQuery = "" },
+                                            onClick = {
+                                                val num = blockedNumberInput.trim()
+                                                if (num.isNotBlank()) blockNumber(num)
+                                                blockedNumberInput = ""
+                                            },
+                                            enabled = blockedNumberInput.isNotBlank(),
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(50)
-                                        ) { Text("Block \"${searchQuery.trim()}\"") }
+                                        ) { Text("Block Number") }
                                     }
                                 }
                             }
@@ -616,18 +692,28 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             }
         }
 
+        val maxBlockListHeightDp = LocalConfiguration.current.screenHeightDp.dp * 0.82f
         Dialog(onDismissRequest = { showBlockListDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 440.dp)
+                    .heightIn(max = maxBlockListHeightDp)
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(22.dp))
-                        Text("Block List", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Outlined.Block, null, tint = ColorRed, modifier = Modifier.size(20.dp))
+                        Text("Blocked Numbers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Surface(shape = RoundedCornerShape(50), color = ColorRed.copy(alpha = 0.12f)) {
                             Text("${blockedContactsList.size}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ColorRed, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                        }
+                        IconButton(
+                            onClick = { showBlockListDialog = false; showBlockedNumbersDialog = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Add, "Add number", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         }
                     }
 
@@ -636,27 +722,32 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     if (blockedContactsList.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Block, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f), modifier = Modifier.size(44.dp))
+                                Icon(Icons.Outlined.Block, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f), modifier = Modifier.size(40.dp))
                                 Text("No numbers blocked", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                TextButton(onClick = { showBlockListDialog = false; showBlockedNumbersDialog = true }) {
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Block a number")
+                                }
                             }
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.heightIn(max = 340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             itemsIndexed(blockedWithInfo) { index, (number, name, photoUri) ->
-                                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(46.dp))
-                                        Spacer(Modifier.width(12.dp))
+                                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        RivoAvatar(name = name, photoUri = photoUri, modifier = Modifier.size(38.dp))
+                                        Spacer(Modifier.width(10.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                            Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                             if (name != number) Text(number, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                         }
                                         IconButton(onClick = {
                                             val updated = blockedContactsList.toMutableList().also { it.removeAt(index) }
                                             blockedContactsList = updated
                                             prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
-                                        }, modifier = Modifier.size(36.dp)) {
-                                            Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(18.dp))
+                                        }, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Default.Close, "Remove", tint = ColorRed, modifier = Modifier.size(16.dp))
                                         }
                                     }
                                 }
@@ -1116,6 +1207,21 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
                             )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Integrate Notes Section",
+                                supporting = if (integrateNotes)
+                                                 "Call recording notes stay separate from the app's Notes section"
+                                             else
+                                                 "Call recording notes are merged into the app's Notes section",
+                                leadingIcon = Icons.Default.Note,
+                                iconContainerColor = Color(0xFFE53935),
+                                checked = integrateNotes,
+                                onCheckedChange = {
+                                    integrateNotes = it
+                                    prefs.setBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, it)
+                                }
+                            )
                         }
                     }
                 }
@@ -1141,19 +1247,10 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                             CardDivider()
                             RivoListItem(
                                 headline = "Blocked Numbers",
-                                supporting = "${blockedContactsList.size} number(s) blocked",
-                                leadingIcon = Icons.Outlined.PersonOff,
-                                iconContainerColor = ColorBluGrey,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { showBlockedNumbersDialog = true }
-                            )
-                            CardDivider()
-                            RivoListItem(
-                                headline = "Tap to see the Block list",
                                 supporting = if (blockedContactsList.isEmpty()) "No numbers blocked"
                                              else "${blockedContactsList.size} number(s) blocked",
-                                leadingIcon = Icons.Outlined.Block,
-                                iconContainerColor = ColorRed,
+                                leadingIcon = Icons.Outlined.PersonOff,
+                                iconContainerColor = ColorBluGrey,
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { showBlockListDialog = true }
                             )

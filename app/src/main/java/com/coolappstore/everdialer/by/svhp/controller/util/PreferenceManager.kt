@@ -64,6 +64,11 @@ class PreferenceManager(context: Context) {
         const val KEY_APP_HAPTICS_STRENGTH     = "app_haptics_strength"
         const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"
         const val KEY_NOTES_ENABLED         = "notes_enabled"
+        // When true (default), the app's Notes section and the call recording notes
+        // (inside Ever Call Recorder's recording playback screen) are kept as two
+        // independent notes sections. When false, they're merged: a contact's Notes
+        // card also surfaces any notes attached to that contact's call recordings.
+        const val KEY_INTEGRATE_NOTES       = "integrate_notes_section"
         const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
         const val KEY_THEME_MODE            = "theme_mode"
