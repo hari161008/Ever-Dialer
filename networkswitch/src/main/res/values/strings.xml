@@ -1,0 +1,12 @@
+<resources>
+    <string name="ns_app_name">Network Switch</string>
+    <string name="network_switch">Network Switch</string>
+    
+    <!-- Configuration -->
+    <string name="network_mode_config">Network Mode Configuration</string>
+    <string name="network_mode_config_desc">Choose which two network modes to toggle between</string>
+    <string name="mode_a_label">Mode A</string>
+    <string name="mode_b_label">Mode B</string>
+    <string name="save_configuration">Save Configuration</string>
+    <string name="configuration_saved">Configuration saved successfully</string>
+</resources>

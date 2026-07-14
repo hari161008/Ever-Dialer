@@ -1162,6 +1162,21 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 onClick = { navigator.navigate(CallSettingsScreenDestination) }
                             )
                             CardDivider()
+                            RivoListItem(
+                                headline = "4G/5G Switcher",
+                                supporting = "Quickly toggle your network mode",
+                                leadingIcon = Icons.Outlined.SignalCellularAlt,
+                                iconContainerColor = Color(0xFF00897B),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    try {
+                                        context.startActivity(
+                                            Intent(context, com.supernova.networkswitch.presentation.ui.activity.MainActivity::class.java)
+                                        )
+                                    } catch (_: Exception) {}
+                                }
+                            )
+                            CardDivider()
                             val hiderMenuHidden = remember(prefs.settingsChanged.collectAsState().value) {
                                 prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_MENU, false)
                             }
