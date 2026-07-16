@@ -11,6 +11,7 @@ import com.supernova.networkswitch.domain.model.ControlMethod
 import com.supernova.networkswitch.domain.model.NetworkMode
 import com.supernova.networkswitch.domain.model.ToggleModeConfig
 import com.supernova.networkswitch.domain.usecase.CheckCompatibilityUseCase
+import com.supernova.networkswitch.domain.usecase.RequestShizukuPermissionUseCase
 import com.supernova.networkswitch.domain.usecase.GetCurrentNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.ToggleNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.UpdateControlMethodUseCase
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 class MainViewModel constructor(
     private val checkCompatibilityUseCase: CheckCompatibilityUseCase,
+    private val requestShizukuPermissionUseCase: RequestShizukuPermissionUseCase,
     private val getCurrentNetworkModeUseCase: GetCurrentNetworkModeUseCase,
     private val toggleNetworkModeUseCase: ToggleNetworkModeUseCase,
     private val updateControlMethodUseCase: UpdateControlMethodUseCase,
@@ -98,9 +100,12 @@ class MainViewModel constructor(
     }
     
     /**
-     * Retry compatibility check
+     * Retry compatibility check. Explicitly re-requests Shizuku permission first —
+     * so tapping "Retry" always re-prompts the user rather than just re-reading the
+     * same denied state.
      */
     fun retryCompatibilityCheck() {
+        requestShizukuPermissionUseCase()
         checkCompatibility()
     }
     

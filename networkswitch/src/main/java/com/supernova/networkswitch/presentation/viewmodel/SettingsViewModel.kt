@@ -47,6 +47,14 @@ class SettingsViewModel constructor(
     }
     
     fun retryCompatibilityCheck() {
+        networkControlRepository.requestShizukuPermission()
+        checkAllCompatibility()
+    }
+
+    /** Re-checks compatibility without forcing a new permission prompt — used on
+     *  activity resume so returning from the Shizuku permission dialog (or any other
+     *  app) reflects the latest state. */
+    fun refreshCompatibility() {
         checkAllCompatibility()
     }
     

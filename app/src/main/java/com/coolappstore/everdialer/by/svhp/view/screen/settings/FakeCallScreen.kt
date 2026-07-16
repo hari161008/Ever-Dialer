@@ -554,18 +554,50 @@ fun FakeCallAddSheet(
     var phoneNumber by remember { mutableStateOf(initialNumber) }
     var numberInput by remember { mutableStateOf(TextFieldValue(initialNumber)) }
 
-    // Time state
+    val prefs = koinInject<PreferenceManager>()
+
+    // Time state — pre-filled from whatever was used for the previous fake call (everything
+    // except name/number), instead of always resetting to "now" / hardcoded defaults.
     val cal = remember { Calendar.getInstance() }
-    var hour by remember { mutableIntStateOf(cal.get(Calendar.HOUR_OF_DAY)) }
-    var minute by remember { mutableIntStateOf(cal.get(Calendar.MINUTE)) }
+    var hour by remember {
+        mutableIntStateOf(
+            if (prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, -1) in 0..23)
+                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, cal.get(Calendar.HOUR_OF_DAY))
+            else cal.get(Calendar.HOUR_OF_DAY)
+        )
+    }
+    var minute by remember {
+        mutableIntStateOf(
+            if (prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, -1) in 0..59)
+                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, cal.get(Calendar.MINUTE))
+            else cal.get(Calendar.MINUTE)
+        )
+    }
 
     // Pick Time mode: an absolute clock time, or a relative countdown timer
-    var timePickMode by remember { mutableStateOf(TimePickMode.Clock) }
-    var timerAmountText by remember { mutableStateOf("30") }
-    var timerUnit by remember { mutableStateOf(TimerUnit.Seconds) }
+    var timePickMode by remember {
+        mutableStateOf(
+            if (prefs.getString(PreferenceManager.KEY_FAKE_CALL_LAST_MODE, "clock") == "timer")
+                TimePickMode.Timer else TimePickMode.Clock
+        )
+    }
+    var timerAmountText by remember {
+        mutableStateOf(prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_TIMER_AMOUNT, 30).toString())
+    }
+    var timerUnit by remember {
+        mutableStateOf(
+            if (prefs.getString(PreferenceManager.KEY_FAKE_CALL_LAST_TIMER_UNIT, "seconds") == "minutes")
+                TimerUnit.Minutes else TimerUnit.Seconds
+        )
+    }
 
     // Day state
-    var selectedDays by remember { mutableStateOf(emptySet<Int>()) }
+    var selectedDays by remember {
+        mutableStateOf(
+            (prefs.getString(PreferenceManager.KEY_FAKE_CALL_LAST_DAYS, "") ?: "")
+                .split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        )
+    }
 
     // Contact picker launcher
     val contactLauncher = rememberLauncherForActivityResult(
@@ -1031,8 +1063,13 @@ fun FakeCallAddSheet(
                                 hour = targetCal.get(Calendar.HOUR_OF_DAY),
                                 minute = targetCal.get(Calendar.MINUTE),
                                 days = emptySet(),
-                                enabled = true
+                                enabled = true,
+                                isTimerBased = true,
+                                timerDelayMillis = delayMillis
                             )
+                            prefs.setString(PreferenceManager.KEY_FAKE_CALL_LAST_MODE, "timer")
+                            prefs.setInt(PreferenceManager.KEY_FAKE_CALL_LAST_TIMER_AMOUNT, timerAmount)
+                            prefs.setString(PreferenceManager.KEY_FAKE_CALL_LAST_TIMER_UNIT, if (timerUnit == TimerUnit.Seconds) "seconds" else "minutes")
                             onSave(entry, exactTriggerAt)
                         } else {
                             val entry = FakeCallEntry(
@@ -1044,6 +1081,10 @@ fun FakeCallAddSheet(
                                 days = selectedDays,
                                 enabled = true
                             )
+                            prefs.setString(PreferenceManager.KEY_FAKE_CALL_LAST_MODE, "clock")
+                            prefs.setInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, hour)
+                            prefs.setInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, minute)
+                            prefs.setString(PreferenceManager.KEY_FAKE_CALL_LAST_DAYS, selectedDays.joinToString(","))
                             onSave(entry, null)
                         }
                     },

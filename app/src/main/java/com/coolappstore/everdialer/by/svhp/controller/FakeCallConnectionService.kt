@@ -183,6 +183,15 @@ class FakeConnection(private val context: Context) : Connection() {
         setOnHold()
     }
 
+    override fun onSilence() {
+        super.onSilence()
+        // Telecom calls this for self-managed connections when the user presses the volume
+        // up/down key while this call is ringing. Real incoming calls get this silencing behavior
+        // for free from the system ringer; since we drive our own ringtone MediaPlayer for fake
+        // calls, we need to explicitly stop it here ourselves.
+        stopRingtonePlayback()
+    }
+
     override fun onUnhold() {
         super.onUnhold()
         setActive()

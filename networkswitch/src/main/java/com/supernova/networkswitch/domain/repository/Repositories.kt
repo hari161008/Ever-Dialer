@@ -29,6 +29,13 @@ interface NetworkControlRepository {
      * Reset connections - useful when switching control methods
      */
     suspend fun resetConnections()
+
+    /**
+     * Explicitly (re-)triggers the Shizuku permission dialog. Used by the "Retry"
+     * action so a manual tap always re-prompts, even if the one-time automatic
+     * request already fired (and was denied) earlier this session.
+     */
+    fun requestShizukuPermission()
 }
 
 /**

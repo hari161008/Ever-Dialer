@@ -156,7 +156,7 @@ fun CallLogTile(
             )
         }
         Box(modifier = Modifier.weight(1f)) {
-        val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, true) }
+        val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
         RivoListItem(
             headline = buildString {

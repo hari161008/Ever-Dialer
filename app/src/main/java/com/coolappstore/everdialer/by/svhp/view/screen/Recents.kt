@@ -385,7 +385,7 @@ fun CallLogFullContent(
 
         var showSimPicker by remember { mutableStateOf(false) }
         var pendingNumber by remember { mutableStateOf<String?>(null) }
-        val simPref = remember(settingsVersion) { prefs.getInt("default_sim", 0) }
+        val simPref = remember(settingsVersion) { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
         // Selection mode state - hoisted to parent
 

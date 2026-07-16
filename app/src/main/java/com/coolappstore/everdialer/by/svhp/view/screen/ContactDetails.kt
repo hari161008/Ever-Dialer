@@ -91,7 +91,7 @@ fun ContactDetailsScreen(
     val context = LocalContext.current
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
     val prefs = koinInject<PreferenceManager>()
-    val simPref = remember { prefs.getInt("default_sim", 0) }
+    val simPref = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
     var showSimPicker by remember { mutableStateOf(false) }
     var showNumberPicker by remember { mutableStateOf(false) }

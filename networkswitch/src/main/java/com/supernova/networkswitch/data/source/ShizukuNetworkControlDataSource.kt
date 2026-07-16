@@ -22,20 +22,94 @@ class  ShizukuNetworkControlDataSource constructor(
     private var userService: IShizukuController? = null
     private val _isConnected = MutableStateFlow(false)
     val isConnected = _isConnected.asStateFlow()
-    
-    private companion object {
-        private const val SHIZUKU_PERMISSION_REQUEST_ID = 8
+
+    companion object {
+        // Not private anymore: MainActivity/SettingsActivity register a
+        // Shizuku.OnRequestPermissionResultListener and need to match this code
+        // against the requestCode they receive.
+        const val SHIZUKU_PERMISSION_REQUEST_ID = 8
+
+        /** True once we've already auto-prompted for permission this process, so we
+         *  don't re-trigger the system dialog on every single recomposition/resume —
+         *  the explicit "Retry" button in the UI can still always re-request. */
+        @Volatile private var hasAutoRequestedPermission = false
+
+        /** Fires right after the user answers the Shizuku permission dialog (granted or
+         *  denied), so the UI can immediately refresh instead of waiting for the user to
+         *  background/foreground the app again. Set by MainActivity/SettingsActivity. */
+        @Volatile var onPermissionResult: (() -> Unit)? = null
+
+        private val permissionResultListener = object : Shizuku.OnRequestPermissionResultListener {
+            override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+                if (requestCode == SHIZUKU_PERMISSION_REQUEST_ID) {
+                    onPermissionResult?.invoke()
+                }
+            }
+        }
+
+        @Volatile private var listenerRegistered = false
+
+        /** Registers the permission-result listener exactly once for the process
+         *  lifetime — matching the pattern used by Ever Call Recorder's
+         *  ShizukuConnectionManager, which pairs every requestPermission() call with a
+         *  registered Shizuku.OnRequestPermissionResultListener. */
+        private fun ensureListenerRegistered() {
+            if (listenerRegistered) return
+            try {
+                Shizuku.addRequestPermissionResultListener(permissionResultListener)
+                listenerRegistered = true
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Requests Shizuku permission from the user, mirroring how Ever Call Recorder's
+     * ShizukuConnectionManager does it: trigger the system permission dialog directly
+     * instead of just reporting "permission denied" and waiting for the user to find a
+     * manual grant button.
+     */
+    fun requestPermission() {
+        ensureListenerRegistered()
+        try {
+            if (!Shizuku.pingBinder()) return
+        } catch (_: Exception) { return }
+        val alreadyGranted = try {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (_: Exception) { false }
+        if (alreadyGranted) return
+        try {
+            Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_ID)
+        } catch (_: Exception) {}
     }
 
     override suspend fun checkCompatibility(subId: Int): CompatibilityState {
         return try {
-            // Check if Shizuku service is running
-            if (!Shizuku.pingBinder()) {
+            // Shizuku's binder can take a brief moment to attach right after the app
+            // or the Shizuku service itself starts (e.g. right after boot, or right
+            // after the user just enabled Shizuku) — a single pingBinder() check can
+            // falsely report "service not running" even though it becomes available
+            // a fraction of a second later. Retry briefly instead of failing fast,
+            // to avoid that false reading.
+            var pinged = Shizuku.pingBinder()
+            var attempts = 0
+            while (!pinged && attempts < 4) {
+                kotlinx.coroutines.delay(250)
+                pinged = Shizuku.pingBinder()
+                attempts++
+            }
+            if (!pinged) {
                 return CompatibilityState.Incompatible("Shizuku service not running")
             }
-            
+
             // Check if Shizuku permission is granted
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                // Auto-trigger the system permission dialog the first time we detect
+                // it's missing, instead of silently reporting "denied" and relying on
+                // the user to discover a manual grant action.
+                if (!hasAutoRequestedPermission) {
+                    hasAutoRequestedPermission = true
+                    requestPermission()
+                }
                 return CompatibilityState.PermissionDenied(com.supernova.networkswitch.domain.model.ControlMethod.SHIZUKU)
             }
             

@@ -148,7 +148,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
 
     var showSimPicker by remember { mutableStateOf(false) }
     var pendingCallNumber by remember { mutableStateOf<String?>(null) }
-    val simPref = remember { prefs.getInt("default_sim", 0) }
+    val simPref = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
     var selectionMode by remember { mutableStateOf(false) }
     var selectedFavorites by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -268,7 +268,12 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                 val gridState = rememberLazyGridState()
                 ScrollHapticsGridEffect(gridState = gridState)
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    // Fixed(3) always used exactly 3 columns even in landscape, where the
+                    // much wider screen made each of those 3 cells — and therefore each
+                    // favorite tile — stretch to a huge size. Adaptive sizes each column to
+                    // a sensible minimum width and lets the column count grow with the
+                    // available width instead, so tiles look right in both orientations.
+                    columns = GridCells.Adaptive(minSize = 100.dp),
                     state = gridState,
                     modifier = Modifier
                         .fillMaxSize()

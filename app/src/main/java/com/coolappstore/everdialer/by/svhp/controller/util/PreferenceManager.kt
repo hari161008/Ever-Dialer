@@ -7,8 +7,43 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class PreferenceManager(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs: SharedPreferences =
         context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+
+    /** Number of currently active SIM subscriptions (0, 1, 2+). Never throws. */
+    fun getActiveSimCount(): Int {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP_MR1) return 1
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    appContext, android.Manifest.permission.READ_PHONE_STATE
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) return 1
+            val sm = appContext.getSystemService(android.telephony.SubscriptionManager::class.java)
+            val list = if (android.os.Build.VERSION_CODES.N <= android.os.Build.VERSION.SDK_INT) {
+                sm?.activeSubscriptionInfoList
+            } else {
+                @Suppress("DEPRECATION")
+                android.telephony.SubscriptionManager.from(appContext).activeSubscriptionInfoList
+            }
+            list?.size ?: 1
+        } catch (_: Exception) { 1 }
+    }
+
+    /** "Show SIM badges in call logs" should only default to on for dual-SIM (or more)
+     *  devices — on a single-SIM device the badge is pure clutter since every entry
+     *  would show the same "SIM 1" chip. */
+    fun getShowSimsInCallLogsDefault(): Boolean = getActiveSimCount() >= 2
+
+    /** Default-SIM-for-calling behavior should only default to "always ask" on
+     *  dual-SIM (or more) devices. On a single-SIM device there is nothing to ask —
+     *  default straight to that one SIM so every call just goes out immediately. */
+    fun getDefaultSimAskEveryTimeDefault(): Boolean = getActiveSimCount() >= 2
+
+    /** Default value for the "default_sim" pref (0 = ask every time, 1 = SIM 1, 2 = SIM 2).
+     *  On a single-SIM device there's nothing to ask about, so default straight to that
+     *  one SIM instead of nagging with an "Ask every time" dialog on every call. */
+    fun getDefaultSimIndexDefault(): Int = if (getActiveSimCount() == 1) 1 else 0
 
     private val _settingsChanged = MutableStateFlow(0)
     val settingsChanged: StateFlow<Int> = _settingsChanged.asStateFlow()
@@ -24,9 +59,9 @@ class PreferenceManager(context: Context) {
     fun getString(key: String, defaultValue: String?)  = prefs.getString(key, defaultValue)
     fun setString(key: String, value: String?)         { prefs.edit().putString(key, value).apply(); _settingsChanged.value += 1 }
     fun getInt(key: String, defaultValue: Int)         = prefs.getInt(key, defaultValue)
-    fun setInt(key: String, value: Int)                { prefs.edit().putInt(key, value).apply() }
+    fun setInt(key: String, value: Int)                { prefs.edit().putInt(key, value).apply(); _settingsChanged.value += 1 }
     fun getFloat(key: String, defaultValue: Float)     = prefs.getFloat(key, defaultValue)
-    fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply() }
+    fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply(); _settingsChanged.value += 1 }
 
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
     fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
@@ -46,6 +81,7 @@ class PreferenceManager(context: Context) {
     }
 
     companion object {
+        const val KEY_DEFAULT_SIM           = "default_sim"
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
         const val KEY_SHOW_FIRST_LETTER     = "show_first_letter"
@@ -158,6 +194,15 @@ class PreferenceManager(context: Context) {
         const val KEY_FAKE_CALLS                = "fake_calls"
         // Fake Call — show a "Fake Call" entry in the dialpad's long-press context menu
         const val KEY_FAKE_CALL_IN_CONTEXT_MENU = "fake_call_in_context_menu"
+        // Fake Call — remembers the last-used time/timer/day settings (everything except
+        // name and number) so creating a new fake call starts from what was used last,
+        // instead of always resetting to hardcoded defaults.
+        const val KEY_FAKE_CALL_LAST_MODE          = "fake_call_last_mode"          // "clock" | "timer"
+        const val KEY_FAKE_CALL_LAST_HOUR           = "fake_call_last_hour"
+        const val KEY_FAKE_CALL_LAST_MINUTE         = "fake_call_last_minute"
+        const val KEY_FAKE_CALL_LAST_DAYS           = "fake_call_last_days"         // comma-separated Calendar.DAY_OF_WEEK ints
+        const val KEY_FAKE_CALL_LAST_TIMER_AMOUNT   = "fake_call_last_timer_amount"
+        const val KEY_FAKE_CALL_LAST_TIMER_UNIT     = "fake_call_last_timer_unit"   // "seconds" | "minutes"
         // Default Message app for the incoming-call screen's Message quick action.
         // Values: "sms" (default), "whatsapp", "telegram", "ask"
         const val KEY_DEFAULT_MESSAGE_APP = "default_message_app"

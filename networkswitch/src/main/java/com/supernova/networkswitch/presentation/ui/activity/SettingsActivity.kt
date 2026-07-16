@@ -49,6 +49,9 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NetworkSwitchGraph.init(applicationContext)
+        com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = {
+            runOnUiThread { viewModel.refreshCompatibility() }
+        }
         
         setContent {
             NetworkSwitchTheme {
@@ -57,6 +60,18 @@ class SettingsActivity : ComponentActivity() {
                     onBackClick = { finish() }
                 )
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshCompatibility()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult != null) {
+            com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = null
         }
     }
 }

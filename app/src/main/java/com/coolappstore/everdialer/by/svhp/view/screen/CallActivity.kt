@@ -66,6 +66,7 @@ import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.SimSlotBadge
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -191,6 +192,8 @@ class CallActivity : FragmentActivity() {
 
                 if (call != null && session != null) {
                     val number = call.details?.handle?.schemeSpecificPart ?: ""
+                    val simSlot = remember(call) { getSimSlotForAccountHandle(this@CallActivity, call.details?.accountHandle) }
+                    val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
                     // Stable initial values — number shown immediately, replaced by
                     // contact name in-place once async lookup completes (no layout shift
                     // because the composable tree is already present and sized).
@@ -248,7 +251,9 @@ class CallActivity : FragmentActivity() {
                         callLogRepo = callLogRepo,
                         prefs = prefs,
                         isPocketBlocked = { isPocketBlocked },
-                        skipIncomingScreen = answeredFromNotification
+                        skipIncomingScreen = answeredFromNotification,
+                        simSlot = simSlot,
+                        showSimBadge = isDualSim
                     )
                 }
             }
@@ -302,6 +307,27 @@ class CallActivity : FragmentActivity() {
 }
 
 private fun sanitizedPhoneForChatApps(number: String): String = number.filter { it.isDigit() || it == '+' }
+
+/** Resolves a telecom PhoneAccountHandle (as reported on the live Call object) to a
+ *  0-based SIM slot index via SubscriptionManager, or -1 if it can't be determined.
+ *  This is how we can show a "SIM 1"/"SIM 2" badge on the in-call screen for an
+ *  *incoming* call — unlike outgoing calls (where the app already knows which SIM
+ *  it dialed out on), there was previously no way to tell which SIM an incoming
+ *  call is arriving on. */
+private fun getSimSlotForAccountHandle(context: Context, accountHandle: android.telecom.PhoneAccountHandle?): Int {
+    if (accountHandle == null) return -1
+    return try {
+        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+        val phoneAccount = tm?.getPhoneAccount(accountHandle)
+        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)
+            ?.takeIf { it != -1 }
+            ?: accountHandle.id.toIntOrNull()
+            ?: return -1
+        val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                as? android.telephony.SubscriptionManager ?: return -1
+        sm.getActiveSubscriptionInfo(subId)?.simSlotIndex ?: -1
+    } catch (_: Exception) { -1 }
+}
 
 private fun openSmsApp(context: Context, number: String) {
     try {
@@ -364,7 +390,9 @@ fun ExpressiveCallScreen(
     callLogRepo: ICallLogRepository? = null,
     prefs: PreferenceManager? = null,
     isPocketBlocked: () -> Boolean = { false },
-    skipIncomingScreen: Boolean = false
+    skipIncomingScreen: Boolean = false,
+    simSlot: Int = -1,
+    showSimBadge: Boolean = false
 ) {
     val context = LocalView.current.context
     val ctx = context
@@ -846,20 +874,24 @@ fun ExpressiveCallScreen(
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
-                        Text(
-                            text = when {
-                                isOnHold -> "On Hold"
-                                callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Calling"
-                                callState == Call.STATE_RINGING -> "Incoming"
-                                callState == Call.STATE_CONNECTING -> "Calling"
-                                callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
-                                else -> "Connecting..."
-                            },
-                            color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            if (showSimBadge && simSlot in 0..1) {
+                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp))
+                            }
+                            Text(
+                                text = when {
+                                    isOnHold -> "On Hold"
+                                    callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                    callState == Call.STATE_DIALING -> "Calling"
+                                    callState == Call.STATE_RINGING -> "Incoming"
+                                    callState == Call.STATE_CONNECTING -> "Calling"
+                                    callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                    else -> "Connecting..."
+                                },
+                                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
                         if (hasHeldCall) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
@@ -997,20 +1029,24 @@ fun ExpressiveCallScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text(
-                            text = when {
-                                isOnHold -> "On Hold"
-                                callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                callState == Call.STATE_DIALING -> "Calling"
-                                callState == Call.STATE_RINGING -> "Incoming"
-                                callState == Call.STATE_CONNECTING -> "Calling"
-                                callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
-                                else -> "Connecting..."
-                            },
-                            color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+                            if (showSimBadge && simSlot in 0..1) {
+                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 18.dp, height = 21.dp))
+                            }
+                            Text(
+                                text = when {
+                                    isOnHold -> "On Hold"
+                                    callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                    callState == Call.STATE_DIALING -> "Calling"
+                                    callState == Call.STATE_RINGING -> "Incoming"
+                                    callState == Call.STATE_CONNECTING -> "Calling"
+                                    callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                    else -> "Connecting..."
+                                },
+                                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
 
                         if (hasHeldCall) {
                             Spacer(modifier = Modifier.height(12.dp))

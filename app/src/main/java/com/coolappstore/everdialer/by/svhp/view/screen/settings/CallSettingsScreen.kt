@@ -152,6 +152,12 @@ fun ContactsToDisplayDialog(
                             subLabel = simName
                         ))
                     }
+                    // Real SIMs being present doesn't mean every contact lives on a SIM — plenty
+                    // of contacts are stored locally on the device (no Google/SIM account at all).
+                    // Those map to key "sim_0" in ContactsRepository, so always offer a separate
+                    // "Device Storage" row too, or local-only contacts had no checkbox anywhere
+                    // and could never be toggled back on.
+                    list.add(ContactSourceItem(key = "sim_0", label = "Device", subLabel = "Device Storage"))
                 } else {
                     list.add(ContactSourceItem(key = "sim_0", label = "SIM", subLabel = "Device Storage"))
                 }
@@ -245,7 +251,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
     var autoSpeaker by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_SPEAKER, false)) }
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
-    var defaultSim by remember { mutableStateOf(prefs.getInt("default_sim", 0)) }
+    var defaultSim by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())) }
     var showSimDialog by remember { mutableStateOf(false) }
 
     var visible by remember { mutableStateOf(false) }
@@ -280,7 +286,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator) {
                                 selected = defaultSim == index,
                                 onClick = {
                                     defaultSim = index
-                                    prefs.setInt("default_sim", index)
+                                    prefs.setInt(PreferenceManager.KEY_DEFAULT_SIM, index)
                                     showSimDialog = false
                                 }
                             )

@@ -162,7 +162,10 @@ fun SettingsContent(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
+        val settingsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+        com.coolappstore.evercallrecorder.by.svhp.ui.common.ScrollHapticsEffect(listState = settingsListState)
         LazyColumn(
+            state = settingsListState,
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {

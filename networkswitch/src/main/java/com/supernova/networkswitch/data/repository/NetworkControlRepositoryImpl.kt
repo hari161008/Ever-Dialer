@@ -53,6 +53,10 @@ class NetworkControlRepositoryImpl constructor(
         shizukuDataSource.resetConnection()
     }
 
+    override fun requestShizukuPermission() {
+        shizukuDataSource.requestPermission()
+    }
+
     private fun getDataSource(method: ControlMethod): NetworkControlDataSource {
         return when (method) {
             ControlMethod.ROOT -> rootDataSource

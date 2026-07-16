@@ -62,7 +62,12 @@ object FakeCallManager {
         val updated = loadEntries(prefs).map { entry ->
             if (entry.id != id) return@map entry
             if (enabled) {
-                entry.copy(enabled = true, triggerAt = scheduleAlarm(context, entry))
+                val triggerAt = if (entry.isTimerBased) {
+                    System.currentTimeMillis() + entry.timerDelayMillis
+                } else {
+                    null // let scheduleAlarm() compute the next clock occurrence
+                }
+                entry.copy(enabled = true, triggerAt = scheduleAlarm(context, entry, triggerAt))
             } else {
                 cancelAlarm(context, id)
                 entry.copy(enabled = false, triggerAt = 0L)
@@ -84,9 +89,20 @@ object FakeCallManager {
 
     /** Re-arms every enabled entry's alarm — call after device boot. */
     fun rescheduleAll(context: Context, prefs: PreferenceManager) {
+        val now = System.currentTimeMillis()
         val updated = loadEntries(prefs).map { entry ->
             if (!entry.enabled) return@map entry
-            entry.copy(triggerAt = scheduleAlarm(context, entry))
+            val triggerAtOverride = when {
+                // The alarm survived in our JSON but AlarmManager alarms don't survive
+                // reboot — if the originally-scheduled absolute time is still ahead of
+                // us, just re-arm at that exact same moment instead of recomputing.
+                entry.triggerAt > now -> entry.triggerAt
+                // Timer-based entries missed their moment while the device was off —
+                // fire again relative to *now*, never fall back to clock-based math.
+                entry.isTimerBased -> now + entry.timerDelayMillis
+                else -> null
+            }
+            entry.copy(triggerAt = scheduleAlarm(context, entry, triggerAtOverride))
         }
         saveEntries(prefs, updated)
     }

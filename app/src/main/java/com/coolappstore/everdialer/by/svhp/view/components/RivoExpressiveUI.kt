@@ -694,7 +694,12 @@ fun RivoScrollAnimatedItem(
     content: @Composable () -> Unit
 ) {
     val prefs = koinInject<PreferenceManager>()
-    val scrollAnimEnabled = remember { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
+    // Must be keyed on settingsVersion (not a bare remember{}) — otherwise a composable
+    // that was already placed in the lazy list keeps its first-read value forever and
+    // flipping the setting in InterfaceScreen has no visible effect until the process
+    // restarts or the item happens to leave/re-enter composition.
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+    val scrollAnimEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
 
     if (scrollAnimEnabled) {
         // Use a key that changes each time this composable enters composition,

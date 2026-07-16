@@ -12,6 +12,7 @@ import com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource
 import com.supernova.networkswitch.domain.repository.NetworkControlRepository
 import com.supernova.networkswitch.domain.repository.PreferencesRepository
 import com.supernova.networkswitch.domain.usecase.CheckCompatibilityUseCase
+import com.supernova.networkswitch.domain.usecase.RequestShizukuPermissionUseCase
 import com.supernova.networkswitch.domain.usecase.GetCurrentNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.GetToggleModeConfigUseCase
 import com.supernova.networkswitch.domain.usecase.ToggleNetworkModeUseCase
@@ -57,6 +58,10 @@ object NetworkSwitchGraph {
 
     val checkCompatibilityUseCase: CheckCompatibilityUseCase by lazy {
         CheckCompatibilityUseCase(networkControlRepository, preferencesRepository)
+    }
+
+    val requestShizukuPermissionUseCase: RequestShizukuPermissionUseCase by lazy {
+        RequestShizukuPermissionUseCase(networkControlRepository)
     }
 
     val toggleNetworkModeUseCase: ToggleNetworkModeUseCase by lazy {

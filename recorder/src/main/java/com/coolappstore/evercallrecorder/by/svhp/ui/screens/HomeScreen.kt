@@ -165,7 +165,10 @@ fun HomeScreen(
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
+            val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+            com.coolappstore.evercallrecorder.by.svhp.ui.common.ScrollHapticsEffect(listState = homeListState)
             LazyColumn(
+                state = homeListState,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {

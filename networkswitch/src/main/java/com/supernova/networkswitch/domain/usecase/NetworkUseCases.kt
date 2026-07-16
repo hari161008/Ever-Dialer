@@ -17,6 +17,18 @@ class CheckCompatibilityUseCase constructor(
     }
 }
 
+/**
+ * Use case that explicitly (re-)triggers the Shizuku permission system dialog.
+ * Used by the "Retry" button so a manual tap always re-prompts.
+ */
+class RequestShizukuPermissionUseCase constructor(
+    private val networkControlRepository: NetworkControlRepository
+) {
+    operator fun invoke() {
+        networkControlRepository.requestShizukuPermission()
+    }
+}
+
 class ToggleNetworkModeUseCase constructor(
     private val networkControlRepository: NetworkControlRepository,
     private val preferencesRepository: PreferencesRepository

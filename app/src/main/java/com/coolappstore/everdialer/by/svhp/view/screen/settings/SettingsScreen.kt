@@ -105,7 +105,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
 
     var silenceUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, false)) }
     var notesEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)) }
-    var integrateNotes by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)) }
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
@@ -1152,47 +1151,17 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 RivoAnimatedSection(delayMs = 140L) {
                     Column {
                         SectionLabel("Calls & System")
+
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline = "Call Settings",
-                                supporting = "Accounts, sensor, pocket mode, and sound",
-                                leadingIcon = Icons.Outlined.Call,
+                                headline = "App Settings",
+                                supporting = "Call settings, network switcher, contacts hider, and notes",
+                                leadingIcon = Icons.Outlined.Tune,
                                 iconContainerColor = ColorTeal,
                                 trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { navigator.navigate(CallSettingsScreenDestination) }
+                                onClick = { navigator.navigate(AppSettingsScreenDestination) }
                             )
                             CardDivider()
-                            RivoListItem(
-                                headline = "4G/5G Switcher",
-                                supporting = "Quickly toggle your network mode",
-                                leadingIcon = Icons.Outlined.SignalCellularAlt,
-                                iconContainerColor = Color(0xFF00897B),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    try {
-                                        context.startActivity(
-                                            Intent(context, com.supernova.networkswitch.presentation.ui.activity.MainActivity::class.java)
-                                        )
-                                    } catch (_: Exception) {}
-                                }
-                            )
-                            CardDivider()
-                            val hiderMenuHidden = remember(prefs.settingsChanged.collectAsState().value) {
-                                prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_MENU, false)
-                            }
-                            AnimatedVisibility(visible = !hiderMenuHidden) {
-                                Column {
-                                    RivoListItem(
-                                        headline = "Contacts Hider",
-                                        supporting = "Hide contacts behind a secret code",
-                                        leadingIcon = Icons.Outlined.Lock,
-                                        iconContainerColor = Color(0xFF5E35B1),
-                                        trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = { navigator.navigate(ContactsHiderScreenDestination) }
-                                    )
-                                    CardDivider()
-                                }
-                            }
                             RivoListItem(
                                 headline = "Fake Call",
                                 supporting = "Schedule fake incoming calls without calling the real person",
@@ -1220,21 +1189,6 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                     } else {
                                         android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
                                     }
-                                }
-                            )
-                            CardDivider()
-                            RivoSwitchListItem(
-                                headline   = "Integrate Notes Section",
-                                supporting = if (integrateNotes)
-                                                 "Call recording notes stay separate from the app's Notes section"
-                                             else
-                                                 "Call recording notes are merged into the app's Notes section",
-                                leadingIcon = Icons.Default.Note,
-                                iconContainerColor = Color(0xFFE53935),
-                                checked = integrateNotes,
-                                onCheckedChange = {
-                                    integrateNotes = it
-                                    prefs.setBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, it)
                                 }
                             )
                         }

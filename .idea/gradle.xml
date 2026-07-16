@@ -10,6 +10,8 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/hiddenapi" />
+            <option value="$PROJECT_DIR$/networkswitch" />
             <option value="$PROJECT_DIR$/recorder" />
           </set>
         </option>

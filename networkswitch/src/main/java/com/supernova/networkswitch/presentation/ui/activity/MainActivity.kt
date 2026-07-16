@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
                 NetworkSwitchGraph.init(applicationContext)
                 return MainViewModel(
                     NetworkSwitchGraph.checkCompatibilityUseCase,
+                    NetworkSwitchGraph.requestShizukuPermissionUseCase,
                     NetworkSwitchGraph.getCurrentNetworkModeUseCase,
                     NetworkSwitchGraph.toggleNetworkModeUseCase,
                     NetworkSwitchGraph.updateControlMethodUseCase,
@@ -49,6 +50,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NetworkSwitchGraph.init(applicationContext)
+        com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = {
+            runOnUiThread { viewModel.refreshAllData() }
+        }
         
         setContent {
             NetworkSwitchTheme {
@@ -68,6 +72,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshAllData()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult != null) {
+            com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = null
+        }
     }
 }
 
