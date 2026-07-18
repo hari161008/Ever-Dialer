@@ -48,6 +48,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         NetworkSwitchGraph.init(applicationContext)
         com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = {
             runOnUiThread { viewModel.refreshCompatibility() }
@@ -87,7 +88,7 @@ private fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("Settings", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
@@ -131,12 +132,15 @@ private fun ControlMethodCard(
     onRetryClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = com.supernova.networkswitch.presentation.ui.components.NetworkSwitchCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -145,11 +149,11 @@ private fun ControlMethodCard(
             ) {
                 Text(
                     text = "Control Method",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 
-                IconButton(onClick = onRetryClick) {
+                FilledTonalIconButton(onClick = onRetryClick) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Refresh compatibility"
@@ -168,14 +172,23 @@ private fun ControlMethodCard(
             Spacer(modifier = Modifier.height(16.dp))
             
             // Root Method Option
-            Row(
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                color = if (selectedMethod == ControlMethod.ROOT)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier
                     .fillMaxWidth()
                     .selectable(
                         selected = selectedMethod == ControlMethod.ROOT,
                         onClick = { onMethodSelected(ControlMethod.ROOT) }
                     )
-                    .padding(8.dp),
+            ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
@@ -230,16 +243,28 @@ private fun ControlMethodCard(
                     }
                 }
             }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
             
             // Shizuku Method Option
-            Row(
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                color = if (selectedMethod == ControlMethod.SHIZUKU)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier
                     .fillMaxWidth()
                     .selectable(
                         selected = selectedMethod == ControlMethod.SHIZUKU,
                         onClick = { onMethodSelected(ControlMethod.SHIZUKU) }
                     )
-                    .padding(8.dp),
+            ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
@@ -294,6 +319,7 @@ private fun ControlMethodCard(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -301,16 +327,19 @@ private fun ControlMethodCard(
 @Composable
 private fun AboutCard() {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = com.supernova.networkswitch.presentation.ui.components.NetworkSwitchCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Text(
                 text = "About",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             
@@ -318,8 +347,9 @@ private fun AboutCard() {
             
             Text(
                 text = "Source Code",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
             Spacer(modifier = Modifier.height(8.dp))
@@ -330,12 +360,13 @@ private fun AboutCard() {
                 link = "https://github.com/aunchagaonkar/NetworkSwitch"
             )
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
             Text(
                 text = "Open Source Licenses",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
             Spacer(modifier = Modifier.height(8.dp))
@@ -375,23 +406,28 @@ private fun LinkItem(
 ) {
     val context = LocalContext.current
     
-    Column(
+    Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(vertical = 4.dp)
             .clickable {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
             }
-            .padding(vertical = 8.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

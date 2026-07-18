@@ -16,6 +16,7 @@ import com.supernova.networkswitch.domain.usecase.GetCurrentNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.ToggleNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.UpdateControlMethodUseCase
 import com.supernova.networkswitch.domain.usecase.GetToggleModeConfigUseCase
+import com.supernova.networkswitch.domain.usecase.UpdateToggleModeConfigUseCase
 import com.supernova.networkswitch.domain.repository.PreferencesRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
@@ -26,6 +27,7 @@ class MainViewModel constructor(
     private val toggleNetworkModeUseCase: ToggleNetworkModeUseCase,
     private val updateControlMethodUseCase: UpdateControlMethodUseCase,
     private val getToggleModeConfigUseCase: GetToggleModeConfigUseCase,
+    private val updateToggleModeConfigUseCase: UpdateToggleModeConfigUseCase,
     private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
     
@@ -39,6 +41,17 @@ class MainViewModel constructor(
     
     // Toggle mode configuration
     var toggleModeConfig by mutableStateOf(ToggleModeConfig(NetworkMode.LTE_ONLY, NetworkMode.NR_ONLY))
+        private set
+
+    // ── Network mode configuration editor (inlined from the former standalone
+    // NetworkModeConfigActivity/ViewModel — now surfaced directly on the main screen) ──
+    var configModeA by mutableStateOf(NetworkMode.LTE_ONLY)
+        private set
+    var configModeB by mutableStateOf(NetworkMode.NR_ONLY)
+        private set
+    var isSavingConfig by mutableStateOf(false)
+        private set
+    var configSaved by mutableStateOf(false)
         private set
     
     var isLoading by mutableStateOf(false)
@@ -74,6 +87,8 @@ class MainViewModel constructor(
         viewModelScope.launch {
             preferencesRepository.observeToggleModeConfig().collectLatest { newConfig ->
                 toggleModeConfig = newConfig
+                configModeA = newConfig.modeA
+                configModeB = newConfig.modeB
                 // Force UI update when config changes
                 refreshNetworkState()
             }
@@ -128,7 +143,40 @@ class MainViewModel constructor(
                 // Use default configuration if loading fails
                 toggleModeConfig = ToggleModeConfig(NetworkMode.LTE_ONLY, NetworkMode.NR_ONLY)
             }
+            configModeA = toggleModeConfig.modeA
+            configModeB = toggleModeConfig.modeB
         }
+    }
+
+    /** Updates the draft "Mode A" selection in the inline config editor (not yet saved). */
+    fun updateConfigModeA(mode: NetworkMode) {
+        configModeA = mode
+    }
+
+    /** Updates the draft "Mode B" selection in the inline config editor (not yet saved). */
+    fun updateConfigModeB(mode: NetworkMode) {
+        configModeB = mode
+    }
+
+    /** Persists the currently selected Mode A / Mode B pair as the new toggle configuration. */
+    fun saveNetworkModeConfig() {
+        if (configModeA == configModeB) return
+
+        isSavingConfig = true
+        viewModelScope.launch {
+            try {
+                updateToggleModeConfigUseCase(ToggleModeConfig(configModeA, configModeB))
+                configSaved = true
+            } catch (e: Exception) {
+                // Handle error (could show toast or snackbar)
+            } finally {
+                isSavingConfig = false
+            }
+        }
+    }
+
+    fun resetConfigSavedFlag() {
+        configSaved = false
     }
     
     /**

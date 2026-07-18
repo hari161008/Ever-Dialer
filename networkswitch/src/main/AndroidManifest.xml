@@ -22,13 +22,6 @@
             android:parentActivityName="com.supernova.networkswitch.presentation.ui.activity.MainActivity"
             android:theme="@style/Theme.NetworkSwitch" />
 
-        <activity
-            android:name="com.supernova.networkswitch.presentation.ui.activity.NetworkModeConfigActivity"
-            android:exported="false"
-            android:label="@string/network_mode_config"
-            android:parentActivityName="com.supernova.networkswitch.presentation.ui.activity.MainActivity"
-            android:theme="@style/Theme.NetworkSwitch" />
-
         <service
             android:name="com.supernova.networkswitch.service.NetworkTileService"
             android:exported="true"

@@ -1155,13 +1155,29 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                         RivoExpressiveCard {
                             RivoListItem(
                                 headline = "App Settings",
-                                supporting = "Call settings, network switcher, contacts hider, and notes",
+                                supporting = "Call settings, network switcher, and notes",
                                 leadingIcon = Icons.Outlined.Tune,
                                 iconContainerColor = ColorTeal,
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { navigator.navigate(AppSettingsScreenDestination) }
                             )
                             CardDivider()
+                            val hiderMenuHidden = remember(prefs.settingsChanged.collectAsState().value) {
+                                prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_MENU, false)
+                            }
+                            AnimatedVisibility(visible = !hiderMenuHidden) {
+                                Column {
+                                    RivoListItem(
+                                        headline = "Contacts Hider",
+                                        supporting = "Hide contacts behind a secret code",
+                                        leadingIcon = Icons.Outlined.Lock,
+                                        iconContainerColor = Color(0xFF5E35B1),
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = { navigator.navigate(ContactsHiderScreenDestination) }
+                                    )
+                                    CardDivider()
+                                }
+                            }
                             RivoListItem(
                                 headline = "Fake Call",
                                 supporting = "Schedule fake incoming calls without calling the real person",

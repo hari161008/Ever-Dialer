@@ -1,7 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.content.Intent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -10,7 +9,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,7 +25,6 @@ import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
-import com.ramcosta.composedestinations.generated.destinations.ContactsHiderScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -45,10 +42,6 @@ fun AppSettingsScreen(navigator: DestinationsNavigator) {
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     var integrateNotes by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)) }
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val hiderMenuHidden = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_MENU, false)
-    }
 
     Scaffold(
         topBar = {
@@ -101,19 +94,6 @@ fun AppSettingsScreen(navigator: DestinationsNavigator) {
                             } catch (_: Exception) {}
                         }
                     )
-                    AnimatedVisibility(visible = !hiderMenuHidden) {
-                        Column {
-                            CardDivider()
-                            RivoListItem(
-                                headline = "Contacts Hider",
-                                supporting = "Hide contacts behind a secret code",
-                                leadingIcon = Icons.Outlined.Lock,
-                                iconContainerColor = Color(0xFF5E35B1),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { navigator.navigate(ContactsHiderScreenDestination) }
-                            )
-                        }
-                    }
                     CardDivider()
                     RivoSwitchListItem(
                         headline   = "Integrate Notes Section",
