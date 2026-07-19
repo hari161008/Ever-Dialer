@@ -17,6 +17,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
 import com.coolappstore.evercallrecorder.by.svhp.system.storage.SafHelper
+import com.coolappstore.evercallrecorder.by.svhp.utils.RecordingFileNameFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -393,10 +394,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         entries.mapNotNull { entry ->
             val name     = entry.name
             val ext      = name.substringAfterLast('.', "")
-            val baseName = name.substringBeforeLast('.')
+            var baseName = name.substringBeforeLast('.')
+
+            // Strip the hidden phone-number suffix (see RecordingFileNameFormatter.formatFileName)
+            // before running the template parser below, so it doesn't confuse the field matching,
+            // and remember the number it carried — this is the number we fall back to whenever the
+            // visible template itself doesn't expose one.
+            val hiddenPhoneNumber = extractHiddenPhoneSuffix(baseName)
+            if (hiddenPhoneNumber != null) {
+                baseName = baseName.substringBeforeLast(RecordingFileNameFormatter.HIDDEN_NUMBER_MARKER)
+            }
+
             val parsed   = parseFilenameWithTemplate(baseName, template)
             val date        = parseDate(parsed.dateStr)
-            val phoneNumber = parsed.phoneNumber.trim().ifBlank { "Unknown" }
+            // Bug fix: previously this only ever fell back to "Unknown" when the template simply
+            // didn't produce a phone number (e.g. the default "{contact_name}_{date}_{direction}"
+            // template never includes one at all), which is exactly what made the player and the
+            // recordings list permanently show "Unknown" for the number — and, since contact name/
+            // photo lookups both key off that number, the contact's saved photo (and sometimes name)
+            // disappeared right along with it. The hidden suffix recovered above now supplies the
+            // real number in that case.
+            val phoneNumber = parsed.phoneNumber.trim().ifBlank { hiddenPhoneNumber ?: "" }.ifBlank { "Unknown" }
             // Prefer contact name embedded in filename (if template uses {contact_name}),
             // then fall back to a live contacts-db lookup by phone number.
             //
@@ -427,6 +445,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 noteText    = noteText
             )
         }
+    }
+
+    /**
+     * Recovers the real phone number hidden by [RecordingFileNameFormatter.formatFileName] when the
+     * user's visible file name template doesn't include {phone_number}. Returns null when the
+     * marker isn't present (e.g. legacy recordings made before this fix, or templates that already
+     * include {phone_number} and so never got the hidden suffix in the first place).
+     */
+    private fun extractHiddenPhoneSuffix(baseName: String): String? {
+        val markerIndex = baseName.lastIndexOf(RecordingFileNameFormatter.HIDDEN_NUMBER_MARKER)
+        if (markerIndex < 0) return null
+        val suffix = baseName.substring(markerIndex + RecordingFileNameFormatter.HIDDEN_NUMBER_MARKER.length)
+        return suffix.trim().ifBlank { null }
     }
 
     // ── Template-aware filename parser ────────────────────────────────────────

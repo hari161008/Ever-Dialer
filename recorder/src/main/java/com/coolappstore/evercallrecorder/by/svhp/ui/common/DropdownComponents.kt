@@ -71,7 +71,18 @@ fun M3DropdownField(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text    = { Text(option.label) },
+                    text = {
+                        Column {
+                            Text(option.label)
+                            option.description?.let { desc ->
+                                Text(
+                                    text = desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = LocalContentColor.current.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    },
                     onClick = {
                         if (option.enabled) {
                             onOptionSelected(option)

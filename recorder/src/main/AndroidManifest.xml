@@ -40,6 +40,13 @@
     <!-- Android 11+ Onwards () -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!--
+         Required so Android OS accepts our InCallService (optional "Call detection method" ->
+         In-call service, off by default). Actually granted at runtime through Shizuku's AppOps,
+         see PermissionChecks.hasManageOngoingCallsPermission / ShellService.grantAppOpByPackage.
+    -->
+    <uses-permission android:name="android.permission.MANAGE_ONGOING_CALLS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -93,6 +100,34 @@
                 <action android:name="android.intent.action.PHONE_STATE" />
             </intent-filter>
         </receiver>
+
+        <!--
+             Optional "Call detection method" -> In-call service (Settings), off by default.
+             Registered as a non-UI, secondary InCallService: it does not make this app a dialer
+             and does not affect whichever app is the actual default dialer/InCallService UI.
+             Disabled at runtime by CallRecordingComponentGuard unless the user opts into this mode.
+        -->
+        <service
+            android:name=".services.call.AppInCallService"
+            android:enabled="false"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            tools:targetApi="31">
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="false" />
+            <meta-data android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS" android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <!--
+             Handles the Delete action on the post-recording file-actions notification
+             (Settings -> "Post-call notification"), so deleting a recording doesn't need to open any UI.
+        -->
+        <receiver
+            android:name=".services.recording.PostRecordingActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!--
              Used by "Record calls from apps" (Settings) to detect ongoing WhatsApp/Telegram calls via their

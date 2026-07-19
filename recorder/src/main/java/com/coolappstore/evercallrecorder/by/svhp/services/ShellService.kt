@@ -330,6 +330,31 @@ class ShellService : IShellService.Stub {
     override fun isRecording(): Boolean = isRecordingActive.get()
 
     /**
+     * Grants an AppOp permission at the package level for a given user profile, using the
+     * elevated shell identity this service already runs under via Shizuku.
+     *
+     * See: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/core/java/android/app/AppOps.md
+     */
+    override fun grantAppOpByPackage(packageName: String, opName: String, userProfileId: Int): Boolean {
+        return try {
+            AppLogger.i(TAG, "Executing: appops set --user $userProfileId $packageName $opName allow")
+            val process = ProcessBuilder("appops", "set", "--user", userProfileId.toString(), packageName, opName, "allow").start()
+            val exitCode = process.waitFor()
+            val errorOutput = process.errorStream.bufferedReader().readText().trim()
+            if (exitCode == 0 && errorOutput.isEmpty()) {
+                AppLogger.i(TAG, "Successfully granted AppOp $opName to $packageName")
+                true
+            } else {
+                AppLogger.e(TAG, "Failed to grant AppOp $opName. Exit code $exitCode. Error: ${errorOutput.ifBlank { "None" }}")
+                false
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Exception granting AppOp $opName to $packageName", e)
+            false
+        }
+    }
+
+    /**
      * Called by Shizuku when it wants to shut down this user service.
      * MUST call [exitProcess] so the entire shell process is terminated; otherwise Shizuku may
      * be unable to clean up the process, and it will linger in memory.

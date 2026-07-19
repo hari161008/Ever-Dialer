@@ -272,6 +272,7 @@ private fun AppearanceSection(preferences: AppPreferences, updateTrigger: Int, a
     val currentThemeMode     = remember(updateTrigger) { preferences.getThemeMode() }
     val isDynamicColorEnabled= remember(updateTrigger) { preferences.isDynamicColorEnabled() }
     val isRecordingNotificationsEnabled = remember(updateTrigger) { preferences.isRecordingNotificationsEnabled() }
+    val isPostRecordingNotificationEnabled = remember(updateTrigger) { preferences.isPostRecordingFileActionsNotificationEnabled() }
     val isShowToastsEnabled  = remember(updateTrigger) { preferences.isShowToastsEnabled() }
     val isVibrationEnabled   = remember(updateTrigger) { preferences.isVibrationEnabled() }
     val accentArgb           = remember(updateTrigger) { preferences.getAccentColor() }
@@ -308,6 +309,12 @@ private fun AppearanceSection(preferences: AppPreferences, updateTrigger: Int, a
             label = stringResource(R.string.settings_recording_notifications),
             checked = isRecordingNotificationsEnabled,
             onCheckedChange = { actions.setRecordingNotificationsEnabled(it) }
+        )
+        ToggleListItem(
+            label = stringResource(R.string.settings_post_recording_notification),
+            checked = isPostRecordingNotificationEnabled,
+            onCheckedChange = { actions.setPostRecordingFileActionsNotificationEnabled(it) },
+            description = stringResource(R.string.settings_post_recording_notification_desc)
         )
         ToggleListItem(label = stringResource(R.string.settings_show_toasts), checked = isShowToastsEnabled, onCheckedChange = { actions.setShowToastsEnabled(it) })
         ToggleListItem(label = stringResource(R.string.settings_vibration_enabled), checked = isVibrationEnabled, onCheckedChange = { actions.setVibrationEnabled(it) })
@@ -592,6 +599,9 @@ private fun RecordingSection(
     val ignoreCrossCountryIncoming = remember(updateTrigger) { preferences.isIgnoreCrossCountryIncomingEnabled() }
     val ignoreContactsModeIncoming = remember(updateTrigger) { preferences.getIgnoreContactsModeIncoming() }
     val ignoreContactsModeOutgoing = remember(updateTrigger) { preferences.getIgnoreContactsModeOutgoing() }
+    val callDetectionMode = remember(updateTrigger) { preferences.getCallDetectionMode() }
+    var hasManageOngoingCallsPermission by remember(updateTrigger) { mutableStateOf(actions.hasManageOngoingCallsPermission()) }
+    var isGrantingPermission by remember { mutableStateOf(false) }
     val ignoreCrossCountryOutgoing = remember(updateTrigger) { preferences.isIgnoreCrossCountryOutgoingEnabled() }
     val ignoredContactsIncomingCount = remember(updateTrigger) { preferences.getIgnoredContactsIncoming().size }
     val ignoredContactsOutgoingCount = remember(updateTrigger) { preferences.getIgnoredContactsOutgoing().size }
@@ -695,6 +705,62 @@ private fun RecordingSection(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
         SectionListItem(icon = storageIcon, headline = stringResource(R.string.settings_recording_folder_label), supporting = storageSupportingText, supportingColor = MaterialTheme.colorScheme.primary, onClick = onStorageClick)
         SectionListItem(icon = Icons.Outlined.DriveFileRenameOutline, headline = stringResource(R.string.settings_file_name_template), supporting = fileNameFormat, supportingColor = MaterialTheme.colorScheme.primary, onClick = { showFileNameFormatDialog = true })
+    }
+
+    // Call detection method
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)) {
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                Icon(imageVector = Icons.Outlined.SettingsPhone, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(14.dp))
+            }
+            Text(text = stringResource(R.string.settings_call_detection_method), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        }
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), elevation = CardDefaults.cardElevation(0.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val detectionOptions = listOf(
+                    OptionItem(AppPreferences.CallDetectionMode.PHONE_STATE.key, stringResource(R.string.settings_call_detection_phone_state), description = stringResource(R.string.settings_call_detection_phone_state_desc)),
+                    OptionItem(AppPreferences.CallDetectionMode.IN_CALL_SERVICE.key, stringResource(R.string.settings_call_detection_in_call_service), description = stringResource(R.string.settings_call_detection_in_call_service_desc))
+                )
+                M3DropdownField(
+                    label = stringResource(R.string.settings_call_detection_method),
+                    selected = detectionOptions.find { it.key == callDetectionMode.key } ?: detectionOptions.first(),
+                    options = detectionOptions,
+                    onOptionSelected = { actions.setCallDetectionMode(AppPreferences.CallDetectionMode.fromKey(it.key)) }
+                )
+                AnimatedVisibility(visible = callDetectionMode == AppPreferences.CallDetectionMode.IN_CALL_SERVICE, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clickable(enabled = !hasManageOngoingCallsPermission && !isGrantingPermission) {
+                                isGrantingPermission = true
+                                actions.grantInCallServicePermission { granted ->
+                                    hasManageOngoingCallsPermission = granted
+                                    isGrantingPermission = false
+                                }
+                            }
+                    ) {
+                        Icon(
+                            imageVector = if (hasManageOngoingCallsPermission) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                            contentDescription = null,
+                            tint = if (hasManageOngoingCallsPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = when {
+                                hasManageOngoingCallsPermission -> stringResource(R.string.settings_call_detection_permission_granted)
+                                isGrantingPermission -> stringResource(R.string.settings_call_detection_grant_permission)
+                                else -> stringResource(R.string.settings_call_detection_permission_missing)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (hasManageOngoingCallsPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // Incoming
@@ -1171,6 +1237,10 @@ private fun SettingsScreenPreview() {
             override fun disableAppLock() {}
             override fun verifyAppLockSecret(secret: String): Boolean = true
             override fun setRecordCallsFromApp(target: AppCallTarget, enabled: Boolean) {}
+            override fun setCallDetectionMode(mode: AppPreferences.CallDetectionMode) {}
+            override fun setPostRecordingFileActionsNotificationEnabled(enabled: Boolean) {}
+            override fun hasManageOngoingCallsPermission(): Boolean = false
+            override fun grantInCallServicePermission(onResult: (Boolean) -> Unit) { onResult(false) }
         }
         SettingsContent(preferences = dummyPreferences, updateTrigger = 0, actions = dummyActions, contactPickerState = null, onStorageClick = {}, onOpenContactsIncoming = {}, onOpenContactsOutgoing = {}, onConfirmContacts = {}, onDismissContacts = {}, onExportLogs = {}, onBack = {})
     }

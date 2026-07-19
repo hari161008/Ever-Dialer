@@ -17,6 +17,13 @@ interface IShellService {
 
     boolean isRecording() = 3;
 
+    /**
+     * Grants an AppOp permission at the package level for a given user profile, using the
+     * elevated shell/root identity this service runs under. Used to grant MANAGE_ONGOING_CALLS
+     * so the app's InCallService-based call detection mode is accepted by the Telecom framework.
+     */
+    boolean grantAppOpByPackage(String packageName, String opName, int userProfileId) = 4;
+
     // The special Shizuku transaction code for "destroy" process
     void destroy() = 16777114;
 }

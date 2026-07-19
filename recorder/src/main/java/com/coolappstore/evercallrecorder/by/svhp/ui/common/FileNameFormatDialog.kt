@@ -100,6 +100,7 @@ fun FileNameFormatDialog(
                     value = text,
                     onValueChange = { text = it },
                     singleLine = true,
+                    isError = text.isBlank(),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -140,7 +141,10 @@ fun FileNameFormatDialog(
                     ) {
                         Text(stringResource(R.string.general_cancel))
                     }
-                    Button(onClick = { onConfirm(text) }) {
+                    Button(
+                        onClick = { onConfirm(text) },
+                        enabled = text.isNotBlank()
+                    ) {
                         Text(stringResource(R.string.general_ok))
                     }
                 }

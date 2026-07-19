@@ -137,7 +137,7 @@ class MainActivity : FragmentActivity() {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
                         "favorites"  -> FavoritesScreenDestination
                         "contacts"   -> ContactScreenDestination
-                        "recordings" -> RecordingsScreenDestination
+                        "recordings" -> RecordingsScreenDestination()
                         "notes"      -> NotesScreenDestination
                         else         -> RecentScreenDestination
                     }

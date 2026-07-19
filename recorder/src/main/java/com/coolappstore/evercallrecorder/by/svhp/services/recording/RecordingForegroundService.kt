@@ -353,6 +353,10 @@ class RecordingForegroundService : Service() {
         // Release all resources held by the recording session, and stop the remote shell service, finalizing the recording file.
         activeSession.release(shellService)
 
+        if (uriToRename != null) {
+            notificationHelper.showPostCallNotification(uriToRename, originalMetadata)
+        }
+
         // If the initialization metadata do not contain a phone number, we attempt to query the call log as a fallback.
         // TODO: Remove this fallback logic once we have a more reliable way to get phone number (using Shizuku and hidden api)
         if (originalMetadata != null && originalMetadata.rawPhoneNumber.isNullOrBlank() && uriToRename != null) {
@@ -367,9 +371,10 @@ class RecordingForegroundService : Service() {
                 val finalNumber = if (sanitizedRaw.isNotBlank()) {
                     val parsed = phoneNumberManager.parsePhoneNumber(sanitizedRaw)
                     if (parsed != null) {
-                        phoneNumberManager.formatToE164(parsed)
+                        phoneNumberManager.formatToE164(parsed) ?: sanitizedRaw
+                    } else {
+                        sanitizedRaw
                     }
-                    sanitizedRaw
                 } else {
                     sanitizedRaw
                 }

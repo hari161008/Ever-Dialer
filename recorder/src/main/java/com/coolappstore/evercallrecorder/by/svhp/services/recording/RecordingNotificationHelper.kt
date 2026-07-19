@@ -16,6 +16,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -26,15 +27,22 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.coolappstore.evercallrecorder.by.svhp.R
 import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
+import com.coolappstore.evercallrecorder.by.svhp.data.recordings.RecordingMetadata
+import kotlin.random.Random
 
 class RecordingNotificationHelper(private val context: Context) {
 
     companion object {
         const val CHANNEL_ID_SERVICE = "recording_channel_service"
         const val CHANNEL_ID_ERROR = "recording_channel_error"
+        const val CHANNEL_ID_POST_CALL = "recording_channel_post_call"
 
         const val SERVICE_NOTIFICATION_ID = 1
         const val ERROR_NOTIFICATION_ID = 2
+
+        const val ACTION_DELETE_RECORDING = "com.coolappstore.evercallrecorder.by.svhp.action.DELETE_RECORDING"
+        const val EXTRA_RECORDING_URI = "com.coolappstore.evercallrecorder.by.svhp.EXTRA_RECORDING_URI"
+        const val EXTRA_NOTIFICATION_ID = "com.coolappstore.evercallrecorder.by.svhp.EXTRA_NOTIFICATION_ID"
     }
 
     /**
@@ -79,6 +87,18 @@ class RecordingNotificationHelper(private val context: Context) {
             lockscreenVisibility = if (notificationsEnabled) NotificationCompat.VISIBILITY_PRIVATE else NotificationCompat.VISIBILITY_SECRET
         }
         manager.createNotificationChannel(errorChannel)
+
+        manager.deleteNotificationChannel(CHANNEL_ID_POST_CALL)
+        val postCallImportance = if (notificationsEnabled) NotificationManager.IMPORTANCE_DEFAULT else NotificationManager.IMPORTANCE_MIN
+        val postCallChannel = NotificationChannel(
+            CHANNEL_ID_POST_CALL, "Recording Saved", postCallImportance
+        ).apply {
+            this.group = groupId
+            enableVibration(false)
+            setShowBadge(false)
+            lockscreenVisibility = if (notificationsEnabled) NotificationCompat.VISIBILITY_PRIVATE else NotificationCompat.VISIBILITY_SECRET
+        }
+        manager.createNotificationChannel(postCallChannel)
     }
 
     fun getNotification(state: RecordingServiceState): Notification {
@@ -234,6 +254,73 @@ class RecordingNotificationHelper(private val context: Context) {
             .build()
         context.getSystemService(NotificationManager::class.java).notify(ERROR_NOTIFICATION_ID, notification)
         vibrate(VibrationEffect.createWaveform(longArrayOf(0, 100, 800), intArrayOf(0, 46, 184), -1))
+    }
+
+    /**
+     * Posts a notification after a recording finishes, offering Open/Share/Delete quick actions
+     * on the saved file. Gated by [AppPreferences.isPostRecordingFileActionsNotificationEnabled].
+     *
+     * @param recordingUri The content:// URI of the finished recording (SAF or private-storage FileProvider URI).
+     * @param metadata The metadata for the call that was just recorded, used for the notification text.
+     */
+    fun showPostCallNotification(recordingUri: Uri, metadata: RecordingMetadata?) {
+        if (!AppPreferences(context).isPostRecordingFileActionsNotificationEnabled()) return
+
+        val mimeType = context.contentResolver.getType(recordingUri) ?: "audio/*"
+        val notificationId = Random.nextInt(1000, Int.MAX_VALUE)
+
+        val directionLabel = metadata?.direction?.labelResId?.let { context.getString(it) } ?: ""
+        val numberLabel = metadata?.getBestNumber()?.takeIf { it.isNotBlank() } ?: metadata?.sourceApp
+        val contentText = context.getString(
+            R.string.post_recording_notification_text,
+            listOfNotNull(numberLabel, directionLabel.ifBlank { null }).joinToString(" · ")
+        )
+
+        val openIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(recordingUri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            context, notificationId, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, recordingUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val chooserIntent = Intent.createChooser(shareIntent, context.getString(R.string.general_share)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val sharePendingIntent = PendingIntent.getActivity(
+            context, notificationId + 1, chooserIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val deleteIntent = Intent(context, PostRecordingActionReceiver::class.java).apply {
+            action = ACTION_DELETE_RECORDING
+            putExtra(EXTRA_RECORDING_URI, recordingUri)
+            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            context, notificationId + 2, deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_POST_CALL)
+            .setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle(context.getString(R.string.post_recording_notification_title))
+            .setContentText(contentText)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setContentIntent(openPendingIntent)
+            .addAction(0, context.getString(R.string.general_open), openPendingIntent)
+            .addAction(0, context.getString(R.string.general_share), sharePendingIntent)
+            .addAction(0, context.getString(R.string.general_delete), deletePendingIntent)
+            .build()
+
+        context.getSystemService(NotificationManager::class.java).notify(notificationId, notification)
     }
 
     /**

@@ -76,9 +76,18 @@ class PhoneNumberManager private constructor(context: Context) {
         /**
          * Normalizes a phone number by removing all non-digit characters, while preserving a leading '+' if present.
          * Example: "+1 (202) 555-0173" would become "+12025550173", and "202-555-0173" would become "2025550173".
+         *
+         * Also performs a basic check for anonymous tokens as a safety net for callers that don't already
+         * go through [sanitizeOemNumber] first; when matched, returns an empty string.
          */
         fun normalisePhoneNumber(phoneNumber: String): String {
-            val trimmed = phoneNumber.trim()
+            val trimmed = phoneNumber.trim().lowercase()
+
+            val anonymousTokens = listOf("unknown", "private", "anonymous", "+anonymous", "+", "#")
+            if (trimmed in anonymousTokens) {
+                return ""
+            }
+
             val digits  = trimmed.filter { it.isDigit() }
             return if (trimmed.startsWith("+")) "+$digits" else digits
         }

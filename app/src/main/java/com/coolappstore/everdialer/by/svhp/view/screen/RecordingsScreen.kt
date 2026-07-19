@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
+import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -29,10 +30,12 @@ import androidx.navigation.NavController
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
+import com.coolappstore.evercallrecorder.by.svhp.ui.screens.AppLockScreen
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.DisclaimerScreen
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.HomeScreen
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.PermissionsScreen
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.PlaybackScreen
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.AppLockViewModel
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.AppNavigationViewModel
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
 import com.ramcosta.composedestinations.annotation.Destination
@@ -40,46 +43,73 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 
 /**
- * The "Recordings" tab shown in the main bottom navigation.
+ * The single "Recordings" / "Call Recording logs" screen — shown both as the "Recordings" tab
+ * in the main bottom navigation, and when opened from Settings → Call Recording.
  *
  * This intentionally reuses the exact same [HomeScreen] and [PlaybackScreen] composables
- * that power the recording logs list inside Settings → Call Recording (the bundled
- * Ever Call Recorder module), so the list of call recordings looks and behaves identically
- * whether it's opened from here or from Settings.
+ * that power the recording logs list inside the bundled Ever Call Recorder module, so the list
+ * of call recordings is the exact same single screen — not a duplicate — whether it's opened
+ * from the bottom-nav tab or from Settings.
+ *
+ * @param openedFromSettings True when this instance was pushed onto the back stack from
+ * Settings → Call Recording rather than selected as the bottom-nav tab. Used purely to keep the
+ * bottom pill/nav bar hidden in that case, since the user is drilling into a detail screen
+ * rather than switching tabs.
  */
 @Destination<RootGraph>(style = TabTransitionStyle::class)
 @Composable
-fun RecordingsScreen(navController: NavController, navigator: DestinationsNavigator) {
+fun RecordingsScreen(
+    openedFromSettings: Boolean = false,
+    navController: NavController,
+    navigator: DestinationsNavigator
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val appNavViewModel: AppNavigationViewModel = viewModel()
     val onboardingStatus by appNavViewModel.onboardingStatus.collectAsState()
+    val appLockViewModel: AppLockViewModel = viewModel()
+    val isAppLockUnlocked by appLockViewModel.isUnlocked.collectAsState()
+    val preferences = remember { AppPreferences(context) }
 
     var selectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
     var highlightQuery by remember { mutableStateOf("") }
     var isRecordingSelectionMode by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = selectedRecording != null) {
+    val isAppLocked = onboardingStatus.disclaimerAccepted && onboardingStatus.isComplete() &&
+        preferences.isAppLockEnabled() && !isAppLockUnlocked
+
+    BackHandler(enabled = selectedRecording != null && !isAppLocked) {
         selectedRecording = null
         highlightQuery = ""
     }
 
-    // Re-check disclaimer/permission state whenever this tab (re)appears or the app resumes,
-    // so granting a permission (or accepting the disclaimer) refreshes the gate immediately.
+    // Re-check disclaimer/permission state whenever this tab (re)appears or the app resumes.
+    // Also re-arms App Lock (if enabled) whenever this screen is backgrounded — matching the
+    // same behaviour as the bundled Ever Call Recorder's own Activity — since this screen is
+    // now the only place call recording logs are shown and must honour App Lock too, not just
+    // the standalone recorder app.
     LaunchedEffect(Unit) { appNavViewModel.refresh() }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) appNavViewModel.refresh()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> appNavViewModel.refresh()
+                Lifecycle.Event.ON_STOP -> {
+                    val isConfigChange = (context as? Activity)?.isChangingConfigurations == true
+                    if (!isConfigChange) appLockViewModel.lock()
+                }
+                else -> {}
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Hide the bottom navigation bar (pill/standard) while the disclaimer or permissions
-    // onboarding content is showing, since its "Continue"/"Grant Access" button sits at
-    // the bottom of the screen where the nav bar would otherwise cover it.
-    val isShowingOnboarding = !onboardingStatus.disclaimerAccepted || !onboardingStatus.isComplete()
+    // onboarding content — or the App Lock gate — is showing, since their "Continue"/"Grant
+    // Access"/"Unlock" controls sit at the bottom of the screen where the nav bar would
+    // otherwise cover them.
+    val isShowingOnboarding = !onboardingStatus.disclaimerAccepted || !onboardingStatus.isComplete() || isAppLocked
     DisposableEffect(isShowingOnboarding) {
         NavBarVisibilityState.hideForOnboarding = isShowingOnboarding
         onDispose { NavBarVisibilityState.hideForOnboarding = false }
@@ -91,6 +121,13 @@ fun RecordingsScreen(navController: NavController, navigator: DestinationsNaviga
     DisposableEffect(isRecordingSelectionMode) {
         NavBarVisibilityState.hideForSelectionMode = isRecordingSelectionMode
         onDispose { NavBarVisibilityState.hideForSelectionMode = false }
+    }
+
+    // Keep the bottom pill hidden for the whole lifetime of this screen when it was pushed
+    // from Settings → Call Recording rather than opened as the Recordings tab.
+    DisposableEffect(openedFromSettings) {
+        NavBarVisibilityState.hideForSettingsEntry = openedFromSettings
+        onDispose { NavBarVisibilityState.hideForSettingsEntry = false }
     }
 
     val appVersion = remember {
@@ -114,6 +151,13 @@ fun RecordingsScreen(navController: NavController, navigator: DestinationsNaviga
                 PermissionsScreen(
                     status = onboardingStatus,
                     onPermissionGranted = { appNavViewModel.refresh() }
+                )
+            }
+            isAppLocked -> {
+                AppLockScreen(
+                    method = preferences.getAppLockMethod(),
+                    onVerifySecret = { secret -> preferences.verifyAppLockSecret(secret) },
+                    onUnlocked = { appLockViewModel.unlock() }
                 )
             }
             else -> {

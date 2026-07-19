@@ -112,4 +112,30 @@ object PermissionChecks {
         val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
         return context.packageName in enabledPackages
     }
+
+    /**
+     * Returns true if this app has been granted the MANAGE_ONGOING_CALLS AppOp, which the
+     * Telecom framework requires before it will bind our [android.telecom.InCallService]
+     * implementation ([com.coolappstore.evercallrecorder.by.svhp.services.call.AppInCallService]).
+     *
+     * This is not a normal runtime permission — it can only be granted via AppOps (e.g. through
+     * Shizuku, see [com.coolappstore.evercallrecorder.by.svhp.services.ShellService.grantAppOpByPackage]),
+     * not through a standard permission request dialog.
+     *
+     * @param context The app context.
+     * @return true if the MANAGE_ONGOING_CALLS AppOp is currently allowed for this app.
+     */
+    fun hasManageOngoingCallsPermission(context: Context): Boolean {
+        return try {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = appOps.unsafeCheckOpNoThrow(
+                "android:manage_ongoing_calls",
+                android.os.Process.myUid(),
+                context.packageName
+            )
+            mode == android.app.AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) {
+            false
+        }
+    }
 }

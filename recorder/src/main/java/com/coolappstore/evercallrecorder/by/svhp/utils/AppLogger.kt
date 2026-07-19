@@ -118,6 +118,32 @@ object AppLogger {
         get() = if (isRemoteProcess) remoteRedactionEnabled else prefs?.isDebugEnabled() != true
 
     /**
+     * Extracts the calling class name from the current thread stack trace.
+     * Used by the tag-less v/d/i/w/e overloads so call sites don't need to declare their own TAG constant.
+     */
+    private fun getCallerTag(): String {
+        val stackTrace = Throwable().stackTrace
+        val loggerClassName = AppLogger::class.java.name
+
+        for (element in stackTrace) {
+            val className = element.className
+            // Skip AppLogger itself and anything outside the app's package (e.g., system or library classes)
+            if (className.startsWith(BuildConfig.APPLICATION_ID) && className != loggerClassName) {
+                var simpleName = className.substringAfterLast('.')
+
+                // Strip anonymous class suffixes (e.g., MyClass$1)
+                val dollarIndex = simpleName.indexOf('$')
+                if (dollarIndex > 0) {
+                    simpleName = simpleName.substring(0, dollarIndex)
+                }
+
+                return simpleName
+            }
+        }
+        return TAG
+    }
+
+    /**
      * An AIDL stub implementation acting as an IPC hook.
      * Used to receive native logs emitted from fully separated process context, like our ShellService.
      */
@@ -273,12 +299,18 @@ object AppLogger {
         logInternal("V", tag, finalMessage, t)
     }
 
+    /** Logs a Verbose level message, auto-detecting the caller's class name as the tag. */
+    fun v(message: String, t: Throwable? = null) { v(getCallerTag(), message, t) }
+
     /** Logs a Debug level message and optionally its throwable trace. */
     fun d(tag: String, message: String, t: Throwable? = null) {
         val finalMessage = if (isRedactionEnabled) redact(message) else message
         if (t != null) Log.d(tag, finalMessage, t) else Log.d(tag, finalMessage)
         logInternal("D", tag, finalMessage, t)
     }
+
+    /** Logs a Debug level message, auto-detecting the caller's class name as the tag. */
+    fun d(message: String, t: Throwable? = null) { d(getCallerTag(), message, t) }
 
     /** Logs an Info level message and optionally its throwable trace. */
     fun i(tag: String, message: String, t: Throwable? = null) {
@@ -287,6 +319,9 @@ object AppLogger {
         logInternal("I", tag, finalMessage, t)
     }
 
+    /** Logs an Info level message, auto-detecting the caller's class name as the tag. */
+    fun i(message: String, t: Throwable? = null) { i(getCallerTag(), message, t) }
+
     /** Logs a Warning level message and optionally its throwable trace. */
     fun w(tag: String, message: String, t: Throwable? = null) {
         val finalMessage = if (isRedactionEnabled) redact(message) else message
@@ -294,12 +329,18 @@ object AppLogger {
         logInternal("W", tag, finalMessage, t)
     }
 
+    /** Logs a Warning level message, auto-detecting the caller's class name as the tag. */
+    fun w(message: String, t: Throwable? = null) { w(getCallerTag(), message, t) }
+
     /** Logs an Error level message and optionally its throwable trace. */
     fun e(tag: String, message: String, t: Throwable? = null) {
         val finalMessage = if (isRedactionEnabled) redact(message) else message
         if (t != null) Log.e(tag, finalMessage, t) else Log.e(tag, finalMessage)
         logInternal("E", tag, finalMessage, t)
     }
+
+    /** Logs an Error level message, auto-detecting the caller's class name as the tag. */
+    fun e(message: String, t: Throwable? = null) { e(getCallerTag(), message, t) }
 
     /** Logs a "What a Terrible Failure" (assert) message and optionally its throwable trace. */
     fun wtf(tag: String, message: String, t: Throwable? = null) {

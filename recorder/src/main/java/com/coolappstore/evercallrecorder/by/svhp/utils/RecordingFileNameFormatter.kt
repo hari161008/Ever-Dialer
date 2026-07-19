@@ -83,23 +83,64 @@ object RecordingFileNameFormatter {
         val baseName = template
             .replace(FileNamePlaceholder.DATE.tag, dateStr)
             .replace(FileNamePlaceholder.DIRECTION.tag, directionStr)
-            .replace(FileNamePlaceholder.PHONE_NUMBER.tag, phoneStr)
-            .replace(FileNamePlaceholder.CONTACT_NAME.tag, contactStr)
+            .replace(FileNamePlaceholder.PHONE_NUMBER.tag, sanitizeForFileName(phoneStr))
+            .replace(FileNamePlaceholder.CONTACT_NAME.tag, sanitizeForFileName(contactStr))
             .replace(FileNamePlaceholder.CROSS_COUNTRY.tag, crossCountryStr)
-            .replace(FileNamePlaceholder.APP_SOURCE.tag, appSourceStr)
+            .replace(FileNamePlaceholder.APP_SOURCE.tag, sanitizeForFileName(appSourceStr))
 
         // Recordings captured from a messaging app's VoIP call (see "Record calls from apps") are always
         // prefixed with the app name, regardless of the user's template, so they are easy to tell apart
         // from normal telephony recordings in file listings even if the template doesn't reference {app_source}.
-        val finalName = if (metadata.sourceApp != null && !template.contains(FileNamePlaceholder.APP_SOURCE.tag)) {
-            "${metadata.sourceApp}_$baseName"
+        var finalName = if (metadata.sourceApp != null && !template.contains(FileNamePlaceholder.APP_SOURCE.tag)) {
+            "${sanitizeForFileName(metadata.sourceApp)}_$baseName"
         } else {
             baseName
+        }
+
+        // Bug fix: the real phone number used to only end up in the filename when the user's
+        // template happened to contain {phone_number}. Templates that omit it (including the
+        // app's own default, "{contact_name}_{date}_{direction}") had no way of getting the
+        // number back afterwards, so the player and recordings list permanently showed
+        // "Unknown" for the number — and, since the contact-photo/name lookups both key off
+        // that number, the contact's photo (and sometimes even their name) silently disappeared
+        // too. A short hidden suffix carrying the real number is now always appended (unless the
+        // template already surfaces it), independent of what the visible template looks like, so
+        // it can always be recovered when the recordings list is parsed back — without changing
+        // how the filename looks to the user. See HomeViewModel.extractHiddenPhoneSuffix().
+        if (phoneStr.isNotEmpty() && !template.contains(FileNamePlaceholder.PHONE_NUMBER.tag)) {
+            finalName = "$finalName$HIDDEN_NUMBER_MARKER${sanitizeForFileName(phoneStr)}"
         }
 
         AppLogger.v(TAG, "Formatted base filename: '$finalName' with template '$template'")
         return "$finalName${codec.containerExtension}"
     }
+
+    /**
+     * Marker prefixing the hidden phone-number suffix appended to filenames whose visible
+     * template doesn't already include {phone_number}. Kept short and unlikely to ever occur
+     * naturally in a contact name or user-authored template. Must match
+     * `HomeViewModel.HIDDEN_NUMBER_MARKER` exactly, since that's what parses it back out.
+     */
+    const val HIDDEN_NUMBER_MARKER = "~#~"
+
+    /**
+     * Strips characters that are illegal (or simply unsafe/confusing) in a filename on Android's
+     * various storage backends (SAF documents providers, private app storage, FAT/exFAT SD cards)
+     * from a single dynamic value — e.g. a contact name or app name — before it's substituted into
+     * the file name template.
+     *
+     * Bug fix: values like contact names were previously substituted into the template completely
+     * unsanitized. A contact name containing "/" (e.g. "Mom / Home"), or any of : * ? " < > |,
+     * would either silently break the SAF file creation, get mangled by the storage provider into
+     * something that no longer matches what the template parser expects when reading the list back,
+     * or (on private storage, where a plain java.io.File is used) be interpreted as a path
+     * separator and write the recording into the wrong place entirely — all of which surfaced to
+     * the user as "the file name template isn't working".
+     */
+    private fun sanitizeForFileName(value: String): String =
+        value.replace(Regex("""[/\\:*?"<>|\x00-\x1F]"""), "_").trim()
+
+
 
     /**
      * Looks up the display name for [phoneNumber], used to embed a contact name into the

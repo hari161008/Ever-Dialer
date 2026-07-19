@@ -19,4 +19,13 @@ object NavBarVisibilityState {
      * bottom nav pill can smoothly slide away instead of overlapping it.
      */
     var hideForSelectionMode by mutableStateOf(false)
+
+    /**
+     * True while the recordings list is showing as a screen pushed from Settings → Call
+     * Recording, rather than as the "Recordings" bottom-nav tab itself. Both routes render the
+     * exact same single screen, but the bottom pill/nav bar should stay hidden in the
+     * Settings-pushed case since the user isn't switching tabs there — they're drilling into a
+     * detail screen and expect a normal "back" flow.
+     */
+    var hideForSettingsEntry by mutableStateOf(false)
 }

@@ -200,6 +200,11 @@ class CallSessionManager private constructor(context: Context) {
         // all — no session tracking, no metadata parsing, no service intents.
         if (!preferences.isCallRecordingEnabled()) return
 
+        // When the user has opted into the InCallService detection method, that path (see
+        // handleInCallServiceState) owns the session entirely — ignore phone-state broadcasts
+        // so we never process the same call twice through two different pipelines.
+        if (preferences.getCallDetectionMode() == AppPreferences.CallDetectionMode.IN_CALL_SERVICE) return
+
         val receivedCallState = when (stateString) {
             TelephonyManager.EXTRA_STATE_RINGING  -> TelephonyManager.CALL_STATE_RINGING
             TelephonyManager.EXTRA_STATE_OFFHOOK  -> TelephonyManager.CALL_STATE_OFFHOOK
@@ -356,6 +361,67 @@ class CallSessionManager private constructor(context: Context) {
         }
         session.answeredViaDialer = true
         evaluateAndStartService()
+    }
+
+    /**
+     * Handles a call state event received from [AppInCallService] — the Telecom-API-based detection
+     * path. Only takes effect when [AppPreferences.getCallDetectionMode] is
+     * [AppPreferences.CallDetectionMode.IN_CALL_SERVICE].
+     *
+     * Unlike [handlePhoneState], the Telecom API already gives us the phone number and direction
+     * immediately and reliably here, so there is no "Verification Window" delay needed.
+     *
+     * @param telecomState One of [android.telecom.Call.STATE_RINGING], [android.telecom.Call.STATE_DIALING],
+     *   [android.telecom.Call.STATE_CONNECTING], [android.telecom.Call.STATE_ACTIVE],
+     *   [android.telecom.Call.STATE_DISCONNECTED] or [android.telecom.Call.STATE_DISCONNECTING].
+     * @param phoneNumber The raw phone number from the call's handle, or null/blank if unavailable (anonymous).
+     */
+    @Synchronized
+    fun handleInCallServiceState(telecomState: Int, phoneNumber: String?) {
+        if (!preferences.isCallRecordingEnabled()) return
+        if (preferences.getCallDetectionMode() != AppPreferences.CallDetectionMode.IN_CALL_SERVICE) return
+
+        AppLogger.i(TAG, "Received InCallService state: $telecomState | Number: $phoneNumber")
+
+        when (telecomState) {
+            android.telecom.Call.STATE_RINGING, android.telecom.Call.STATE_DIALING, android.telecom.Call.STATE_CONNECTING -> {
+                sessionJob?.cancel()
+                sessionJob = managerScope.launch {
+                    processInCallServiceStart(telecomState, phoneNumber)
+                }
+            }
+            android.telecom.Call.STATE_ACTIVE -> {
+                if (session.isSessionActive) {
+                    session.answeredViaDialer = true
+                    evaluateAndStartService()
+                }
+            }
+            android.telecom.Call.STATE_DISCONNECTED, android.telecom.Call.STATE_DISCONNECTING -> {
+                sessionJob?.cancel()
+                if (session.isSessionActive) {
+                    AppLogger.d(TAG, "Call ended (InCallService). Sending stop INTENT to RecordingForegroundService.")
+                    sendServiceCommand(RecordingForegroundService.ACTION_STOP_RECORDING)
+                    session.clear()
+                }
+            }
+        }
+    }
+
+    /**
+     * Suspend counterpart of [handleInCallServiceState] for the RINGING/DIALING/CONNECTING states,
+     * since [RecordingMetadata.enrichMetadata] must be called from a coroutine.
+     */
+    private suspend fun processInCallServiceStart(telecomState: Int, phoneNumber: String?) {
+        if (!session.isSessionActive) {
+            val direction = if (telecomState == android.telecom.Call.STATE_RINGING) RecordingDirection.INCOMING else RecordingDirection.OUTGOING
+            val rawNumber = PhoneNumberManager.sanitizeOemNumber(phoneNumber)
+            val enrichedMetadata = RecordingMetadata.enrichMetadata(appContext, RecordingMetadata(rawNumber, direction))
+            withContext(Dispatchers.Main) {
+                session.currentMetadata = enrichedMetadata
+            }
+        }
+        AppLogger.d(TAG, "Evaluating service start at $telecomState state (InCallService).")
+        withContext(Dispatchers.Main) { evaluateAndStartService() }
     }
 
     @Synchronized

@@ -293,6 +293,26 @@
     <string name="recording_toast_paused">Recording paused.</string>
     <string name="recording_toast_resumed">Recording resumed.</string>
     <string name="recording_started">Recording started.</string>
+
+    <!-- Post-recording file-actions notification -->
+    <string name="post_recording_notification_title">Recording saved</string>
+    <string name="post_recording_notification_text">%1$s call — tap Open, Share, or Delete.</string>
+    <string name="general_open">Open</string>
+    <string name="general_share">Share</string>
+    <string name="general_delete">Delete</string>
+
+    <!-- Call detection method -->
+    <string name="settings_call_detection_method">Call detection method</string>
+    <string name="settings_call_detection_phone_state">Phone state (default)</string>
+    <string name="settings_call_detection_phone_state_desc">Uses the system\'s phone-state broadcast. Works everywhere.</string>
+    <string name="settings_call_detection_in_call_service">In-call service</string>
+    <string name="settings_call_detection_in_call_service_desc">Detects calls directly through Android\'s Telecom API. May be more reliable on some devices, and can also pick up WhatsApp/Telegram calls without notification access. Requires a permission grant via Shizuku.</string>
+    <string name="settings_call_detection_grant_permission">Grant permission via Shizuku</string>
+    <string name="settings_call_detection_permission_granted">Permission granted</string>
+    <string name="settings_call_detection_permission_missing">Permission not granted yet — tap to grant via Shizuku</string>
+    <string name="settings_post_recording_notification">Post-call notification</string>
+    <string name="settings_post_recording_notification_desc">Shows Open/Share/Delete actions after each recording finishes.</string>
+
     <!-- Recording Service: Errors -->
     <string name="recording_error_title">Recording Error</string>
     <string name="recording_error_folder_missing">Selected output folder is missing, invalid, or we do not have permission to write to it. Select one in the app settings.</string>

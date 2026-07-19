@@ -1199,12 +1199,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 iconContainerColor = Color(0xFFE53935),
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = {
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                        val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
-                                        try { context.startActivity(launch) } catch (_: Exception) {}
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
+                                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination(openedFromSettings = true))
                                 }
                             )
                         }

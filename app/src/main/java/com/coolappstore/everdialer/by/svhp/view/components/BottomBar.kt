@@ -151,7 +151,8 @@ fun BottomBar(navController: NavController) {
     // (e.g. Recordings) is showing its own full-screen onboarding content.
     val isOnTabScreen = visibleTabRoutes.any { currentRoute.contains(it, ignoreCase = true) } &&
         !NavBarVisibilityState.hideForOnboarding &&
-        !NavBarVisibilityState.hideForSelectionMode
+        !NavBarVisibilityState.hideForSelectionMode &&
+        !NavBarVisibilityState.hideForSettingsEntry
 
     // If current tab is now hidden, redirect to first visible tab. This must only fire for
     // tabs the user actually disabled in Settings > Tab Sections — not for a visible tab that's

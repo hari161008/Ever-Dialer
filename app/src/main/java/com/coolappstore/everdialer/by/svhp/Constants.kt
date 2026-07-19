@@ -1,7 +1,9 @@
 package com.coolappstore.everdialer.by.svhp
 
 val APP_NAME = "Ever Dialer"
-val APP_VERSION = "9.0.0"
+// Sourced from app/build.gradle's defaultConfig.versionName — never hardcode it here,
+// BuildConfig.VERSION_NAME is regenerated from Gradle on every build.
+val APP_VERSION = BuildConfig.VERSION_NAME
 val BUILD_NUMBER = "20260429"
 val PATREON_URL = "https://www.patreon.com/c/GrinchDev"
 val DISCORD_URL = "https://discord.gg/NtEvU3726e"

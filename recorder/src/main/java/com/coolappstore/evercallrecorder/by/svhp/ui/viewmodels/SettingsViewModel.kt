@@ -70,6 +70,10 @@ interface SettingsActions {
     fun disableAppLock()
     fun verifyAppLockSecret(secret: String): Boolean
     fun setRecordCallsFromApp(target: com.coolappstore.evercallrecorder.by.svhp.services.call.AppCallTarget, enabled: Boolean)
+    fun setCallDetectionMode(mode: AppPreferences.CallDetectionMode)
+    fun setPostRecordingFileActionsNotificationEnabled(enabled: Boolean)
+    fun hasManageOngoingCallsPermission(): Boolean
+    fun grantInCallServicePermission(onResult: (Boolean) -> Unit)
 }
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application), SettingsActions {
@@ -181,6 +185,39 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     override fun exportLogs(uri: android.net.Uri) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             AppLogger.exportReport(appContext, uri)
+        }
+    }
+    override fun setCallDetectionMode(mode: AppPreferences.CallDetectionMode) { preferences.setCallDetectionMode(mode); refresh() }
+    override fun setPostRecordingFileActionsNotificationEnabled(enabled: Boolean) { preferences.setPostRecordingFileActionsNotificationEnabled(enabled); refresh() }
+    override fun hasManageOngoingCallsPermission(): Boolean =
+        com.coolappstore.evercallrecorder.by.svhp.system.permissions.PermissionChecks.hasManageOngoingCallsPermission(appContext)
+
+    /**
+     * Grants the MANAGE_ONGOING_CALLS AppOp to this app through Shizuku, so the OS accepts binding
+     * [com.coolappstore.evercallrecorder.by.svhp.services.call.AppInCallService]. Requires Shizuku
+     * to be installed and its permission already granted (same requirement as recording itself).
+     */
+    override fun grantInCallServicePermission(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val manager = com.coolappstore.evercallrecorder.by.svhp.integrations.shizuku.ShizukuConnectionManager(appContext)
+            try {
+                if (!com.coolappstore.evercallrecorder.by.svhp.integrations.shizuku.ShizukuConnectionManager.isAvailable() ||
+                    !com.coolappstore.evercallrecorder.by.svhp.integrations.shizuku.ShizukuConnectionManager.hasPermission(appContext)
+                ) {
+                    onResult(false)
+                    return@launch
+                }
+                val service = manager.getShellService()
+                val userId = android.os.Process.myUid() / 100000
+                val granted = service.grantAppOpByPackage(appContext.packageName, "MANAGE_ONGOING_CALLS", userId)
+                onResult(granted)
+            } catch (e: Exception) {
+                AppLogger.e("SCR:SettingsViewModel", "Failed to grant MANAGE_ONGOING_CALLS via Shizuku", e)
+                onResult(false)
+            } finally {
+                try { manager.unbind() } catch (_: Exception) {}
+                refresh()
+            }
         }
     }
 }

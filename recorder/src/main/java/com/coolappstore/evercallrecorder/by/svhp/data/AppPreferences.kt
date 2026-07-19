@@ -91,6 +91,10 @@ class AppPreferences(private val context: Context) {
         // Record calls from apps defaults — both OFF (unticked) until the user opts in.
         const val RECORD_WHATSAPP_CALLS = false
         const val RECORD_TELEGRAM_CALLS = false
+        // Call detection defaults to the original, proven phone-state broadcast method.
+        val CALL_DETECTION_MODE = CallDetectionMode.PHONE_STATE
+        // Post-call file-actions notification (Open/Share/Delete) — on by default, purely additive.
+        const val POST_RECORDING_FILE_ACTIONS_NOTIFICATION = true
     }
 
     enum class Key(val id: String) {
@@ -138,7 +142,9 @@ class AppPreferences(private val context: Context) {
         APP_LOCK_SECRET_HASH("app_lock_secret_hash"),
         APP_LOCK_SALT("app_lock_salt"),
         RECORD_WHATSAPP_CALLS("record_whatsapp_calls"),
-        RECORD_TELEGRAM_CALLS("record_telegram_calls");
+        RECORD_TELEGRAM_CALLS("record_telegram_calls"),
+        CALL_DETECTION_MODE("call_detection_mode"),
+        POST_RECORDING_FILE_ACTIONS_NOTIFICATION("post_recording_file_actions_notification");
     }
 
     enum class IgnoreContactsMode(val key: String) {
@@ -169,6 +175,28 @@ class AppPreferences(private val context: Context) {
         companion object {
             fun fromKey(key: String?): ThemeMode =
                 entries.firstOrNull { it.key == key } ?: throw IllegalArgumentException("Unknown ThemeMode key: $key")
+        }
+    }
+
+    /**
+     * How incoming/outgoing calls are detected.
+     *
+     * - [PHONE_STATE]     - the original method: a manifest [android.content.BroadcastReceiver] listening
+     *   for the system's PHONE_STATE broadcast. Works everywhere, but on some OEMs this broadcast can
+     *   arrive late or be throttled, and it never carries the number for anonymous/private callers.
+     * - [IN_CALL_SERVICE] - an additional detection method using Android's Telecom [android.telecom.InCallService]
+     *   API, which observes calls directly instead of waiting on a broadcast, and can also pick up
+     *   self-managed (VoIP, e.g. WhatsApp/Telegram) calls without the notification-listener workaround.
+     *   Requires the MANAGE_ONGOING_CALLS AppOp, granted through Shizuku from Settings.
+     *
+     * Default is [PHONE_STATE] so existing installs keep behaving exactly as before unless the user
+     * opts in to the new method.
+     */
+    enum class CallDetectionMode(val key: String) {
+        PHONE_STATE("phone_state"), IN_CALL_SERVICE("in_call_service");
+        companion object {
+            fun fromKey(key: String?): CallDetectionMode =
+                entries.firstOrNull { it.key == key } ?: PHONE_STATE
         }
     }
 
@@ -376,6 +404,20 @@ class AppPreferences(private val context: Context) {
 
     /** True if at least one "record calls from apps" target is enabled. */
     fun isAnyAppCallRecordingEnabled() = isRecordWhatsAppCallsEnabled() || isRecordTelegramCallsEnabled()
+
+    // ── Call detection method ───────────────────────────────────────────────
+    fun getCallDetectionMode(): CallDetectionMode =
+        CallDetectionMode.fromKey(getString(Key.CALL_DETECTION_MODE, DefaultsValue.CALL_DETECTION_MODE.key))
+    fun setCallDetectionMode(mode: CallDetectionMode) {
+        setString(Key.CALL_DETECTION_MODE, mode.key)
+        com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(context)
+    }
+
+    // ── Post-call file actions notification (Open/Share/Delete) ────────────
+    fun isPostRecordingFileActionsNotificationEnabled() =
+        getBoolean(Key.POST_RECORDING_FILE_ACTIONS_NOTIFICATION, DefaultsValue.POST_RECORDING_FILE_ACTIONS_NOTIFICATION)
+    fun setPostRecordingFileActionsNotificationEnabled(enabled: Boolean) =
+        setBoolean(Key.POST_RECORDING_FILE_ACTIONS_NOTIFICATION, enabled)
 
     // ── Custom font (shared with Ever Dialer's Settings → Interface) ───────────
     /**
