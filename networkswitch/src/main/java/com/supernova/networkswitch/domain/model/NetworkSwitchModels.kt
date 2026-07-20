@@ -89,3 +89,49 @@ sealed class CompatibilityState {
     data class Incompatible(val reason: String) : CompatibilityState()
     data class PermissionDenied(val method: ControlMethod) : CompatibilityState()
 }
+
+/**
+ * The two configurable network modes (Mode A / Mode B, as set in Network Mode Configuration)
+ * that every automation rule below picks between.
+ */
+enum class AutomationMode {
+    MODE_A,
+    MODE_B
+}
+
+/** Same as [AutomationMode] but with an additional "don't do anything" option, used per-app. */
+enum class AppAutomationMode {
+    NONE,
+    MODE_A,
+    MODE_B
+}
+
+/**
+ * "Switch Based On Screen State" — when enabled, automatically applies [screenOffMode] whenever
+ * the screen turns off and [screenOnMode] whenever it turns on. Off by default; defaults to
+ * Mode A for screen-off and Mode B for screen-on once enabled.
+ */
+data class ScreenStateAutomationConfig(
+    val enabled: Boolean = false,
+    val screenOffMode: AutomationMode = AutomationMode.MODE_A,
+    val screenOnMode: AutomationMode = AutomationMode.MODE_B
+)
+
+/**
+ * "Switch based on Battery Saver state" — when enabled, applies [mode] whenever Battery Saver
+ * is turned on. Off by default; defaults to Mode A once enabled.
+ */
+data class BatterySaverAutomationConfig(
+    val enabled: Boolean = false,
+    val mode: AutomationMode = AutomationMode.MODE_A
+)
+
+/**
+ * "Switch Based On App Launched" — when enabled, applies the mode mapped to whichever app is
+ * currently in the foreground (via [appModes], keyed by package name). Off by default; every
+ * app defaults to [AppAutomationMode.NONE] (do nothing) until explicitly configured.
+ */
+data class AppLaunchAutomationConfig(
+    val enabled: Boolean = false,
+    val appModes: Map<String, AppAutomationMode> = emptyMap()
+)

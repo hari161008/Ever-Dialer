@@ -9,6 +9,7 @@ import com.supernova.networkswitch.domain.model.CompatibilityState
 import com.supernova.networkswitch.domain.model.ControlMethod
 import com.supernova.networkswitch.domain.repository.NetworkControlRepository
 import com.supernova.networkswitch.domain.repository.PreferencesRepository
+import com.supernova.networkswitch.util.MasterSwitchStore
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -59,6 +60,11 @@ class SettingsViewModel constructor(
     }
     
     private fun checkAllCompatibility() {
+        if (!MasterSwitchStore.isEnabled()) {
+            rootCompatibility = CompatibilityState.Incompatible("4G/5G Switcher is turned off")
+            shizukuCompatibility = CompatibilityState.Incompatible("4G/5G Switcher is turned off")
+            return
+        }
         viewModelScope.launch {
             rootCompatibility = CompatibilityState.Pending
             shizukuCompatibility = CompatibilityState.Pending

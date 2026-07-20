@@ -15,10 +15,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.supernova.networkswitch.R
@@ -26,10 +29,16 @@ import com.supernova.networkswitch.di.NetworkSwitchGraph
 import com.supernova.networkswitch.domain.model.CompatibilityState
 import com.supernova.networkswitch.presentation.theme.NetworkSwitchTheme
 import com.supernova.networkswitch.presentation.viewmodel.MainViewModel
+import com.supernova.networkswitch.presentation.ui.composable.AppLaunchAutomationCard
+import com.supernova.networkswitch.presentation.ui.composable.BatterySaverAutomationCard
 import com.supernova.networkswitch.presentation.ui.composable.CompatibilityCard
+import com.supernova.networkswitch.presentation.ui.composable.MasterSwitchCard
+import com.supernova.networkswitch.presentation.ui.composable.MasterSwitchOffBanner
 import com.supernova.networkswitch.presentation.ui.composable.NetworkModeConfigCard
+import com.supernova.networkswitch.presentation.ui.composable.NetworkSwitchFloatingHint
 import com.supernova.networkswitch.presentation.ui.composable.NetworkToggleCard
 import com.supernova.networkswitch.presentation.ui.composable.QuickSettingsHintCard
+import com.supernova.networkswitch.presentation.ui.composable.ScreenStateAutomationCard
 
 class MainActivity : ComponentActivity() {
 
@@ -56,6 +65,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         NetworkSwitchGraph.init(applicationContext)
+        com.supernova.networkswitch.service.AutomationServiceController.sync(applicationContext)
         com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource.onPermissionResult = {
             runOnUiThread { viewModel.refreshAllData() }
         }
@@ -100,6 +110,26 @@ private fun MainScreen(
             viewModel.resetConfigSavedFlag()
         }
     }
+
+    // Re-check Usage Access whenever the screen resumes (e.g. coming back from Settings after
+    // granting it), and load the app list once if "Switch Based On App Launched" is on.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshUsageAccessStatus(context)
+                if (viewModel.appLaunchConfig.enabled && viewModel.installedApps.isEmpty()) {
+                    viewModel.loadInstalledApps(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (viewModel.showFloatingHintPopup) {
+        NetworkSwitchFloatingHint(onDismiss = { viewModel.dismissFloatingHintPopup() })
+    }
     
     Scaffold(
         topBar = {
@@ -124,35 +154,78 @@ private fun MainScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Compatibility Status Card
-            CompatibilityCard(
-                compatibilityState = compatibilityState,
-                currentControlMethod = viewModel.selectedMethod,
-                onRetryClick = { viewModel.retryCompatibilityCheck() }
-            )
-            
-            // Network Toggle Card (show if compatible)
-            if (compatibilityState is CompatibilityState.Compatible) {
-                NetworkToggleCard(
-                    currentMode = viewModel.currentNetworkMode,
-                    toggleButtonText = viewModel.getToggleButtonText(),
-                    isLoading = viewModel.isLoading,
-                    onToggleClick = { viewModel.toggleNetworkMode() }
-                )
+            // Red banner shown whenever the feature is turned off
+            if (!viewModel.masterEnabled) {
+                MasterSwitchOffBanner()
             }
 
-            // Network Mode Configuration — inlined below the Network Mode container
-            NetworkModeConfigCard(
-                modeA = viewModel.configModeA,
-                modeB = viewModel.configModeB,
-                isSaving = viewModel.isSavingConfig,
-                onModeASelected = { viewModel.updateConfigModeA(it) },
-                onModeBSelected = { viewModel.updateConfigModeB(it) },
-                onSaveClick = { viewModel.saveNetworkModeConfig() }
+            // Universal toggle for the whole feature — off by default
+            MasterSwitchCard(
+                enabled = viewModel.masterEnabled,
+                onEnabledChange = { viewModel.setMasterEnabled(context, it) }
             )
-            
-            // Quick Settings Tip Card
-            QuickSettingsHintCard()
+
+            if (viewModel.masterEnabled) {
+                // Compatibility Status Card
+                CompatibilityCard(
+                    compatibilityState = compatibilityState,
+                    currentControlMethod = viewModel.selectedMethod,
+                    onRetryClick = { viewModel.retryCompatibilityCheck() }
+                )
+
+                // Network Toggle Card (show if compatible)
+                if (compatibilityState is CompatibilityState.Compatible) {
+                    NetworkToggleCard(
+                        currentMode = viewModel.currentNetworkMode,
+                        toggleButtonText = viewModel.getToggleButtonText(),
+                        isLoading = viewModel.isLoading,
+                        onToggleClick = { viewModel.toggleNetworkMode() }
+                    )
+                }
+
+                // Network Mode Configuration — inlined below the Network Mode container
+                NetworkModeConfigCard(
+                    modeA = viewModel.configModeA,
+                    modeB = viewModel.configModeB,
+                    isSaving = viewModel.isSavingConfig,
+                    onModeASelected = { viewModel.updateConfigModeA(it) },
+                    onModeBSelected = { viewModel.updateConfigModeB(it) },
+                    onSaveClick = { viewModel.saveNetworkModeConfig() }
+                )
+
+                // "Switch Based On Screen State" — off by default
+                ScreenStateAutomationCard(
+                    enabled = viewModel.screenStateConfig.enabled,
+                    screenOffMode = viewModel.screenStateConfig.screenOffMode,
+                    screenOnMode = viewModel.screenStateConfig.screenOnMode,
+                    onEnabledChange = { viewModel.setScreenStateEnabled(context, it) },
+                    onScreenOffModeChange = { viewModel.setScreenOffMode(it) },
+                    onScreenOnModeChange = { viewModel.setScreenOnMode(it) }
+                )
+
+                // "Switch based on Battery Saver state" — off by default
+                BatterySaverAutomationCard(
+                    enabled = viewModel.batterySaverConfig.enabled,
+                    mode = viewModel.batterySaverConfig.mode,
+                    onEnabledChange = { viewModel.setBatterySaverEnabled(context, it) },
+                    onModeChange = { viewModel.setBatterySaverMode(it) }
+                )
+
+                // "Switch Based On App Launched" — off by default
+                AppLaunchAutomationCard(
+                    enabled = viewModel.appLaunchConfig.enabled,
+                    hasUsageAccess = viewModel.hasUsageAccess,
+                    isLoadingApps = viewModel.isLoadingInstalledApps,
+                    apps = viewModel.installedApps,
+                    appModes = viewModel.appLaunchConfig.appModes,
+                    onEnabledChange = { viewModel.setAppLaunchEnabled(context, it) },
+                    onGrantUsageAccessClick = { viewModel.requestUsageAccess(context) },
+                    onAppModeChange = { packageName, mode -> viewModel.setAppMode(packageName, mode) }
+                )
+
+                // Quick Settings Tip Card
+                QuickSettingsHintCard()
+            }
         }
     }
 }

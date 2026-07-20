@@ -24,6 +24,88 @@ import com.supernova.networkswitch.presentation.ui.components.NetworkSwitchCardS
 
 private fun ControlMethod.displayName() = if (this == ControlMethod.SHIZUKU) "Shizuku" else "Root"
 
+/**
+ * Red banner shown at the very top of the screen whenever the universal 4G/5G Switcher toggle
+ * is off, making it unmistakable that the feature is disabled.
+ */
+@Composable
+fun MasterSwitchOffBanner(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.error
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onError,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "4G/5G Switcher is turned off",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onError
+            )
+        }
+    }
+}
+
+/**
+ * Universal toggle that enables/disables the entire 4G/5G Switcher feature. Defaults to off.
+ * While off, no compatibility checks, network-mode reads/writes, or Shizuku/root calls run
+ * anywhere in the feature — including in the background (Quick Settings tile).
+ */
+@Composable
+fun MasterSwitchCard(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = NetworkSwitchCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable 4G/5G Switcher",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (enabled)
+                        "The feature is active. Turn off to fully disable it, including in the background."
+                    else
+                        "Off by default. Turn on to allow this feature to check compatibility and switch network modes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange
+            )
+        }
+    }
+}
+
 @Composable
 private fun StatusIconBadge(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

@@ -11,12 +11,19 @@ import com.supernova.networkswitch.data.source.RootNetworkControlDataSource
 import com.supernova.networkswitch.data.source.ShizukuNetworkControlDataSource
 import com.supernova.networkswitch.domain.repository.NetworkControlRepository
 import com.supernova.networkswitch.domain.repository.PreferencesRepository
+import com.supernova.networkswitch.domain.usecase.ApplyAutomationModeUseCase
 import com.supernova.networkswitch.domain.usecase.CheckCompatibilityUseCase
 import com.supernova.networkswitch.domain.usecase.RequestShizukuPermissionUseCase
+import com.supernova.networkswitch.domain.usecase.GetAppLaunchConfigUseCase
+import com.supernova.networkswitch.domain.usecase.GetBatterySaverConfigUseCase
 import com.supernova.networkswitch.domain.usecase.GetCurrentNetworkModeUseCase
+import com.supernova.networkswitch.domain.usecase.GetScreenStateConfigUseCase
 import com.supernova.networkswitch.domain.usecase.GetToggleModeConfigUseCase
 import com.supernova.networkswitch.domain.usecase.ToggleNetworkModeUseCase
+import com.supernova.networkswitch.domain.usecase.UpdateAppLaunchConfigUseCase
+import com.supernova.networkswitch.domain.usecase.UpdateBatterySaverConfigUseCase
 import com.supernova.networkswitch.domain.usecase.UpdateControlMethodUseCase
+import com.supernova.networkswitch.domain.usecase.UpdateScreenStateConfigUseCase
 import com.supernova.networkswitch.domain.usecase.UpdateToggleModeConfigUseCase
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "network_switch_preferences")
@@ -37,6 +44,7 @@ object NetworkSwitchGraph {
         if (appContext == null) {
             appContext = context.applicationContext
         }
+        com.supernova.networkswitch.util.MasterSwitchStore.init(context.applicationContext)
     }
 
     private fun requireContext(): Context =
@@ -82,5 +90,33 @@ object NetworkSwitchGraph {
 
     val updateToggleModeConfigUseCase: UpdateToggleModeConfigUseCase by lazy {
         UpdateToggleModeConfigUseCase(preferencesRepository)
+    }
+
+    val getScreenStateConfigUseCase: GetScreenStateConfigUseCase by lazy {
+        GetScreenStateConfigUseCase(preferencesRepository)
+    }
+
+    val updateScreenStateConfigUseCase: UpdateScreenStateConfigUseCase by lazy {
+        UpdateScreenStateConfigUseCase(preferencesRepository)
+    }
+
+    val getBatterySaverConfigUseCase: GetBatterySaverConfigUseCase by lazy {
+        GetBatterySaverConfigUseCase(preferencesRepository)
+    }
+
+    val updateBatterySaverConfigUseCase: UpdateBatterySaverConfigUseCase by lazy {
+        UpdateBatterySaverConfigUseCase(preferencesRepository)
+    }
+
+    val getAppLaunchConfigUseCase: GetAppLaunchConfigUseCase by lazy {
+        GetAppLaunchConfigUseCase(preferencesRepository)
+    }
+
+    val updateAppLaunchConfigUseCase: UpdateAppLaunchConfigUseCase by lazy {
+        UpdateAppLaunchConfigUseCase(preferencesRepository)
+    }
+
+    val applyAutomationModeUseCase: ApplyAutomationModeUseCase by lazy {
+        ApplyAutomationModeUseCase(networkControlRepository, preferencesRepository)
     }
 }

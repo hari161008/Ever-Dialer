@@ -1,8 +1,11 @@
 package com.supernova.networkswitch.domain.repository
 
+import com.supernova.networkswitch.domain.model.AppLaunchAutomationConfig
+import com.supernova.networkswitch.domain.model.BatterySaverAutomationConfig
 import com.supernova.networkswitch.domain.model.CompatibilityState
 import com.supernova.networkswitch.domain.model.ControlMethod
 import com.supernova.networkswitch.domain.model.NetworkMode
+import com.supernova.networkswitch.domain.model.ScreenStateAutomationConfig
 import com.supernova.networkswitch.domain.model.ToggleModeConfig
 import kotlinx.coroutines.flow.Flow
 
@@ -71,4 +74,31 @@ interface PreferencesRepository {
      * Observe toggle mode configuration changes
      */
     fun observeToggleModeConfig(): Flow<ToggleModeConfig>
+
+    /** Get "Switch Based On Screen State" configuration */
+    suspend fun getScreenStateConfig(): ScreenStateAutomationConfig
+
+    /** Set "Switch Based On Screen State" configuration */
+    suspend fun setScreenStateConfig(config: ScreenStateAutomationConfig)
+
+    /** Observe "Switch Based On Screen State" configuration changes */
+    fun observeScreenStateConfig(): Flow<ScreenStateAutomationConfig>
+
+    /** Get "Switch based on Battery Saver state" configuration */
+    suspend fun getBatterySaverConfig(): BatterySaverAutomationConfig
+
+    /** Set "Switch based on Battery Saver state" configuration */
+    suspend fun setBatterySaverConfig(config: BatterySaverAutomationConfig)
+
+    /** Observe "Switch based on Battery Saver state" configuration changes */
+    fun observeBatterySaverConfig(): Flow<BatterySaverAutomationConfig>
+
+    /** Get "Switch Based On App Launched" configuration */
+    suspend fun getAppLaunchConfig(): AppLaunchAutomationConfig
+
+    /** Set "Switch Based On App Launched" configuration */
+    suspend fun setAppLaunchConfig(config: AppLaunchAutomationConfig)
+
+    /** Observe "Switch Based On App Launched" configuration changes */
+    fun observeAppLaunchConfig(): Flow<AppLaunchAutomationConfig>
 }

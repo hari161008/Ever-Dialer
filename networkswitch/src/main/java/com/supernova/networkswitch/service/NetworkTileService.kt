@@ -11,6 +11,7 @@ import com.supernova.networkswitch.domain.usecase.GetCurrentNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.ToggleNetworkModeUseCase
 import com.supernova.networkswitch.domain.usecase.GetToggleModeConfigUseCase
 import com.supernova.networkswitch.domain.repository.PreferencesRepository
+import com.supernova.networkswitch.util.MasterSwitchStore
 import kotlinx.coroutines.*
 
 class NetworkTileService : TileService() {
@@ -34,10 +35,23 @@ class NetworkTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
+        NetworkSwitchGraph.init(applicationContext)
+
+        if (!MasterSwitchStore.isEnabled()) {
+            qsTile?.apply {
+                state = Tile.STATE_UNAVAILABLE
+                label = "4G/5G Switcher"
+                subtitle = "Turned off in app settings"
+                updateTile()
+            }
+            return
+        }
+
         serviceScope.launch {
             try {
                 // Observe toggle configuration changes
                 preferencesRepository.observeToggleModeConfig().collect { newConfig ->
+                    if (!MasterSwitchStore.isEnabled()) return@collect
                     toggleConfig = newConfig
                     refreshNetworkState()
                 }
@@ -54,7 +68,9 @@ class NetworkTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        
+
+        if (!MasterSwitchStore.isEnabled()) return
+
         val subId = SubscriptionManager.getDefaultDataSubscriptionId()
         
         serviceScope.launch {
