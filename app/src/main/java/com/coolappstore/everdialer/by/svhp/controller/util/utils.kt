@@ -95,61 +95,6 @@ fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle
 }
 
 /**
- * Sends a USSD/MMI code using the officially documented
- * [android.telephony.TelephonyManager.sendUssdRequest] API (added API 26), instead of
- * dialing the code as a regular call and trying to sniff the response out of
- * undocumented Telecom connection-event extras (which is unreliable across OEMs/carriers
- * and was the reason USSD responses often never appeared).
- *
- * @param accountHandle Which SIM to send from (null = default/only SIM).
- * @param onResult Called on the main thread with (request, response text) on success.
- * @param onFailure Called on the main thread with (request, failureCode) — failureCode is
- *  either [android.telephony.TelephonyManager.USSD_RETURN_FAILURE] or
- *  [android.telephony.TelephonyManager.USSD_ERROR_SERVICE_UNAVAIL] — if the request could
- *  not be sent at all (e.g. unsupported on this device/OS version), this is invoked
- *  immediately with a -1 code so the caller can fall back to the legacy dial-based flow.
- */
-fun sendUssdCode(
-    context: Context,
-    code: String,
-    accountHandle: PhoneAccountHandle?,
-    onResult: (String, String) -> Unit,
-    onFailure: (String, Int) -> Unit
-) {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-        onFailure(code, -1)
-        return
-    }
-    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
-        // sendUssdRequest was added in API 26 — fall back on older devices.
-        onFailure(code, -1)
-        return
-    }
-    try {
-        val baseTm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
-            ?: return onFailure(code, -1)
-        val tm = if (accountHandle != null) {
-            try {
-                val subId = accountHandle.id?.toIntOrNull() ?: -1
-                if (subId > 0) baseTm.createForSubscriptionId(subId) else baseTm
-            } catch (_: Exception) { baseTm }
-        } else baseTm
-
-        val callback = object : android.telephony.TelephonyManager.UssdResponseCallback() {
-            override fun onReceiveUssdResponse(telephonyManager: android.telephony.TelephonyManager, request: String, response: CharSequence) {
-                onResult(request, response.toString())
-            }
-            override fun onReceiveUssdResponseFailed(telephonyManager: android.telephony.TelephonyManager, request: String, failureCode: Int) {
-                onFailure(request, failureCode)
-            }
-        }
-        tm.sendUssdRequest(code, callback, android.os.Handler(android.os.Looper.getMainLooper()))
-    } catch (e: Exception) {
-        onFailure(code, -1)
-    }
-}
-
-/**
  * Places a call respecting the user's default SIM preference.
  * simPref: 0 = ask, 1 = SIM1 (index 0), 2 = SIM2 (index 1)
  * Returns true if a direct call was placed, false if sim picker should be shown.

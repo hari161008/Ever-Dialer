@@ -68,7 +68,6 @@ import com.coolappstore.everdialer.by.svhp.controller.util.DialpadToneStyle
 import com.coolappstore.everdialer.by.svhp.controller.util.DialpadTonePlayer
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
-import com.coolappstore.everdialer.by.svhp.controller.util.sendUssdCode
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
@@ -234,7 +233,6 @@ fun DialPadContent(
     var showSimPicker by remember { mutableStateOf(false) }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
     var pendingSearchCallNumber by remember { mutableStateOf<String?>(null) }
-    var pendingUssdCode by remember { mutableStateOf<String?>(null) }
 
     // "Fake Call" entry in the long-press context menu (toggled from the Fake Call screen)
     val fakeCallInContextMenu = remember(settingsState) {
@@ -257,44 +255,6 @@ fun DialPadContent(
             }
         } else {
             makeCall(context, num)
-        }
-    }
-
-    // Helper: send a USSD/MMI code via TelephonyManager.sendUssdRequest (the documented,
-    // reliable API), respecting the same default-SIM preference as regular calls. Falls
-    // back to dialing the code as a regular call (the old behavior) if sendUssdRequest
-    // isn't available/fails outright — e.g. pre-API 26 devices.
-    fun sendUssdWithSimPreference(code: String) {
-        fun dispatch(handle: android.telecom.PhoneAccountHandle?) {
-            sendUssdCode(
-                context, code, handle,
-                onResult = { req, resp -> UssdRepository.post(req, resp) },
-                onFailure = { _, _ ->
-                    // Fall back to the legacy dial-based path so the code still runs even
-                    // if the documented API isn't available on this device.
-                    val encodedCode = code.replace("#", "%23")
-                    val telUri = android.net.Uri.parse("tel:$encodedCode")
-                    try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_CALL, telUri).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                        )
-                    } catch (_: Exception) {}
-                }
-            )
-        }
-        val accounts = telecomManager.callCapablePhoneAccounts
-        if (accounts.size > 1) {
-            val simPref = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
-            when {
-                simPref == 1 && accounts.size >= 1 -> dispatch(accounts[0])
-                simPref == 2 && accounts.size >= 2 -> dispatch(accounts[1])
-                else -> {
-                    pendingUssdCode = code
-                    showSimPicker = true
-                }
-            }
-        } else {
-            dispatch(null)
         }
     }
 
@@ -403,27 +363,23 @@ fun DialPadContent(
         if (!((decoded.startsWith("*") || decoded.startsWith("#")) &&
               decoded.endsWith("#"))) return false
 
-        return if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE)
-                == PackageManager.PERMISSION_GRANTED) {
-            // Use the documented TelephonyManager.sendUssdRequest API (API 26+) instead of
-            // dialing the code as a regular call and trying to sniff the network's response
-            // out of undocumented Telecom connection-event extras — that approach was
-            // unreliable across OEMs/carriers and often silently never produced a response.
-            sendUssdWithSimPreference(decoded)
-            true
+        // Dial USSD/MMI codes exactly like a normal call via TelecomManager.placeCall()
+        // (same approach RivoPhoneApp uses). The carrier's telephony stack recognises the
+        // MMI/USSD prefix itself and drives the whole USSD session — including any
+        // interactive multi-step menu — through Android's own native USSD dialog, and
+        // placing a real call also lets CallService's connection-event listener (see
+        // isUssdNumber() below) pick up and surface the response inline when the
+        // carrier/OEM supplies one. This is far more reliable than
+        // TelephonyManager.sendUssdRequest(), which only supports a single
+        // non-interactive request/response and fails outright on many devices, carriers,
+        // and dual-SIM setups.
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            placeCallWithSimPreference(decoded)
         } else {
-            // No CALL_PHONE permission — open dialer pre-filled so user can dial manually
-            val encodedCode = decoded.replace("#", "%23")
-            val telUri = android.net.Uri.parse("tel:$encodedCode")
-            try {
-                context.startActivity(
-                    Intent(Intent.ACTION_DIAL, telUri).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                )
-                true
-            } catch (_: Exception) { false }
+            pendingSearchCallNumber = decoded
+            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
         }
+        return true
     }
 
     fun initiateCall(num: String) {
@@ -458,26 +414,8 @@ fun DialPadContent(
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
             onSimSelected = { handle ->
-                val ussdCode = pendingUssdCode
-                if (ussdCode != null) {
-                    sendUssdCode(
-                        context, ussdCode, handle,
-                        onResult = { req, resp -> UssdRepository.post(req, resp) },
-                        onFailure = { _, _ ->
-                            val encodedCode = ussdCode.replace("#", "%23")
-                            val telUri = android.net.Uri.parse("tel:$encodedCode")
-                            try {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_CALL, telUri).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                                )
-                            } catch (_: Exception) {}
-                        }
-                    )
-                    pendingUssdCode = null
-                } else {
-                    makeCall(context, pendingSearchCallNumber ?: number, handle)
-                    pendingSearchCallNumber = null
-                }
+                makeCall(context, pendingSearchCallNumber ?: number, handle)
+                pendingSearchCallNumber = null
                 showSimPicker = false
             }
         )
