@@ -429,6 +429,15 @@ private fun FakeCallCard(
         if (entry.triggerAt <= 0L || !entry.enabled) ""
         else "Rings ${timeFmt.format(Date(entry.triggerAt))}"
     }
+    val timerDurationLabel = remember(entry.timerDelayMillis) {
+        val totalSeconds = entry.timerDelayMillis / 1000
+        if (totalSeconds > 0 && totalSeconds % 60 == 0L) {
+            val minutes = totalSeconds / 60
+            "$minutes ${if (minutes == 1L) "minute" else "minutes"}"
+        } else {
+            "$totalSeconds ${if (totalSeconds == 1L) "second" else "seconds"}"
+        }
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -496,12 +505,21 @@ private fun FakeCallCard(
                 )
                 val timeStr = String.format(Locale.getDefault(), "%02d:%02d", entry.hour, entry.minute)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Outlined.AccessTime, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
-                    Text(
-                        timeStr + if (entry.days.isNotEmpty()) " · ${entry.days.map { DAY_LABELS[it - 1] }.joinToString("")}" else "",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (entry.isTimerBased) {
+                        Icon(Icons.Outlined.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
+                        Text(
+                            "Timer · $timerDurationLabel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(Icons.Outlined.AccessTime, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
+                        Text(
+                            timeStr + if (entry.days.isNotEmpty()) " · ${entry.days.map { DAY_LABELS[it - 1] }.joinToString("")}" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
                 if (nextLabel.isNotEmpty()) {
                     Text(nextLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -557,20 +575,24 @@ fun FakeCallAddSheet(
     val prefs = koinInject<PreferenceManager>()
 
     // Time state — pre-filled from whatever was used for the previous fake call (everything
-    // except name/number), instead of always resetting to "now" / hardcoded defaults.
+    // except name/number), instead of always resetting to "now" / hardcoded defaults. If
+    // there's no previous preference yet, default to one minute from now rather than the
+    // exact current time, since the exact current time reads as "already passed" the moment
+    // its seconds tick over and gets pushed to tomorrow by the next-occurrence math.
     val cal = remember { Calendar.getInstance() }
+    val defaultCal = remember { (cal.clone() as Calendar).apply { add(Calendar.MINUTE, 1) } }
     var hour by remember {
         mutableIntStateOf(
             if (prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, -1) in 0..23)
-                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, cal.get(Calendar.HOUR_OF_DAY))
-            else cal.get(Calendar.HOUR_OF_DAY)
+                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_HOUR, defaultCal.get(Calendar.HOUR_OF_DAY))
+            else defaultCal.get(Calendar.HOUR_OF_DAY)
         )
     }
     var minute by remember {
         mutableIntStateOf(
             if (prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, -1) in 0..59)
-                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, cal.get(Calendar.MINUTE))
-            else cal.get(Calendar.MINUTE)
+                prefs.getInt(PreferenceManager.KEY_FAKE_CALL_LAST_MINUTE, defaultCal.get(Calendar.MINUTE))
+            else defaultCal.get(Calendar.MINUTE)
         )
     }
 

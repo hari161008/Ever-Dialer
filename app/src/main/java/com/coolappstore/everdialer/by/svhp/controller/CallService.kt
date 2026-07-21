@@ -12,6 +12,8 @@ import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import com.coolappstore.everdialer.by.svhp.MainActivity
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -19,6 +21,7 @@ import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.screen.BiometricCallActivity
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
+import com.coolappstore.everdialer.by.svhp.view.screen.settings.KEY_SELECTED_APP_ICON
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.koin.android.ext.android.inject
@@ -43,6 +46,34 @@ class CallService : InCallService() {
     // away from the real one. This map remembers the real moment each call became ACTIVE once,
     // so every later rebuild reuses that same timestamp instead of a fresh "now".
     private val callConnectTimes = mutableMapOf<Call, Long>()
+
+    /**
+     * The ongoing/incoming-call notification's small icon should look like whichever app icon
+     * the user currently has selected (Settings > App Icon), instead of a generic stock phone
+     * glyph that doesn't match and can appear mirrored/"inverted" next to it. Each app icon
+     * variant already ships a monochrome adaptive-icon layer designed for exactly this purpose.
+     */
+    private fun currentCallSmallIcon(): Int {
+        return when (prefs.getString(KEY_SELECTED_APP_ICON, "default")) {
+            "phone"        -> R.drawable.ic_notif_call_phone
+            "custom_phone" -> R.drawable.ic_notif_call_custom_phone
+            "google"       -> R.drawable.ic_notif_call_google
+            "nothing"      -> R.drawable.ic_notif_call_nothing
+            else           -> R.drawable.ic_notif_call_default
+        }
+    }
+
+    /** Loads the contact's photo (if any) as a square bitmap suitable for a Person/large icon. */
+    private fun loadContactPhotoBitmap(photoUri: String?): android.graphics.Bitmap? {
+        if (photoUri.isNullOrEmpty()) return null
+        return try {
+            contentResolver.openInputStream(android.net.Uri.parse(photoUri))?.use { stream ->
+                android.graphics.BitmapFactory.decodeStream(stream)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     
 
@@ -423,6 +454,16 @@ class CallService : InCallService() {
                 val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
                 setAudioRoute(if (isSpeaker) android.telecom.CallAudioState.ROUTE_EARPIECE else android.telecom.CallAudioState.ROUTE_SPEAKER)
             }
+            "HOLD_CALL"    -> {
+                val call = _currentCallSession.value?.call
+                try {
+                    if (call?.state == Call.STATE_HOLDING) call.unhold() else call?.hold()
+                } catch (_: Exception) {}
+            }
+            "BLUETOOTH_CALL" -> {
+                val isBluetooth = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_BLUETOOTH
+                setAudioRoute(if (isBluetooth) android.telecom.CallAudioState.ROUTE_SPEAKER else android.telecom.CallAudioState.ROUTE_BLUETOOTH)
+            }
             "NOTES_CALL"   -> {
                 val name   = intent.getStringExtra("contact_name") ?: "Unknown"
                 val number = intent.getStringExtra("phone_number") ?: ""
@@ -482,11 +523,25 @@ class CallService : InCallService() {
         val speakerPi = PendingIntent.getService(this, 5,
             Intent(this, CallService::class.java).apply { action = "SPEAKER_CALL" },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val holdPi = PendingIntent.getService(this, 6,
+            Intent(this, CallService::class.java).apply { action = "HOLD_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val bluetoothPi = PendingIntent.getService(this, 7,
+            Intent(this, CallService::class.java).apply { action = "BLUETOOTH_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val person = androidx.core.app.Person.Builder().setName(contactName).setImportant(true).build()
+        val contactPhotoBitmap = loadContactPhotoBitmap(if (isHiddenContact && hideNames) null else contact?.photoUri)
+        val personBuilder = Person.Builder().setName(contactName).setImportant(true)
+        if (contactPhotoBitmap != null) {
+            personBuilder.setIcon(IconCompat.createWithAdaptiveBitmap(contactPhotoBitmap))
+        }
+        val person = personBuilder.build()
         val isRinging = call.state == Call.STATE_RINGING
         val isMuted   = _audioState.value?.isMuted ?: false
         val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
+        val isOnHold  = call.state == Call.STATE_HOLDING
+        val bluetoothAvailable = (_audioState.value?.supportedRouteMask ?: 0) and android.telecom.CallAudioState.ROUTE_BLUETOOTH != 0
+        val isBluetooth = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_BLUETOOTH
         val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ID
 
         // Use the call's real, authoritative connect time from Telecom (the same source
@@ -497,7 +552,7 @@ class CallService : InCallService() {
             ?: callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
 
         val builder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.sym_action_call)
+            .setSmallIcon(currentCallSmallIcon())
             .setContentTitle(contactName)
             .setContentText(if (isRinging) "Incoming call" else "Active call")
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -541,6 +596,22 @@ class CallService : InCallService() {
                     speakerPi
                 ).build()
             )
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    R.drawable.ic_notif_hold,
+                    if (isOnHold) "Resume" else "Hold",
+                    holdPi
+                ).build()
+            )
+            if (bluetoothAvailable) {
+                builder.addAction(
+                    NotificationCompat.Action.Builder(
+                        R.drawable.ic_notif_bluetooth,
+                        if (isBluetooth) "Speaker" else "Bluetooth",
+                        bluetoothPi
+                    ).build()
+                )
+            }
         }
 
         val notification = builder.build()
@@ -553,14 +624,14 @@ class CallService : InCallService() {
         // Start/stop floating bubble based on preference
         if (call.state != android.telecom.Call.STATE_DISCONNECTED &&
             call.state != android.telecom.Call.STATE_DISCONNECTING) {
-            maybeStartFloatingCall(contactName, number)
+            maybeStartFloatingCall(contactName, number, if (isHiddenContact && hideNames) null else contact?.photoUri)
         }
     }
 
-    private fun maybeStartFloatingCall(contactName: String, number: String) {
+    private fun maybeStartFloatingCall(contactName: String, number: String, photoUri: String?) {
         if (!prefs.getBoolean(PreferenceManager.KEY_FLOATING_CALL, false)) return
         if (!android.provider.Settings.canDrawOverlays(this)) return
-        FloatingCallService.start(this, contactName, number)
+        FloatingCallService.start(this, contactName, number, photoUri)
     }
 
     private fun cancelNotification() {

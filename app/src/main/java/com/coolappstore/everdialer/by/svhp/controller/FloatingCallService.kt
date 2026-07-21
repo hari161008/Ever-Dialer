@@ -55,6 +55,7 @@ class FloatingCallService : Service() {
 
     private val contactNameState = mutableStateOf("?")
     private val phoneNumberState  = mutableStateOf("")
+    private val photoUriState     = mutableStateOf<String?>(null)
     private val menuVisibleState  = mutableStateOf(false)
 
     private val configReceiver = object : BroadcastReceiver() {
@@ -100,10 +101,12 @@ class FloatingCallService : Service() {
     companion object {
         const val EXTRA_CONTACT_NAME = "contact_name"
         const val EXTRA_PHONE_NUMBER = "phone_number"
+        const val EXTRA_PHOTO_URI    = "photo_uri"
 
-        fun start(context: Context, name: String, number: String) {
+        fun start(context: Context, name: String, number: String, photoUri: String? = null) {
             context.startService(Intent(context, FloatingCallService::class.java).apply {
                 putExtra(EXTRA_CONTACT_NAME, name); putExtra(EXTRA_PHONE_NUMBER, number)
+                putExtra(EXTRA_PHOTO_URI, photoUri)
             })
         }
         fun stop(context: Context) =
@@ -123,6 +126,7 @@ class FloatingCallService : Service() {
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
         contactNameState.value = intent?.getStringExtra(EXTRA_CONTACT_NAME) ?: "?"
         phoneNumberState.value  = intent?.getStringExtra(EXTRA_PHONE_NUMBER) ?: ""
+        photoUriState.value     = intent?.getStringExtra(EXTRA_PHOTO_URI)
         if (bubbleView == null) { createBubble(); observeAll() }
         return START_STICKY
     }
@@ -134,14 +138,14 @@ class FloatingCallService : Service() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setContent { Rivo4Theme { BubbleUI(contactNameState.value) { if (menuView == null) showMenu() else dismissMenu() } } }
+            setContent { Rivo4Theme { BubbleUI(contactNameState.value, photoUriState.value) { if (menuView == null) showMenu() else dismissMenu() } } }
         }
         bubbleView = cv
         try { wm.addView(cv, bubbleParams) } catch (_: Exception) { stopSelf() }
     }
 
     @Composable
-    private fun BubbleUI(name: String, onTap: () -> Unit) {
+    private fun BubbleUI(name: String, photoUri: String?, onTap: () -> Unit) {
         var entered by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { delay(50); entered = true }
 
@@ -210,13 +214,21 @@ class FloatingCallService : Service() {
                 shadowElevation = 0.dp,
                 modifier        = Modifier.size(58.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text       = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        fontWeight = FontWeight.Bold,
-                        fontSize   = 22.sp,
-                        color      = MaterialTheme.colorScheme.onPrimaryContainer
+                if (!photoUri.isNullOrEmpty()) {
+                    com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar(
+                        name     = name,
+                        photoUri = photoUri,
+                        modifier = Modifier.fillMaxSize()
                     )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text       = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 22.sp,
+                            color      = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
 
@@ -252,6 +264,7 @@ class FloatingCallService : Service() {
     private fun showMenu() {
         if (menuView != null) return
         menuVisibleState.value = false
+        bubbleView?.visibility = View.GONE
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lifecycleOwner)
@@ -275,10 +288,17 @@ class FloatingCallService : Service() {
 
     private fun dismissMenu() {
         menuVisibleState.value = false
+        // Hide the bubble the moment the close animation starts, then bring it back once the
+        // floating popup window has actually been torn down (unless the call screen itself is
+        // in the foreground, in which case observeAll() is already keeping it hidden).
+        bubbleView?.visibility = View.GONE
         scope.launch {
             delay(440)
             try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
             menuView = null
+            if (!CallActivity.isInForeground.value) {
+                bubbleView?.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -301,6 +321,9 @@ class FloatingCallService : Service() {
             delay(200)
             try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
             menuView = null
+            if (action != MenuAction.Close && !CallActivity.isInForeground.value) {
+                bubbleView?.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -326,8 +349,20 @@ class FloatingCallService : Service() {
         val isMuted    = audioState?.isMuted ?: false
         val isSpeaker  = audioState?.route == CallAudioState.ROUTE_SPEAKER
 
-        // Full-screen Box – card is at BottomCenter so its background fills behind nav bar
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        // Full-screen Box – card is at BottomCenter so its background fills behind nav bar.
+        // Tapping anywhere in the empty area above the sheet (i.e. not on the sheet itself,
+        // since the sheet's own children consume their own taps first) dismisses the menu,
+        // which brings the floating bubble back once the window is torn down.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
             AnimatedVisibility(
                 visible = visible,
                 enter   = slideInVertically(

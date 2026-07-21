@@ -113,6 +113,17 @@ object FakeCallManager {
         val triggerAt = triggerAtOverride ?: computeNextTrigger(entry.hour, entry.minute, entry.days)
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = alarmPendingIntent(context, entry.id)
+        // setAlarmClock() delivers at the exact millisecond requested — it's exempt from Doze
+        // and app-standby throttling entirely (the same guarantee real alarm-clock apps rely
+        // on), unlike setExactAndAllowWhileIdle()/setAndAllowWhileIdle() which can still be
+        // deferred by a few seconds (or, without SCHEDULE_EXACT_ALARM, a lot more) once the
+        // device is idle. A fake call needs to ring at exactly the moment the user picked.
+        try {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, pi), pi)
+            return triggerAt
+        } catch (_: Exception) {
+            // Fall through to the exact-alarm paths below if setAlarmClock() is ever refused.
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
                 am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)

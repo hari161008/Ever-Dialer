@@ -109,13 +109,20 @@ class AutomationService : Service() {
         val channelId = "network_switch_automation"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
+            // IMPORTANCE_NONE blocks the channel from ever displaying anything in the shade,
+            // status bar, or lock screen — this satisfies the platform's requirement that a
+            // foreground service post a notification, while ensuring the user never sees it
+            // (not even briefly, and not just "silently" present in the shade).
             val channel = NotificationChannel(
                 channelId,
                 "Network Mode Automation",
-                NotificationManager.IMPORTANCE_MIN
+                NotificationManager.IMPORTANCE_NONE
             ).apply {
                 description = "Keeps automatic network mode switching rules running in the background"
                 setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+                setSound(null, null)
             }
             manager?.createNotificationChannel(channel)
         }
