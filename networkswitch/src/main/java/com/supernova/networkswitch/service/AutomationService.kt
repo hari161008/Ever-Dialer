@@ -146,6 +146,11 @@ class AutomationService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
+            // Android requires a notification to start a foreground service, but the automation
+            // rules running in the background aren't something the user needs to be reminded
+            // about on every screen/app change, so hide it from the notification shade right
+            // after satisfying that requirement. The service keeps running in the foreground.
+            androidx.core.app.NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
         } catch (e: Exception) {
             // If the platform refuses the foreground start (e.g. background start restrictions),
             // fall back to running as a plain background service rather than crashing.

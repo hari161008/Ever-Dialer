@@ -43,6 +43,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -332,7 +333,8 @@ fun RivoExpressiveButton(
     contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     size: Dp = 64.dp,
     iconSize: Dp = 24.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    iconBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -359,7 +361,17 @@ fun RivoExpressiveButton(
             shadowElevation = 0.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = label, modifier = Modifier.size(iconSize))
+                if (iconBitmap != null) {
+                    Image(
+                        bitmap = iconBitmap,
+                        contentDescription = label,
+                        modifier = Modifier
+                            .size(iconSize)
+                            .clip(RoundedCornerShape(iconSize / 4))
+                    )
+                } else {
+                    Icon(icon, contentDescription = label, modifier = Modifier.size(iconSize))
+                }
             }
         }
         if (label != null) {

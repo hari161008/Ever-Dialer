@@ -12,17 +12,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.supernova.networkswitch.domain.model.AppAutomationMode
 import com.supernova.networkswitch.domain.model.AutomationMode
 import com.supernova.networkswitch.presentation.ui.components.NetworkSwitchCardShape
@@ -245,6 +253,9 @@ fun AppLaunchAutomationCard(
     onAppModeChange: (packageName: String, mode: AppAutomationMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val configuredCount = remember(appModes) { appModes.count { it.value != AppAutomationMode.NONE } }
+    var showPicker by rememberSaveable { mutableStateOf(false) }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = NetworkSwitchCardShape,
@@ -300,32 +311,136 @@ fun AppLaunchAutomationCard(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                if (isLoadingApps) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                    }
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.fillMaxWidth()
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isLoadingApps) { showPicker = true }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 420.dp)
-                        ) {
-                            items(apps, key = { it.packageName }) { app ->
-                                AppModeRow(
-                                    app = app,
-                                    mode = appModes[app.packageName] ?: AppAutomationMode.NONE,
-                                    onModeChange = { newMode -> onAppModeChange(app.packageName, newMode) }
-                                )
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Select Apps",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isLoadingApps) "Loading apps…"
+                                       else if (configuredCount == 0) "No apps configured yet"
+                                       else "$configuredCount app${if (configuredCount == 1) "" else "s"} configured",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isLoadingApps) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        } else {
+                            Icon(imageVector = Icons.Filled.Search, contentDescription = "Select apps")
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (showPicker && enabled && !isLoadingApps) {
+        AppPickerDialog(
+            apps = apps,
+            appModes = appModes,
+            onAppModeChange = onAppModeChange,
+            onDismiss = { showPicker = false }
+        )
+    }
+}
+
+/**
+ * Floating popup (separate from the settings card) that lists every launchable app with a search
+ * bar on top, so the user can quickly find an app and assign it a Mode A / Mode B / None rule.
+ */
+@Composable
+private fun AppPickerDialog(
+    apps: List<LaunchableAppInfo>,
+    appModes: Map<String, AppAutomationMode>,
+    onAppModeChange: (packageName: String, mode: AppAutomationMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val filteredApps = remember(apps, query) {
+        if (query.isBlank()) apps
+        else apps.filter { it.appName.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true) }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.82f)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Select Apps",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close")
+                    }
+                }
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    placeholder = { Text("Search apps") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (filteredApps.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "No apps match \"$query\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        items(filteredApps, key = { it.packageName }) { app ->
+                            AppModeRow(
+                                app = app,
+                                mode = appModes[app.packageName] ?: AppAutomationMode.NONE,
+                                onModeChange = { newMode -> onAppModeChange(app.packageName, newMode) }
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

@@ -443,11 +443,14 @@ fun ContactDetailsScreen(
 
                 // Social — contact through WhatsApp / Telegram. Only actually redirects into the
                 // app when it's installed on the device; otherwise lets the user know instead of
-                // silently doing nothing or bouncing out to a browser.
+                // silently doing nothing or bouncing out to a browser. The button icons are the
+                // real installed apps' own launcher icons rather than generic glyphs.
                 item {
+                    val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
+                    val telegramIcon = remember(context) { getTelegramIcon(context) }
                     RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            RivoExpressiveButton(icon = Icons.Default.Chat, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                            RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
                                 if (displayPhone == "Unknown") return@RivoExpressiveButton
                                 if (!openWhatsAppChat(context, displayPhone)) {
                                     android.widget.Toast.makeText(context, "WhatsApp isn't installed", android.widget.Toast.LENGTH_SHORT).show()
@@ -456,7 +459,9 @@ fun ContactDetailsScreen(
                             // Telegram has many third-party clients/forks, so rather than forcing
                             // one specific app this opens Android's own chooser sheet listing
                             // every installed app that can handle it, letting the user pick theirs.
-                            RivoExpressiveButton(icon = Icons.Default.Send, label = "Telegram", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                            // The icon shown is pulled from whichever installed app actually
+                            // registers to handle tg:// links.
+                            RivoExpressiveButton(icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
                                 if (displayPhone == "Unknown") return@RivoExpressiveButton
                                 if (!openTelegramChat(context, displayPhone)) {
                                     android.widget.Toast.makeText(context, "No Telegram app is installed", android.widget.Toast.LENGTH_SHORT).show()
@@ -596,6 +601,46 @@ private fun isAnyPackageInstalled(context: Context, packages: Set<String>): Bool
             true
         } catch (_: Exception) { false }
     }
+
+private fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): androidx.compose.ui.graphics.ImageBitmap {
+    val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+    val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap.asImageBitmap()
+}
+
+/** Loads the real launcher icon of whichever WhatsApp variant is installed (WhatsApp or WhatsApp
+ *  Business), so the "Social" card can show the actual app icon instead of a generic chat glyph. */
+private fun getWhatsAppIcon(context: Context): androidx.compose.ui.graphics.ImageBitmap? {
+    val pkg = WHATSAPP_PACKAGES.firstOrNull { p ->
+        try { context.packageManager.getPackageInfo(p, 0); true } catch (_: Exception) { false }
+    } ?: return null
+    return try {
+        drawableToImageBitmap(context.packageManager.getApplicationIcon(pkg))
+    } catch (_: Exception) { null }
+}
+
+/** Telegram has many third-party clients/forks. Rather than guessing a package name, this
+ *  resolves the exact same "tg://resolve" intent used to actually open the chat, and loads the
+ *  icon of whichever app is registered to handle it — so the icon shown always matches the app
+ *  that will really open. If more than one Telegram-capable app is installed, the device's
+ *  configured default handler for the intent (if any) is preferred; otherwise the first match
+ *  is used, since the user gets an app chooser at click-time anyway. */
+private fun getTelegramIcon(context: Context): androidx.compose.ui.graphics.ImageBitmap? {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
+    val packageManager = context.packageManager
+    val resolvedDefault = try { packageManager.resolveActivity(intent, 0) } catch (_: Exception) { null }
+    val handlers = try { packageManager.queryIntentActivities(intent, 0) } catch (_: Exception) { emptyList() }
+    val chosenPackage = resolvedDefault?.activityInfo?.packageName
+        ?: handlers.firstOrNull()?.activityInfo?.packageName
+        ?: return null
+    return try {
+        drawableToImageBitmap(packageManager.getApplicationIcon(chosenPackage))
+    } catch (_: Exception) { null }
+}
 
 /** Opens a WhatsApp chat with [phoneNumber]. Returns false (does nothing) if WhatsApp isn't installed. */
 private fun openWhatsAppChat(context: Context, phoneNumber: String): Boolean {
