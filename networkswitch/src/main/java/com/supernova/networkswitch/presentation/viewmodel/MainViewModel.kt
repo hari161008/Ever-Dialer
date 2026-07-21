@@ -397,9 +397,12 @@ class MainViewModel constructor(
         viewModelScope.launch { NetworkSwitchGraph.updateAppLaunchConfigUseCase(appLaunchConfig) }
     }
 
-    /** Loads the list of launchable apps for the app picker. */
-    fun loadInstalledApps(context: android.content.Context) {
+    /** Loads the list of launchable apps for the app picker. Pass [force] = true to reload even
+     *  if a list was already loaded (e.g. every time the picker popup is opened), so apps
+     *  installed/uninstalled since the last load are reflected instead of showing a stale list. */
+    fun loadInstalledApps(context: android.content.Context, force: Boolean = false) {
         if (isLoadingInstalledApps) return
+        if (!force && installedApps.isNotEmpty()) return
         isLoadingInstalledApps = true
         viewModelScope.launch {
             try {

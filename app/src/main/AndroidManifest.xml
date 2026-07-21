@@ -245,6 +245,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityCustomPhoneIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_custom_phone"
+            android:roundIcon="@mipmap/ic_launcher_custom_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityGoogleDialerIcon"
             android:targetActivity=".MainActivity"
             android:label="@string/app_name"

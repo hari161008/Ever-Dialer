@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -355,19 +356,23 @@ fun RivoExpressiveButton(
             onClick = onClick,
             modifier = Modifier.size(size).scale(scale),
             shape = RoundedCornerShape(cornerRadius),
-            color = containerColor,
+            color = if (iconBitmap != null) Color.Transparent else containerColor,
             contentColor = contentColor,
             interactionSource = interactionSource,
             shadowElevation = 0.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
                 if (iconBitmap != null) {
+                    // Real app icons already have their own background baked in — don't put
+                    // another filled circle behind them, or it reads as a halo/outline. Let the
+                    // icon fill almost the whole tap target instead.
                     Image(
                         bitmap = iconBitmap,
                         contentDescription = label,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier
-                            .size(iconSize)
-                            .clip(RoundedCornerShape(iconSize / 4))
+                            .size(size)
+                            .clip(CircleShape)
                     )
                 } else {
                     Icon(icon, contentDescription = label, modifier = Modifier.size(iconSize))
@@ -545,7 +550,9 @@ fun RivoListItem(
                         .size(48.dp)
                         .then(
                             if (onAvatarClick != null)
-                                Modifier.combinedClickable(onClick = onAvatarClick)
+                                Modifier
+                                    .clip(CircleShape)
+                                    .combinedClickable(onClick = onAvatarClick)
                             else Modifier
                         )
                 )

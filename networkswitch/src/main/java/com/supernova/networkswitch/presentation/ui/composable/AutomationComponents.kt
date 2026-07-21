@@ -251,6 +251,7 @@ fun AppLaunchAutomationCard(
     onEnabledChange: (Boolean) -> Unit,
     onGrantUsageAccessClick: () -> Unit,
     onAppModeChange: (packageName: String, mode: AppAutomationMode) -> Unit,
+    onPickerOpen: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuredCount = remember(appModes) { appModes.count { it.value != AppAutomationMode.NONE } }
@@ -314,7 +315,10 @@ fun AppLaunchAutomationCard(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isLoadingApps) { showPicker = true }
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        showPicker = true
+                        onPickerOpen()
+                    }
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -345,10 +349,11 @@ fun AppLaunchAutomationCard(
         }
     }
 
-    if (showPicker && enabled && !isLoadingApps) {
+    if (showPicker && enabled) {
         AppPickerDialog(
             apps = apps,
             appModes = appModes,
+            isLoading = isLoadingApps,
             onAppModeChange = onAppModeChange,
             onDismiss = { showPicker = false }
         )
@@ -363,6 +368,7 @@ fun AppLaunchAutomationCard(
 private fun AppPickerDialog(
     apps: List<LaunchableAppInfo>,
     appModes: Map<String, AppAutomationMode>,
+    isLoading: Boolean,
     onAppModeChange: (packageName: String, mode: AppAutomationMode) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -419,23 +425,43 @@ private fun AppPickerDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (filteredApps.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "No apps match \"$query\"",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                when {
+                    apps.isEmpty() && isLoading -> {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        }
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        items(filteredApps, key = { it.packageName }) { app ->
-                            AppModeRow(
-                                app = app,
-                                mode = appModes[app.packageName] ?: AppAutomationMode.NONE,
-                                onModeChange = { newMode -> onAppModeChange(app.packageName, newMode) }
+                    apps.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No apps found on this device",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        }
+                    }
+                    filteredApps.isEmpty() -> {
+                        // Only reachable once the user has actually typed a search query that
+                        // matches nothing — apps.isEmpty() above already covers the "nothing
+                        // loaded yet" case, so this never fires just from opening the picker.
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No apps match \"$query\"",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    else -> {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            items(filteredApps, key = { it.packageName }) { app ->
+                                AppModeRow(
+                                    app = app,
+                                    mode = appModes[app.packageName] ?: AppAutomationMode.NONE,
+                                    onModeChange = { newMode -> onAppModeChange(app.packageName, newMode) }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            }
                         }
                     }
                 }

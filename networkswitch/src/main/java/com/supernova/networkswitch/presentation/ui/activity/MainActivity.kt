@@ -220,7 +220,8 @@ private fun MainScreen(
                     appModes = viewModel.appLaunchConfig.appModes,
                     onEnabledChange = { viewModel.setAppLaunchEnabled(context, it) },
                     onGrantUsageAccessClick = { viewModel.requestUsageAccess(context) },
-                    onAppModeChange = { packageName, mode -> viewModel.setAppMode(packageName, mode) }
+                    onAppModeChange = { packageName, mode -> viewModel.setAppMode(packageName, mode) },
+                    onPickerOpen = { viewModel.loadInstalledApps(context, force = true) }
                 )
 
                 // Quick Settings Tip Card

@@ -150,10 +150,24 @@ class AutomationService : Service() {
             // rules running in the background aren't something the user needs to be reminded
             // about on every screen/app change, so hide it from the notification shade right
             // after satisfying that requirement. The service keeps running in the foreground.
-            androidx.core.app.NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
+            // startForeground() posts the notification asynchronously through the system server,
+            // so cancelling in the very same call can race ahead of it and get overwritten a
+            // moment later — cancel a few times over the next couple of seconds to be safe.
+            hideForegroundNotification()
         } catch (e: Exception) {
             // If the platform refuses the foreground start (e.g. background start restrictions),
             // fall back to running as a plain background service rather than crashing.
+        }
+    }
+
+    private fun hideForegroundNotification() {
+        val notificationManager = androidx.core.app.NotificationManagerCompat.from(this)
+        try { notificationManager.cancel(NOTIFICATION_ID) } catch (_: Exception) {}
+        serviceScope.launch {
+            repeat(5) {
+                delay(400)
+                try { notificationManager.cancel(NOTIFICATION_ID) } catch (_: Exception) {}
+            }
         }
     }
 
@@ -317,6 +331,7 @@ class AutomationService : Service() {
         if (mode != lastAppliedMode) {
             lastAppliedMode = mode
             applyMode(mode)
+            hideForegroundNotification()
         }
     }
 

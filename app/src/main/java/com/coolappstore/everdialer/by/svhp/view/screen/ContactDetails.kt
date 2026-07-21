@@ -448,6 +448,7 @@ fun ContactDetailsScreen(
                 item {
                     val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
                     val telegramIcon = remember(context) { getTelegramIcon(context) }
+                    val meetIcon = remember(context) { getGoogleMeetIcon(context) }
                     RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                             RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
@@ -465,6 +466,11 @@ fun ContactDetailsScreen(
                                 if (displayPhone == "Unknown") return@RivoExpressiveButton
                                 if (!openTelegramChat(context, displayPhone)) {
                                     android.widget.Toast.makeText(context, "No Telegram app is installed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                            RivoExpressiveButton(icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                if (!openGoogleMeet(context)) {
+                                    android.widget.Toast.makeText(context, "Google Meet isn't installed", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             })
                         }
@@ -623,23 +629,51 @@ private fun getWhatsAppIcon(context: Context): androidx.compose.ui.graphics.Imag
     } catch (_: Exception) { null }
 }
 
+private const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
+
 /** Telegram has many third-party clients/forks. Rather than guessing a package name, this
  *  resolves the exact same "tg://resolve" intent used to actually open the chat, and loads the
- *  icon of whichever app is registered to handle it — so the icon shown always matches the app
- *  that will really open. If more than one Telegram-capable app is installed, the device's
- *  configured default handler for the intent (if any) is preferred; otherwise the first match
- *  is used, since the user gets an app chooser at click-time anyway. */
+ *  icon of whichever app is registered to handle it — so the icon shown always matches an app
+ *  that will really open. If the official Telegram app is one of the installed handlers, its icon
+ *  is used; otherwise the first genuine handler is used. Android's own "Open with…" chooser
+ *  (which has its own generic share icon and isn't a real Telegram client) is always excluded. */
 private fun getTelegramIcon(context: Context): androidx.compose.ui.graphics.ImageBitmap? {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
     val packageManager = context.packageManager
-    val resolvedDefault = try { packageManager.resolveActivity(intent, 0) } catch (_: Exception) { null }
-    val handlers = try { packageManager.queryIntentActivities(intent, 0) } catch (_: Exception) { emptyList() }
-    val chosenPackage = resolvedDefault?.activityInfo?.packageName
-        ?: handlers.firstOrNull()?.activityInfo?.packageName
-        ?: return null
+    val handlers = try {
+        packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    } catch (_: Exception) { emptyList() }
+        .mapNotNull { it.activityInfo?.packageName }
+        // Exclude Android's own intent resolver / chooser — it isn't a real Telegram client and
+        // shows a generic "share" glyph, not a Telegram icon.
+        .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
+        .distinct()
+
+    val chosenPackage = handlers.firstOrNull { it == OFFICIAL_TELEGRAM_PACKAGE } ?: handlers.firstOrNull() ?: return null
+
     return try {
         drawableToImageBitmap(packageManager.getApplicationIcon(chosenPackage))
     } catch (_: Exception) { null }
+}
+
+private const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
+
+/** Loads Google Meet's real launcher icon if it's installed. */
+private fun getGoogleMeetIcon(context: Context): androidx.compose.ui.graphics.ImageBitmap? {
+    return try {
+        context.packageManager.getPackageInfo(GOOGLE_MEET_PACKAGE, 0)
+        drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
+    } catch (_: Exception) { null }
+}
+
+/** Opens the Google Meet app. Returns false (does nothing) if it isn't installed. */
+private fun openGoogleMeet(context: Context): Boolean {
+    val launchIntent = try { context.packageManager.getLaunchIntentForPackage(GOOGLE_MEET_PACKAGE) } catch (_: Exception) { null }
+        ?: return false
+    return try {
+        context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Exception) { false }
 }
 
 /** Opens a WhatsApp chat with [phoneNumber]. Returns false (does nothing) if WhatsApp isn't installed. */
