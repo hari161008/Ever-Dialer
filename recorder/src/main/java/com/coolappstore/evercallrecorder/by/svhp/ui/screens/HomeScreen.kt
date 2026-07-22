@@ -65,6 +65,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit,
     onRecordingClick: (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem, String) -> Unit = { _, _ -> },
     onSelectionModeChanged: (Boolean) -> Unit = {},
+    onGlobalSearchClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vm: HomeViewModel = viewModel()
@@ -181,9 +182,8 @@ fun HomeScreen(
                     }
                 }
                 item {
-                    SearchBar(
-                        query = query,
-                        onQueryChange = { vm.searchQuery.value = it },
+                    GlobalSearchPill(
+                        onClick = onGlobalSearchClick,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
@@ -378,23 +378,36 @@ private fun SelectionBar(
 
 // ── Search bar ────────────────────────────────────────────────────────────────
 
+/** Same look/behaviour as the "Search in Ever Dialer" pill shown atop the main Calls / Contacts
+ *  / Favourites tabs: a non-editable pill that opens the app's single unified search screen
+ *  (which also searches call recordings and recording notes) rather than filtering only the
+ *  recordings list in place. */
 @Composable
-private fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier,
-        placeholder = { Text("Search recordings…", style = MaterialTheme.typography.bodyMedium) },
-        leadingIcon  = { Icon(Icons.Outlined.Search, contentDescription = null) },
-        trailingIcon = {
-            AnimatedVisibility(visible = query.isNotBlank(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-                IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear") }
-            }
-        },
-        singleLine = true,
-        shape  = RoundedCornerShape(16.dp),
-        colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant)
-    )
+fun GlobalSearchPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(52.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Search in Ever Dialer",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }
 
 // ── Filter + Sort pills ────────────────────────────────────────────────────────

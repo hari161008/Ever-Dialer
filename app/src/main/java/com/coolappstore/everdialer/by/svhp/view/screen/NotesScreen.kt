@@ -62,7 +62,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Destination<RootGraph>(style = TabTransitionStyle::class)
 @Composable
-fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) {
+fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, highlightQuery: String? = null) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
     val haptic = LocalHapticFeedback.current
@@ -81,6 +81,16 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
     }
 
     var notes by remember { mutableStateOf(NoteManager.getAllNotes(context)) }
+    // Set when this screen was opened by tapping a note in the unified search results — scrolls
+    // to and visually highlights the matched word/phrase within that specific note.
+    val matchedNote = remember(notes, highlightQuery) {
+        if (highlightQuery.isNullOrBlank()) null
+        else notes.firstOrNull {
+            it.contactName.contains(highlightQuery, ignoreCase = true) ||
+                    it.phoneNumber.contains(highlightQuery, ignoreCase = true) ||
+                    it.content.contains(highlightQuery, ignoreCase = true)
+        }
+    }
     var showOverflow by remember { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNotes by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -223,6 +233,10 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
+            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                navigator = navigator,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
             if (notes.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -252,6 +266,12 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
             } else {
                 val listState = rememberLazyListState()
                 ScrollHapticsEffect(listState = listState)
+                LaunchedEffect(matchedNote) {
+                    matchedNote?.let { target ->
+                        val index = notes.indexOfFirst { it.file.absolutePath == target.file.absolutePath }
+                        if (index >= 0) listState.animateScrollToItem(index)
+                    }
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -261,12 +281,14 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
                     items(notes, key = { it.file.absolutePath }) { note ->
                         val safePhone = note.phoneNumber.filter { it.isDigit() || it == '+' }
                         val photoUri = phoneToPhotoUri[safePhone]
+                        val isHighlighted = matchedNote?.file?.absolutePath == note.file.absolutePath
                         RivoScrollAnimatedItem {
                         NoteCard(
                             note = note,
                             photoUri = photoUri,
                             isSelected = selectedNotes.contains(note.file.absolutePath),
                             selectionMode = selectionMode,
+                            highlightQuery = if (isHighlighted) highlightQuery else null,
                             onClick = {
                                 if (selectionMode) {
                                     val key = note.file.absolutePath
@@ -405,16 +427,52 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator) 
     } // end outer Box
 }
 
+/** Wraps every case-insensitive occurrence of [query] in [text] with a highlighted span — used
+ *  to show at a glance which word matched when a note was opened from search results. */
+@Composable
+private fun highlightedText(text: String, query: String?): androidx.compose.ui.text.AnnotatedString {
+    if (query.isNullOrBlank()) return androidx.compose.ui.text.AnnotatedString(text)
+    return androidx.compose.ui.text.buildAnnotatedString {
+        var startIndex = 0
+        val lowerText = text.lowercase()
+        val lowerQuery = query.lowercase()
+        while (startIndex <= text.length) {
+            val matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+            if (matchIndex < 0) {
+                append(text.substring(startIndex))
+                break
+            }
+            append(text.substring(startIndex, matchIndex))
+            withStyle(
+                androidx.compose.ui.text.SpanStyle(
+                    background = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                append(text.substring(matchIndex, matchIndex + query.length))
+            }
+            startIndex = matchIndex + query.length
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = false, selectionMode: Boolean = false, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = false, selectionMode: Boolean = false, highlightQuery: String? = null, onClick: () -> Unit, onLongClick: () -> Unit) {
     val dateStr = remember(note.lastModified) {
         SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(note.lastModified))
     }
 
+    // Briefly (and then persistently, while this note is the search-result match) tints the
+    // card so it's obvious at a glance which note matched, in addition to the inline word
+    // highlight below.
     val cardBgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            highlightQuery != null -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        },
         animationSpec = tween(200), label = "noteBg"
     )
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -482,7 +540,7 @@ fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = fa
                     )
                 }
                 Text(
-                    text = note.content,
+                    text = highlightedText(note.content, highlightQuery),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,

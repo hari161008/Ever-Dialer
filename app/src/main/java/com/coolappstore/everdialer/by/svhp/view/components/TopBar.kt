@@ -29,6 +29,53 @@ import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDes
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
+/** The pill-shaped, non-editable "Search in Ever Dialer" bar — tapping it opens the single
+ *  unified [SearchScreenDestination] (contacts, non-contacts, contact notes, recording notes).
+ *  Shown at the top of the main tabs (via [TopBar]) as well as Settings, Notes, and Recordings,
+ *  so every entry point into search looks and behaves identically. */
+@Composable
+fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
+    val searchSource = remember { MutableInteractionSource() }
+    val searchPressed by searchSource.collectIsPressedAsState()
+    val searchScale by animateFloatAsState(
+        targetValue = if (searchPressed) 0.96f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "searchScale"
+    )
+    Surface(
+        onClick = {
+            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+            }
+            navigator.navigate(SearchScreenDestination)
+        },
+        modifier = modifier.height(52.dp).scale(searchScale),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        interactionSource = searchSource
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Search in Ever Dialer",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
 @Composable
 fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     val context = LocalContext.current
@@ -63,13 +110,7 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     )
 
     // Search bar press animation
-    val searchSource = remember { MutableInteractionSource() }
-    val searchPressed by searchSource.collectIsPressedAsState()
-    val searchScale by animateFloatAsState(
-        targetValue = if (searchPressed) 0.96f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "searchScale"
-    )
+
 
     Surface(
         modifier = Modifier
@@ -87,36 +128,7 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Search bar
-            Surface(
-                onClick = {
-                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                    performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
-                }
-                navigator.navigate(SearchScreenDestination)
-            },
-                modifier = Modifier.weight(1f).height(52.dp).scale(searchScale),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                interactionSource = searchSource
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Search in Ever Dialer",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            SearchBarPill(navigator = navigator, modifier = Modifier.weight(1f))
 
             // Settings button – coloured icon background
             Surface(

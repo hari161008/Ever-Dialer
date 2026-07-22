@@ -865,6 +865,87 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
         else -> {}
     }
 
+    // ── Settings-only search ─────────────────────────────────────────────────
+    // Deliberately separate from the app-wide unified search (Contacts / Non contacts / Notes /
+    // Recordings) — typing here only ever searches settings screens and toggles, never contacts
+    // or notes, and there's no Filter button since there's nothing to filter by category.
+    var settingsSearchQuery by remember { mutableStateOf("") }
+    val settingsSearchEntries = listOf(
+        SettingsSearchEntry("Check For Updates", "Current version: v$APP_VERSION") {
+            scope.launch {
+                updateDialogState = UpdateDialogState.Checking
+                val release = fetchLatestRelease(GITHUB_API_RELEASES)
+                updateDialogState = when {
+                    release == null -> UpdateDialogState.Error
+                    isNewerVersion(release.tagName, APP_VERSION) -> {
+                        val apkFile = getApkDestinationFile()
+                        val downloadedVersion = prefs.getString(PreferenceManager.KEY_DOWNLOADED_UPDATE_VERSION, null)
+                        val readyToInstall = apkFile.exists() && apkFile.length() > 0L && downloadedVersion == release.tagName
+                        UpdateDialogState.ConfirmUpdate(release.tagName, release.apkUrl, readyToInstall)
+                    }
+                    else -> UpdateDialogState.UpToDate
+                }
+            }
+        },
+        SettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer") {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.google.com/forms/d/e/1FAIpQLSdY2WYWDFfvLScsBBxfCWzozyA_4sHUCzfR1JycfzJKASvbfQ/viewform?usp=header")))
+        },
+        SettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer") {
+            navigator.navigate(RatingsWebViewScreenDestination)
+        },
+        SettingsSearchEntry("More Apps", "Check out other apps from the developer") {
+            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.MoreAppsWebViewScreenDestination)
+        },
+        SettingsSearchEntry("Interface", "Themes, colors, and layout") {
+            navigator.navigate(InterfaceScreenDestination)
+        },
+        SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app") { showHapticsDialog = true },
+        SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app") { /* toggled inline in the list */ },
+        SettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password") {
+            navigator.navigate(BiometricScreenDestination)
+        },
+        SettingsSearchEntry("App Settings", "Call settings, network switcher, and notes") {
+            navigator.navigate(AppSettingsScreenDestination)
+        },
+        SettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code") {
+            navigator.navigate(ContactsHiderScreenDestination)
+        },
+        SettingsSearchEntry("Fake Call", "Schedule fake incoming calls without calling the real person") {
+            navigator.navigate(FakeCallScreenDestination)
+        },
+        SettingsSearchEntry("Call Recording", "Open Ever Call Recorder") {
+            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination(openedFromSettings = true))
+        },
+        SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers") { /* toggled inline in the list */ },
+        SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you") { showBlockListDialog = true },
+        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens") { /* toggled inline in the list */ },
+        SettingsSearchEntry("Create Backup", "Save app configuration and notes") {
+            scope.launch {
+                val file = BackupManager.createBackup(context)
+                backupState = if (file != null) {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/octet-stream"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Save Backup"))
+                    BackupDialogState.BackupSuccess(file.absolutePath)
+                } else {
+                    BackupDialogState.Error("Failed to create backup")
+                }
+            }
+        },
+        SettingsSearchEntry("Restore Backup", "Restore app configuration and notes") { restoreLauncher.launch("*/*") },
+        SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info") {
+            navigator.navigate(AboutAppScreenDestination)
+        }
+    )
+    val filteredSettingsResults = if (settingsSearchQuery.isBlank()) emptyList()
+        else settingsSearchEntries.filter {
+            it.title.contains(settingsSearchQuery, ignoreCase = true) || it.subtitle.contains(settingsSearchQuery, ignoreCase = true)
+        }
+
     // ── Screen ────────────────────────────────────────────────────────────────
     Scaffold(
         topBar = {
@@ -883,6 +964,67 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
+            item {
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextField(
+                        value = settingsSearchQuery,
+                        onValueChange = { settingsSearchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Search settings") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                        trailingIcon = {
+                            AnimatedVisibility(visible = settingsSearchQuery.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                                IconButton(onClick = { settingsSearchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        singleLine = true
+                    )
+                }
+            }
+
+            if (settingsSearchQuery.isNotBlank()) {
+                item {
+                    if (filteredSettingsResults.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                "No settings found for \"$settingsSearchQuery\"",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        RivoExpressiveCard {
+                            filteredSettingsResults.forEachIndexed { index, entry ->
+                                RivoListItem(
+                                    headline = entry.title,
+                                    supporting = entry.subtitle,
+                                    leadingIcon = Icons.Default.Settings,
+                                    iconContainerColor = ColorBluGrey,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = {
+                                        settingsSearchQuery = ""
+                                        entry.onClick()
+                                    }
+                                )
+                                if (index < filteredSettingsResults.size - 1) CardDivider()
+                            }
+                        }
+                    }
+                }
+            } else {
 
             // ── Default Dialer Warning Banner ──────────────────────────────────
             if (!isDefaultDialer) {
@@ -1311,10 +1453,18 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                 }
             }
 
+            }
+
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
 }
+
+private data class SettingsSearchEntry(
+    val title: String,
+    val subtitle: String,
+    val onClick: () -> Unit
+)
 
 private sealed class UpdateDialogState {
     object Idle : UpdateDialogState()

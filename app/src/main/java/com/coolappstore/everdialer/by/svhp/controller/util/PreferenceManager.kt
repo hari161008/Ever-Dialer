@@ -105,6 +105,7 @@ class PreferenceManager(context: Context) {
         // independent notes sections. When false, they're merged: a contact's Notes
         // card also surfaces any notes attached to that contact's call recordings.
         const val KEY_INTEGRATE_NOTES       = "integrate_notes_section"
+        const val KEY_DELETE_NOTES_WITH_RECORDING = "delete_notes_with_recording"
         const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
         const val KEY_THEME_MODE            = "theme_mode"
@@ -211,5 +212,16 @@ class PreferenceManager(context: Context) {
         const val KEY_CONTACTS_HIDER_IDS          = "contacts_hider_ids"           // comma-separated contact IDs
         const val KEY_CONTACTS_HIDER_HIDE_NAMES   = "contacts_hider_hide_names"    // bool
         const val KEY_CONTACTS_HIDER_HIDE_MENU    = "contacts_hider_hide_menu"     // bool
+
+        // Search filter (Dialpad / Calls / Contacts / Favourites search bars) — the "Filter"
+        // button beside the search bar. All four default to true (checked) so search behaves
+        // as broadly as possible until the user deliberately narrows it down. Persisted here
+        // (rather than in-memory) so the chosen filter survives the app being closed and
+        // reopened.
+        const val KEY_SEARCH_FILTER_CONTACTS        = "search_filter_contacts"
+        const val KEY_SEARCH_FILTER_NON_CONTACTS    = "search_filter_non_contacts"
+        const val KEY_SEARCH_FILTER_RECORDINGS      = "search_filter_recordings"
+        const val KEY_SEARCH_FILTER_CONTACT_NOTES   = "search_filter_contact_notes"
+        const val KEY_SEARCH_FILTER_RECORDING_NOTES = "search_filter_recording_notes"
     }
 }

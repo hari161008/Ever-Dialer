@@ -1,12 +1,14 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.SignalCellularAlt
@@ -42,6 +44,7 @@ fun AppSettingsScreen(navigator: DestinationsNavigator) {
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     var integrateNotes by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)) }
+    var deleteNotesWithRecording by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DELETE_NOTES_WITH_RECORDING, false)) }
 
     Scaffold(
         topBar = {
@@ -109,6 +112,22 @@ fun AppSettingsScreen(navigator: DestinationsNavigator) {
                             prefs.setBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, it)
                         }
                     )
+                    AnimatedVisibility(visible = integrateNotes) {
+                        Column {
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline   = "Delete Notes With Recording",
+                                supporting = "Also delete the linked note in Notes when its call recording is deleted",
+                                leadingIcon = Icons.Default.DeleteSweep,
+                                iconContainerColor = Color(0xFF6D4C41),
+                                checked = deleteNotesWithRecording,
+                                onCheckedChange = {
+                                    deleteNotesWithRecording = it
+                                    prefs.setBoolean(PreferenceManager.KEY_DELETE_NOTES_WITH_RECORDING, it)
+                                }
+                            )
+                        }
+                    }
                 }
             }
 

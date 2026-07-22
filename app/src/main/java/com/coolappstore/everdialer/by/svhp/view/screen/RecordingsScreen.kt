@@ -187,7 +187,10 @@ fun RecordingsScreen(
                                 selectedRecording = recordingItem
                                 highlightQuery = query
                             },
-                            onSelectionModeChanged = { isRecordingSelectionMode = it }
+                            onSelectionModeChanged = { isRecordingSelectionMode = it },
+                            onGlobalSearchClick = {
+                                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination)
+                            }
                         )
                     }
                 }

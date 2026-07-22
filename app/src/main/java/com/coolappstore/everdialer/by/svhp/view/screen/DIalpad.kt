@@ -62,21 +62,29 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
+import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.DialpadToneStyle
 import com.coolappstore.everdialer.by.svhp.controller.util.DialpadTonePlayer
+import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.normalizeNumberDigits
+import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
+import com.coolappstore.everdialer.by.svhp.view.components.getSearchFilterState
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.SingleTile
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.TileGroup
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -102,6 +110,49 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
  */
 private object DialpadDraftHolder {
     var pendingNumber: String = ""
+}
+
+/** Extra (non-contact) result rows shown below matched contacts in the dialpad's search-results
+ *  panel, gated by the persisted "Filter" checkboxes (see [SearchFilterButton]). */
+private sealed class DialpadExtraResult {
+    data class NonContact(val entry: CallLogEntry) : DialpadExtraResult()
+    data class Recording(val item: RecordingItem) : DialpadExtraResult()
+    data class ContactNote(val note: com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry) : DialpadExtraResult()
+    data class RecordingNote(val item: RecordingItem) : DialpadExtraResult()
+}
+
+@Composable
+private fun DialpadExtraResultTile(result: DialpadExtraResult, onCallNumber: (String) -> Unit) {
+    when (result) {
+        is DialpadExtraResult.NonContact -> SingleTile(
+            title = result.entry.name?.ifEmpty { result.entry.number } ?: result.entry.number,
+            subtitle = if (result.entry.name.isNullOrEmpty() || result.entry.name == result.entry.number) null else result.entry.number,
+            icon = Icons.Default.Person,
+            phoneNumber = result.entry.number,
+            onClick = { onCallNumber(result.entry.number) }
+        )
+        is DialpadExtraResult.Recording -> SingleTile(
+            title = result.item.contactName?.ifBlank { result.item.phoneNumber } ?: result.item.phoneNumber,
+            subtitle = result.item.phoneNumber,
+            icon = Icons.Default.Mic,
+            phoneNumber = result.item.phoneNumber,
+            onClick = { if (result.item.phoneNumber.isNotBlank()) onCallNumber(result.item.phoneNumber) }
+        )
+        is DialpadExtraResult.ContactNote -> SingleTile(
+            title = result.note.contactName.ifBlank { result.note.phoneNumber.ifBlank { "Unknown" } },
+            subtitle = result.note.content,
+            icon = Icons.Default.StickyNote2,
+            phoneNumber = result.note.phoneNumber,
+            onClick = { if (result.note.phoneNumber.isNotBlank()) onCallNumber(result.note.phoneNumber) }
+        )
+        is DialpadExtraResult.RecordingNote -> SingleTile(
+            title = result.item.contactName?.ifBlank { result.item.phoneNumber } ?: result.item.phoneNumber,
+            subtitle = result.item.noteText,
+            icon = Icons.Default.Mic,
+            phoneNumber = result.item.phoneNumber,
+            onClick = { if (result.item.phoneNumber.isNotBlank()) onCallNumber(result.item.phoneNumber) }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -229,6 +280,60 @@ fun DialPadContent(
     var searchQuery by remember { mutableStateOf("") }
     val soundPool = remember { buildDtmfSoundPool(context) }
 
+    // Filter state for the search bar's Filter button (Contacts / Non contacts / Contact
+    // notes / Recording notes), persisted so it's remembered across app restarts.
+    val settingsVerForFilter by prefs.settingsChanged.collectAsState()
+    val searchFilterState = remember(settingsVerForFilter) { prefs.getSearchFilterState() }
+    val callLogVM: CallLogViewModel = koinActivityViewModel()
+    val callLogsForSearch by callLogVM.allCallLogs.collectAsState()
+    val recordingsVM: HomeViewModel = viewModel()
+    val recordingsForSearch by recordingsVM.allRecordings.collectAsState()
+
+    // Extra (non-contact) results shown below matched contacts while typing a text query —
+    // numbers from the call log that aren't saved contacts, plus contact/recording notes whose
+    // content matches. Only active in text-search mode (not while T9-matching a typed number).
+    val extraSearchResults = remember(searchQuery, callLogsForSearch, recordingsForSearch, searchFilterState) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) emptyList()
+        else {
+            val results = mutableListOf<DialpadExtraResult>()
+            if (searchFilterState.nonContacts) {
+                val seen = LinkedHashMap<String, CallLogEntry>()
+                callLogsForSearch.asSequence()
+                    .filter { it.contactId.isNullOrBlank() }
+                    .forEach { entry ->
+                        val key = normalizeNumberDigits(entry.number).filter { it.isDigit() }.takeLast(9)
+                            .ifBlank { entry.number }
+                        seen.putIfAbsent(key, entry)
+                    }
+                seen.values.filter { entry ->
+                    entry.number.replace(" ", "").contains(q.replace(" ", "")) ||
+                            (entry.isCallerIdName && (entry.name?.contains(q, ignoreCase = true) == true))
+                }.take(3).forEach { results.add(DialpadExtraResult.NonContact(it)) }
+            }
+            if (searchFilterState.contactNotes) {
+                NoteManager.getAllNotes(context).filter { note ->
+                    note.contactName.contains(q, ignoreCase = true) ||
+                            note.phoneNumber.contains(q, ignoreCase = true) ||
+                            note.content.contains(q, ignoreCase = true)
+                }.take(3).forEach { results.add(DialpadExtraResult.ContactNote(it)) }
+            }
+            var recordingNoteMatches: List<RecordingItem> = emptyList()
+            if (searchFilterState.recordingNotes) {
+                recordingNoteMatches = recordingsForSearch.filter { it.noteText.isNotBlank() && it.noteText.contains(q, ignoreCase = true) }
+                recordingNoteMatches.take(3).forEach { results.add(DialpadExtraResult.RecordingNote(it)) }
+            }
+            if (searchFilterState.recordings) {
+                recordingsForSearch.filter { rec ->
+                    rec !in recordingNoteMatches &&
+                            ((rec.contactName?.contains(q, ignoreCase = true) == true) ||
+                                    rec.phoneNumber.replace(" ", "").contains(q.replace(" ", "")))
+                }.take(3).forEach { results.add(DialpadExtraResult.Recording(it)) }
+            }
+            results
+        }
+    }
+
     val t9Enabled = prefs.getBoolean(PreferenceManager.KEY_T9_DIALING, true)
     var showSimPicker by remember { mutableStateOf(false) }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
@@ -275,11 +380,12 @@ fun DialPadContent(
     }
 
     // Search results from search bar
-    val searchResults by remember(searchQuery, number, allContacts, t9Enabled) {
+    val searchResults by remember(searchQuery, number, allContacts, t9Enabled, searchFilterState) {
         derivedStateOf {
             val q = searchQuery.trim()
             val n = number
-            when {
+            if (!searchFilterState.contacts) emptyList()
+            else when {
                 q.isNotEmpty() -> allContacts.filter { c ->
                     c.name.contains(q, ignoreCase = true) ||
                     c.phoneNumbers.any { it.contains(q) }
@@ -562,7 +668,7 @@ fun DialPadContent(
 
                 // Search results
                 AnimatedVisibility(
-                    visible = searchResults.isNotEmpty(),
+                    visible = searchResults.isNotEmpty() || extraSearchResults.isNotEmpty(),
                     enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
                             expandVertically(tween(420, easing = FastOutSlowInEasing)),
                     exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
@@ -589,6 +695,9 @@ fun DialPadContent(
                                         initiateCall(num)
                                     }
                                 )
+                            }
+                            extraSearchResults.forEach { extra ->
+                                DialpadExtraResultTile(result = extra, onCallNumber = { initiateCall(it) })
                             }
                         }
                     }
@@ -746,7 +855,7 @@ fun DialPadContent(
 
         // Search results
         AnimatedVisibility(
-            visible = searchResults.isNotEmpty(),
+            visible = searchResults.isNotEmpty() || extraSearchResults.isNotEmpty(),
             enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
                     expandVertically(tween(420, easing = FastOutSlowInEasing)),
             exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
@@ -773,13 +882,16 @@ fun DialPadContent(
                                 }
                             )
                         }
+                        extraSearchResults.forEach { extra ->
+                            DialpadExtraResultTile(result = extra, onCallNumber = { initiateCall(it) })
+                        }
                     }
                 }
             }
         }
 
         AnimatedVisibility(
-            visible = number.isNotEmpty() && searchResults.isEmpty() && searchQuery.isEmpty(),
+            visible = number.isNotEmpty() && searchResults.isEmpty() && extraSearchResults.isEmpty() && searchQuery.isEmpty(),
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {

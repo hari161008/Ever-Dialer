@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +64,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _allRecordings = MutableStateFlow<List<RecordingItem>>(emptyList())
     private val _isLoading     = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
+    // Public read-only view of every recording on disk (unfiltered by searchQuery/filterTab),
+    // used by the dialer's own global search screen to search recording notes.
+    val allRecordings: StateFlow<List<RecordingItem>> = _allRecordings
 
     val sortConfig = MutableStateFlow(
         run {
@@ -126,10 +130,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteSelected(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val toDelete = selectedUris.value.toSet()
+            val itemsByUri = _allRecordings.value.associateBy { it.uri }
             toDelete.forEach { uri ->
                 runCatching { SafHelper.deleteRecording(context, uri) }
                 notesPrefs.edit().remove(uri.toString()).apply()
                 favPrefs.edit().remove(uri.toString()).apply()
+                itemsByUri[uri]?.let { deleteIntegratedContactNoteIfNeeded(context, it.phoneNumber) }
             }
             withContext(Dispatchers.Main) {
                 selectedUris.value = emptySet()
@@ -156,6 +162,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             notesPrefs.edit().remove(item.uri.toString()).apply()
             favPrefs.edit().remove(item.uri.toString()).apply()
+            deleteIntegratedContactNoteIfNeeded(context, item.phoneNumber)
             withContext(Dispatchers.Main) {
                 _allRecordings.value = _allRecordings.value.filter { it.uri != item.uri }
                 applyFilters()
@@ -322,6 +329,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun isFavourite(uri: Uri) = favPrefs.getBoolean(uri.toString(), false)
+
+    /**
+     * Ever Dialer's Settings → App Settings → "Integrate Notes Section" treats this app's Notes
+     * section and call-recording notes as one merged place. Settings → App Settings →
+     * "Delete Notes With Recording" (only shown/settable while that's on) extends this: when a
+     * recording is deleted, the matching contact note (kept in the main app's own Notes
+     * section/files, not this module's [notesPrefs]) is deleted too — since with integration on
+     * they're presented as the same note. Off by default so deleting a recording never removes
+     * a contact note unless the user opted in. Reads straight from the shared "rivo_prefs"
+     * SharedPreferences file (same file/keys Ever Dialer's own PreferenceManager uses) and the
+     * app's Notes directory convention, since this module can't depend on the app module.
+     */
+    private fun deleteIntegratedContactNoteIfNeeded(context: Context, phoneNumber: String) {
+        try {
+            val prefs = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+            val integrateNotes = prefs.getBoolean("integrate_notes_section", true)
+            val deleteWithRecording = prefs.getBoolean("delete_notes_with_recording", false)
+            if (!integrateNotes || !deleteWithRecording) return
+            val safeNumber = phoneNumber.filter { it.isDigit() || it == '+' }
+            if (safeNumber.isEmpty()) return
+            val notesDir = File(context.getExternalFilesDir(null), "Notes")
+            notesDir.listFiles()
+                ?.filter { it.extension == "txt" && it.nameWithoutExtension.contains("[$safeNumber]") }
+                ?.forEach { it.delete() }
+        } catch (_: Exception) {}
+    }
 
     private fun loadRecordings() {
         viewModelScope.launch {
@@ -661,10 +694,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (urisToDelete.isEmpty()) return
 
         // Delete works uniformly across SAF-folder and private-storage recordings.
+        val itemsByUri = working.associateBy { it.uri }
         urisToDelete.forEach { uri ->
             runCatching { SafHelper.deleteRecording(context, uri) }
             notesPrefs.edit().remove(uri.toString()).apply()
             favPrefs.edit().remove(uri.toString()).apply()
+            itemsByUri[uri]?.let { deleteIntegratedContactNoteIfNeeded(context, it.phoneNumber) }
         }
 
         withContext(Dispatchers.Main) {

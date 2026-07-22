@@ -123,6 +123,27 @@ fun placeCallWithSimPreference(
     }
 }
 
+/**
+ * Strips everything except digits and a leading '+' so two differently-formatted
+ * representations of the same number ("+1 (555) 123-4567" vs "5551234567") can be compared.
+ */
+fun normalizeNumberDigits(number: String): String =
+    number.filter { it.isDigit() || it == '+' }
+
+/**
+ * Loose equality check for two phone numbers: compares the last 9 digits (enough to avoid
+ * false positives while still matching across differing country-code / leading-zero / spacing
+ * conventions). Used to decide whether a call-log number belongs to a saved contact.
+ */
+fun numbersLikelyMatch(a: String, b: String): Boolean {
+    val da = normalizeNumberDigits(a).filter { it.isDigit() }
+    val db = normalizeNumberDigits(b).filter { it.isDigit() }
+    if (da.isEmpty() || db.isEmpty()) return false
+    val tailLen = minOf(9, da.length, db.length)
+    if (tailLen <= 0) return false
+    return da.takeLast(tailLen) == db.takeLast(tailLen)
+}
+
 fun openInContacts(context: Context, contactId: String) {
     val intent = Intent(Intent.ACTION_VIEW).apply {
         data = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contactId)
