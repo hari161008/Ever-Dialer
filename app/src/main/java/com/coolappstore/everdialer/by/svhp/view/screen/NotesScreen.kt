@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -205,6 +206,11 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
             TopAppBar(
                 title = { Text("Notes", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = {
+                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination)
+                    }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Settings")
+                    }
                     Box {
                         IconButton(onClick = { showOverflow = true }) {
                             Icon(Icons.Default.MoreVert, "More")

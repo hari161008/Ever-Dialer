@@ -21,7 +21,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -113,12 +115,22 @@ fun ContactSearchContent(
     val settingsVer by prefs.settingsChanged.collectAsState()
     val filterState = remember(settingsVer) { prefs.getSearchFilterState() }
 
-    var query by rememberSaveable { mutableStateOf("") }
+    // TextFieldValue (not a plain String) so the cursor position survives this screen being
+    // recreated — e.g. navigating into a contact's details and pressing back. With a plain
+    // String, re-requesting focus on the freshly recomposed field always snapped the cursor
+    // back to index 0 instead of staying at the end of the restored text.
+    var queryFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
+    val query = queryFieldValue.text
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+        // Restore the cursor to the end of any already-typed query rather than letting the
+        // newly (re)created text field default the selection back to the very start.
+        queryFieldValue = queryFieldValue.copy(selection = TextRange(queryFieldValue.text.length))
         keyboardController?.show()
     }
 
@@ -197,8 +209,8 @@ fun ContactSearchContent(
                 shadowElevation = 0.dp
             ) {
                 TextField(
-                    value = query,
-                    onValueChange = { query = it },
+                    value = queryFieldValue,
+                    onValueChange = { queryFieldValue = it },
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     placeholder = { Text("Search contacts or numbers") },
                     leadingIcon = {
@@ -208,7 +220,7 @@ fun ContactSearchContent(
                     },
                     trailingIcon = {
                         AnimatedVisibility(visible = query.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-                            IconButton(onClick = { query = "" }) {
+                            IconButton(onClick = { queryFieldValue = TextFieldValue("") }) {
                                 Icon(Icons.Default.Close, contentDescription = "Clear")
                             }
                         }

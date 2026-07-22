@@ -81,12 +81,22 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    // In landscape, search/settings are in the NavigationRail — just provide status bar inset
+    val prefs = koinInject<PreferenceManager>()
+    // In landscape, Settings is reachable from the NavigationRail — but each tab still needs
+    // its own search bar on top (matching Notes/Recordings, which always show one inline) so
+    // every section is searchable and scrolls independently below it.
     if (isLandscape) {
-        Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
+        Surface(
+            modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            SearchBarPill(
+                navigator = navigator,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
         return
     }
-    val prefs = koinInject<PreferenceManager>()
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,

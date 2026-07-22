@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -66,6 +67,7 @@ fun HomeScreen(
     onRecordingClick: (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem, String) -> Unit = { _, _ -> },
     onSelectionModeChanged: (Boolean) -> Unit = {},
     onGlobalSearchClick: () -> Unit = {},
+    onEverDialerSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val vm: HomeViewModel = viewModel()
@@ -150,8 +152,13 @@ fun HomeScreen(
                 title = { Text("Ever Call Recorder", fontWeight = FontWeight.Bold) },
                 actions = {
                     AnimatedVisibility(visible = !isSelectionMode, enter = fadeIn(), exit = fadeOut()) {
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        Row {
+                            IconButton(onClick = onEverDialerSettingsClick) {
+                                Icon(Icons.Default.Tune, contentDescription = "Ever Dialer Settings")
+                            }
+                            IconButton(onClick = onSettingsClick) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            }
                         }
                     }
                 },

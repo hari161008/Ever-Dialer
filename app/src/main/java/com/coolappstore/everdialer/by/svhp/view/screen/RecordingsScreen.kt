@@ -190,6 +190,9 @@ fun RecordingsScreen(
                             onSelectionModeChanged = { isRecordingSelectionMode = it },
                             onGlobalSearchClick = {
                                 navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination)
+                            },
+                            onEverDialerSettingsClick = {
+                                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination)
                             }
                         )
                     }

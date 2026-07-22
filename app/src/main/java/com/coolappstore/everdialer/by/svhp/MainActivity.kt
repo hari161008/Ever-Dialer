@@ -138,7 +138,7 @@ class MainActivity : FragmentActivity() {
                         "favorites"  -> FavoritesScreenDestination
                         "contacts"   -> ContactScreenDestination
                         "recordings" -> RecordingsScreenDestination()
-                        "notes"      -> NotesScreenDestination
+                        "notes"      -> NotesScreenDestination()
                         else         -> RecentScreenDestination
                     }
                 }
@@ -483,14 +483,6 @@ class MainActivity : FragmentActivity() {
                                         )
                                         Spacer(Modifier.height(4.dp))
 
-                                        RailItem(
-                                            selected = currentDest?.hierarchy?.any { it.route?.contains("search", ignoreCase = true) == true } == true,
-                                            icon = { _ -> Icon(Icons.Default.Search, "Search", modifier = Modifier.size(24.dp)) },
-                                            label = "Search",
-                                            paddingStart = railPaddingStart,
-                                            paddingEnd = railPaddingEnd,
-                                            onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination.route) }
-                                        )
                                         RailItem(
                                             selected = currentDest?.hierarchy?.any { it.route?.contains("settings", ignoreCase = true) == true } == true,
                                             icon = { _ -> Icon(Icons.Default.Tune, "Settings", modifier = Modifier.size(24.dp)) },
