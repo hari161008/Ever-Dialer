@@ -1,6 +1,8 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -14,11 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -44,6 +48,47 @@ private data class DragGhostState(
     val windowPosition: Offset
 )
 
+/**
+ * Drag detection that claims the gesture the instant a finger goes down, instead of waiting for
+ * touch-slop to be exceeded in a particular direction (as `detectDragGestures` / long-press
+ * variants do). That wait was the root cause of drags being cut short or refusing to start
+ * inside a scrollable settings list: the ancestor `LazyColumn` runs its own scroll-gesture
+ * detector at the same time, and whichever one crosses its slop threshold first "wins" the
+ * gesture — the list routinely won before our long-press/slop check even finished, especially
+ * on any drag with a vertical component. Consuming the initial pointer-down here means the
+ * ancestor scrollable never gets a chance to claim the gesture at all.
+ */
+private fun Modifier.immediateDrag(
+    key: Any?,
+    onDragStart: () -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit
+): Modifier = this.pointerInput(key) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        down.consume()
+        onDragStart()
+        val pointerId = down.id
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == pointerId }
+            if (change == null) {
+                onDragEnd()
+                break
+            }
+            if (change.pressed) {
+                val delta = change.positionChange()
+                if (delta != Offset.Zero) onDrag(delta)
+                change.consume()
+            } else {
+                change.consume()
+                onDragEnd()
+                break
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
@@ -63,11 +108,26 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
     }
     var showButtonsMenu by remember { mutableStateOf(false) }
 
+    // Freeform layout — when on, buttons can be dropped anywhere in the preview instead of
+    // snapping into the fixed 3-per-row grid. Off (unticked) by default.
+    var freeformEnabled by remember { mutableStateOf(CallButtonPrefs.isFreeformEnabled(prefs)) }
+    val freeformPositions = remember {
+        mutableStateMapOf<String, Offset>().apply {
+            CallButtonPrefs.getFreeformPositions(prefs).forEach { (id, xy) -> put(id, Offset(xy.first, xy.second)) }
+        }
+    }
+
     // Drag-ghost overlay state: while a button is being dragged, a floating copy of it is drawn
     // in a layer above *everything* (including the card that would otherwise clip it), so it can
     // be dragged anywhere on screen — not just within the small preview card's bounds.
     var dragGhost by remember { mutableStateOf<DragGhostState?>(null) }
     var overlayRootWindowOffset by remember { mutableStateOf(Offset.Zero) }
+
+    // True while any button in the preview is actively being dragged. Used to freeze the outer
+    // settings list's scrolling for the duration of the drag, so the screen never scrolls out
+    // from under a finger that's mid-drag (which previously made drags feel like they got cut
+    // short / auto-dropped before reaching where the user intended).
+    var isDraggingAnyButton by remember { mutableStateOf(false) }
 
     fun resetButtonLayout() {
         buttonOrder.clear()
@@ -101,7 +161,10 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
             modifier = Modifier
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            // Disabled while a Feature Button is being dragged so the list can never scroll out
+            // from under the drag — see [isDraggingAnyButton].
+            userScrollEnabled = !isDraggingAnyButton
         ) {
 
             // ── Feature Buttons ───────────────────────────────────────
@@ -197,9 +260,26 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     buttonOrder = buttonOrder,
                                     enabledMap = enabledMap,
                                     hangupWidth = hangupWidth,
+                                    freeformEnabled = freeformEnabled,
+                                    onFreeformEnabledChanged = {
+                                        freeformEnabled = it
+                                        CallButtonPrefs.setFreeformEnabled(prefs, it)
+                                    },
+                                    freeformPositions = freeformPositions,
+                                    onFreeformPositionsChanged = {
+                                        CallButtonPrefs.setFreeformPositions(
+                                            prefs,
+                                            freeformPositions.mapValues { (_, offset) -> offset.x to offset.y }
+                                        )
+                                    },
                                     onOrderChanged = { CallButtonPrefs.setOrder(prefs, buttonOrder) },
-                                    onResetLayout = ::resetButtonLayout,
-                                    onDragGhostChange = { dragGhost = it }
+                                    onResetLayout = {
+                                        resetButtonLayout()
+                                        freeformPositions.clear()
+                                        CallButtonPrefs.setFreeformPositions(prefs, emptyMap())
+                                    },
+                                    onDragGhostChange = { dragGhost = it },
+                                    onDragActiveChanged = { isDraggingAnyButton = it }
                                 )
                             }
                         }
@@ -408,9 +488,14 @@ private fun FeatureButtonsPreview(
     buttonOrder: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
     enabledMap: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     hangupWidth: Float,
+    freeformEnabled: Boolean,
+    onFreeformEnabledChanged: (Boolean) -> Unit,
+    freeformPositions: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Offset>,
+    onFreeformPositionsChanged: () -> Unit,
     onOrderChanged: () -> Unit,
     onResetLayout: () -> Unit,
-    onDragGhostChange: (DragGhostState?) -> Unit
+    onDragGhostChange: (DragGhostState?) -> Unit,
+    onDragActiveChanged: (Boolean) -> Unit
 ) {
     val gridIds = buttonOrder.filter { it != CallButtonPrefs.ID_HANGUP }
 
@@ -423,6 +508,32 @@ private fun FeatureButtonsPreview(
     // the dragged tile's current position against every other tile, and to know where to start
     // the floating ghost from.
     val tileBounds = remember { mutableStateMapOf<String, Rect>() }
+
+    // ── Freeform toggle — sits above the "Preview" heading. When on, buttons can be dropped
+    // anywhere inside the preview area instead of snapping into the fixed 3-per-row grid.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onFreeformEnabledChanged(!freeformEnabled) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Freeform",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "Drag and drop buttons anywhere in the preview, instead of snapping to the grid",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Checkbox(checked = freeformEnabled, onCheckedChange = onFreeformEnabledChanged)
+    }
+    Spacer(Modifier.height(8.dp))
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -450,37 +561,46 @@ private fun FeatureButtonsPreview(
             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
-                if (rowIndex > 0) Spacer(Modifier.height(20.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    rowIds.forEach { id ->
-                        val spec = CallButtonPrefs.specFor(id) ?: return@forEach
-                        val isEnabled = enabledMap[id] ?: true
-                        val isDragging = draggingId == id
+            if (freeformEnabled) {
+                FreeformButtonsArea(
+                    gridIds = gridIds,
+                    enabledMap = enabledMap,
+                    freeformPositions = freeformPositions,
+                    onDragActiveChanged = onDragActiveChanged,
+                    onPositionsChanged = onFreeformPositionsChanged
+                )
+            } else {
+                gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
+                    if (rowIndex > 0) Spacer(Modifier.height(20.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        rowIds.forEach { id ->
+                            val spec = CallButtonPrefs.specFor(id) ?: return@forEach
+                            val isEnabled = enabledMap[id] ?: true
+                            val isDragging = draggingId == id
 
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .onGloballyPositioned { coords ->
-                                    tileBounds[id] = Rect(
-                                        offset = coords.positionInWindow(),
-                                        size = coords.size.toSize()
-                                    )
-                                }
-                                // The original tile fades out while its floating ghost (rendered
-                                // above everything, unclipped by this card) takes over showing
-                                // where it's being dragged to.
-                                .alpha(if (isDragging) 0f else 1f)
-                                .pointerInput(id) {
-                                    detectDragGesturesAfterLongPress(
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .onGloballyPositioned { coords ->
+                                        tileBounds[id] = Rect(
+                                            offset = coords.positionInWindow(),
+                                            size = coords.size.toSize()
+                                        )
+                                    }
+                                    // The original tile fades out while its floating ghost (rendered
+                                    // above everything, unclipped by this card) takes over showing
+                                    // where it's being dragged to.
+                                    .alpha(if (isDragging) 0f else 1f)
+                                    .immediateDrag(
+                                        key = id,
                                         onDragStart = {
                                             draggingId = id
+                                            onDragActiveChanged(true)
                                             currentGhostCenter = tileBounds[id]?.center ?: Offset.Zero
                                             onDragGhostChange(DragGhostState(spec, currentGhostCenter))
                                         },
-                                        onDrag = { change, amount ->
-                                            change.consume()
-                                            currentGhostCenter += amount
+                                        onDrag = { delta ->
+                                            currentGhostCenter += delta
                                             onDragGhostChange(DragGhostState(spec, currentGhostCenter))
 
                                             val targetId = tileBounds
@@ -501,45 +621,42 @@ private fun FeatureButtonsPreview(
                                         },
                                         onDragEnd = {
                                             draggingId = null
+                                            onDragActiveChanged(false)
                                             onDragGhostChange(null)
                                             onOrderChanged()
-                                        },
-                                        onDragCancel = {
-                                            draggingId = null
-                                            onDragGhostChange(null)
                                         }
                                     )
-                                }
-                                .width(76.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isEnabled) Color.White.copy(alpha = 0.16f)
-                                        else Color.White.copy(alpha = 0.08f),
-                                modifier = Modifier.size(56.dp)
+                                    .width(76.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        spec.icon,
-                                        contentDescription = null,
-                                        tint = if (isEnabled) Color.White else Color.White.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isEnabled) Color.White.copy(alpha = 0.16f)
+                                            else Color.White.copy(alpha = 0.08f),
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            spec.icon,
+                                            contentDescription = null,
+                                            tint = if (isEnabled) Color.White else Color.White.copy(alpha = 0.35f),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
+                                Text(
+                                    spec.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isEnabled) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
                             }
-                            Text(
-                                spec.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isEnabled) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
-                                maxLines = 1,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
                         }
-                    }
-                    // Pad out the row with invisible spacers so a partial last row still aligns
-                    // left-to-right the same way the real call screen's SpaceEvenly row does.
-                    repeat(3 - rowIds.size) {
-                        Spacer(modifier = Modifier.width(76.dp))
+                        // Pad out the row with invisible spacers so a partial last row still aligns
+                        // left-to-right the same way the real call screen's SpaceEvenly row does.
+                        repeat(3 - rowIds.size) {
+                            Spacer(modifier = Modifier.width(76.dp))
+                        }
                     }
                 }
             }
@@ -568,8 +685,115 @@ private fun FeatureButtonsPreview(
 
     Spacer(Modifier.height(8.dp))
     Text(
-        "Long-press and drag a button anywhere to reorder it. Hang Up always stays last, matching the real call screen.",
+        if (freeformEnabled)
+            "Drag a button anywhere in the preview to place it. Hang Up always stays fixed at the bottom, matching the real call screen."
+        else
+            "Drag a button anywhere to reorder it. Hang Up always stays last, matching the real call screen.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+}
+
+/**
+ * Freeform drag area — buttons can be dropped anywhere within these bounds rather than snapping
+ * into the fixed 3-per-row grid. Positions are stored as fractions (0f..1f) of this area's size
+ * so the layout scales correctly across screen sizes; a button with no stored position yet
+ * defaults to where it would sit in the normal grid, so switching Freeform on doesn't jumble
+ * the layout the user already had.
+ */
+@Composable
+private fun FreeformButtonsArea(
+    gridIds: List<String>,
+    enabledMap: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    freeformPositions: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Offset>,
+    onDragActiveChanged: (Boolean) -> Unit,
+    onPositionsChanged: () -> Unit
+) {
+    val density = LocalDensity.current
+    val rows = if (gridIds.isEmpty()) 1 else ((gridIds.size + 2) / 3)
+    val areaHeight = (rows * 96).dp.coerceAtLeast(120.dp)
+    val tileWidthPx = with(density) { 76.dp.toPx() }
+    val tileHeightPx = with(density) { 88.dp.toPx() }
+
+    fun defaultFraction(index: Int): Offset {
+        val (x, y) = CallButtonPrefs.defaultFreeformFraction(index, gridIds.size)
+        return Offset(x, y)
+    }
+
+    var draggingId by remember { mutableStateOf<String?>(null) }
+
+    // BoxWithConstraints resolves its size synchronously on first composition (unlike
+    // onGloballyPositioned, whose callback only fires *after* the first layout pass) — so the
+    // draggable area's pixel size is correct from the very first frame instead of momentarily
+    // being zero, which previously made drags silently no-op if a user touched down too early.
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(areaHeight)
+    ) {
+        val containerWidthPx = with(density) { maxWidth.toPx() }
+        val containerHeightPx = with(density) { maxHeight.toPx() }
+
+        gridIds.forEachIndexed { index, id ->
+            val spec = CallButtonPrefs.specFor(id) ?: return@forEachIndexed
+            val isEnabled = enabledMap[id] ?: true
+            val fraction = freeformPositions[id] ?: defaultFraction(index)
+            val isDragging = draggingId == id
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .zIndex(if (isDragging) 1f else 0f)
+                    .offset {
+                        val cx = fraction.x * containerWidthPx - tileWidthPx / 2f
+                        val cy = fraction.y * containerHeightPx - tileHeightPx / 2f
+                        IntOffset(cx.roundToInt(), cy.roundToInt())
+                    }
+                    .width(76.dp)
+                    .immediateDrag(
+                        key = id,
+                        onDragStart = {
+                            draggingId = id
+                            onDragActiveChanged(true)
+                        },
+                        onDrag = { delta ->
+                            if (containerWidthPx > 0f && containerHeightPx > 0f) {
+                                val current = freeformPositions[id] ?: defaultFraction(index)
+                                val newX = (current.x + delta.x / containerWidthPx).coerceIn(0f, 1f)
+                                val newY = (current.y + delta.y / containerHeightPx).coerceIn(0f, 1f)
+                                freeformPositions[id] = Offset(newX, newY)
+                            }
+                        },
+                        onDragEnd = {
+                            draggingId = null
+                            onDragActiveChanged(false)
+                            onPositionsChanged()
+                        }
+                    )
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (isEnabled) Color.White.copy(alpha = 0.16f)
+                            else Color.White.copy(alpha = 0.08f),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            spec.icon,
+                            contentDescription = null,
+                            tint = if (isEnabled) Color.White else Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Text(
+                    spec.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isEnabled) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
+    }
 }

@@ -67,6 +67,8 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
     val haptic = LocalHapticFeedback.current
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
 
@@ -92,6 +94,15 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
                     it.content.contains(highlightQuery, ignoreCase = true)
         }
     }
+    // Keep the bottom pill hidden (and the in-screen search bar hidden below) for the whole
+    // lifetime of this screen when it was opened to show one highlighted match from unified
+    // Search, rather than as the normal "Notes" bottom-nav tab.
+    val isSearchResultView = !highlightQuery.isNullOrBlank()
+    androidx.compose.runtime.DisposableEffect(isSearchResultView) {
+        com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForSearchResult = isSearchResultView
+        onDispose { com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForSearchResult = false }
+    }
+
     var showOverflow by remember { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNotes by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -124,6 +135,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
     var selectedNote by remember { mutableStateOf<NoteEntry?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var editorNote by remember { mutableStateOf<NoteEntry?>(null) }
+    var editorHighlightQuery by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<NoteEntry?>(null) }
 
@@ -133,7 +145,8 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
         NoteEditorDialog(
             contactName = editorNote!!.contactName,
             phoneNumber = editorNote!!.phoneNumber,
-            onDismiss = { showEditor = false; editorNote = null; refreshNotes() }
+            highlightQuery = editorHighlightQuery,
+            onDismiss = { showEditor = false; editorNote = null; editorHighlightQuery = null; refreshNotes() }
         )
     }
 
@@ -206,10 +219,12 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
             TopAppBar(
                 title = { Text("Notes", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = {
-                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination)
-                    }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Settings")
+                    if (!isLandscape) {
+                        IconButton(onClick = {
+                            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination)
+                        }) {
+                            Icon(Icons.Default.Tune, contentDescription = "Settings")
+                        }
                     }
                     Box {
                         IconButton(onClick = { showOverflow = true }) {
@@ -239,11 +254,19 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
-                navigator = navigator,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+            if (!isLandscape && !isSearchResultView) {
+                com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                    navigator = navigator,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             if (notes.isEmpty()) {
+                if (isLandscape && !isSearchResultView) {
+                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -272,10 +295,11 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
             } else {
                 val listState = rememberLazyListState()
                 ScrollHapticsEffect(listState = listState)
+                val listHeaderOffset = if (isLandscape) 1 else 0
                 LaunchedEffect(matchedNote) {
                     matchedNote?.let { target ->
                         val index = notes.indexOfFirst { it.file.absolutePath == target.file.absolutePath }
-                        if (index >= 0) listState.animateScrollToItem(index)
+                        if (index >= 0) listState.animateScrollToItem(index + listHeaderOffset)
                     }
                 }
                 LazyColumn(
@@ -284,6 +308,14 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (isLandscape && !isSearchResultView) {
+                        item(key = "search_bar_pill", contentType = "searchBar") {
+                            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                                navigator = navigator,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                            )
+                        }
+                    }
                     items(notes, key = { it.file.absolutePath }) { note ->
                         val safePhone = note.phoneNumber.filter { it.isDigit() || it == '+' }
                         val photoUri = phoneToPhotoUri[safePhone]
@@ -301,6 +333,7 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
                                     selectedNotes = if (selectedNotes.contains(key)) selectedNotes - key else selectedNotes + key
                                 } else {
                                     editorNote = note
+                                    editorHighlightQuery = if (isHighlighted) highlightQuery else null
                                     showEditor = true
                                 }
                             },
@@ -433,6 +466,43 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
     } // end outer Box
 }
 
+/** Highlights every case-insensitive occurrence of [query] with a tinted background span inside
+ *  the note editor's text field, so the word that matched a search is visible while editing —
+ *  not just on the note card in the list. Character offsets are unchanged, so identity mapping
+ *  is used. */
+private class NoteHighlightTransformation(
+    private val query: String,
+    private val highlightColor: androidx.compose.ui.graphics.Color
+) : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val annotated = androidx.compose.ui.text.buildAnnotatedString {
+            append(text.text)
+            if (query.isNotBlank()) {
+                val lowerText = text.text.lowercase()
+                val lowerQuery = query.lowercase()
+                var startIndex = 0
+                while (startIndex <= text.text.length) {
+                    val matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+                    if (matchIndex < 0) break
+                    addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            background = highlightColor.copy(alpha = 0.35f),
+                            fontWeight = FontWeight.Bold
+                        ),
+                        matchIndex,
+                        matchIndex + query.length
+                    )
+                    startIndex = matchIndex + query.length
+                }
+            }
+        }
+        return androidx.compose.ui.text.input.TransformedText(
+            annotated,
+            androidx.compose.ui.text.input.OffsetMapping.Identity
+        )
+    }
+}
+
 /** Wraps every case-insensitive occurrence of [query] in [text] with a highlighted span — used
  *  to show at a glance which word matched when a note was opened from search results. */
 @Composable
@@ -563,6 +633,7 @@ fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = fa
 fun NoteEditorDialog(
     contactName: String,
     phoneNumber: String,
+    highlightQuery: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -621,7 +692,11 @@ fun NoteEditorDialog(
                     .heightIn(min = 200.dp),
                 placeholder = { Text("Type your note here...") },
                 shape = RoundedCornerShape(16.dp),
-                minLines = 8
+                minLines = 8,
+                visualTransformation = if (!highlightQuery.isNullOrBlank())
+                    NoteHighlightTransformation(highlightQuery, MaterialTheme.colorScheme.tertiary)
+                else
+                    androidx.compose.ui.text.input.VisualTransformation.None
             )
         }
     }

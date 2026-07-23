@@ -48,6 +48,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
@@ -406,6 +407,7 @@ fun ContactSearchContent(
                                             )
                                         },
                                         onClick = {
+                                            NavBarVisibilityState.hideForSearchResult = true
                                             navigator.navigate(NotesScreenDestination(highlightQuery = query))
                                         }
                                     )
@@ -432,6 +434,7 @@ fun ContactSearchContent(
                                         icon = Icons.Default.Mic,
                                         phoneNumber = rec.phoneNumber,
                                         onClick = {
+                                            NavBarVisibilityState.hideForSettingsEntry = true
                                             navigator.navigate(RecordingsScreenDestination(openedFromSettings = true))
                                         }
                                     )
@@ -467,6 +470,7 @@ fun ContactSearchContent(
                                             )
                                         },
                                         onClick = {
+                                            NavBarVisibilityState.hideForSettingsEntry = true
                                             navigator.navigate(RecordingsScreenDestination(openedFromSettings = true))
                                         }
                                     )

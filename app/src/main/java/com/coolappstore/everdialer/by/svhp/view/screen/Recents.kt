@@ -455,6 +455,13 @@ fun CallLogFullContent(
                 kotlinx.coroutines.delay(200)
                 showSpinner = true
             }
+            if (isLandscape) {
+                com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                    navigator = navigator,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             if (showSpinner) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
@@ -599,6 +606,13 @@ fun CallLogFullContent(
                     ) {
                         // In landscape, stat cards and filter pills scroll with the list
                         if (isLandscape) {
+                            item(key = "search_bar_pill", contentType = "searchBar") {
+                                com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                                    navigator = navigator,
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
                             if (showToday || showMissed || showOutgoing || showCallTime) {
                                 item(key = "stat_cards", contentType = "statCards") {
                                     LazyRow(

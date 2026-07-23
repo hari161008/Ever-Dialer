@@ -5,6 +5,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.CallLog
+import android.provider.ContactsContract
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -53,12 +54,34 @@ class CallLogViewModel(
         }
     }
 
+    // Saving/renaming/deleting a contact never touches the call log provider itself, so without
+    // this, a call log entry kept showing "Unknown"/the old name forever after the contact was
+    // saved — nothing was telling this ViewModel its cached names (via CallLogRepository's own
+    // contactInfoCache) were now stale. Shares the same debounce job as the call log observer
+    // since either one just means "re-fetch and re-resolve names".
+    private val contactsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            debounceJob?.cancel()
+            debounceJob = viewModelScope.launch {
+                delay(300)
+                fetchLogs(forceRefresh = true)
+            }
+        }
+    }
+
     init {
         getApplication<Application>().contentResolver.registerContentObserver(
             CallLog.Calls.CONTENT_URI,
             true,
             callLogObserver
         )
+        try {
+            getApplication<Application>().contentResolver.registerContentObserver(
+                ContactsContract.Contacts.CONTENT_URI,
+                true,
+                contactsObserver
+            )
+        } catch (_: Exception) {}
         // Step 1: serve disk cache immediately so UI is instant
         viewModelScope.launch(Dispatchers.IO) {
             val diskCache = loadFromDisk()
@@ -76,6 +99,7 @@ class CallLogViewModel(
     override fun onCleared() {
         super.onCleared()
         getApplication<Application>().contentResolver.unregisterContentObserver(callLogObserver)
+        getApplication<Application>().contentResolver.unregisterContentObserver(contactsObserver)
     }
 
     fun setFilter(newFilter: CallLogFilter) {
@@ -108,7 +132,8 @@ class CallLogViewModel(
             // every app open after the first one).
             val changed = result.size != cachedLogs.size ||
                 result.zip(cachedLogs).any { (a, b) ->
-                    a.number != b.number || a.date != b.date || a.type != b.type
+                    a.number != b.number || a.date != b.date || a.type != b.type ||
+                        a.name != b.name || a.photoUri != b.photoUri
                 }
             cachedLogs = result
             saveToDisk(result)

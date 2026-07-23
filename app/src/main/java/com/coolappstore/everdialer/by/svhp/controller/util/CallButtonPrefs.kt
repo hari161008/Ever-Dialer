@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
@@ -39,6 +40,7 @@ object CallButtonPrefs {
     const val ID_SPEAKER   = "speaker"
     const val ID_BLUETOOTH = "bluetooth"
     const val ID_MORE      = "more"
+    const val ID_RECORD    = "record"
     const val ID_HANGUP    = "hangup"
 
     /** Buttons that can never be hidden by the user. */
@@ -53,14 +55,16 @@ object CallButtonPrefs {
         CallButtonSpec(ID_SPEAKER,   "Speaker",    Icons.Default.VolumeDown, Color(0xFF4CAF50)),
         CallButtonSpec(ID_BLUETOOTH, "Bluetooth",  Icons.Default.Bluetooth,  Color(0xFF1976D2)),
         CallButtonSpec(ID_MORE,      "More",       Icons.Default.MoreHoriz,  Color(0xFF757575)),
+        CallButtonSpec(ID_RECORD,    "Record",     Icons.Default.FiberManualRecord, Color(0xFFE53935)),
         CallButtonSpec(ID_HANGUP,    "Hang Up",    Icons.Default.CallEnd,    Color(0xFFD32F2F))
     )
 
     val ALL_IDS: List<String> = SPECS.map { it.id }
 
-    const val DEFAULT_ORDER = "hold,add,dialpad,note,mute,speaker,bluetooth,more,hangup"
-    // "more" is new — off by default so existing users see the same buttons as before.
-    const val DEFAULT_DISABLED = "more"
+    const val DEFAULT_ORDER = "hold,add,dialpad,note,mute,speaker,bluetooth,more,record,hangup"
+    // "more" and "record" are new — both off by default (unticked in the 3-dot menu) so
+    // existing users see the same buttons as before until they opt in.
+    const val DEFAULT_DISABLED = "more,record"
 
     fun specFor(id: String): CallButtonSpec? = SPECS.find { it.id == id }
 
@@ -103,5 +107,48 @@ object CallButtonPrefs {
     fun getActiveActionIds(prefs: PreferenceManager): List<String> {
         val disabled = getDisabled(prefs)
         return getOrder(prefs).filter { it != ID_HANGUP && it !in disabled }
+    }
+
+    // ── Freeform layout ──────────────────────────────────────────────────────────────
+    // When enabled, Feature Buttons are placed at custom (x, y) positions instead of the
+    // fixed 3-per-row grid. Shared between the Settings preview (draggable) and the real
+    // ongoing-call screen (renders the same saved positions) so both stay in sync.
+
+    fun isFreeformEnabled(prefs: PreferenceManager): Boolean =
+        prefs.getBoolean(PreferenceManager.KEY_CALL_BUTTONS_FREEFORM, false)
+
+    fun setFreeformEnabled(prefs: PreferenceManager, enabled: Boolean) {
+        prefs.setBoolean(PreferenceManager.KEY_CALL_BUTTONS_FREEFORM, enabled)
+    }
+
+    /** Loads saved freeform positions as fractions (0f..1f) of the draggable area. Format: "id:x:y|id:x:y". */
+    fun getFreeformPositions(prefs: PreferenceManager): Map<String, Pair<Float, Float>> {
+        val raw = prefs.getString(PreferenceManager.KEY_CALL_BUTTONS_FREEFORM_POSITIONS, null) ?: return emptyMap()
+        val map = mutableMapOf<String, Pair<Float, Float>>()
+        raw.split("|").forEach { entry ->
+            val parts = entry.split(":")
+            if (parts.size == 3) {
+                val x = parts[1].toFloatOrNull()
+                val y = parts[2].toFloatOrNull()
+                if (x != null && y != null) map[parts[0]] = x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f)
+            }
+        }
+        return map
+    }
+
+    fun setFreeformPositions(prefs: PreferenceManager, positions: Map<String, Pair<Float, Float>>) {
+        val raw = positions.entries.joinToString("|") { (id, xy) -> "$id:${xy.first}:${xy.second}" }
+        prefs.setString(PreferenceManager.KEY_CALL_BUTTONS_FREEFORM_POSITIONS, raw)
+    }
+
+    /** Default freeform fraction for a button at [index] within [totalCount], matching where it
+     *  would sit in the normal 3-per-row grid — so turning Freeform on doesn't jumble the layout. */
+    fun defaultFreeformFraction(index: Int, totalCount: Int): Pair<Float, Float> {
+        val rows = if (totalCount <= 0) 1 else ((totalCount + 2) / 3)
+        val col = index % 3
+        val row = index / 3
+        val x = (col + 0.5f) / 3f
+        val y = (row + 0.5f) / rows
+        return x to y
     }
 }

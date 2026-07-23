@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,6 +62,7 @@ private val ColorBlue   = Color(0xFF2196F3)
 private val ColorGreen  = Color(0xFF4CAF50)
 private val ColorOrange = Color(0xFFFF9800)
 private val ColorIndigo = Color(0xFF3F51B5)
+private val ColorRed    = Color(0xFFE53935)
 
 data class ThemeOption(val key: String, val label: String)
 
@@ -108,6 +111,9 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
     var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())) }
+    var autoDeleteUnknownEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED, false)) }
+    var autoDeleteUnknownValue   by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1).toString()) }
+    var autoDeleteUnknownUnit    by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "days") ?: "days") }
     var callTimeFormat24h   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false)) }
     var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
@@ -1187,6 +1193,71 @@ fun InterfaceScreen(navigator: DestinationsNavigator) {
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, it)
                                     }
                                 )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Auto Delete Unknown No in call log",
+                                    supporting = if (autoDeleteUnknownEnabled)
+                                        "Deletes call log entries from unsaved numbers older than $autoDeleteUnknownValue ${if (autoDeleteUnknownUnit == "hours") "hour(s)" else "day(s)"}"
+                                    else "Automatically remove old call log entries from numbers not in your contacts",
+                                    leadingIcon = Icons.Outlined.AutoDelete,
+                                    iconContainerColor = ColorRed,
+                                    checked = autoDeleteUnknownEnabled,
+                                    onCheckedChange = { enabled ->
+                                        autoDeleteUnknownEnabled = enabled
+                                        prefs.setBoolean(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED, enabled)
+                                        if (enabled) {
+                                            // Reset to the 1-day default every time it's turned on, and stamp "now"
+                                            // as the cutoff — only call log entries from *after* this moment are
+                                            // ever eligible for auto-deletion, so existing history is never touched.
+                                            autoDeleteUnknownValue = "1"
+                                            autoDeleteUnknownUnit = "days"
+                                            prefs.setInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1)
+                                            prefs.setString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "days")
+                                            prefs.setLong(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT, System.currentTimeMillis())
+                                        }
+                                    }
+                                )
+                                AnimatedVisibility(visible = autoDeleteUnknownEnabled) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(start = 68.dp, end = 16.dp, bottom = 14.dp, top = 2.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = autoDeleteUnknownValue,
+                                            onValueChange = { raw ->
+                                                val digitsOnly = raw.filter { it.isDigit() }.take(4)
+                                                autoDeleteUnknownValue = digitsOnly
+                                                val n = digitsOnly.toIntOrNull()
+                                                if (n != null && n > 0) {
+                                                    prefs.setInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, n)
+                                                }
+                                            },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.width(90.dp)
+                                        )
+                                        FilterChip(
+                                            selected = autoDeleteUnknownUnit == "days",
+                                            onClick = {
+                                                autoDeleteUnknownUnit = "days"
+                                                prefs.setString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "days")
+                                            },
+                                            label = { Text("Days") }
+                                        )
+                                        FilterChip(
+                                            selected = autoDeleteUnknownUnit == "hours",
+                                            onClick = {
+                                                autoDeleteUnknownUnit = "hours"
+                                                prefs.setString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "hours")
+                                            },
+                                            label = { Text("Hours") }
+                                        )
+                                    }
+                                }
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(

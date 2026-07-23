@@ -68,6 +68,7 @@ import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.SimSlotBadge
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
+import com.coolappstore.evercallrecorder.by.svhp.services.recording.RecordingForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -454,6 +455,10 @@ fun ExpressiveCallScreen(
     // a brief STATE_RINGING flash as already-active for UI purposes
     val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
     var isOnHold by remember { mutableStateOf(false) }
+    // Manual state for the optional "Record" Feature Button — toggles the bundled call
+    // recorder's foreground service on/off for this call. Purely a manual trigger; the
+    // recorder's own auto-record setting (Settings → Call Recording) is unaffected.
+    var isManuallyRecording by remember { mutableStateOf(false) }
     var showNoteWindow by remember { mutableStateOf(false) }
 
     // ── Call-lock biometric ────────────────────────────────────────────────
@@ -566,6 +571,15 @@ fun ExpressiveCallScreen(
             CallButtonPrefs.ID_NOTE, CallButtonPrefs.ID_MUTE, CallButtonPrefs.ID_SPEAKER,
             CallButtonPrefs.ID_BLUETOOTH
         )
+    }
+    // Freeform layout — when enabled in Settings → Appearance → Caller UI, buttons are rendered
+    // at the exact custom positions configured there instead of the fixed 3-per-row grid. The
+    // real call screen only *renders* this saved layout; dragging/editing happens in Settings.
+    val freeformEnabled = remember(settingsVersion) {
+        prefs?.let { CallButtonPrefs.isFreeformEnabled(it) } ?: false
+    }
+    val freeformPositions = remember(settingsVersion) {
+        prefs?.let { CallButtonPrefs.getFreeformPositions(it) } ?: emptyMap()
     }
     var showMoreMenu by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
@@ -719,6 +733,42 @@ fun ExpressiveCallScreen(
                     if (isBluetoothActive) CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
                     else CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
                 }
+            } else {
+                // No Bluetooth headset connected this call — reserve the same grid slot instead
+                // of rendering nothing, otherwise Arrangement.SpaceEvenly redistributes the
+                // remaining buttons in this row across the freed-up space, which visually
+                // "moves" every button after it in the saved order — differently from call to
+                // call depending on whether a headset happens to be connected that time.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(modifier = Modifier.size(68.dp))
+                    Text(
+                        text = "",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+            CallButtonPrefs.ID_RECORD -> AnimatedCallButton(
+                icon = Icons.Default.FiberManualRecord,
+                label = if (isManuallyRecording) "Stop" else "Record",
+                isActive = isManuallyRecording,
+                btnColor = controlBtnColor, activeBtnColor = Color(0xFFE53935),
+                fgColor = controlBtnFg, activeFgColor = Color.White
+            ) {
+                val action = if (isManuallyRecording) {
+                    RecordingForegroundService.ACTION_STOP_RECORDING
+                } else {
+                    RecordingForegroundService.ACTION_MANUAL_START
+                }
+                try {
+                    context.startService(
+                        Intent(context, RecordingForegroundService::class.java).setAction(action)
+                    )
+                } catch (_: Exception) {
+                    // Recording permissions/service unavailable on this device — ignore, the
+                    // button simply won't toggle recording state below.
+                }
+                isManuallyRecording = !isManuallyRecording
             }
             CallButtonPrefs.ID_MORE -> Box {
                 AnimatedCallButton(
@@ -876,7 +926,7 @@ fun ExpressiveCallScreen(
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
                             if (showSimBadge && simSlot in 0..1) {
-                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp))
+                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp), shape = RoundedCornerShape(percent = 25))
                             }
                             Text(
                                 text = when {
@@ -911,12 +961,13 @@ fun ExpressiveCallScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                activeButtonIds.chunked(3).forEach { rowIds ->
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        rowIds.forEach { id -> RenderFeatureButton(id) }
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
+                                FeatureButtonsLayout(
+                                    activeButtonIds = activeButtonIds,
+                                    freeformEnabled = freeformEnabled,
+                                    freeformPositions = freeformPositions,
+                                    rowSpacing = 16.dp
+                                ) { id -> RenderFeatureButton(id) }
+                                Spacer(modifier = Modifier.height(16.dp))
                                 AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp)) {
@@ -1031,7 +1082,7 @@ fun ExpressiveCallScreen(
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                             if (showSimBadge && simSlot in 0..1) {
-                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 18.dp, height = 21.dp))
+                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 18.dp, height = 21.dp), shape = RoundedCornerShape(percent = 25))
                             }
                             Text(
                                 text = when {
@@ -1082,12 +1133,12 @@ fun ExpressiveCallScreen(
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 // Feature Buttons — order & visibility from Settings → Appearance → Caller UI
-                                activeButtonIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
-                                    if (rowIndex > 0) Spacer(modifier = Modifier.height(20.dp))
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        rowIds.forEach { id -> RenderFeatureButton(id) }
-                                    }
-                                }
+                                FeatureButtonsLayout(
+                                    activeButtonIds = activeButtonIds,
+                                    freeformEnabled = freeformEnabled,
+                                    freeformPositions = freeformPositions,
+                                    rowSpacing = 20.dp
+                                ) { id -> RenderFeatureButton(id) }
 
                                 AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                     Column(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
@@ -1450,6 +1501,54 @@ fun ExpressiveCallScreen(
 }
 
 // ─── In-Call Dial Pad ──────────────────────────────────────────────────────────
+
+/**
+ * Renders the ongoing call's Feature Buttons either as the fixed 3-per-row grid, or — when
+ * Freeform is turned on in Settings → Appearance → Caller UI — at the exact custom positions
+ * saved there. Positions are read-only here; editing them happens in the Settings preview.
+ */
+@Composable
+private fun FeatureButtonsLayout(
+    activeButtonIds: List<String>,
+    freeformEnabled: Boolean,
+    freeformPositions: Map<String, Pair<Float, Float>>,
+    rowSpacing: androidx.compose.ui.unit.Dp = 20.dp,
+    content: @Composable (String) -> Unit
+) {
+    if (!freeformEnabled) {
+        activeButtonIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
+            if (rowIndex > 0) Spacer(modifier = Modifier.height(rowSpacing))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                rowIds.forEach { id -> content(id) }
+            }
+        }
+        return
+    }
+
+    val density = LocalDensity.current
+    val rows = if (activeButtonIds.isEmpty()) 1 else ((activeButtonIds.size + 2) / 3)
+    val areaHeight = (rows * 96).dp.coerceAtLeast(120.dp)
+    val tileWidthPx = with(density) { 76.dp.toPx() }
+    val tileHeightPx = with(density) { 88.dp.toPx() }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(areaHeight)) {
+        val containerWidthPx = with(density) { maxWidth.toPx() }
+        val containerHeightPx = with(density) { maxHeight.toPx() }
+
+        activeButtonIds.forEachIndexed { index, id ->
+            val (fx, fy) = freeformPositions[id] ?: CallButtonPrefs.defaultFreeformFraction(index, activeButtonIds.size)
+            Box(
+                modifier = Modifier.offset {
+                    val cx = fx * containerWidthPx - tileWidthPx / 2f
+                    val cy = fy * containerHeightPx - tileHeightPx / 2f
+                    IntOffset(cx.roundToInt(), cy.roundToInt())
+                }
+            ) {
+                content(id)
+            }
+        }
+    }
+}
 
 @Composable
 private fun InCallDialPad(

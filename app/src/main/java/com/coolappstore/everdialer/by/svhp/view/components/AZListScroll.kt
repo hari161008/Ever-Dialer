@@ -69,7 +69,8 @@ fun AZListScroll(
     selectionMode: Boolean = false,
     selectedContacts: Set<String> = emptySet(),
     onSelectionModeChange: (Boolean) -> Unit = {},
-    onSelectedContactsChange: (Set<String>) -> Unit = {}
+    onSelectedContactsChange: (Set<String>) -> Unit = {},
+    topContent: (@Composable () -> Unit)? = null
 ) {
     AZListContent(
         contacts = contacts,
@@ -78,6 +79,7 @@ fun AZListScroll(
         modifier = modifier,
         selectionMode = selectionMode,
         selectedContacts = selectedContacts,
+        topContent = topContent,
         onSelectMode = { contact ->
             onSelectionModeChange(true)
             onSelectedContactsChange(setOf(contact.id))
@@ -100,7 +102,8 @@ fun AZListContent(
     selectionMode: Boolean = false,
     selectedContacts: Set<String> = emptySet(),
     onSelectMode: (Contact) -> Unit = {},
-    onSelectToggle: (Contact) -> Unit = {}
+    onSelectToggle: (Contact) -> Unit = {},
+    topContent: (@Composable () -> Unit)? = null
 ) {
     val grouped = remember(contacts) {
         val mainGroups = contacts.groupBy {
@@ -118,9 +121,10 @@ fun AZListContent(
     }
 
     // Map each letter to its first LazyColumn item index for sidebar jump
-    val alphabetIndices = remember(grouped) {
+    val topContentOffset = if (topContent != null) 1 else 0
+    val alphabetIndices = remember(grouped, topContentOffset) {
         val map = mutableMapOf<Char, Int>()
-        var currentIndex = 0
+        var currentIndex = topContentOffset
         grouped.forEach { (char, group) ->
             map[char] = currentIndex          // stickyHeader index
             currentIndex += 1 + group.size   // header + N contact items
@@ -147,6 +151,11 @@ fun AZListContent(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
+            if (topContent != null) {
+                item(key = "search_bar_pill", contentType = "searchBar") {
+                    topContent()
+                }
+            }
             grouped.forEach { (initial, contactsForChar) ->
                 // ── Letter header ──────────────────────────────────────────
                 stickyHeader(key = "header_$initial", contentType = "letterHeader") {

@@ -103,6 +103,8 @@ import kotlin.math.abs
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigator) {
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
     val favorites = remember(allContacts) { allContacts.filter { it.isFavorite } }
@@ -258,6 +260,12 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (favorites.isEmpty()) {
+                if (isLandscape) {
+                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Icon(Icons.Default.Favorite, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.height(16.dp))
@@ -282,6 +290,17 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (isLandscape) {
+                        item(
+                            key = "search_bar_pill",
+                            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
+                        ) {
+                            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                                navigator = navigator,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                            )
+                        }
+                    }
                     items(orderedFavorites, key = { it.id }) { contact ->
                         RivoScrollAnimatedItem {
                             FavoriteContactCard(

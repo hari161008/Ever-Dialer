@@ -19,6 +19,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +82,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
 import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -871,80 +878,32 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     // or notes, and there's no Filter button since there's nothing to filter by category.
     var settingsSearchQuery by remember { mutableStateOf("") }
     val settingsSearchEntries = listOf(
-        SettingsSearchEntry("Check For Updates", "Current version: v$APP_VERSION") {
-            scope.launch {
-                updateDialogState = UpdateDialogState.Checking
-                val release = fetchLatestRelease(GITHUB_API_RELEASES)
-                updateDialogState = when {
-                    release == null -> UpdateDialogState.Error
-                    isNewerVersion(release.tagName, APP_VERSION) -> {
-                        val apkFile = getApkDestinationFile()
-                        val downloadedVersion = prefs.getString(PreferenceManager.KEY_DOWNLOADED_UPDATE_VERSION, null)
-                        val readyToInstall = apkFile.exists() && apkFile.length() > 0L && downloadedVersion == release.tagName
-                        UpdateDialogState.ConfirmUpdate(release.tagName, release.apkUrl, readyToInstall)
-                    }
-                    else -> UpdateDialogState.UpToDate
-                }
-            }
-        },
-        SettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer") {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.google.com/forms/d/e/1FAIpQLSdY2WYWDFfvLScsBBxfCWzozyA_4sHUCzfR1JycfzJKASvbfQ/viewform?usp=header")))
-        },
-        SettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer") {
-            navigator.navigate(RatingsWebViewScreenDestination)
-        },
-        SettingsSearchEntry("More Apps", "Check out other apps from the developer") {
-            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.MoreAppsWebViewScreenDestination)
-        },
-        SettingsSearchEntry("Interface", "Themes, colors, and layout") {
-            navigator.navigate(InterfaceScreenDestination)
-        },
-        SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app") { showHapticsDialog = true },
-        SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app") { /* toggled inline in the list */ },
-        SettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password") {
-            navigator.navigate(BiometricScreenDestination)
-        },
-        SettingsSearchEntry("App Settings", "Call settings, network switcher, and notes") {
-            navigator.navigate(AppSettingsScreenDestination)
-        },
-        SettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code") {
-            navigator.navigate(ContactsHiderScreenDestination)
-        },
-        SettingsSearchEntry("Fake Call", "Schedule fake incoming calls without calling the real person") {
-            navigator.navigate(FakeCallScreenDestination)
-        },
-        SettingsSearchEntry("Call Recording", "Open Ever Call Recorder") {
-            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination(openedFromSettings = true))
-        },
-        SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers") { /* toggled inline in the list */ },
-        SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you") { showBlockListDialog = true },
-        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens") { /* toggled inline in the list */ },
-        SettingsSearchEntry("Create Backup", "Save app configuration and notes") {
-            scope.launch {
-                val file = BackupManager.createBackup(context)
-                backupState = if (file != null) {
-                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(shareIntent, "Save Backup"))
-                    BackupDialogState.BackupSuccess(file.absolutePath)
-                } else {
-                    BackupDialogState.Error("Failed to create backup")
-                }
-            }
-        },
-        SettingsSearchEntry("Restore Backup", "Restore app configuration and notes") { restoreLauncher.launch("*/*") },
-        SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info") {
-            navigator.navigate(AboutAppScreenDestination)
-        }
+        SettingsSearchEntry("Check For Updates", "Current version: v$APP_VERSION", "check_for_updates", Icons.Default.SystemUpdate, ColorAmber),
+        SettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer", "rate_and_review", Icons.Default.Star, ColorCyan),
+        SettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer", "check_ratings", Icons.Default.Reviews, ColorGreen),
+        SettingsSearchEntry("More Apps", "Check out other apps from the developer", "more_apps", Icons.Default.Apps, ColorIndigo),
+        SettingsSearchEntry("Interface", "Themes, colors, and layout", "interface", Icons.Outlined.Palette, ColorPurple),
+        SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, ColorPurple),
+        SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app", "scroll_haptics", Icons.Outlined.SwipeVertical, ColorIndigo),
+        SettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password", "authentication", Icons.Default.Fingerprint, Color(0xFF6750A4)),
+        SettingsSearchEntry("App Settings", "Call settings, network switcher, and notes", "app_settings", Icons.Outlined.Tune, ColorTeal),
+        SettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code", "contacts_hider", Icons.Outlined.Lock, Color(0xFF5E35B1)),
+        SettingsSearchEntry("Fake Call", "Schedule fake incoming calls without calling the real person", "fake_call", Icons.Outlined.PhoneCallback, ColorRed),
+        SettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
+        SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, ColorRed),
+        SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, ColorBluGrey),
+        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, ColorAmber),
+        SettingsSearchEntry("Create Backup", "Save app configuration and notes", "create_backup", Icons.Default.Backup, ColorGreen),
+        SettingsSearchEntry("Restore Backup", "Restore app configuration and notes", "restore_backup", Icons.Default.Restore, ColorBrown),
+        SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, ColorBluGrey)
     )
     val filteredSettingsResults = if (settingsSearchQuery.isBlank()) emptyList()
         else settingsSearchEntries.filter {
             it.title.contains(settingsSearchQuery, ignoreCase = true) || it.subtitle.contains(settingsSearchQuery, ignoreCase = true)
         }
+    // The key of the setting row that should scroll into view and flash, most recently
+    // requested from a search result tap. Rows read this via settingsSearchHighlight().
+    var highlightedSettingKey by remember { mutableStateOf<String?>(null) }
 
     // ── Screen ────────────────────────────────────────────────────────────────
     Scaffold(
@@ -1011,12 +970,12 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 RivoListItem(
                                     headline = entry.title,
                                     supporting = entry.subtitle,
-                                    leadingIcon = Icons.Default.Settings,
-                                    iconContainerColor = ColorBluGrey,
+                                    leadingIcon = entry.icon,
+                                    iconContainerColor = entry.iconContainerColor,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = {
                                         settingsSearchQuery = ""
-                                        entry.onClick()
+                                        highlightedSettingKey = entry.key
                                     }
                                 )
                                 if (index < filteredSettingsResults.size - 1) CardDivider()
@@ -1075,6 +1034,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.SystemUpdate,
                                 iconContainerColor = ColorAmber,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("check_for_updates", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
                                     scope.launch {
                                         updateDialogState = UpdateDialogState.Checking
@@ -1110,6 +1070,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Star,
                                 iconContainerColor = ColorCyan,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("rate_and_review", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.google.com/forms/d/e/1FAIpQLSdY2WYWDFfvLScsBBxfCWzozyA_4sHUCzfR1JycfzJKASvbfQ/viewform?usp=header"))
                                     context.startActivity(intent)
@@ -1122,6 +1083,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Reviews,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("check_ratings", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(RatingsWebViewScreenDestination) }
                             )
                             CardDivider()
@@ -1131,6 +1093,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Apps,
                                 iconContainerColor = ColorIndigo,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("more_apps", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.MoreAppsWebViewScreenDestination) }
                             )
                         }
@@ -1144,7 +1107,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         SectionLabel("Appearance")
                         RivoExpressiveCard {
-                            RivoListItem(headline = "Interface", supporting = "Themes, colors, and layout", leadingIcon = Icons.Outlined.Palette, iconContainerColor = ColorPurple, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(InterfaceScreenDestination) })
+                            RivoListItem(headline = "Interface", supporting = "Themes, colors, and layout", leadingIcon = Icons.Outlined.Palette, iconContainerColor = ColorPurple, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("interface", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { navigator.navigate(InterfaceScreenDestination) })
                         }
                     }
                 }
@@ -1162,6 +1125,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.Vibration,
                                 iconContainerColor = ColorPurple,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("tap_haptics", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { showHapticsDialog = true }
                             )
                             CardDivider()
@@ -1171,6 +1135,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.SwipeVertical,
                                 iconContainerColor = ColorIndigo,
                                 checked = scrollHapticsEnabled,
+                                modifier = Modifier.settingsSearchHighlight("scroll_haptics", highlightedSettingKey) { highlightedSettingKey = null },
                                 onCheckedChange = {
                                     scrollHapticsEnabled = it
                                     prefs.setBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, it)
@@ -1281,6 +1246,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Fingerprint,
                                 iconContainerColor = Color(0xFF6750A4),
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("authentication", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(BiometricScreenDestination) }
                             )
                         }
@@ -1301,6 +1267,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.Tune,
                                 iconContainerColor = ColorTeal,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("app_settings", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(AppSettingsScreenDestination) }
                             )
                             CardDivider()
@@ -1315,6 +1282,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                         leadingIcon = Icons.Outlined.Lock,
                                         iconContainerColor = Color(0xFF5E35B1),
                                         trailingIcon = Icons.Default.ChevronRight,
+                                        modifier = Modifier.settingsSearchHighlight("contacts_hider", highlightedSettingKey) { highlightedSettingKey = null },
                                         onClick = { navigator.navigate(ContactsHiderScreenDestination) }
                                     )
                                     CardDivider()
@@ -1326,6 +1294,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.PhoneCallback,
                                 iconContainerColor = ColorRed,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("fake_call", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(FakeCallScreenDestination) }
                             )
                         }
@@ -1340,7 +1309,13 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.FiberManualRecord,
                                 iconContainerColor = Color(0xFFE53935),
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("call_recording", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
+                                    // Flip this before navigating (not inside RecordingsScreen's own
+                                    // effect) so BottomBar never sees a frame where the destination
+                                    // looks like a disabled tab it should redirect away from — even
+                                    // when the "Recordings" tab has been hidden via Tab Sections.
+                                    NavBarVisibilityState.hideForSettingsEntry = true
                                     navigator.navigate(com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination(openedFromSettings = true))
                                 }
                             )
@@ -1361,6 +1336,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.PhoneDisabled,
                                 iconContainerColor = ColorRed,
                                 checked = silenceUnknown,
+                                modifier = Modifier.settingsSearchHighlight("silence_unknown", highlightedSettingKey) { highlightedSettingKey = null },
                                 onCheckedChange = {
                                     silenceUnknown = it
                                     prefs.setBoolean(PreferenceManager.KEY_SILENCE_UNKNOWN, it)
@@ -1374,6 +1350,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.PersonOff,
                                 iconContainerColor = ColorBluGrey,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("blocked_numbers", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { showBlockListDialog = true }
                             )
                         }
@@ -1394,6 +1371,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Autorenew,
                                 iconContainerColor = ColorAmber,
                                 checked = autoUpdateEnabled,
+                                modifier = Modifier.settingsSearchHighlight("auto_check_updates", highlightedSettingKey) { highlightedSettingKey = null },
                                 onCheckedChange = {
                                     autoUpdateEnabled = it
                                     prefs.setBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, it)
@@ -1416,6 +1394,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Default.Backup,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("create_backup", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
                                     scope.launch {
                                         val file = BackupManager.createBackup(context)
@@ -1435,7 +1414,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                                 }
                             )
                             CardDivider()
-                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration and notes", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, onClick = { restoreLauncher.launch("*/*") })
+                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration and notes", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("restore_backup", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { restoreLauncher.launch("*/*") })
                         }
                     }
                 }
@@ -1447,7 +1426,7 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         SectionLabel("About")
                         RivoExpressiveCard {
-                            RivoListItem(headline = "About Ever Dialer", supporting = "Version $APP_VERSION · Developer info", leadingIcon = Icons.Outlined.Info, iconContainerColor = ColorBluGrey, trailingIcon = Icons.Default.ChevronRight, onClick = { navigator.navigate(AboutAppScreenDestination) })
+                            RivoListItem(headline = "About Ever Dialer", supporting = "Version $APP_VERSION · Developer info", leadingIcon = Icons.Outlined.Info, iconContainerColor = ColorBluGrey, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("about_app", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { navigator.navigate(AboutAppScreenDestination) })
                         }
                     }
                 }
@@ -1460,10 +1439,50 @@ fun SettingsScreen(navigator: DestinationsNavigator) {
     }
 }
 
+/**
+ * Applied to a settings row so that tapping a search result can reveal *where* that setting
+ * lives (scrolling it into view and flashing it) instead of silently firing its action. Uses
+ * BringIntoViewRequester rather than a computed LazyColumn index, since several rows above are
+ * conditionally shown (banners, hidden feature toggles) and would otherwise shift the index.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.settingsSearchHighlight(
+    key: String,
+    highlightedKey: String?,
+    onConsumed: () -> Unit
+): Modifier {
+    val requester = remember(key) { BringIntoViewRequester() }
+    val isHighlighted = highlightedKey == key
+    val flash = remember(key) { Animatable(0f) }
+    val highlightColor = MaterialTheme.colorScheme.primary
+    LaunchedEffect(isHighlighted) {
+        if (isHighlighted) {
+            requester.bringIntoView()
+            flash.snapTo(1f)
+            flash.animateTo(0f, animationSpec = tween(1200))
+            onConsumed()
+        }
+    }
+    return this
+        .bringIntoViewRequester(requester)
+        .drawWithContent {
+            drawContent()
+            if (flash.value > 0f) {
+                drawRoundRect(
+                    color = highlightColor.copy(alpha = 0.30f * flash.value),
+                    cornerRadius = CornerRadius(16.dp.toPx())
+                )
+            }
+        }
+}
+
 private data class SettingsSearchEntry(
     val title: String,
     val subtitle: String,
-    val onClick: () -> Unit
+    val key: String,
+    val icon: ImageVector,
+    val iconContainerColor: Color
 )
 
 private sealed class UpdateDialogState {

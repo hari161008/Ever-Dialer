@@ -20,8 +20,28 @@ object NoteManager {
         return "$safeName - [$safeNumber].txt"
     }
 
-    fun getNoteFile(context: Context, contactName: String, phoneNumber: String): File =
-        File(getNotesDir(context), getFileName(contactName, phoneNumber))
+    fun getNoteFile(context: Context, contactName: String, phoneNumber: String): File {
+        val dir = getNotesDir(context)
+        val safeNumber = phoneNumber.filter { it.isDigit() || it == '+' }
+        // Always resolve to the single existing file for this phone number first, regardless
+        // of what name is passed in. This prevents duplicate note files when the contact name
+        // resolves differently at different times (e.g. "Unknown"/raw number during an ongoing
+        // call vs. the actual saved contact name once resolved).
+        if (safeNumber.isNotEmpty()) {
+            val existing = dir.listFiles()
+                ?.filter { it.extension == "txt" && it.nameWithoutExtension.endsWith("[$safeNumber]") }
+                ?.maxByOrNull { it.lastModified() }
+            if (existing != null) {
+                val desiredName = getFileName(contactName, phoneNumber)
+                if (existing.name != desiredName && contactName.isNotBlank() && contactName != "Unknown") {
+                    val renamed = File(dir, desiredName)
+                    if (!renamed.exists() && existing.renameTo(renamed)) return renamed
+                }
+                return existing
+            }
+        }
+        return File(dir, getFileName(contactName, phoneNumber))
+    }
 
     fun readNote(context: Context, contactName: String, phoneNumber: String): String =
         try { getNoteFile(context, contactName, phoneNumber).readText() } catch (_: Exception) { "" }
@@ -58,16 +78,33 @@ object NoteManager {
     }
 
     fun getAllNotes(context: Context): List<NoteEntry> = try {
-        getNotesDir(context).listFiles()
-            ?.filter { it.extension == "txt" }
-            ?.sortedByDescending { it.lastModified() }
-            ?.map { file ->
+        val files = getNotesDir(context).listFiles()?.filter { it.extension == "txt" } ?: emptyList()
+
+        // De-duplicate: multiple note files can exist for the same phone number if a note was
+        // written while the contact name hadn't resolved yet and again later with the real
+        // name. Keep only the most recently modified file per phone number.
+        val byNumber = files.groupBy { file ->
+            val base = file.nameWithoutExtension
+            val idx = base.lastIndexOf(" - [")
+            if (idx >= 0) base.substring(idx + 4).trimEnd(']') else ""
+        }
+        val deduped = byNumber.flatMap { (number, group) ->
+            if (number.isBlank() || group.size <= 1) group
+            else {
+                val newest = group.maxByOrNull { it.lastModified() }!!
+                group.filter { it !== newest }.forEach { deleteNoteFile(it) }
+                listOf(newest)
+            }
+        }
+
+        deduped.sortedByDescending { it.lastModified() }
+            .map { file ->
                 val base = file.nameWithoutExtension
                 val idx = base.lastIndexOf(" - [")
                 val contactName = if (idx >= 0) base.substring(0, idx) else base
                 val phoneNumber = if (idx >= 0) base.substring(idx + 4).trimEnd(']') else ""
                 NoteEntry(file, contactName, phoneNumber, file.readText(), file.lastModified())
-            } ?: emptyList()
+            }
     } catch (_: Exception) { emptyList() }
 }
 

@@ -7,12 +7,14 @@ import android.os.Build
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telephony.SubscriptionManager
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 
 class CallLogRepository(
     private val context: Context,
-    private val contentResolver: ContentResolver
+    private val contentResolver: ContentResolver,
+    private val prefs: PreferenceManager
 ) : ICallLogRepository {
 
     // Persist across calls (not just within one getCallLogs() pass) so that repeated
@@ -44,6 +46,7 @@ class CallLogRepository(
     }
 
     override fun getCallLogs(): List<CallLogEntry> {
+        pruneAutoDeletedUnknownCalls()
         val callLogs = mutableListOf<CallLogEntry>()
 
         val projection = arrayOf(
@@ -142,6 +145,53 @@ class CallLogRepository(
             val info = sm.getActiveSubscriptionInfo(subId) ?: return -1
             info.simSlotIndex
         } catch (_: Exception) { -1 }
+    }
+
+    /**
+     * Deletes call log entries from numbers that aren't saved contacts, once they're older than
+     * the configured "Auto Delete Unknown No in call log" threshold — but only entries whose
+     * call date is at/after [PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT], i.e.
+     * from *after* the feature was turned on. This is what guarantees existing call history is
+     * never touched by turning the feature on: anything older than that timestamp is never
+     * considered for deletion, no matter how old or how "unknown" it is.
+     */
+    private fun pruneAutoDeletedUnknownCalls() {
+        if (!prefs.getBoolean(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED, false)) return
+        val enabledAt = prefs.getLong(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT, 0L)
+        if (enabledAt <= 0L) return // safety: never prune anything unless we know exactly when this was turned on
+
+        val amount = prefs.getInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1).coerceAtLeast(1)
+        val unit = prefs.getString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "days") ?: "days"
+        val thresholdMillis = amount.toLong() * if (unit == "hours") 3_600_000L else 86_400_000L
+        val cutoff = System.currentTimeMillis() - thresholdMillis
+        if (cutoff <= enabledAt) return // the threshold window hasn't elapsed yet since it was turned on
+
+        try {
+            contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.DATE),
+                "${CallLog.Calls.DATE} >= ? AND ${CallLog.Calls.DATE} < ?",
+                arrayOf(enabledAt.toString(), cutoff.toString()),
+                null
+            )?.use { cursor ->
+                val numberIdx = cursor.getColumnIndex(CallLog.Calls.NUMBER)
+                val dateIdx = cursor.getColumnIndex(CallLog.Calls.DATE)
+                while (cursor.moveToNext()) {
+                    val number = cursor.getString(numberIdx) ?: continue
+                    val date = cursor.getLong(dateIdx)
+                    val (contactName, _, contactId) = contactInfoCache.getOrPut(number) { getContactDataByNumber(number) }
+                    if (contactName == null && contactId == null) {
+                        try {
+                            contentResolver.delete(
+                                CallLog.Calls.CONTENT_URI,
+                                "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
+                                arrayOf(number, date.toString())
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun getContactDataByNumber(

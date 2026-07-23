@@ -79,6 +79,8 @@ fun HomeScreen(
     val selectedUris   by vm.selectedUris.collectAsState()
     val isSelectionMode = selectedUris.isNotEmpty()
     val context = LocalContext.current
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     // Let the host (Ever Dialer's Recordings tab) know when the recording-selection pill is
     // showing, so it can smoothly animate its own bottom navigation pill out of the way instead
@@ -153,8 +155,10 @@ fun HomeScreen(
                 actions = {
                     AnimatedVisibility(visible = !isSelectionMode, enter = fadeIn(), exit = fadeOut()) {
                         Row {
-                            IconButton(onClick = onEverDialerSettingsClick) {
-                                Icon(Icons.Default.Tune, contentDescription = "Ever Dialer Settings")
+                            if (!isLandscape) {
+                                IconButton(onClick = onEverDialerSettingsClick) {
+                                    Icon(Icons.Default.Tune, contentDescription = "Ever Dialer Settings")
+                                }
                             }
                             IconButton(onClick = onSettingsClick) {
                                 Icon(Icons.Outlined.Settings, contentDescription = "Settings")

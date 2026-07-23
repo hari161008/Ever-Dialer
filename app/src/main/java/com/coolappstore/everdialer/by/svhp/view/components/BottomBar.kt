@@ -152,7 +152,8 @@ fun BottomBar(navController: NavController) {
     val isOnTabScreen = visibleTabRoutes.any { currentRoute.contains(it, ignoreCase = true) } &&
         !NavBarVisibilityState.hideForOnboarding &&
         !NavBarVisibilityState.hideForSelectionMode &&
-        !NavBarVisibilityState.hideForSettingsEntry
+        !NavBarVisibilityState.hideForSettingsEntry &&
+        !NavBarVisibilityState.hideForSearchResult
 
     // If current tab is now hidden, redirect to first visible tab. This must only fire for
     // tabs the user actually disabled in Settings > Tab Sections — not for a visible tab that's
@@ -160,7 +161,9 @@ fun BottomBar(navController: NavController) {
     // disclaimer/permissions gate), otherwise tapping that tab would immediately get redirected
     // away again in a loop.
     val isOnHiddenTab = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) } &&
-        visibleTabRoutes.none { currentRoute.contains(it, ignoreCase = true) }
+        visibleTabRoutes.none { currentRoute.contains(it, ignoreCase = true) } &&
+        !NavBarVisibilityState.hideForSettingsEntry &&
+        !NavBarVisibilityState.hideForSearchResult
     fun routeForTabKey(key: String): String? = when (key) {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route

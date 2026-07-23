@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.coolappstore.everdialer.by.svhp.controller.util.ContactsCache
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import androidx.lifecycle.AndroidViewModel
@@ -41,9 +42,35 @@ class ContactsViewModel(
     // — or leave the loading spinner stuck if it never completes.
     private var fetchJob: Job? = null
 
+    // True once a real fetchContacts() run (cache-refresh or otherwise) has completed, so we
+    // know whether it's safe to overwrite the on-disk cache — e.g. never write an empty/filtered
+    // result over the cache from a run that was cancelled mid-flight.
+    private var hasLoadedFromCache = false
+
     init {
-        fetchContacts()
+        loadCachedContactsThenRefresh()
         fetchAvailableAccounts()
+    }
+
+    /** Shows the last-known contacts list from disk immediately (near-instant even for a few
+     *  thousand contacts, unlike a live ContentResolver query) so the Contacts tab and unified
+     *  Search have something to render and filter against right away, then kicks off a real
+     *  fetch in the background to replace it with up-to-date data and refresh the cache. */
+    private fun loadCachedContactsThenRefresh() {
+        val ctx = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            _isLoading.value = false
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val cached = runCatching { ContactsCache.read(ctx) }.getOrDefault(emptyList())
+            if (cached.isNotEmpty() && !hasLoadedFromCache) {
+                _allContacts.value = cached
+                _isLoading.value = false
+            }
+            fetchContacts()
+        }
     }
 
     fun fetchContacts() {
@@ -55,14 +82,17 @@ class ContactsViewModel(
             return
         }
         fetchJob?.cancel()
-        _isLoading.value = true
+        // Only show the blocking loading state if we don't already have a cached list on
+        // screen — otherwise this becomes a silent background refresh.
+        if (_allContacts.value.isEmpty()) _isLoading.value = true
+        val sessionKey = _selectedAccountKey.value
+        val enabledKeys = getEnabledAccountKeys()
+        val isUnfiltered = sessionKey == null && enabledKeys.isEmpty()
         fetchJob = viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val sessionKey = _selectedAccountKey.value
                 val raw = if (sessionKey != null) {
                     contactsRepo.getContacts(setOf(sessionKey))
                 } else {
-                    val enabledKeys = getEnabledAccountKeys()
                     if (enabledKeys.isEmpty()) contactsRepo.getContacts()
                     else contactsRepo.getContacts(enabledKeys)
                 }
@@ -72,8 +102,14 @@ class ContactsViewModel(
                                else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                 if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
             }.onSuccess {
+                hasLoadedFromCache = true
                 _allContacts.value = it
                 _isLoading.value = false
+                // Only cache the unfiltered "all accounts" result — that's the list every cold
+                // start and every unified-Search session actually wants preloaded; per-filter
+                // views stay fetch-on-demand since they're already an explicit, interactive
+                // user action rather than something that needs to feel instant on launch.
+                if (isUnfiltered) ContactsCache.write(ctx, it)
             }.onFailure {
                 _isLoading.value = false
             }

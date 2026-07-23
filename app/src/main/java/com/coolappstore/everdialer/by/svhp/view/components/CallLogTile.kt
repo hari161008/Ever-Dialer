@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
@@ -42,11 +43,14 @@ import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import org.koin.compose.koinInject
 
 /**
- * A small, clean SIM-card-chip badge (a rectangle with a clipped corner, like a real SIM card)
- * with the slot number in bold — solid flat color instead of stacking text over a busy vector
- * icon, so the number stays clearly legible at small sizes instead of reading as a blurry dot.
+ * A small, clean SIM-card-chip badge — solid flat color with the slot number in bold, so the
+ * number stays clearly legible at small sizes. Defaults to a rectangle with one clipped corner
+ * (like a real SIM card); pass [shape] to use a plain rounded rect instead (used on the ongoing
+ * call screen, where the badge is shown much smaller and the notch's diagonal edge doesn't
+ * anti-alias as cleanly). Text is centered using a matched line height and no font padding
+ * (rather than a fixed manual offset) so the digit stays perfectly centered at every size.
  */
-private val SimChipShape = GenericShape { size, _ ->
+private val SimCardNotchShape = GenericShape { size, _ ->
     val notch = size.minDimension * 0.42f
     moveTo(notch, 0f)
     lineTo(size.width, 0f)
@@ -57,25 +61,42 @@ private val SimChipShape = GenericShape { size, _ ->
 }
 
 @Composable
-fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier) {
+fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier, shape: Shape = SimCardNotchShape) {
     val color = if (slot == 0) Color(0xFF2E7D32) else Color(0xFFC62828)
-    Box(
-        modifier = modifier
-            .size(width = 22.dp, height = 26.dp)
-            .clip(SimChipShape)
+    BoxWithConstraints(
+        modifier = Modifier
+            .size(width = 18.dp, height = 21.dp) // default size — callers can override via `modifier`
+            .then(modifier)
+            .clip(shape)
             .background(color),
         contentAlignment = Alignment.Center
     ) {
+        val fontSize = (maxHeight.value * 0.52f).sp
         Text(
             text = if (slot == 0) "1" else "2",
             color = Color.White,
-            fontSize = 14.sp,
-            lineHeight = 14.sp,
+            fontSize = fontSize,
+            lineHeight = fontSize,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 3.dp)
+            style = androidx.compose.ui.text.TextStyle(
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+            )
         )
     }
+}
+
+/**
+ * Best-effort "national" digits of a phone number with any country code stripped, used so the
+ * avatar for an unsaved number shows that number's actual first digit (and varies in color by
+ * number) instead of a generic fixed "Unknown" placeholder. There's no phone-number library in
+ * this project to parse country codes properly, so this uses the common heuristic that national
+ * numbers are 10 digits long (true for India, the US/Canada, and many other countries) and
+ * treats anything beyond the last 10 digits as the country code.
+ */
+private fun nationalNumberDigits(number: String): String {
+    val digits = number.filter { it.isDigit() }
+    return if (digits.length > 10) digits.takeLast(10) else digits
 }
 
 @Composable
@@ -141,7 +162,19 @@ fun CallLogTile(
             c != null && c.id in hiddenIds
         }
     }
-    val displayName = if (isHiddenContact) log.number else (log.name ?: log.number)
+    val displayName = when {
+        isHiddenContact -> log.number
+        isContact -> log.name!!
+        else -> "Unknown"
+    }
+    // Headline shows "Unknown" for unsaved numbers, but the avatar should still look like a real
+    // per-number identity — first digit of the actual number (country code stripped) and a color
+    // that varies by number — rather than every unsaved caller getting an identical grey/green "U".
+    val avatarSourceName = when {
+        isHiddenContact -> log.number
+        isContact -> log.name!!
+        else -> nationalNumberDigits(log.number).ifEmpty { "Unknown" }
+    }
 
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(
@@ -158,19 +191,23 @@ fun CallLogTile(
         Box(modifier = Modifier.weight(1f)) {
         val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
+        // The number shows on the *supporting* line under the name/"Unknown" headline, unless
+        // hidden-name masking already put the number on the headline itself. Put the badge to
+        // the right of whichever line is actually showing the number.
+        val numberOnSupportingLine = !isHiddenContact
+        val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({ SimSlotBadge(slot = log.simSlot) }) else null
         RivoListItem(
             headline = buildString {
                 append(displayName)
                 if (log.count > 1) append(" (${log.count})")
             },
             supporting = buildString {
-                if (!isHiddenContact && log.name != null && log.name != log.number) append(log.number)
+                if (!isHiddenContact) append(log.number)
             },
-            avatarName  = displayName,
+            avatarName  = avatarSourceName,
             photoUri    = log.photoUri,
-            trailingStartContent = if (showSimBadge) ({
-                SimSlotBadge(slot = log.simSlot)
-            }) else null,
+            headlineEndContent = if (!numberOnSupportingLine) simBadge else null,
+            supportingEndContent = if (numberOnSupportingLine) simBadge else null,
             trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed

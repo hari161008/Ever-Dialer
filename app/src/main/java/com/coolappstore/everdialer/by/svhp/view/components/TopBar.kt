@@ -82,19 +82,13 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val prefs = koinInject<PreferenceManager>()
-    // In landscape, Settings is reachable from the NavigationRail — but each tab still needs
-    // its own search bar on top (matching Notes/Recordings, which always show one inline) so
-    // every section is searchable and scrolls independently below it.
+    // In landscape, Settings is reachable from the NavigationRail, and each tab screen hosts
+    // its own search bar inline within its scrollable content (so it scrolls away with the
+    // rest of the list instead of staying pinned) — so the shared top bar renders nothing here.
     if (isLandscape) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            SearchBarPill(
-                navigator = navigator,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
+        // Reserve the same top inset the fixed bar used to occupy so page content lines up
+        // the same as before, without pinning a non-scrolling search bar on screen.
+        Spacer(modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars))
         return
     }
     var visible by remember { mutableStateOf(false) }

@@ -497,6 +497,10 @@ fun RivoListItem(
     trailingIcon: ImageVector? = null,
     trailingText: String? = null,
     trailingStartContent: (@Composable () -> Unit)? = null,
+    headlineStartContent: (@Composable () -> Unit)? = null,
+    supportingStartContent: (@Composable () -> Unit)? = null,
+    headlineEndContent: (@Composable () -> Unit)? = null,
+    supportingEndContent: (@Composable () -> Unit)? = null,
     avatarName: String? = null,
     photoUri: String? = null,
     onClick: () -> Unit,
@@ -566,21 +570,63 @@ fun RivoListItem(
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = headline,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (supporting != null) {
+                if (headlineStartContent != null || headlineEndContent != null) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        headlineStartContent?.let {
+                            it()
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = headline,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        headlineEndContent?.let {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            it()
+                        }
+                    }
+                } else {
                     Text(
-                        text = supporting,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = headline,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+                if (supporting != null) {
+                    if (supportingStartContent != null || supportingEndContent != null) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            supportingStartContent?.let {
+                                it()
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(
+                                text = supporting,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            supportingEndContent?.let {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                it()
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = supporting,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 

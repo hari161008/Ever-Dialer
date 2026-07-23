@@ -229,7 +229,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 selectionMode = selectionMode,
                 selectedContacts = selectedContacts,
                 onSelectionModeChange = { selectionMode = it },
-                onSelectedContactsChange = { selectedContacts = it }
+                onSelectedContactsChange = { selectedContacts = it },
+                isLandscape = isLandscape
             )
         }
     }
@@ -282,7 +283,8 @@ fun ContactContent(
     selectionMode: Boolean = false,
     selectedContacts: Set<String> = emptySet(),
     onSelectionModeChange: (Boolean) -> Unit = {},
-    onSelectedContactsChange: (Set<String>) -> Unit = {}
+    onSelectedContactsChange: (Set<String>) -> Unit = {},
+    isLandscape: Boolean = false
 ) {
     var visible by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(
@@ -458,8 +460,20 @@ fun ContactContent(
 
             // ── Body: loading indicator, empty state, or the actual list ──
             if (isLoadingContacts) {
+                if (isLandscape) {
+                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 RivoLoadingIndicatorView()
             } else if (contacts.isEmpty()) {
+                if (isLandscape) {
+                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
@@ -485,10 +499,24 @@ fun ContactContent(
                                 selectionMode = selectionMode,
                                 selectedContacts = selectedContacts,
                                 onSelectionModeChange = onSelectionModeChange,
-                                onSelectedContactsChange = onSelectedContactsChange
+                                onSelectedContactsChange = onSelectedContactsChange,
+                                topContent = if (isLandscape) {
+                                    {
+                                        com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                                            navigator = navigator,
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                        )
+                                    }
+                                } else null
                             )
             }
         } else {
+            if (isLandscape) {
+                com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                    navigator = navigator,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             PermissionDeniedView(
                 icon = Icons.Default.Person,
                 title = "Contacts",

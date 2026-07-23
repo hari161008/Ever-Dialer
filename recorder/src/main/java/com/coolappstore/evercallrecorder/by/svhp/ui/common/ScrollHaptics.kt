@@ -13,17 +13,37 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.snapshotFlow
-import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
 
-private fun performScrollHapticTick(context: Context) {
+/**
+ * Ever Dialer's own Scroll Haptics setting (Settings → Vibration → Scroll Haptics) lives in a
+ * shared "rivo_prefs" SharedPreferences file. The recorder module can't depend on the app
+ * module's PreferenceManager class (dependency direction is app -> recorder), so it reads the
+ * same preferences file/keys directly. This keeps the Recordings list and Call Recording
+ * Settings screen's scroll haptics in sync with the single toggle in Ever Dialer's Settings,
+ * instead of the unrelated "Vibration" toggle in the recorder's own settings.
+ */
+private const val RIVO_PREFS_NAME = "rivo_prefs"
+private const val KEY_SCROLL_HAPTICS = "scroll_haptics_enabled"
+private const val KEY_SCROLL_HAPTIC_STRENGTH = "scroll_haptic_strength"
+
+private fun isScrollHapticsEnabled(context: Context): Boolean =
+    context.getSharedPreferences(RIVO_PREFS_NAME, Context.MODE_PRIVATE)
+        .getBoolean(KEY_SCROLL_HAPTICS, false)
+
+private fun scrollHapticStrength(context: Context): Int =
+    context.getSharedPreferences(RIVO_PREFS_NAME, Context.MODE_PRIVATE)
+        .getInt(KEY_SCROLL_HAPTIC_STRENGTH, 60)
+
+private fun performScrollHapticTick(context: Context, amplitude: Int) {
     try {
+        val clampedAmplitude = amplitude.coerceIn(1, 255)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(VibratorManager::class.java)
-            vm?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(10, 60))
+            vm?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(10, clampedAmplitude))
         } else {
             val vibrator = context.getSystemService(Vibrator::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(10, 60))
+                vibrator?.vibrate(VibrationEffect.createOneShot(10, clampedAmplitude))
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(10L)
@@ -33,16 +53,15 @@ private fun performScrollHapticTick(context: Context) {
 }
 
 /**
- * Light haptic "tick" while scrolling a [LazyListState]-backed list, gated by the
- * existing Vibration setting (Settings → Vibration) — same toggle that already
- * controls recording-notification vibration, now also covering scroll feedback in
- * the Recordings list and the Recording Settings screen.
+ * Light haptic "tick" while scrolling a [LazyListState]-backed list, gated by Ever Dialer's
+ * Scroll Haptics setting (Settings → Vibration → Scroll Haptics) — the same toggle that
+ * controls scroll haptics everywhere else in the app, now also covering the Recordings list
+ * and the Call Recording Settings screen.
  */
 @Composable
 fun ScrollHapticsEffect(listState: LazyListState) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val prefs = remember { AppPreferences(context) }
 
     val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
     val pxThreshold = (1.5f * pxPerCm).coerceAtLeast(8f)
@@ -69,7 +88,7 @@ fun ScrollHapticsEffect(listState: LazyListState) {
             }
             val delta = kotlin.math.abs(absolutePx - lastAbsolutePx)
             lastAbsolutePx = absolutePx
-            if (!prefs.isVibrationEnabled()) {
+            if (!isScrollHapticsEnabled(context)) {
                 hapticBucket = 0f
                 return@collect
             }
@@ -77,7 +96,7 @@ fun ScrollHapticsEffect(listState: LazyListState) {
             if (hapticBucket >= pxThreshold) {
                 val count = (hapticBucket / pxThreshold).toInt()
                 hapticBucket -= count * pxThreshold
-                performScrollHapticTick(context)
+                performScrollHapticTick(context, scrollHapticStrength(context))
             }
         }
     }

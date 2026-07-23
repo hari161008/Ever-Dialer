@@ -1,11 +1,15 @@
 package com.coolappstore.everdialer.by.svhp.modal.data
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class ContactEvent(
     val type: Int,
     val label: String?,
     val date: String
 )
 
+@Serializable
 data class Contact(
     val id: String,
     val name: String,
@@ -21,6 +25,7 @@ data class Contact(
     val sourceAccounts: List<String> = emptyList(),
 )
 
+@Serializable
 data class ContactAccount(
     val key: String,
     val displayName: String,

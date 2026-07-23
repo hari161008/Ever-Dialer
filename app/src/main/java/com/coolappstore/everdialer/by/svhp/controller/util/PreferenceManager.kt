@@ -62,6 +62,8 @@ class PreferenceManager(context: Context) {
     fun setInt(key: String, value: Int)                { prefs.edit().putInt(key, value).apply(); _settingsChanged.value += 1 }
     fun getFloat(key: String, defaultValue: Float)     = prefs.getFloat(key, defaultValue)
     fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply(); _settingsChanged.value += 1 }
+    fun getLong(key: String, defaultValue: Long)       = prefs.getLong(key, defaultValue)
+    fun setLong(key: String, value: Long)              { prefs.edit().putLong(key, value).apply(); _settingsChanged.value += 1 }
 
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
     fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
@@ -126,6 +128,18 @@ class PreferenceManager(context: Context) {
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_PILL_NAV              = "pill_style_nav"
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
+        // Auto Delete Unknown No in call log — off by default. When on, call log entries from
+        // numbers that aren't saved contacts get auto-deleted once older than the configured
+        // threshold. Only applies going forward from the moment it's turned on (see
+        // KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT) so existing history is never touched.
+        const val KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED = "auto_delete_unknown_calls_enabled"
+        // Threshold amount, paired with KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT ("hours"/"days").
+        const val KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE = "auto_delete_unknown_calls_value"
+        const val KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT = "auto_delete_unknown_calls_unit"
+        // Timestamp (epoch millis) the feature was last turned on. Only unknown-number call log
+        // entries whose call date is at/after this point are eligible for auto-deletion, so
+        // entries that already existed before the feature was enabled are never deleted by it.
+        const val KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT = "auto_delete_unknown_calls_enabled_at"
         // Call Time Format in call logs — false = 12-hour (default), true = 24-hour
         const val KEY_CALL_TIME_FORMAT_24H  = "call_time_format_24h"
         // Whether the ongoing-call screen smoothly slides away when a call ends. Default true;
@@ -139,6 +153,13 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_BUTTONS_ORDER    = "call_buttons_order"
         // Comma-separated list of button ids that are hidden from the call screen
         const val KEY_CALL_BUTTONS_DISABLED = "call_buttons_disabled"
+        // Freeform layout — when true, Feature Buttons can be dragged and dropped to any
+        // position on the preview/call screen instead of snapping into the fixed 3-per-row
+        // grid. Off by default (unticked).
+        const val KEY_CALL_BUTTONS_FREEFORM = "call_buttons_freeform"
+        // Freeform positions — JSON-encoded map of button id -> {x, y} as fractions (0f..1f)
+        // of the available preview/call area, only used while KEY_CALL_BUTTONS_FREEFORM is on.
+        const val KEY_CALL_BUTTONS_FREEFORM_POSITIONS = "call_buttons_freeform_positions"
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
         const val KEY_TELEGRAM_SHOWN        = "telegram_shown"

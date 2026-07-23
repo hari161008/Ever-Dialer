@@ -28,4 +28,13 @@ object NavBarVisibilityState {
      * detail screen and expect a normal "back" flow.
      */
     var hideForSettingsEntry by mutableStateOf(false)
+
+    /**
+     * True while a tab screen is showing a single highlighted result it was opened into from
+     * unified Search (e.g. Notes opened from a "Notes" search hit) rather than as the normal
+     * bottom-nav tab. The bottom pill/nav bar and that screen's own search bar pill both stay
+     * hidden for the lifetime of this highlighted view, matching the Settings-entry behaviour
+     * above, since the user is viewing one specific search match rather than browsing the tab.
+     */
+    var hideForSearchResult by mutableStateOf(false)
 }
