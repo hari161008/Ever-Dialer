@@ -83,25 +83,26 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
                 title = { Text("About Ever Dialer", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
                 }
             )
         }
     ) { padding ->
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 24.dp + navBarBottom),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
             com.coolappstore.everdialer.by.svhp.view.components.SettingsSearchEntryPoint(navigator = navigator)
             Spacer(modifier = Modifier.height(20.dp))
 

@@ -97,7 +97,7 @@ private val ColorCyan    = Color(0xFF00BCD4)
  * LazyColumn item index needs to be scrolled to before that row can be brought into view.
  */
 private val settingsSectionKeyGroups: List<List<String>> = listOf(
-    listOf("check_for_updates", "call_recording", "rate_and_review", "check_ratings", "more_apps"),
+    listOf("check_for_updates", "call_recording", "rate_and_review", "check_ratings", "more_apps", "donate"),
     listOf("interface"),
     listOf("tap_haptics", "scroll_haptics"),
     listOf("authentication"),
@@ -812,6 +812,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer", "rate_and_review", Icons.Default.Star, ColorCyan),
         SettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer", "check_ratings", Icons.Default.Reviews, ColorGreen),
         SettingsSearchEntry("More Apps", "Check out other apps from the developer", "more_apps", Icons.Default.Apps, ColorIndigo),
+        SettingsSearchEntry("Donate", "Support this open source project", "donate", Icons.Default.Favorite, ColorRed),
         SettingsSearchEntry("Interface", "Themes, colors, and layout", "interface", Icons.Outlined.Palette, ColorPurple),
         SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, ColorPurple),
         SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app", "scroll_haptics", Icons.Outlined.SwipeVertical, ColorIndigo),
@@ -878,7 +879,9 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Scroll Animation", "Animate list scrolling", "scroll_animation", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "scroll_animation")) },
         SettingsSearchEntry("Pill Style Navigation", "Pill-shaped bottom navigation bar", "pill_style_nav", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "pill_style_nav")) },
         SettingsSearchEntry("Show Sims In Call Logs", "Show which SIM a call used in the call log", "show_sims_call_logs", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "show_sims_call_logs")) },
+        SettingsSearchEntry("Name non contacts as Unknown", "Display Unknown or phone number for unsaved callers", "name_non_contacts_as_unknown", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "name_non_contacts_as_unknown")) },
         SettingsSearchEntry("Auto Delete Unknown No in call log", "Automatically clean up unknown-number entries", "auto_delete_unknown_calllog", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "auto_delete_unknown_calllog")) },
+
         SettingsSearchEntry("Call Time Format in call logs", "12-hour or 24-hour time format", "call_time_format", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "call_time_format")) },
         SettingsSearchEntry("Icon-Only Bottom Bar", "Hide labels on the bottom navigation bar", "icon_only_bottom_bar", Icons.Outlined.Palette, ColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "icon_only_bottom_bar")) },
         SettingsSearchEntry("Open Dialpad by Default", "Launch straight into the dialpad", "open_dialpad_default", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "open_dialpad_default")) },
@@ -935,26 +938,31 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
     // ── Screen ────────────────────────────────────────────────────────────────
     Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = { IconButton(onClick = { navigateBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
+                navigationIcon = {
+                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigateBack() })
+                }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         BackHandler { navigateBack() }
         ScrollHapticsEffect(listState = listState)
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding).alpha(alpha).offset(y = offsetY).imePadding(),
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).alpha(alpha).offset(y = offsetY).imePadding(),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             // While showing search results, every visible item below the search field is one
             // row of the same result group, so the list-wide gap must be 0 there — otherwise the
             // grouped rows render with a visible gap between them despite [groupedRowShape]
             // making them look like a single continuous card. A separate Spacer item restores the
             // normal 16dp gap between the search field and the results/empty-state below it.
             verticalArrangement = if (settingsSearchQuery.isNotBlank()) Arrangement.spacedBy(0.dp) else Arrangement.spacedBy(16.dp)
+
         ) {
 
             item {
@@ -1167,10 +1175,26 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 modifier = Modifier.settingsSearchHighlight("more_apps", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.MoreAppsWebViewScreenDestination) }
                             )
+                            CardDivider()
+                            RivoListItem(
+                                headline = "Donate",
+                                supporting = "Support this open source project",
+                                leadingIcon = Icons.Default.Favorite,
+                                iconContainerColor = ColorRed,
+                                trailingIcon = Icons.Default.OpenInNew,
+                                modifier = Modifier.settingsSearchHighlight("donate", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hariprabhu.com/Ever-Dialer/#donate")).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
                         }
                     }
                 }
             }
+
 
             // ── Appearance ───────────────────────────────────────────────────
             item {

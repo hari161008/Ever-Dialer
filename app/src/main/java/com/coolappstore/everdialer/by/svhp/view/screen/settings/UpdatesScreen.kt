@@ -260,13 +260,12 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
     )
 
     Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
                 title = { Text("Updates", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
                 },
                 actions = {
                     IconButton(
@@ -287,14 +286,16 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
             // ── Hero Banner ──────────────────────────────────────────
             RivoAnimatedSection(delayMs = 0L) {
                 ExpressiveUpdateHeroCard(checkState = checkState)

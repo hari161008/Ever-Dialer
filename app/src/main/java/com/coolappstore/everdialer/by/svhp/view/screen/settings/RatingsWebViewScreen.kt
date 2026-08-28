@@ -1,6 +1,8 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
+import android.content.Intent
 import android.graphics.Bitmap
+
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -9,7 +11,9 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -17,20 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 
-private const val RATINGS_URL =
-    "https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ratings%20Reviews/Ever%20Dialer/Ever%20Dialer.html"
+
+private const val RATINGS_URL = "https://hariprabhu.com/Ever-Dialer"
 
 @Destination<RootGraph>
 @Composable
@@ -102,26 +108,53 @@ fun RatingsWebViewScreen(navigator: DestinationsNavigator) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
-        // ── Floating circular back button — bottom centre ──────────────────
-        FloatingActionButton(
-            onClick = {
-                if (canGoBack) webViewRef?.goBack() else navigator.navigateUp()
-            },
-            shape             = CircleShape,
-            containerColor    = MaterialTheme.colorScheme.primaryContainer,
-            contentColor      = MaterialTheme.colorScheme.onPrimaryContainer,
-            elevation         = FloatingActionButtonDefaults.elevation(6.dp),
+        // ── Floating circular back and share buttons — bottom centre ──────────────────
+        val context = LocalContext.current
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp)
-                .size(56.dp)
+                .padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                modifier = Modifier.size(24.dp)
-            )
+            FloatingActionButton(
+                onClick = {
+                    if (canGoBack) webViewRef?.goBack() else navigator.navigateUp()
+                },
+                shape          = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor   = MaterialTheme.colorScheme.onPrimaryContainer,
+                elevation      = FloatingActionButtonDefaults.elevation(6.dp),
+                modifier       = Modifier.size(56.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            FloatingActionButton(
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, RATINGS_URL)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share"))
+                },
+                shape          = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor   = MaterialTheme.colorScheme.onPrimaryContainer,
+                elevation      = FloatingActionButtonDefaults.elevation(6.dp),
+                modifier       = Modifier.size(56.dp)
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = "Share",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -462,3 +463,103 @@ private fun FeatureChip(icon: ImageVector, label: String) {
         }
     }
 }
+
+// ─── Donate Dialog ────────────────────────────────────────────────────────────
+
+@Composable
+fun DonateDialog(
+    onDonate: () -> Unit,
+    onLater: () -> Unit
+) {
+    var secondsRemaining by remember { mutableIntStateOf(10) }
+
+    LaunchedEffect(Unit) {
+        while (secondsRemaining > 0) {
+            delay(1000L)
+            secondsRemaining--
+        }
+    }
+
+    LaunchDialogSurface {
+        DialogBanner(
+            title = "Support Ever Dialer",
+            subtitle = "Open Source Project"
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        "Donate to this open source project using \"UPI or Buy me a coffee\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+
+            Text(
+                "Your contribution helps keep Ever Dialer completely free, privacy-friendly, and actively maintained.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onLater,
+                    enabled = secondsRemaining == 0,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text(
+                        if (secondsRemaining > 0) "Later (${secondsRemaining}s)" else "Later",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Button(
+                    onClick = onDonate,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Donate", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+

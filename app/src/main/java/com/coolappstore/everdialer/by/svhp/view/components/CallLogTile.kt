@@ -169,10 +169,14 @@ fun CallLogTile(
     val isHiddenContact = remember(log.contactId, hiddenIds, hideNames) {
         hideNames && hiddenIds.isNotEmpty() && log.contactId != null && log.contactId in hiddenIds
     }
+    val nameNonContactsAsUnknown = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)
+    }
     val displayName = when {
         isHiddenContact -> log.number
         isContact -> log.name!!
-        else -> "Unknown"
+        nameNonContactsAsUnknown -> "Unknown"
+        else -> log.number
     }
     // Headline shows "Unknown" for unsaved numbers, but the avatar should still look like a real
     // per-number identity — first digit of the actual number (country code stripped) and a color
@@ -199,9 +203,8 @@ fun CallLogTile(
         val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
         // The number shows on the *supporting* line under the name/"Unknown" headline, unless
-        // hidden-name masking already put the number on the headline itself. Put the badge to
-        // the right of whichever line is actually showing the number.
-        val numberOnSupportingLine = !isHiddenContact
+        // hidden-name masking already put the number on the headline itself or non-contacts are named by number.
+        val showNumberOnSupportingLine = !isHiddenContact && (isContact || nameNonContactsAsUnknown)
         val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({ SimSlotBadge(slot = log.simSlot, modifier = Modifier.size(width = 14.dp, height = 16.dp)) }) else null
         RivoListItem(
             headline = buildString {
@@ -209,15 +212,16 @@ fun CallLogTile(
                 if (log.count > 1) append(" (${log.count})")
             },
             supporting = buildString {
-                if (!isHiddenContact) append(log.number)
+                if (showNumberOnSupportingLine) append(log.number)
             },
             avatarName  = avatarSourceName,
             photoUri    = log.photoUri,
-            headlineStartContent = if (!numberOnSupportingLine) simBadge else null,
-            supportingStartContent = if (numberOnSupportingLine) simBadge else null,
+            headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
+            supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
             trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
+
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
                 CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
                 else                        -> Icons.Default.Call

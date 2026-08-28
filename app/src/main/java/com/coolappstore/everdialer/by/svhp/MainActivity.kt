@@ -361,6 +361,32 @@ class MainActivity : FragmentActivity() {
                     )
                 }
 
+                // ── Donate popup state ──────────────────────────────────────
+                var showDonateDialog by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    val lastVersion = prefs.getString(PreferenceManager.KEY_LAST_APP_VERSION, null)
+                    val openCount = prefs.getInt(PreferenceManager.KEY_APP_OPEN_COUNT, 0) + 1
+                    prefs.setInt(PreferenceManager.KEY_APP_OPEN_COUNT, openCount)
+
+                    if (lastVersion == null) {
+                        // Fresh install
+                        prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
+                        if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
+                            showDonateDialog = true
+                        }
+                    } else if (lastVersion != APP_VERSION) {
+                        // App update!
+                        prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
+                        showDonateDialog = true
+                    } else {
+                        // Same version
+                        if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
+                            showDonateDialog = true
+                        }
+                    }
+                }
+
                 // ── Biometric blur + lock ─────────────────────────────────
                 val blurRadius by animateDpAsState(
                     targetValue = if (!isUnlocked) 22.dp else 0.dp,
@@ -370,9 +396,29 @@ class MainActivity : FragmentActivity() {
 
                 // ── Ongoing Call Banner + Main nav host ───────────────────
                 val callSession by CallService.currentCallSession.collectAsState()
+                val isCallActive = callSession != null
                 val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
 
+                // ── Donate Popup Dialog (shows on update or 4th launch; if in call, waits until call ends) ──
+                if (showDonateDialog && !isCallActive && !showWelcomeDialog && !showTelegramDialog && !showFullScreenIntentDialog) {
+                    com.coolappstore.everdialer.by.svhp.view.components.DonateDialog(
+                        onDonate = {
+                            prefs.setBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, true)
+                            showDonateDialog = false
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hariprabhu.com/Ever-Dialer/#donate")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                        },
+                        onLater = {
+                            prefs.setBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, true)
+                            showDonateDialog = false
+                        }
+                    )
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
+
                     // Main content — blurred when locked
                     Column(
                         modifier = Modifier

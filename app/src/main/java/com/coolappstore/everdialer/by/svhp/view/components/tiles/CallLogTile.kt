@@ -36,10 +36,21 @@ fun CallLogTile(
     displayNameOverride: String? = null
 ) {
     val isMissed = log.types.any { it == CallLog.Calls.MISSED_TYPE } || (log.types.isEmpty() && log.type == CallLog.Calls.MISSED_TYPE)
-    val displayTitle = displayNameOverride ?: (log.name?.ifEmpty { log.number } ?: log.number.ifEmpty { "Unknown" })
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    val nameNonContactsAsUnknown = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true) }
+    val displayTitle = displayNameOverride ?: (
+        if (!log.name.isNullOrEmpty()) {
+            log.name
+        } else if (nameNonContactsAsUnknown) {
+            "Unknown"
+        } else {
+            log.number.ifEmpty { "Unknown" }
+        }
+    )
+
+
 
     SingleTile(
         title = displayTitle,

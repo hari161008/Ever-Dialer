@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.screen.CallActivity
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import kotlinx.coroutines.*
@@ -59,18 +60,53 @@ class FloatingCallService : Service() {
     private val photoUriState     = mutableStateOf<String?>(null)
     private val menuVisibleState  = mutableStateOf(false)
 
+    private fun getSavedPosition(): Pair<Int, Int> {
+        val prefs = PreferenceManager(this)
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val displayMetrics = resources.displayMetrics
+        val screenW = displayMetrics.widthPixels
+        val screenH = displayMetrics.heightPixels
+
+        val defaultX = 24
+        val defaultY = if (isLandscape) 160 else 320
+
+        val (rawX, rawY) = if (isLandscape) {
+            Pair(
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_X, defaultX),
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_Y, defaultY)
+            )
+        } else {
+            Pair(
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_X, defaultX),
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_Y, defaultY)
+            )
+        }
+
+        val clampedX = rawX.coerceIn(0, (screenW - 120).coerceAtLeast(0))
+        val clampedY = rawY.coerceIn(0, (screenH - 120).coerceAtLeast(0))
+        return Pair(clampedX, clampedY)
+    }
+
+    private fun savePosition(x: Int, y: Int) {
+        val prefs = PreferenceManager(this)
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (isLandscape) {
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_X, x)
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_Y, y)
+        } else {
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_X, x)
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_Y, y)
+        }
+    }
+
     private val configReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != Intent.ACTION_CONFIGURATION_CHANGED) return
             scope.launch {
                 delay(80) // let window system settle after rotation
-                val display = wm.defaultDisplay
-                @Suppress("DEPRECATION")
-                val screenW = display.width
-                @Suppress("DEPRECATION")
-                val screenH = display.height
-                bubbleParams.x = bubbleParams.x.coerceIn(0, (screenW - 200).coerceAtLeast(0))
-                bubbleParams.y = bubbleParams.y.coerceIn(0, (screenH - 200).coerceAtLeast(0))
+                val (savedX, savedY) = getSavedPosition()
+                bubbleParams.x = savedX
+                bubbleParams.y = savedY
                 try { bubbleView?.let { wm.updateViewLayout(it, bubbleParams) } } catch (_: Exception) {}
             }
         }
@@ -87,6 +123,7 @@ class FloatingCallService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START; x = 24; y = 320 }
+
 
     // Menu: MATCH_PARENT so the Surface background fills all the way behind nav bar
     private val menuParams = WindowManager.LayoutParams(
@@ -135,6 +172,9 @@ class FloatingCallService : Service() {
     // ── Bubble ────────────────────────────────────────────────────────────────
 
     private fun createBubble() {
+        val (savedX, savedY) = getSavedPosition()
+        bubbleParams.x = savedX
+        bubbleParams.y = savedY
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lifecycleOwner)
@@ -200,14 +240,23 @@ class FloatingCallService : Service() {
                                 change.consume()
                                 bubbleParams.x = (bubbleParams.x + delta.x.toInt()).coerceAtLeast(0)
                                 bubbleParams.y = (bubbleParams.y + delta.y.toInt()).coerceAtLeast(0)
+                                savePosition(bubbleParams.x, bubbleParams.y)
                                 try { wm.updateViewLayout(bubbleView, bubbleParams) } catch (_: Exception) {}
                             }
-                            if (!change.pressed) { if (!dragged) onTap(); break }
+                            if (!change.pressed) {
+                                if (dragged) {
+                                    savePosition(bubbleParams.x, bubbleParams.y)
+                                } else {
+                                    onTap()
+                                }
+                                break
+                            }
                         } while (true)
                     }
                 },
             contentAlignment = Alignment.Center
         ) {
+
             Surface(
                 shape           = CircleShape,
                 color           = MaterialTheme.colorScheme.primaryContainer,
@@ -318,12 +367,8 @@ class FloatingCallService : Service() {
                 )
                 is MenuAction.AnswerCall -> {
                     CallService.answerCall()
-                    action.ctx.startActivity(
-                        Intent(action.ctx, CallActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
                 }
+
                 MenuAction.Close -> { delay(150); removeBubble(); stopSelf() }
                 MenuAction.Hangup -> CallService.declineCall()
             }

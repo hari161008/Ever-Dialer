@@ -16,9 +16,14 @@ Ever Dialer is the best replacement of Google dialer which can RECORD CALLS with
 <br>
 
 # ⭐ Rate and Review
-Everyone's Ratings: [Click Here](https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ratings%20Reviews/Ever%20Dialer/Ever%20Dialer.html)
+Everyone's Ratings: [Click Here](https://hariprabhu.com/Ever-Dialer)
 
 If you would like to write a Review, you must install the app, then go to App's settings > Rate and Review
+
+<br>
+
+# ❤️ Donate
+If you liked any of my apps, a Donation using UPI (INR) or Buy Me A Coffee ($) is a must: [Donate](https://hariprabhu.com/#donate)
 
 <br>
 

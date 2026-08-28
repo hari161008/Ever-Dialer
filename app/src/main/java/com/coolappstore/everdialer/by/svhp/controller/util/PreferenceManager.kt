@@ -331,5 +331,19 @@ class PreferenceManager(context: Context) {
         const val KEY_SEARCH_FILTER_RECORDINGS      = "search_filter_recordings"
         const val KEY_SEARCH_FILTER_CONTACT_NOTES   = "search_filter_contact_notes"
         const val KEY_SEARCH_FILTER_RECORDING_NOTES = "search_filter_recording_notes"
+
+        const val KEY_APP_OPEN_COUNT                = "app_open_count"
+        const val KEY_LAST_APP_VERSION              = "last_app_version"
+        const val KEY_DONATE_POPUP_SHOWN_INSTALL    = "donate_popup_shown_install"
+
+        const val KEY_FLOATING_CALL_POS_PORTRAIT_X  = "floating_call_pos_portrait_x"
+        const val KEY_FLOATING_CALL_POS_PORTRAIT_Y  = "floating_call_pos_portrait_y"
+        const val KEY_FLOATING_CALL_POS_LANDSCAPE_X = "floating_call_pos_landscape_x"
+        const val KEY_FLOATING_CALL_POS_LANDSCAPE_Y = "floating_call_pos_landscape_y"
+
+        const val KEY_NAME_NON_CONTACTS_AS_UNKNOWN  = "name_non_contacts_as_unknown"
     }
 }
+
+
+

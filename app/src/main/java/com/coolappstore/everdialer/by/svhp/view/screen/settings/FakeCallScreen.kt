@@ -105,20 +105,18 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
             onSave = { entry, exactTriggerOverride ->
                 FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
                 entries = FakeCallManager.loadEntries(prefs)
-                showAddSheet = false
-                addMode = null
+                showAddSheet = false; addMode = null
             }
         )
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
                 title = { Text("Fake Call", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
+                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
                 },
                 actions = {
                     Box {
@@ -181,10 +179,12 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
             }
         }
     ) { padding ->
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding())
+                .padding(bottom = navBarBottom)
         ) {
             if (entries.isEmpty()) {
                 // Empty state

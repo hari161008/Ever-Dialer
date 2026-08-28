@@ -134,27 +134,28 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
                 title = { Text("Authentication", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = ::navigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
+                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = ::navigateBack)
                 }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(
             modifier = Modifier
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
                 .offset(y = offsetY)
                 .alpha(alpha)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
             com.coolappstore.everdialer.by.svhp.view.components.SettingsSearchEntryPoint(navigator = navigator)
 
             // ── Authentication Method card ─────────────────────────────────
@@ -442,14 +443,13 @@ private fun ContactPickerDialog(
             color = MaterialTheme.colorScheme.surface
         ) {
             Scaffold(
+                contentWindowInsets = WindowInsets.statusBars,
                 topBar = {
                     Column {
                         TopAppBar(
                             title = { Text("Select Contacts", fontWeight = FontWeight.SemiBold) },
                             navigationIcon = {
-                                IconButton(onClick = onDismiss) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                                }
+                                com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = onDismiss)
                             },
                             actions = {
                                 TextButton(onClick = ::selectAll) {
@@ -457,6 +457,7 @@ private fun ContactPickerDialog(
                                 }
                             }
                         )
+
                         // Search bar
                         OutlinedTextField(
                             value = searchQuery,
