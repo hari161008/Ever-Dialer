@@ -93,6 +93,7 @@ import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDe
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDestination
 import org.koin.core.context.GlobalContext
 
 class MainActivity : FragmentActivity() {
@@ -347,7 +348,7 @@ class MainActivity : FragmentActivity() {
                         readyToInstall = false,
                         onAction = {
                             showAutoUpdateDialog = false
-                            navController.navigate(com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDestination.route)
+                            navController.navigate(UpdatesScreenDestination.route)
                         },
                         onDismiss = { showAutoUpdateDialog = false }
                     )

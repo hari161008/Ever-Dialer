@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,8 +43,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -379,32 +384,22 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
 
     val animatedContainerColor by animateColorAsState(
         targetValue = containerColor,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = tween(400),
         label = "heroContainerColor"
     )
 
-    val borderColor = when (checkState) {
-        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                              else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-        is CheckState.Failed -> MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-    }
-
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         color = animatedContainerColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        tonalElevation = 2.dp
+        tonalElevation = 1.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             HeroStatusIcon(checkState = checkState)
 
@@ -416,16 +411,14 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                     text = "Ever Dialer",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp
+                    fontWeight = FontWeight.Medium
                 )
 
                 AnimatedContent(
                     targetState = checkState,
                     transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                            slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 2 }) togetherWith
-                            (fadeOut(tween(140)) + slideOutVertically(tween(140)) { -it / 2 })
+                        (fadeIn(tween(250)) + slideInVertically { it / 2 }) togetherWith
+                            (fadeOut(tween(150)) + slideOutVertically { -it / 2 })
                     },
                     label = "heroTitle"
                 ) { state ->
@@ -447,7 +440,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                             fontWeight = FontWeight.ExtraBold,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodyMedium,
@@ -460,10 +453,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
 
             AnimatedContent(
                 targetState = checkState,
-                transitionSpec = {
-                    (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy), initialScale = 0.8f)) togetherWith
-                        (fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.8f))
-                },
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "statusBadge"
             ) { state ->
                 when (state) {
@@ -477,8 +467,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                         ExpressiveStatusChip(
                             text = "New v${state.latest.tagName}",
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            pulsing = true
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     } else {
                         ExpressiveStatusChip(
@@ -509,16 +498,10 @@ private fun HeroStatusIcon(checkState: CheckState) {
         label = "heroSpin"
     )
     val pulse by infinite.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "heroPulse"
-    )
-    val glowAlpha by infinite.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.65f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "glowPulse"
     )
 
     val (icon, iconBgColor, iconTintColor) = when (checkState) {
@@ -552,53 +535,30 @@ private fun HeroStatusIcon(checkState: CheckState) {
         )
     }
 
-    Box(contentAlignment = Alignment.Center) {
-        // Ambient soft radial glow
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f)
-                .alpha(glowAlpha)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                            Color.Transparent
-                        )
-                    ),
-                    shape = CircleShape
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = iconBgColor,
+        modifier = Modifier
+            .size(76.dp)
+            .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f),
+        shadowElevation = 0.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            AnimatedContent(
+                targetState = checkState,
+                transitionSpec = {
+                    (fadeIn(tween(250)) + scaleIn(initialScale = 0.6f)) togetherWith
+                        (fadeOut(tween(150)) + scaleOut(targetScale = 0.6f))
+                },
+                label = "heroIconGlyph"
+            ) { state ->
+                val modifier = if (state is CheckState.Checking) Modifier.rotate(spin) else Modifier
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTintColor,
+                    modifier = modifier.size(36.dp)
                 )
-        )
-
-        Surface(
-            shape = RoundedCornerShape(26.dp),
-            color = iconBgColor,
-            border = androidx.compose.foundation.BorderStroke(
-                1.5.dp,
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-            ),
-            modifier = Modifier
-                .size(76.dp)
-                .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f),
-            shadowElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                AnimatedContent(
-                    targetState = checkState,
-                    transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy), initialScale = 0.6f)) togetherWith
-                            (fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 0.6f))
-                    },
-                    label = "heroIconGlyph"
-                ) { state ->
-                    val modifier = if (state is CheckState.Checking) Modifier.rotate(spin) else Modifier
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconTintColor,
-                        modifier = modifier.size(36.dp)
-                    )
-                }
             }
         }
     }
@@ -679,42 +639,25 @@ private fun ExpressiveStatCard(
     iconTint: Color = MaterialTheme.colorScheme.primary,
     highlighted: Boolean = false
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "statCardPressScale"
-    )
-
     val bgColor = if (highlighted) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
     } else {
         MaterialTheme.colorScheme.surfaceContainerLow
     }
 
-    val borderColor = if (highlighted) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-    }
-
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = bgColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         modifier = modifier
-            .scale(pressScale)
-            .clickable(interactionSource = interactionSource, indication = null) {}
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = iconTint.copy(alpha = 0.16f),
-                modifier = Modifier.size(38.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = iconTint.copy(alpha = 0.15f),
+                modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -754,19 +697,11 @@ private fun ExpressiveActionArea(
     onCheckAgain: () -> Unit,
     onUpdateClick: (ReleaseInfo) -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "actionBtnPressScale"
-    )
-
     AnimatedContent(
         targetState = checkState,
         transitionSpec = {
-            (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + slideInVertically(spring(stiffness = Spring.StiffnessMedium)) { it / 3 }) togetherWith
-                (fadeOut(tween(130)) + slideOutVertically(tween(130)) { -it / 3 })
+            (fadeIn(tween(250)) + slideInVertically { it / 3 }) togetherWith
+                (fadeOut(tween(140)) + slideOutVertically { -it / 3 })
         },
         label = "actionArea"
     ) { state ->
@@ -774,17 +709,14 @@ private fun ExpressiveActionArea(
             state is CheckState.Done && state.isNewer && state.latest != null -> {
                 Button(
                     onClick = { onUpdateClick(state.latest) },
-                    interactionSource = interactionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
-                        .scale(pressScale),
+                        .height(54.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 6.dp)
+                    )
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
@@ -799,11 +731,9 @@ private fun ExpressiveActionArea(
             state is CheckState.Failed -> {
                 FilledTonalButton(
                     onClick = onCheckAgain,
-                    interactionSource = interactionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
-                        .scale(pressScale),
+                        .height(54.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -838,11 +768,9 @@ private fun ExpressiveActionArea(
             else -> {
                 FilledTonalButton(
                     onClick = onCheckAgain,
-                    interactionSource = interactionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
-                        .scale(pressScale),
+                        .height(54.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1046,7 +974,7 @@ private fun NotesShimmerPlaceholder() {
     }
 }
 
-/** Expressive markdown-lite renderer for GitHub release note bodies. */
+/** Rich GitHub Markdown renderer supporting code blocks, headers, quotes, lists, bold, italic, code, links. */
 @Composable
 private fun ReleaseNotesText(rawNotes: String?) {
     if (rawNotes.isNullOrBlank()) {
@@ -1058,47 +986,286 @@ private fun ReleaseNotesText(rawNotes: String?) {
         return
     }
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val codeBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+
+    val lines = rawNotes.lines()
+    var inCodeBlock = false
+    val codeBlockLines = mutableListOf<String>()
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        rawNotes.lines().forEach { rawLine ->
-            val line = rawLine.trim()
+        for (rawLine in lines) {
+            val trimmed = rawLine.trim()
+
+            // Handle code block fences
+            if (trimmed.startsWith("```")) {
+                if (inCodeBlock) {
+                    val codeContent = codeBlockLines.joinToString("\n")
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = codeContent,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = onSurfaceColor,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                    codeBlockLines.clear()
+                    inCodeBlock = false
+                } else {
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if (inCodeBlock) {
+                codeBlockLines.add(rawLine)
+                continue
+            }
+
             when {
-                line.isBlank() -> Spacer(Modifier.height(4.dp))
-                line.startsWith("#") -> {
+                trimmed.isBlank() -> Spacer(Modifier.height(4.dp))
+
+                trimmed.startsWith("#### ") -> {
                     Text(
-                        line.trimStart('#').trim(),
+                        text = parseMarkdownInline(trimmed.removePrefix("#### ").trim(), primaryColor, onSurfaceColor, codeBgColor),
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight = FontWeight.SemiBold,
+                        color = onSurfaceVariantColor,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
-                line.startsWith("- ") || line.startsWith("* ") -> {
+                trimmed.startsWith("### ") -> {
+                    Text(
+                        text = parseMarkdownInline(trimmed.removePrefix("### ").trim(), primaryColor, onSurfaceColor, codeBgColor),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = onSurfaceColor,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                trimmed.startsWith("## ") -> {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        Text(
+                            text = parseMarkdownInline(trimmed.removePrefix("## ").trim(), primaryColor, onSurfaceColor, codeBgColor),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                    }
+                }
+                trimmed.startsWith("# ") -> {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        Text(
+                            text = parseMarkdownInline(trimmed.removePrefix("# ").trim(), primaryColor, onSurfaceColor, codeBgColor),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = primaryColor
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                        )
+                    }
+                }
+
+                trimmed.startsWith("> ") || trimmed.startsWith(">") -> {
+                    val quoteText = trimmed.removePrefix(">").trim()
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = primaryColor.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .width(3.5.dp)
+                                .height(22.dp)
+                        ) {}
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = parseMarkdownInline(quoteText, primaryColor, onSurfaceVariantColor, codeBgColor),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                            color = onSurfaceVariantColor
+                        )
+                    }
+                }
+
+                trimmed == "---" || trimmed == "***" || trimmed == "___" -> {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    )
+                }
+
+                trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ") -> {
+                    val content = trimmed.substring(2).trim()
+                    val leadingSpaces = rawLine.takeWhile { it == ' ' }.length
+                    val indent = (leadingSpaces / 2 * 12).dp
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = indent),
                         verticalAlignment = Alignment.Top,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = primaryColor,
                             modifier = Modifier
                                 .padding(top = 7.dp)
                                 .size(5.dp)
                         ) {}
                         Text(
-                            line.removePrefix("- ").removePrefix("* ").replace("**", ""),
+                            text = parseMarkdownInline(content, primaryColor, onSurfaceColor, codeBgColor),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = onSurfaceColor
                         )
                     }
                 }
+
+                trimmed.matches(Regex("""^\d+\.\s+.*""")) -> {
+                    val numPrefix = trimmed.substringBefore(".") + "."
+                    val content = trimmed.substringAfter(".").trim()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = numPrefix,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor
+                        )
+                        Text(
+                            text = parseMarkdownInline(content, primaryColor, onSurfaceColor, codeBgColor),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = onSurfaceColor
+                        )
+                    }
+                }
+
                 else -> {
                     Text(
-                        line.replace("**", ""),
+                        text = parseMarkdownInline(trimmed, primaryColor, onSurfaceColor, codeBgColor),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = onSurfaceColor
                     )
                 }
             }
+        }
+
+        if (inCodeBlock && codeBlockLines.isNotEmpty()) {
+            val codeContent = codeBlockLines.joinToString("\n")
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = codeContent,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = onSurfaceColor,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Parses GitHub inline markdown into an AnnotatedString with formatting spans. */
+private fun parseMarkdownInline(
+    text: String,
+    primaryColor: Color,
+    onSurfaceColor: Color,
+    codeBgColor: Color
+): AnnotatedString {
+    return buildAnnotatedString {
+        val pattern = Regex("""(\[(.*?)\]\((.*?)\)|`([^`]+)`|\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|__([^_]+)__|(?<!\*)\*([^*]+)\*(?!\*)|(?<!_)_([^_]+)_(?!_)|~~([^~]+)~~|(#[0-9]+|@[a-zA-Z0-9_/-]+))""")
+        var currentIndex = 0
+        val matches = pattern.findAll(text)
+
+        for (match in matches) {
+            val start = match.range.first
+            val end = match.range.last + 1
+
+            if (start > currentIndex) {
+                append(text.substring(currentIndex, start))
+            }
+
+            val fullMatch = match.value
+            when {
+                fullMatch.startsWith("[") && fullMatch.contains("](") -> {
+                    val label = match.groupValues[2]
+                    pushStyle(SpanStyle(color = primaryColor, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Medium))
+                    append(label)
+                    pop()
+                }
+                fullMatch.startsWith("`") && fullMatch.endsWith("`") -> {
+                    val codeText = match.groupValues[4]
+                    pushStyle(
+                        SpanStyle(
+                            fontFamily = FontFamily.Monospace,
+                            background = codeBgColor,
+                            color = primaryColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    append(" $codeText ")
+                    pop()
+                }
+                fullMatch.startsWith("***") && fullMatch.endsWith("***") -> {
+                    val content = match.groupValues[5]
+                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
+                    append(content)
+                    pop()
+                }
+                (fullMatch.startsWith("**") && fullMatch.endsWith("**")) || (fullMatch.startsWith("__") && fullMatch.endsWith("__")) -> {
+                    val content = if (match.groupValues[6].isNotEmpty()) match.groupValues[6] else match.groupValues[7]
+                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                    append(content)
+                    pop()
+                }
+                (fullMatch.startsWith("*") && fullMatch.endsWith("*")) || (fullMatch.startsWith("_") && fullMatch.endsWith("_")) -> {
+                    val content = if (match.groupValues[8].isNotEmpty()) match.groupValues[8] else match.groupValues[9]
+                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                    append(content)
+                    pop()
+                }
+                fullMatch.startsWith("~~") && fullMatch.endsWith("~~") -> {
+                    val content = match.groupValues[10]
+                    pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
+                    append(content)
+                    pop()
+                }
+                fullMatch.startsWith("#") || fullMatch.startsWith("@") -> {
+                    pushStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold))
+                    append(fullMatch)
+                    pop()
+                }
+                else -> {
+                    append(fullMatch)
+                }
+            }
+            currentIndex = end
+        }
+
+        if (currentIndex < text.length) {
+            append(text.substring(currentIndex))
         }
     }
 }
@@ -1246,7 +1413,15 @@ private fun CompareReleaseNotesSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Installed, 1 = Latest
+
+    fun closeWithAnimation() {
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1261,11 +1436,28 @@ private fun CompareReleaseNotesSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                "Compare Release Notes",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Compare Release Notes",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                IconButton(
+                    onClick = { closeWithAnimation() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             val hasLatest = latestVersion != null
             if (hasLatest) {
@@ -1286,9 +1478,11 @@ private fun CompareReleaseNotesSheet(
                 targetState = if (hasLatest) selectedTab else 0,
                 transitionSpec = {
                     if (targetState > initialState) {
-                        (slideInVertically { it / 4 } + fadeIn()) togetherWith fadeOut()
+                        (slideInVertically { it / 4 } + fadeIn(tween(200))) togetherWith
+                            (slideOutVertically { -it / 4 } + fadeOut(tween(150)))
                     } else {
-                        (slideInVertically { -it / 4 } + fadeIn()) togetherWith fadeOut()
+                        (slideInVertically { -it / 4 } + fadeIn(tween(200))) togetherWith
+                            (slideOutVertically { it / 4 } + fadeOut(tween(150)))
                     }
                 },
                 label = "compareContent"
@@ -1312,14 +1506,14 @@ private fun CompareReleaseNotesSheet(
             }
 
             Button(
-                onClick = onDismiss,
+                onClick = { closeWithAnimation() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("Close")
+                Text("Close", fontWeight = FontWeight.Bold)
             }
         }
     }

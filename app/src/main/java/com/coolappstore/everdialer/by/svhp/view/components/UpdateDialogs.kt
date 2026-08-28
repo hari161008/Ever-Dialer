@@ -73,7 +73,7 @@ fun UpdateDialogSurface(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(28.dp),
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 content = content
@@ -82,7 +82,7 @@ fun UpdateDialogSurface(
     }
 }
 
-/** Rotating gradient ring with a pulsing center icon — shown while checking for updates. */
+/** Rotating gradient squircle with a pulsing center icon — shown while checking for updates. */
 @Composable
 fun UpdateCheckingDialog() {
     UpdateDialogSurface {
@@ -94,46 +94,36 @@ fun UpdateCheckingDialog() {
             label = "spinAngle"
         )
         val pulse by infinite.animateFloat(
-            initialValue = 0.85f,
-            targetValue = 1.12f,
+            initialValue = 0.88f,
+            targetValue = 1.08f,
             animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "pulseScale"
         )
 
         val primary = MaterialTheme.colorScheme.primary
-        val track = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
 
-        Box(modifier = Modifier.size(84.dp), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.fillMaxSize().rotate(rotation)) {
-                val stroke = 6.dp.toPx()
-                drawArc(
-                    color = track,
-                    startAngle = 0f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                drawArc(
-                    brush = Brush.sweepGradient(listOf(primary.copy(alpha = 0f), primary, primary.copy(alpha = 0f))),
-                    startAngle = 0f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                    size = Size(size.width, size.height)
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            modifier = Modifier.size(76.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .rotate(rotation)
+                        .scale(pulse)
                 )
             }
-            Icon(
-                Icons.Default.SystemUpdate,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(34.dp).scale(pulse)
-            )
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Checking for updates", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Checking for Updates", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Hang tight, this won't take long…",
+                "Connecting to update repository…",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -149,13 +139,8 @@ fun UpdateUpToDateDialog(currentVersion: String, onDismiss: () -> Unit) {
         var appeared by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { appeared = true }
 
-        val circleScale by animateFloatAsState(
-            targetValue = if (appeared) 1f else 0f,
-            animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-            label = "checkCircleScale"
-        )
         val checkScale by animateFloatAsState(
-            targetValue = if (appeared) 1f else 0f,
+            targetValue = if (appeared) 1f else 0.4f,
             animationSpec = spring(
                 stiffness = Spring.StiffnessLow,
                 dampingRatio = Spring.DampingRatioMediumBouncy
@@ -165,30 +150,25 @@ fun UpdateUpToDateDialog(currentVersion: String, onDismiss: () -> Unit) {
 
         val successColor = MaterialTheme.colorScheme.primary
 
-        Box(
-            modifier = Modifier
-                .size(84.dp)
-                .scale(circleScale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(successColor.copy(alpha = 0.28f), successColor.copy(alpha = 0.06f))
-                    )
-                ),
-            contentAlignment = Alignment.Center
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            modifier = Modifier.size(76.dp)
         ) {
-            Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = successColor,
-                modifier = Modifier.size(52.dp).scale(checkScale)
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = successColor,
+                    modifier = Modifier.size(40.dp).scale(checkScale)
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("You're up to date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("You're Up to Date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Ever Dialer v$currentVersion is the latest version.",
+                "Ever Dialer v$currentVersion is the latest version available.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -198,16 +178,14 @@ fun UpdateUpToDateDialog(currentVersion: String, onDismiss: () -> Unit) {
         Button(
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = successColor)
-        ) { Text("Nice!") }
+        ) { Text("Great!") }
     }
 }
 
 /**
- * Shown when a newer version is available.
- * [readyToInstall] = true when the APK for [latestVersion] is already downloaded —
- * in that case the primary action installs immediately without re-downloading.
+ * Modern Material You / Material Expressive update popup shown when an update is available.
  */
 @Composable
 fun UpdateAvailableDialog(
@@ -221,46 +199,37 @@ fun UpdateAvailableDialog(
         var appeared by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { appeared = true }
 
-        val infinite = rememberInfiniteTransition(label = "availableFloat")
-        val bob by infinite.animateFloat(
-            initialValue = -3f,
-            targetValue = 3f,
-            animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "iconBob"
-        )
-
         val iconScale by animateFloatAsState(
-            targetValue = if (appeared) 1f else 0.4f,
+            targetValue = if (appeared) 1f else 0.5f,
             animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
             label = "availIconScale"
         )
 
         val accent = MaterialTheme.colorScheme.primary
 
-        Box(
-            modifier = Modifier
-                .size(84.dp)
-                .scale(iconScale)
-                .offset(y = bob.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(listOf(accent.copy(alpha = 0.26f), accent.copy(alpha = 0.05f)))
-                ),
-            contentAlignment = Alignment.Center
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(76.dp).scale(iconScale)
         ) {
-            Icon(
-                if (readyToInstall) Icons.Default.InstallMobile else Icons.Default.SystemUpdate,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(40.dp)
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Update available", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                if (readyToInstall) "The update has already been downloaded and is ready to install."
-                else "A new version of Ever Dialer is ready to download.",
+                "Update Available",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "A newer build of Ever Dialer is ready to download & explore.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -269,54 +238,81 @@ fun UpdateAvailableDialog(
 
         // Version chips: current -> latest
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.Center
         ) {
-            VersionChip(label = "Current", version = "v$currentVersion", highlighted = false)
-            val arrowAlpha by animateFloatAsState(
-                targetValue = if (appeared) 1f else 0f,
-                animationSpec = tween(400, delayMillis = 120),
-                label = "arrowAlpha"
-            )
+            VersionChip(label = "Installed", version = "v$currentVersion", highlighted = false, modifier = Modifier.weight(1f))
+            
             Icon(
                 Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = accent,
-                modifier = Modifier.size(18.dp).alpha(arrowAlpha)
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .size(20.dp)
             )
-            VersionChip(label = "New", version = "v$latestVersion", highlighted = true, accent = accent)
+            
+            VersionChip(label = "Latest", version = "v$latestVersion", highlighted = true, accent = accent, modifier = Modifier.weight(1f))
         }
 
-        Button(
-            onClick = onAction,
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(50),
-            colors = ButtonDefaults.buttonColors(containerColor = accent)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                if (readyToInstall) Icons.Default.InstallMobile else Icons.Default.Download,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(if (readyToInstall) "Install Now" else "Download & Install")
-        }
+            Button(
+                onClick = onAction,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent)
+            ) {
+                Text("View Update", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Not Now") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
 @Composable
-private fun VersionChip(label: String, version: String, highlighted: Boolean, accent: Color = MaterialTheme.colorScheme.primary) {
+private fun VersionChip(
+    label: String,
+    version: String,
+    highlighted: Boolean,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    modifier: Modifier = Modifier
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (highlighted) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        color = if (highlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 version,
                 style = MaterialTheme.typography.titleMedium,
@@ -337,60 +333,45 @@ fun UpdateDownloadingDialog(latestVersion: String, progress: Float) {
             label = "downloadProgress"
         )
 
-        val infinite = rememberInfiniteTransition(label = "downloadPulse")
-        val pulse by infinite.animateFloat(
-            initialValue = 0.92f,
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "downloadIconPulse"
-        )
-
         val primary = MaterialTheme.colorScheme.primary
-        val track = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
 
-        Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 7.dp.toPx()
-                drawArc(
-                    color = track,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                drawArc(
-                    color = primary,
-                    startAngle = -90f,
-                    sweepAngle = 360f * animatedProgress,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            modifier = Modifier.size(76.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Downloading,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(36.dp)
                 )
             }
-            Icon(
-                Icons.Default.Downloading,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(34.dp).scale(pulse)
-            )
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Downloading update", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Downloading Update", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("v$latestVersion", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LinearProgressIndicator(
                 progress = { animatedProgress },
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(50)),
-                strokeCap = StrokeCap.Round
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(50)),
+                strokeCap = StrokeCap.Round,
+                color = primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${(animatedProgress * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Installing automatically when done", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${(animatedProgress * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("Installing when ready…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -420,23 +401,32 @@ fun UpdateErrorDialog(message: String = "Could not check for updates. Please try
 
         val errorColor = MaterialTheme.colorScheme.error
 
-        Box(
-            modifier = Modifier
-                .size(84.dp)
-                .offset(x = shake.value.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(errorColor.copy(alpha = 0.22f), errorColor.copy(alpha = 0.05f)))),
-            contentAlignment = Alignment.Center
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            modifier = Modifier.size(76.dp).offset(x = shake.value.dp)
         ) {
-            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = errorColor, modifier = Modifier.size(44.dp))
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.ErrorOutline,
+                    contentDescription = null,
+                    tint = errorColor,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Update check failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Update Check Failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
 
-        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50)) {
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
             Text("OK")
         }
     }
