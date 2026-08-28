@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,6 +17,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,13 +26,13 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -38,10 +40,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.APP_VERSION
@@ -55,16 +60,19 @@ import com.coolappstore.everdialer.by.svhp.controller.util.fetchReleaseForVersio
 import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
 import com.coolappstore.everdialer.by.svhp.controller.util.installApkAndScheduleDelete
 import com.coolappstore.everdialer.by.svhp.controller.util.isNewerVersion
+import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
+import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
+import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
+import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
-private val ColorGreen = Color(0xFF4CAF50)
-private val ColorAmber = Color(0xFFFFA000)
-private val ColorRed = Color(0xFFF44336)
+import kotlin.math.roundToInt
 
 // ─── State machines ────────────────────────────────────────────────────────
 
@@ -82,6 +90,7 @@ private sealed class DownloadState {
     object Failed : DownloadState()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
 fun UpdatesScreen(navigator: DestinationsNavigator) {
@@ -95,7 +104,23 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
     var installedNotesLoaded by remember { mutableStateOf(false) }
     var showCompareSheet by remember { mutableStateOf(false) }
 
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+    var autoUpdateEnabled by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true))
+    }
+
+    fun triggerHaptic() {
+        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+            performAppHaptic(
+                context,
+                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+            )
+        }
+    }
+
     fun runCheck() {
+        triggerHaptic()
         scope.launch {
             checkState = CheckState.Checking
             val release = fetchLatestRelease(GITHUB_API_RELEASES)
@@ -107,9 +132,6 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         }
     }
 
-    // Auto-check the moment the page opens, and silently fetch the installed
-    // version's own release notes in the background so they're ready the
-    // instant the user wants to compare the two.
     LaunchedEffect(Unit) {
         runCheck()
     }
@@ -129,6 +151,7 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 latestVersion = ds.release.tagName,
                 readyToInstall = ds.readyToInstall,
                 onConfirm = {
+                    triggerHaptic()
                     if (ds.readyToInstall) {
                         downloadState = DownloadState.Idle
                         installApkAndScheduleDelete(context, getApkDestinationFile())
@@ -181,11 +204,31 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
             AlertDialog(
                 onDismissRequest = { downloadState = DownloadState.Idle },
                 shape = RoundedCornerShape(28.dp),
-                icon = { Icon(Icons.Default.ErrorOutline, null, tint = ColorRed) },
-                title = { Text("Download failed") },
-                text = { Text("Something went wrong while downloading the update. Please try again.") },
+                icon = {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                },
+                title = { Text("Download Failed", fontWeight = FontWeight.Bold) },
+                text = { Text("Something went wrong while downloading the update. Please check your internet connection and try again.") },
                 confirmButton = {
-                    TextButton(onClick = { downloadState = DownloadState.Idle }) { Text("OK") }
+                    Button(
+                        onClick = { downloadState = DownloadState.Idle },
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("OK")
+                    }
                 }
             )
         }
@@ -203,6 +246,14 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         )
     }
 
+    val infinite = rememberInfiniteTransition(label = "appBarSpin")
+    val spinAngle by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
+        label = "spinAngle"
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -217,182 +268,336 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                         onClick = { runCheck() },
                         enabled = checkState !is CheckState.Checking
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Check again")
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Check again",
+                            modifier = if (checkState is CheckState.Checking) Modifier.rotate(spinAngle) else Modifier
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .graphicsLayer {
-                    alpha = if (screenVisible) 1f else 0f
-                    translationY = if (screenVisible) 0f else 24.dp.toPx()
-                }
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                UpdateHeroBlob(checkState = checkState)
+            // ── Hero Banner ──────────────────────────────────────────
+            RivoAnimatedSection(delayMs = 0L) {
+                ExpressiveUpdateHeroCard(checkState = checkState)
+            }
 
-                Spacer(Modifier.height(20.dp))
+            // ── Version Stat Cards ────────────────────────────────────
+            RivoAnimatedSection(delayMs = 60L) {
+                VersionStatsRow(checkState = checkState)
+            }
 
-                VersionHeaderRow(checkState = checkState)
-
-                Spacer(Modifier.height(20.dp))
-
-                ReleaseNotesBox(checkState = checkState)
-
-                Spacer(Modifier.height(20.dp))
-
-                UpdateActionArea(
+            // ── Action Button Area ───────────────────────────────────
+            RivoAnimatedSection(delayMs = 120L) {
+                ExpressiveActionArea(
                     checkState = checkState,
                     onCheckAgain = { runCheck() },
                     onUpdateClick = { latest ->
+                        triggerHaptic()
                         val apkFile = getApkDestinationFile()
                         val downloadedVersion = prefs.getString(PreferenceManager.KEY_DOWNLOADED_UPDATE_VERSION, null)
                         val readyToInstall = apkFile.exists() && apkFile.length() > 0L && downloadedVersion == latest.tagName
                         downloadState = DownloadState.Confirm(latest, readyToInstall)
                     }
                 )
+            }
 
-                Spacer(Modifier.height(16.dp))
-
-                TextButton(
-                    onClick = { showCompareSheet = true },
-                    enabled = installedNotesLoaded
-                ) {
-                    Icon(Icons.Outlined.Difference, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Compare release notes")
+            // ── Release Notes Section ────────────────────────────────
+            RivoAnimatedSection(delayMs = 180L) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RivoSectionHeader(title = "What's New")
+                    ExpressiveReleaseNotesCard(
+                        checkState = checkState,
+                        installedNotes = installedNotes,
+                        onCompareClick = { showCompareSheet = true }
+                    )
                 }
+            }
 
-                Spacer(Modifier.height(24.dp))
+            // ── Compare Release Notes ─────────────────────────────────
+            RivoAnimatedSection(delayMs = 210L) {
+                RivoExpressiveCard {
+                    RivoListItem(
+                        headline = "Compare Release Notes",
+                        supporting = "Compare installed v$APP_VERSION with the latest release",
+                        leadingIcon = Icons.Outlined.Difference,
+                        iconContainerColor = MaterialTheme.colorScheme.primary,
+                        trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                        onClick = { showCompareSheet = true }
+                    )
+                }
+            }
+
+            // ── Update Preferences Card ──────────────────────────────
+            RivoAnimatedSection(delayMs = 240L) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RivoSectionHeader(title = "Options")
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Auto Check For Updates",
+                            supporting = "Automatically check for new releases when app launches",
+                            leadingIcon = Icons.Default.Autorenew,
+                            iconContainerColor = MaterialTheme.colorScheme.primary,
+                            checked = autoUpdateEnabled,
+                            onCheckedChange = { enabled ->
+                                autoUpdateEnabled = enabled
+                                prefs.setBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, enabled)
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+// ─── Expressive Hero Status Card ──────────────────────────────────────────
+
+@Composable
+private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
+    val containerColor = when (checkState) {
+        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                              else MaterialTheme.colorScheme.surfaceContainerLow
+        is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.surfaceContainerLow
+    }
+
+    val animatedContainerColor by animateColorAsState(
+        targetValue = containerColor,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "heroContainerColor"
+    )
+
+    val borderColor = when (checkState) {
+        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                              else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+        is CheckState.Failed -> MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)),
+        shape = RoundedCornerShape(28.dp),
+        color = animatedContainerColor,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        tonalElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            HeroStatusIcon(checkState = checkState)
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Ever Dialer",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp
+                )
+
+                AnimatedContent(
+                    targetState = checkState,
+                    transitionSpec = {
+                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                            slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 2 }) togetherWith
+                            (fadeOut(tween(140)) + slideOutVertically(tween(140)) { -it / 2 })
+                    },
+                    label = "heroTitle"
+                ) { state ->
+                    val (title, subtitle) = when (state) {
+                        is CheckState.Checking -> "Checking for updates…" to "Connecting to update repository"
+                        is CheckState.Done -> if (state.isNewer && state.latest != null) {
+                            "Update Available!" to "v${state.latest.tagName} is ready to download"
+                        } else {
+                            "You're Up to Date" to "Ever Dialer v$APP_VERSION is the latest version"
+                        }
+                        is CheckState.Failed -> "Update Check Failed" to "Could not connect to update server"
+                        else -> "Ever Dialer Updates" to "Current version v$APP_VERSION"
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            AnimatedContent(
+                targetState = checkState,
+                transitionSpec = {
+                    (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy), initialScale = 0.8f)) togetherWith
+                        (fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.8f))
+                },
+                label = "statusBadge"
+            ) { state ->
+                when (state) {
+                    is CheckState.Checking -> ExpressiveStatusChip(
+                        text = "Checking…",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        pulsing = true
+                    )
+                    is CheckState.Done -> if (state.isNewer && state.latest != null) {
+                        ExpressiveStatusChip(
+                            text = "New v${state.latest.tagName}",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            pulsing = true
+                        )
+                    } else {
+                        ExpressiveStatusChip(
+                            text = "Latest Build",
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    is CheckState.Failed -> ExpressiveStatusChip(
+                        text = "Connection Error",
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    else -> Spacer(Modifier.height(0.dp))
+                }
             }
         }
     }
 }
 
-// ─── Decorative animated gradient blob behind the header ──────────────────
 @Composable
-private fun UpdateHeroBlob(checkState: CheckState) {
-    val infinite = rememberInfiniteTransition(label = "heroBlob")
-    val rotation by infinite.animateFloat(
+private fun HeroStatusIcon(checkState: CheckState) {
+    val infinite = rememberInfiniteTransition(label = "heroIconAnim")
+    val spin by infinite.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
-        label = "blobRotation"
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+        label = "heroSpin"
     )
     val pulse by infinite.animateFloat(
         initialValue = 0.94f,
         targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "blobPulse"
+        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "heroPulse"
+    )
+    val glowAlpha by infinite.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "glowPulse"
     )
 
-    val accent = when (checkState) {
-        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primary else ColorGreen
-        is CheckState.Failed -> ColorRed
-        else -> MaterialTheme.colorScheme.primary
+    val (icon, iconBgColor, iconTintColor) = when (checkState) {
+        is CheckState.Checking -> Triple(
+            Icons.Default.SystemUpdate,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        is CheckState.Done -> if (checkState.isNewer) {
+            Triple(
+                Icons.Default.NewReleases,
+                MaterialTheme.colorScheme.primaryContainer,
+                MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        } else {
+            Triple(
+                Icons.Default.Verified,
+                MaterialTheme.colorScheme.primaryContainer,
+                MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        is CheckState.Failed -> Triple(
+            Icons.Default.CloudOff,
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
+        )
+        else -> Triple(
+            Icons.Default.SystemUpdate,
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.primary
+        )
     }
-    val accentAnimated by animateColorAsState(targetValue = accent, animationSpec = tween(500), label = "blobColor")
 
-    Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+    Box(contentAlignment = Alignment.Center) {
+        // Ambient soft radial glow
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .rotate(rotation)
-                .scale(pulse)
+                .size(96.dp)
+                .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f)
+                .alpha(glowAlpha)
                 .background(
-                    Brush.sweepGradient(
-                        listOf(
-                            accentAnimated.copy(alpha = 0.35f),
-                            accentAnimated.copy(alpha = 0.05f),
-                            accentAnimated.copy(alpha = 0.35f)
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                            Color.Transparent
                         )
                     ),
                     shape = CircleShape
                 )
         )
-        Box(
+
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = iconBgColor,
+            border = androidx.compose.foundation.BorderStroke(
+                1.5.dp,
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            ),
             modifier = Modifier
-                .size(84.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center
+                .size(76.dp)
+                .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f),
+            shadowElevation = 4.dp
         ) {
-            AnimatedContent(
-                targetState = checkState,
-                transitionSpec = {
-                    (fadeIn(tween(250)) + scaleIn(initialScale = 0.7f)) togetherWith
-                        (fadeOut(tween(150)) + scaleOut(targetScale = 0.7f))
-                },
-                label = "heroIcon"
-            ) { state ->
-                when (state) {
-                    is CheckState.Checking -> {
-                        val spin by infinite.animateFloat(
-                            initialValue = 0f, targetValue = 360f,
-                            animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
-                            label = "spin"
-                        )
-                        Icon(
-                            Icons.Default.SystemUpdate, null,
-                            tint = accentAnimated,
-                            modifier = Modifier.size(38.dp).rotate(spin)
-                        )
-                    }
-                    is CheckState.Done -> {
-                        if (state.isNewer) {
-                            Icon(Icons.Default.NewReleases, null, tint = accentAnimated, modifier = Modifier.size(38.dp))
-                        } else {
-                            Icon(Icons.Default.CheckCircle, null, tint = accentAnimated, modifier = Modifier.size(38.dp))
-                        }
-                    }
-                    is CheckState.Failed -> Icon(Icons.Default.ErrorOutline, null, tint = accentAnimated, modifier = Modifier.size(38.dp))
-                    else -> Icon(Icons.Default.SystemUpdate, null, tint = accentAnimated, modifier = Modifier.size(38.dp))
-                }
-            }
-        }
-    }
-}
-
-// ─── Version + status badge row ────────────────────────────────────────────
-@Composable
-private fun VersionHeaderRow(checkState: CheckState) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Ever Dialer",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "v$APP_VERSION",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold
-            )
-
-            AnimatedContent(
-                targetState = checkState,
-                transitionSpec = { (fadeIn() + slideInVertically { it / 2 }) togetherWith (fadeOut() + slideOutVertically { -it / 2 }) },
-                label = "statusBadge"
-            ) { state ->
-                when (state) {
-                    is CheckState.Checking -> StatusChip("Checking…", MaterialTheme.colorScheme.primary, animated = true)
-                    is CheckState.Done -> if (state.isNewer) {
-                        StatusChip("Update required", ColorAmber)
-                    } else {
-                        StatusChip("Latest", ColorGreen)
-                    }
-                    is CheckState.Failed -> StatusChip("Check failed", ColorRed)
-                    else -> Spacer(Modifier.width(1.dp))
+            Box(contentAlignment = Alignment.Center) {
+                AnimatedContent(
+                    targetState = checkState,
+                    transitionSpec = {
+                        (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy), initialScale = 0.6f)) togetherWith
+                            (fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 0.6f))
+                    },
+                    label = "heroIconGlyph"
+                ) { state ->
+                    val modifier = if (state is CheckState.Checking) Modifier.rotate(spin) else Modifier
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTintColor,
+                        modifier = modifier.size(36.dp)
+                    )
                 }
             }
         }
@@ -400,78 +605,407 @@ private fun VersionHeaderRow(checkState: CheckState) {
 }
 
 @Composable
-private fun StatusChip(text: String, color: Color, animated: Boolean = false) {
-    val infinite = rememberInfiniteTransition(label = "chipPulse")
+private fun ExpressiveStatusChip(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    pulsing: Boolean = false
+) {
+    val infinite = rememberInfiniteTransition(label = "statusChipPulse")
     val alphaAnim by infinite.animateFloat(
-        initialValue = 0.55f, targetValue = 1f,
+        initialValue = 0.65f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "chipAlpha"
     )
+
     Surface(
         shape = RoundedCornerShape(50),
-        color = color.copy(alpha = 0.16f),
-        modifier = Modifier.alpha(if (animated) alphaAnim else 1f)
+        color = containerColor,
+        modifier = Modifier.alpha(if (pulsing) alphaAnim else 1f)
     ) {
         Text(
-            text,
+            text = text,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = color,
+            color = contentColor,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
         )
     }
 }
 
-// ─── Release notes box ──────────────────────────────────────────────────────
-@Composable
-private fun ReleaseNotesBox(checkState: CheckState) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 140.dp, max = 320.dp)
-                .padding(20.dp)
-        ) {
-            AnimatedContent(
-                targetState = checkState,
-                transitionSpec = { (fadeIn(tween(280)) togetherWith fadeOut(tween(140))) },
-                label = "notesContent"
-            ) { state ->
-                when (state) {
-                    CheckState.Idle, is CheckState.Checking -> NotesShimmerPlaceholder()
+// ─── Version Stats Row ─────────────────────────────────────────────────────
 
-                    is CheckState.Done -> if (state.isNewer && state.latest != null) {
-                        androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            item {
-                                Text(
-                                    "What's new in v${state.latest.tagName}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(Modifier.height(10.dp))
+@Composable
+private fun VersionStatsRow(checkState: CheckState) {
+    val latestVersionText = when (checkState) {
+        is CheckState.Done -> checkState.latest?.tagName?.let { "v$it" } ?: "v$APP_VERSION"
+        is CheckState.Checking -> "Checking…"
+        is CheckState.Failed -> "Unavailable"
+        else -> "v$APP_VERSION"
+    }
+
+    val isNewer = (checkState as? CheckState.Done)?.isNewer == true
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ExpressiveStatCard(
+            label = "Installed",
+            value = "v$APP_VERSION",
+            icon = Icons.Outlined.PhoneAndroid,
+            modifier = Modifier.weight(1f),
+            iconTint = MaterialTheme.colorScheme.primary
+        )
+
+        ExpressiveStatCard(
+            label = "Latest Release",
+            value = latestVersionText,
+            icon = if (isNewer) Icons.Outlined.CloudDownload else Icons.Outlined.CheckCircle,
+            modifier = Modifier.weight(1f),
+            iconTint = if (isNewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+            highlighted = isNewer
+        )
+    }
+}
+
+@Composable
+private fun ExpressiveStatCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    highlighted: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "statCardPressScale"
+    )
+
+    val bgColor = if (highlighted) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+
+    val borderColor = if (highlighted) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = bgColor,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .scale(pressScale)
+            .clickable(interactionSource = interactionSource, indication = null) {}
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = iconTint.copy(alpha = 0.16f),
+                modifier = Modifier.size(38.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+// ─── Expressive Action Button Area ─────────────────────────────────────────
+
+@Composable
+private fun ExpressiveActionArea(
+    checkState: CheckState,
+    onCheckAgain: () -> Unit,
+    onUpdateClick: (ReleaseInfo) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "actionBtnPressScale"
+    )
+
+    AnimatedContent(
+        targetState = checkState,
+        transitionSpec = {
+            (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + slideInVertically(spring(stiffness = Spring.StiffnessMedium)) { it / 3 }) togetherWith
+                (fadeOut(tween(130)) + slideOutVertically(tween(130)) { -it / 3 })
+        },
+        label = "actionArea"
+    ) { state ->
+        when {
+            state is CheckState.Done && state.isNewer && state.latest != null -> {
+                Button(
+                    onClick = { onUpdateClick(state.latest) },
+                    interactionSource = interactionSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .scale(pressScale),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 6.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Download & Install v${state.latest.tagName}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            state is CheckState.Failed -> {
+                FilledTonalButton(
+                    onClick = onCheckAgain,
+                    interactionSource = interactionSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .scale(pressScale),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Try Again", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            state is CheckState.Checking || state == CheckState.Idle -> {
+                FilledTonalButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text("Checking for updates…", fontWeight = FontWeight.Medium)
+                }
+            }
+
+            else -> {
+                FilledTonalButton(
+                    onClick = onCheckAgain,
+                    interactionSource = interactionSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .scale(pressScale),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Check for Updates", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+// ─── Expressive Release Notes Card ─────────────────────────────────────────
+
+@Composable
+private fun ExpressiveReleaseNotesCard(
+    checkState: CheckState,
+    installedNotes: String?,
+    onCompareClick: () -> Unit
+) {
+    RivoExpressiveCard {
+        AnimatedContent(
+            targetState = checkState,
+            transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+            label = "notesAnimatedCard"
+        ) { state ->
+            when (state) {
+                CheckState.Idle, is CheckState.Checking -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        NotesShimmerPlaceholder()
+                    }
+                }
+
+                is CheckState.Done -> {
+                    if (state.isNewer && state.latest != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        "v${state.latest.tagName}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                if (state.latest.publishedAt != null) {
+                                    Text(
+                                        text = state.latest.publishedAt.substringBefore("T"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                            SelectionContainer {
                                 ReleaseNotesText(state.latest.releaseNotes)
                             }
                         }
                     } else {
-                        NoUpdatesNotice()
-                    }
+                        // Up to date
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
 
-                    is CheckState.Failed -> Column(
-                        modifier = Modifier.fillMaxSize(),
+                            Text(
+                                "You're on the latest build",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                "There are no pending updates. You're enjoying the most recent version of Ever Dialer.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+
+                            if (!installedNotes.isNullOrBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                TextButton(
+                                    onClick = onCompareClick,
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("View Installed Version Notes")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                is CheckState.Failed -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
-                        Spacer(Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.CloudOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                         Text(
-                            "Couldn't reach the update server",
-                            style = MaterialTheme.typography.bodyMedium,
+                            "Couldn't check for updates",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Unable to reach the GitHub releases repository. Please verify your connection.",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
@@ -483,55 +1017,23 @@ private fun ReleaseNotesBox(checkState: CheckState) {
 }
 
 @Composable
-private fun NoUpdatesNotice() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        var appeared by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { appeared = true }
-        val scale by animateFloatAsState(
-            targetValue = if (appeared) 1f else 0.6f,
-            animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-            label = "noUpdateScale"
-        )
-        Icon(
-            Icons.Default.CheckCircle,
-            contentDescription = null,
-            tint = ColorGreen,
-            modifier = Modifier.size(40.dp).scale(scale)
-        )
-        Spacer(Modifier.height(10.dp))
-        Text("No new updates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "You're already running the latest version of Ever Dialer.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
 private fun NotesShimmerPlaceholder() {
     val infinite = rememberInfiniteTransition(label = "shimmer")
     val shimmerX by infinite.animateFloat(
         initialValue = -1f, targetValue = 2f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
         label = "shimmerX"
     )
-    val base = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    val highlight = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
+    val base = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val highlight = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(1f, 0.85f, 0.92f, 0.6f).forEach { widthFraction ->
+        listOf(0.7f, 1f, 0.88f, 0.65f).forEach { widthFraction ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth(widthFraction)
                     .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
                         Brush.linearGradient(
                             colors = listOf(base, highlight, base),
@@ -544,7 +1046,7 @@ private fun NotesShimmerPlaceholder() {
     }
 }
 
-/** Very small markdown-lite renderer for GitHub release note bodies. */
+/** Expressive markdown-lite renderer for GitHub release note bodies. */
 @Composable
 private fun ReleaseNotesText(rawNotes: String?) {
     if (rawNotes.isNullOrBlank()) {
@@ -555,91 +1057,46 @@ private fun ReleaseNotesText(rawNotes: String?) {
         )
         return
     }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         rawNotes.lines().forEach { rawLine ->
             val line = rawLine.trim()
             when {
-                line.isBlank() -> Spacer(Modifier.height(2.dp))
-                line.startsWith("#") -> Text(
-                    line.trimStart('#').trim(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                line.startsWith("- ") || line.startsWith("* ") -> Row(verticalAlignment = Alignment.Top) {
-                    Text("•  ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                line.isBlank() -> Spacer(Modifier.height(4.dp))
+                line.startsWith("#") -> {
                     Text(
-                        line.removePrefix("- ").removePrefix("* ").replace("**", ""),
-                        style = MaterialTheme.typography.bodyMedium
+                        line.trimStart('#').trim(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                else -> Text(
-                    line.replace("**", ""),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-// ─── Action area: big pill button / no-updates state ───────────────────────
-@Composable
-private fun UpdateActionArea(
-    checkState: CheckState,
-    onCheckAgain: () -> Unit,
-    onUpdateClick: (ReleaseInfo) -> Unit
-) {
-    AnimatedContent(
-        targetState = checkState,
-        transitionSpec = { (fadeIn(tween(260)) + slideInVertically { it / 3 }) togetherWith (fadeOut(tween(140))) },
-        label = "actionArea"
-    ) { state ->
-        when {
-            state is CheckState.Done && state.isNewer && state.latest != null -> {
-                Button(
-                    onClick = { onUpdateClick(state.latest) },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Update to v${state.latest.tagName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                line.startsWith("- ") || line.startsWith("* ") -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 7.dp)
+                                .size(5.dp)
+                        ) {}
+                        Text(
+                            line.removePrefix("- ").removePrefix("* ").replace("**", ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
-            }
-            state is CheckState.Failed -> {
-                OutlinedButton(
-                    onClick = onCheckAgain,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Try Again", fontWeight = FontWeight.Bold)
-                }
-            }
-            state is CheckState.Checking || state == CheckState.Idle -> {
-                Button(
-                    onClick = {},
-                    enabled = false,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Checking for updates…")
-                }
-            }
-            else -> {
-                // Up to date — no update button, just a subtle re-check affordance.
-                OutlinedButton(
-                    onClick = onCheckAgain,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Check Again", fontWeight = FontWeight.SemiBold)
+                else -> {
+                    Text(
+                        line.replace("**", ""),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }
@@ -647,6 +1104,7 @@ private fun UpdateActionArea(
 }
 
 // ─── Permission-to-download confirmation dialog ────────────────────────────
+
 @Composable
 private fun PermissionToDownloadDialog(
     currentVersion: String,
@@ -655,61 +1113,121 @@ private fun PermissionToDownloadDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var appeared by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { appeared = true }
-    val scale by animateFloatAsState(
-        targetValue = if (appeared) 1f else 0.85f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "confirmScale"
-    )
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.scale(scale),
         shape = RoundedCornerShape(28.dp),
         icon = {
-            Icon(
-                if (readyToInstall) Icons.Default.InstallMobile else Icons.Default.Download,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (readyToInstall) Icons.Default.InstallMobile else Icons.Default.Download,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        },
+        title = {
+            Text(
+                if (readyToInstall) "Install Update?" else "Download Update?",
+                fontWeight = FontWeight.Bold
             )
         },
-        title = { Text(if (readyToInstall) "Install update?" else "Download update?") },
         text = {
             Text(
                 if (readyToInstall)
-                    "Ever Dialer v$latestVersion has already been downloaded. Install it now?"
+                    "Ever Dialer v$latestVersion has already been downloaded. Would you like to install it now?"
                 else
-                    "Ever Dialer v$latestVersion is available (you have v$currentVersion). This will download the APK to your Downloads folder — nothing happens until you confirm."
+                    "Ever Dialer v$latestVersion is available (you have v$currentVersion). The APK will be downloaded to your Downloads folder."
             )
         },
         confirmButton = {
-            Button(onClick = onConfirm, shape = RoundedCornerShape(50)) {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
                 Text(if (readyToInstall) "Install Now" else "Download")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Not Now") }
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Not Now")
+            }
         }
     )
 }
 
 @Composable
 private fun DownloadingDialog(latestVersion: String, progress: Float) {
-    val animatedProgress by animateFloatAsState(targetValue = progress, animationSpec = tween(250), label = "dlProgress")
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(250),
+        label = "dlProgress"
+    )
+
     AlertDialog(
         onDismissRequest = {},
-        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        ),
         shape = RoundedCornerShape(28.dp),
-        icon = { Icon(Icons.Default.Downloading, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("Downloading v$latestVersion") },
+        icon = {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Downloading,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        },
+        title = { Text("Downloading v$latestVersion", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 LinearProgressIndicator(
                     progress = { animatedProgress },
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(50)),
+                    strokeCap = StrokeCap.Round,
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
-                Text("${(animatedProgress * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${(animatedProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Installing when ready…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         confirmButton = {}
@@ -717,6 +1235,7 @@ private fun DownloadingDialog(latestVersion: String, progress: Float) {
 }
 
 // ─── Compare release notes bottom sheet ─────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompareReleaseNotesSheet(
@@ -732,62 +1251,73 @@ private fun CompareReleaseNotesSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
-            Text("Compare Release Notes", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Compare Release Notes",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
 
             val hasLatest = latestVersion != null
             if (hasLatest) {
-                SingleChoiceSegmented(
-                    options = listOf("Installed  ·  v$installedVersion", "Latest  ·  v${latestVersion}"),
+                ExpressiveSegmentedTab(
+                    options = listOf("Installed · v$installedVersion", "Latest · v$latestVersion"),
                     selectedIndex = selectedTab,
                     onSelect = { selectedTab = it }
                 )
-                Spacer(Modifier.height(16.dp))
             } else {
                 Text(
-                    "No newer version to compare — showing your installed release notes.",
+                    "Showing release notes for your installed version.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(12.dp))
             }
 
             AnimatedContent(
                 targetState = if (hasLatest) selectedTab else 0,
                 transitionSpec = {
                     if (targetState > initialState) {
-                        (slideInVertically { it / 4 } + fadeIn()) togetherWith (fadeOut())
+                        (slideInVertically { it / 4 } + fadeIn()) togetherWith fadeOut()
                     } else {
-                        (slideInVertically { -it / 4 } + fadeIn()) togetherWith (fadeOut())
+                        (slideInVertically { -it / 4 } + fadeIn()) togetherWith fadeOut()
                     }
                 },
                 label = "compareContent"
             ) { tab ->
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(modifier = Modifier.heightIn(min = 160.dp, max = 380.dp).padding(18.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .heightIn(min = 160.dp, max = 380.dp)
+                            .padding(18.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         SelectionContainer {
-                            androidx.compose.foundation.lazy.LazyColumn {
-                                item {
-                                    ReleaseNotesText(if (tab == 0) installedNotes else latestNotes)
-                                }
-                            }
+                            ReleaseNotesText(if (tab == 0) installedNotes else latestNotes)
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(50)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Close")
             }
@@ -796,11 +1326,15 @@ private fun CompareReleaseNotesSheet(
 }
 
 @Composable
-private fun SingleChoiceSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+private fun ExpressiveSegmentedTab(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(50))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(4.dp)
     ) {
@@ -809,26 +1343,26 @@ private fun SingleChoiceSegmented(options: List<String>, selectedIndex: Int, onS
             val bg by animateColorAsState(
                 targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
                 animationSpec = tween(220),
-                label = "segBg"
+                label = "tabBg"
             )
             val fg by animateColorAsState(
                 targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(220),
-                label = "segFg"
+                label = "tabFg"
             )
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(bg)
-                    .padding(vertical = 10.dp)
-                    .then(Modifier.clickableNoRipple { onSelect(index) }),
+                    .clickable { onSelect(index) }
+                    .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     label,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                     color = fg,
                     textAlign = TextAlign.Center,
                     maxLines = 1
@@ -836,12 +1370,4 @@ private fun SingleChoiceSegmented(options: List<String>, selectedIndex: Int, onS
             }
         }
     }
-}
-
-private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed {
-    clickable(
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-        onClick = onClick
-    )
 }

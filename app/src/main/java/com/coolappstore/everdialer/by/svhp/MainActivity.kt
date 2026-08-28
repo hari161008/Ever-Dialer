@@ -347,15 +347,7 @@ class MainActivity : FragmentActivity() {
                         readyToInstall = false,
                         onAction = {
                             showAutoUpdateDialog = false
-                            val url = autoUpdateApkUrl
-                            if (url != null) {
-                                val id = enqueueApkDownload(this@MainActivity, url)
-                                if (id != null) {
-                                    autoDownloadId = id
-                                    autoDownloadProgress = 0f
-                                    showAutoDownloadProgress = true
-                                }
-                            }
+                            navController.navigate(com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDestination.route)
                         },
                         onDismiss = { showAutoUpdateDialog = false }
                     )

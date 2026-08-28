@@ -103,7 +103,6 @@ private val settingsSectionKeyGroups: List<List<String>> = listOf(
     listOf("authentication"),
     listOf("app_settings", "contacts_hider", "fake_call", "call_recording"),
     listOf("silence_unknown", "blocked_numbers"),
-    listOf("auto_check_updates"),
     listOf("create_backup", "restore_backup"),
     listOf("about_app")
 )
@@ -132,7 +131,6 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
     var scrollCmPerHaptic by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f)) }
     var scrollHapticStrength by remember { mutableIntStateOf(prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60)) }
-    var autoUpdateEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true)) }
     var pocketModePrevention by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) }
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
 
@@ -824,7 +822,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
         SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, ColorRed),
         SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, ColorBluGrey),
-        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, ColorAmber),
+        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, ColorAmber) { it.navigate(UpdatesScreenDestination) },
         SettingsSearchEntry("Create Backup", "Save app configuration and notes", "create_backup", Icons.Default.Backup, ColorGreen),
         SettingsSearchEntry("Restore Backup", "Restore app configuration and notes", "restore_backup", Icons.Default.Restore, ColorBrown),
         SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, ColorBluGrey),
@@ -1464,29 +1462,6 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             }
 
-
-            // ── Auto Check For Updates ────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 240L) {
-                    Column {
-                        SectionLabel("Auto Check For Updates")
-                        RivoExpressiveCard {
-                            RivoSwitchListItem(
-                                headline   = "Auto Check For Updates",
-                                supporting = "Automatically check for updates when the app opens",
-                                leadingIcon = Icons.Default.Autorenew,
-                                iconContainerColor = ColorAmber,
-                                checked = autoUpdateEnabled,
-                                modifier = Modifier.settingsSearchHighlight("auto_check_updates", highlightedSettingKey) { highlightedSettingKey = null },
-                                onCheckedChange = {
-                                    autoUpdateEnabled = it
-                                    prefs.setBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, it)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
 
             // ── Backup & Restore ─────────────────────────────────────────────
             item {
