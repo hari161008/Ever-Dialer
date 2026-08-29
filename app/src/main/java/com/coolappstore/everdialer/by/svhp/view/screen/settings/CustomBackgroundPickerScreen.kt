@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager
 import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.WallpaperExportHelper
@@ -71,6 +72,10 @@ fun CustomBackgroundPickerScreen(
     val context = LocalContext.current
     val prefs: PreferenceManager = koinInject()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        BackgroundMediaManager.autoCleanInBackground(context, prefs)
+    }
 
     val target = if (isIncoming) CustomBackgroundTarget.INCOMING else CustomBackgroundTarget.ONGOING
     val basePrefix = target.prefix
@@ -248,7 +253,14 @@ fun CustomBackgroundPickerScreen(
             initialDim = bgDim,
             initialBlur = bgBlur,
             initialVideoSpeed = bgVideoSpeed,
-            onDismiss = { editorMediaState = null },
+            onDismiss = {
+                editorMediaState?.let { (file, _, _) ->
+                    scope.launch(Dispatchers.IO) {
+                        BackgroundMediaManager.cleanupFileIfInCache(context, file)
+                    }
+                }
+                editorMediaState = null
+            },
             onSaveSuccess = {
                 bgType = type
                 bgPath = prefs.getString("${prefix}_bg_path", "") ?: ""
@@ -259,6 +271,7 @@ fun CustomBackgroundPickerScreen(
                 bgBlur = prefs.getFloat("${prefix}_bg_blur", 0f)
                 bgVideoSpeed = prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
                 editorMediaState = null
+                BackgroundMediaManager.autoCleanInBackground(context, prefs)
             }
         )
     }
@@ -1168,6 +1181,7 @@ fun CustomBackgroundPickerScreen(
                 bgType = "none"
                 prefs.setString("${prefix}_bg_type", "none")
                 prefs.setString("${prefix}_bg_path", "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
                 Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
             },
             onOpenEditor = { file, isVideo, type ->

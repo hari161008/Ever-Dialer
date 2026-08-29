@@ -2,6 +2,7 @@ package com.coolappstore.everdialer.by.svhp.view.components
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
@@ -12,6 +13,8 @@ import android.os.Looper
 import android.util.AttributeSet
 import android.view.Surface
 import android.view.TextureView
+import android.view.View
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,6 +52,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.WallpaperExportHelper
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +112,7 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     private var activePlayerIndex = 0 // 0 = A, 1 = B
     private var isCrossfading = false
+    private var crossfadeAnimator: ValueAnimator? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loopCheckRunnable = object : Runnable {
@@ -195,8 +200,25 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             startMonitoring()
             return
         }
+
+        ensureSurfaces()
         if (textureViewA.isAvailable) initPlayerA(textureViewA.width, textureViewA.height)
         if (textureViewB.isAvailable) initPlayerB(textureViewB.width, textureViewB.height)
+    }
+
+    private fun ensureSurfaces() {
+        if ((surfaceA == null || !surfaceA!!.isValid) && textureViewA.isAvailable && textureViewA.surfaceTexture != null) {
+            try {
+                surfaceA?.release()
+                surfaceA = Surface(textureViewA.surfaceTexture)
+            } catch (_: Exception) {}
+        }
+        if ((surfaceB == null || !surfaceB!!.isValid) && textureViewB.isAvailable && textureViewB.surfaceTexture != null) {
+            try {
+                surfaceB?.release()
+                surfaceB = Surface(textureViewB.surfaceTexture)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun applyPlaybackSpeed(mp: MediaPlayer?, speed: Float) {
@@ -241,8 +263,9 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     private fun initPlayerA(w: Int, h: Int) {
         val file = videoFile ?: return
+        ensureSurfaces()
         val surf = surfaceA ?: return
-        if (!file.exists()) return
+        if (!file.exists() || !surf.isValid) return
 
         try {
             releasePlayerA()
@@ -270,14 +293,13 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
                 }
 
                 setOnCompletionListener { p ->
-                    try {
-                        if (activePlayerIndex == 0 && !isCrossfading) {
-                            triggerCrossfade()
-                        } else {
+                    // Fallback loop if crossfade didn't trigger
+                    if (!isCrossfading && activePlayerIndex == 0) {
+                        try {
                             p.seekTo(0)
                             p.start()
-                        }
-                    } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    }
                 }
 
                 setOnErrorListener { p, _, _ ->
@@ -295,8 +317,9 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     private fun initPlayerB(w: Int, h: Int) {
         val file = videoFile ?: return
+        ensureSurfaces()
         val surf = surfaceB ?: return
-        if (!file.exists()) return
+        if (!file.exists() || !surf.isValid) return
 
         try {
             releasePlayerB()
@@ -324,14 +347,13 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
                 }
 
                 setOnCompletionListener { p ->
-                    try {
-                        if (activePlayerIndex == 1 && !isCrossfading) {
-                            triggerCrossfade()
-                        } else {
+                    // Fallback loop if crossfade didn't trigger
+                    if (!isCrossfading && activePlayerIndex == 1) {
+                        try {
                             p.seekTo(0)
                             p.start()
-                        }
-                    } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    }
                 }
 
                 setOnErrorListener { p, _, _ ->
@@ -353,61 +375,78 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
     }
 
     private fun triggerCrossfade() {
-        val currentActivePlayer = if (activePlayerIndex == 0) playerA else playerB
-        val nextPlayer = if (activePlayerIndex == 0) playerB else playerA
-        val activeTexture = if (activePlayerIndex == 0) textureViewA else textureViewB
-        val nextTexture = if (activePlayerIndex == 0) textureViewB else textureViewA
-        val isNextPrepared = if (activePlayerIndex == 0) isPreparedB else isPreparedA
+        if (isCrossfading) return
+        val file = videoFile ?: return
+        if (!file.exists()) return
 
-        if (currentActivePlayer == null) return
+        val activeIndex = activePlayerIndex
+        val outgoingPlayer = if (activeIndex == 0) playerA else playerB
+        val incomingPlayer = if (activeIndex == 0) playerB else playerA
+        val outgoingTexture = if (activeIndex == 0) textureViewA else textureViewB
+        val incomingTexture = if (activeIndex == 0) textureViewB else textureViewA
+        val isIncomingPrepared = if (activeIndex == 0) isPreparedB else isPreparedA
 
-        if (nextPlayer == null || !isNextPrepared) {
-            // Fallback: loop current player directly without interruption
+        if (outgoingPlayer == null || incomingPlayer == null || !isIncomingPrepared) {
             try {
-                currentActivePlayer.seekTo(0)
-                currentActivePlayer.start()
+                outgoingPlayer?.seekTo(0)
+                outgoingPlayer?.start()
             } catch (_: Exception) {}
             return
         }
 
         try {
-            val dur = currentActivePlayer.duration
-            val crossfadeDuration = if (dur > 0) minOf(1200L, (dur * 0.4f).toLong().coerceAtLeast(350L)) else 800L
+            val dur = outgoingPlayer.duration
+            val crossfadeDuration = if (dur > 0) {
+                minOf(1200L, (dur * 0.35f).toLong().coerceAtLeast(250L).coerceAtMost((dur * 0.5f).toLong().coerceAtLeast(250L)))
+            } else 800L
 
             isCrossfading = true
-            nextPlayer.seekTo(0)
-            nextPlayer.start()
-            nextTexture.alpha = 0f
-            nextTexture.animate().cancel()
-            activeTexture.animate().cancel()
 
-            nextTexture.animate()
-                .alpha(1f)
-                .setDuration(crossfadeDuration)
-                .setInterpolator(android.view.animation.LinearInterpolator())
-                .start()
+            // Cancel any ongoing animator
+            crossfadeAnimator?.cancel()
+            crossfadeAnimator = null
 
-            activeTexture.animate()
-                .alpha(0f)
-                .setDuration(crossfadeDuration)
-                .setInterpolator(android.view.animation.LinearInterpolator())
-                .setListener(object : AnimatorListenerAdapter() {
+            incomingPlayer.seekTo(0)
+            incomingPlayer.start()
+
+            incomingTexture.visibility = View.VISIBLE
+            incomingTexture.alpha = 0f
+
+            val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = crossfadeDuration
+                interpolator = LinearInterpolator()
+                addUpdateListener { anim ->
+                    val fraction = anim.animatedValue as Float
+                    incomingTexture.alpha = fraction
+                    outgoingTexture.alpha = 1f - fraction
+                }
+                addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         try {
-                            currentActivePlayer.pause()
-                            currentActivePlayer.seekTo(0)
+                            outgoingPlayer.pause()
+                            outgoingPlayer.seekTo(0)
                         } catch (_: Exception) {}
+                        incomingTexture.alpha = 1f
+                        outgoingTexture.alpha = 0f
+                        activePlayerIndex = 1 - activeIndex
                         isCrossfading = false
+                        crossfadeAnimator = null
+                    }
+
+                    override fun onAnimationCancel(animation: Animator) {
+                        isCrossfading = false
+                        crossfadeAnimator = null
                     }
                 })
-                .start()
-
-            activePlayerIndex = 1 - activePlayerIndex
+            }
+            crossfadeAnimator = animator
+            animator.start()
         } catch (e: Exception) {
             isCrossfading = false
+            crossfadeAnimator = null
             try {
-                currentActivePlayer.seekTo(0)
-                currentActivePlayer.start()
+                outgoingPlayer.seekTo(0)
+                outgoingPlayer.start()
             } catch (_: Exception) {}
         }
     }
@@ -427,7 +466,7 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             val dur = currentActivePlayer.duration
             if (dur <= 0) return
 
-            val crossfadeDuration = minOf(1200L, (dur * 0.4f).toLong().coerceAtLeast(350L))
+            val crossfadeDuration = minOf(1200L, (dur * 0.35f).toLong().coerceAtLeast(250L).coerceAtMost((dur * 0.5f).toLong().coerceAtLeast(250L)))
             val triggerPosition = dur - crossfadeDuration
 
             if (pos >= triggerPosition && !isCrossfading) {
@@ -456,8 +495,8 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     private fun releasePlayer() {
         mainHandler.removeCallbacks(loopCheckRunnable)
-        textureViewA.animate().cancel()
-        textureViewB.animate().cancel()
+        crossfadeAnimator?.cancel()
+        crossfadeAnimator = null
         releasePlayerA()
         releasePlayerB()
         isCrossfading = false
@@ -465,6 +504,7 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        ensureSurfaces()
         if (playerA == null && videoFile != null && textureViewA.isAvailable) {
             initPlayerA(textureViewA.width, textureViewA.height)
         }
@@ -847,6 +887,13 @@ fun CustomBackgroundEditorDialog(
 
     var isSaving by remember { mutableStateOf(false) }
 
+    fun handleDismiss() {
+        scope.launch(Dispatchers.IO) {
+            BackgroundMediaManager.cleanupFileIfInCache(context, mediaFile)
+        }
+        onDismiss()
+    }
+
     fun saveBackground() {
         if (isSaving) return
         isSaving = true
@@ -858,6 +905,9 @@ fun CustomBackgroundEditorDialog(
                 val destFile = File(bgDir, "custom_bg_${p}.$ext")
                 mediaFile.copyTo(destFile, overwrite = true)
 
+                // Delete temporary picked file from cacheDir
+                BackgroundMediaManager.cleanupFileIfInCache(context, mediaFile)
+
                 prefs.setString("${p}_bg_type", bgType)
                 prefs.setString("${p}_bg_path", destFile.absolutePath)
                 prefs.setFloat("${p}_bg_zoom", zoom)
@@ -868,6 +918,9 @@ fun CustomBackgroundEditorDialog(
                 if (isVideo) {
                     prefs.setFloat("${p}_bg_video_speed", videoSpeed)
                 }
+
+                // Prune any unreferenced backgrounds
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
 
                 withContext(Dispatchers.Main) {
                     isSaving = false
@@ -884,7 +937,7 @@ fun CustomBackgroundEditorDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { handleDismiss() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false
@@ -1269,7 +1322,7 @@ fun CustomBackgroundEditorDialog(
                 ) {
                     // M3 Expressive Back Button
                     Surface(
-                        onClick = onDismiss,
+                        onClick = { handleDismiss() },
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),

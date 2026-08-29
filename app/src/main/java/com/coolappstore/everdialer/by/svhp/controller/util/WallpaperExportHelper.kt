@@ -108,6 +108,8 @@ object WallpaperExportHelper {
                                 prefs.setString("${prefix}_bg_path", dest.absolutePath)
                             }
                         }
+                        // Clean up extracted temp file from cacheDir
+                        BackgroundMediaManager.cleanupFileIfInCache(context, extracted)
                     }
                 }
             } catch (_: Exception) {}

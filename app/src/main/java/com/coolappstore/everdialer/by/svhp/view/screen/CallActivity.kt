@@ -1258,33 +1258,48 @@ fun ExpressiveCallScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
+            val isSameBg = incomingBgConfig.bgType == ongoingBgConfig.bgType &&
+                    incomingBgConfig.hasCustomBg == ongoingBgConfig.hasCustomBg &&
+                    incomingBgConfig.bgFile?.absolutePath == ongoingBgConfig.bgFile?.absolutePath
+
+            if (isSameBg) {
                 CallBackgroundLayer(
-                    config = incomingBgConfig,
+                    config = currentBgConfig,
                     photoUri = photoUri,
                     isDark = isDark,
                     driftX = driftX,
                     driftY = driftY,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = 1f - answerProgress }
+                    modifier = Modifier.fillMaxSize()
                 )
-            }
-            if (!wasRinging || skipIncomingScreen || answerProgress > 0f) {
-                CallBackgroundLayer(
-                    config = ongoingBgConfig,
-                    photoUri = photoUri,
-                    isDark = isDark,
-                    driftX = driftX,
-                    driftY = driftY,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
-                                Modifier.graphicsLayer { alpha = answerProgress }
-                            } else Modifier
-                        )
-                )
+            } else {
+                if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
+                    CallBackgroundLayer(
+                        config = incomingBgConfig,
+                        photoUri = photoUri,
+                        isDark = isDark,
+                        driftX = driftX,
+                        driftY = driftY,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = 1f - answerProgress }
+                    )
+                }
+                if (!wasRinging || skipIncomingScreen || answerProgress > 0f) {
+                    CallBackgroundLayer(
+                        config = ongoingBgConfig,
+                        photoUri = photoUri,
+                        isDark = isDark,
+                        driftX = driftX,
+                        driftY = driftY,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
+                                    Modifier.graphicsLayer { alpha = answerProgress }
+                                } else Modifier
+                            )
+                    )
+                }
             }
 
             if (isLandscape) {
