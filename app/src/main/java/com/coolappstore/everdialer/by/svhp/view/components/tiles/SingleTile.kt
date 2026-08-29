@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,6 +52,7 @@ fun SingleTile(
     titleTrailing: (@Composable () -> Unit)? = null,
     isMissedCall: Boolean = false,
     phoneNumber: String? = null,
+    forcePersonIcon: Boolean = false,
     onAvatarClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     isMenuOpen: Boolean = false,
@@ -68,23 +70,29 @@ fun SingleTile(
 
     val scale by animateFloatAsState(
         targetValue    = if (showMenu) 0.97f else if (isPressed) 0.95f else 1f,
-        animationSpec  = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label          = "TileScale"
+        animationSpec  = spring(
+            stiffness    = Spring.StiffnessLow,
+            dampingRatio = Spring.DampingRatioMediumBouncy
+        ),
+        label = "TileScale"
     )
 
     val numberForMenu = phoneNumber ?: subtitle?.filter { it.isDigit() || it == '+' }
         ?.takeIf { it.length >= 5 } ?: subtitle
 
-    Box(modifier = modifier.fillMaxWidth().scale(scale)) {
+    Surface(
+        color           = Color.Transparent,
+        modifier        = modifier.fillMaxWidth().scale(scale),
+        shadowElevation = 0.dp
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        if (horizontalDragDetected) return@combinedClickable
-                        isPressed = false
+                    indication        = null,
+                    onClick           = {
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                             performAppHaptic(
                                 context,
@@ -94,27 +102,35 @@ fun SingleTile(
                         }
                         onClick()
                     },
-                    onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (onLongClick != null) onLongClick()
-                        else showMenu = true
-                    }
+                    onLongClick       = onLongClick
                 )
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        awaitFirstDown(requireUnconsumed = false)
                         isPressed = true
                         horizontalDragDetected = false
-                        val downPos = down.position
                         do {
-                            val event   = awaitPointerEvent()
-                            val current = event.changes.firstOrNull() ?: break
-                            val dx = kotlin.math.abs(current.position.x - downPos.x)
-                            val dy = kotlin.math.abs(current.position.y - downPos.y)
-                            if (dx > 28.dp.toPx() && dx > dy * 1.3f) horizontalDragDetected = true
-                            if (!current.pressed) break
-                        } while (true)
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull()
+                            if (change != null && change.pressed) {
+                                val dragAmount = change.position - change.previousPosition
+                                if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y) && kotlin.math.abs(dragAmount.x) > 10f) {
+                                    horizontalDragDetected = true
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+                        if (horizontalDragDetected && onSelectMode != null) {
+                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                performAppHaptic(
+                                    context,
+                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                )
+                            }
+                            onSelectMode()
+                        }
                         isPressed = false
+                        horizontalDragDetected = false
                     }
                 }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -123,6 +139,7 @@ fun SingleTile(
             RivoAvatar(
                 name               = title,
                 photoUri           = photoUri,
+                forcePersonIcon    = forcePersonIcon,
                 icon               = icon,
                 iconContainerColor = iconContainerColor,
                 modifier           = Modifier

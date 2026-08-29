@@ -18,6 +18,22 @@ class RivoApp : ShizuApplication() {
         }
         restoreSavedAppIcon()
         com.coolappstore.everdialer.by.svhp.controller.FakeCallConnectionService.ensureRegistered(this)
+        initMissedCallBadgeObserver()
+    }
+
+    private fun initMissedCallBadgeObserver() {
+        try {
+            contentResolver.registerContentObserver(
+                android.provider.CallLog.Calls.CONTENT_URI,
+                true,
+                object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this@RivoApp)
+                    }
+                }
+            )
+            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this)
+        } catch (_: Exception) {}
     }
 
     private fun restoreSavedAppIcon() {

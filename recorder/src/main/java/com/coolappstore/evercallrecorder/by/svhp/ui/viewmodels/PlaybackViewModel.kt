@@ -45,6 +45,12 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
                     _duration.value = player.duration.coerceAtLeast(0L)
+                } else if (state == Player.STATE_ENDED) {
+                    _isPlaying.value = false
+                    progressJob?.cancel()
+                    if (_duration.value > 0) {
+                        _currentPosition.value = _duration.value
+                    }
                 }
             }
         })
@@ -61,7 +67,15 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun togglePlayPause() {
-        if (player.isPlaying) player.pause() else player.play()
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            if (player.playbackState == Player.STATE_ENDED || (_duration.value > 0 && player.currentPosition >= _duration.value)) {
+                player.seekTo(0)
+                _currentPosition.value = 0L
+            }
+            player.play()
+        }
     }
 
     fun seekForward() { player.seekTo((player.currentPosition + 5_000).coerceAtMost(player.duration)) }

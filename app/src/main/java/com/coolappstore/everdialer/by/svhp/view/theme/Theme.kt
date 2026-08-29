@@ -33,92 +33,204 @@ private val LightColorScheme = lightColorScheme(
 
 private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
     val argb = primary.toArgb()
-    val r = android.graphics.Color.red(argb)
-    val g = android.graphics.Color.green(argb)
-    val b = android.graphics.Color.blue(argb)
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(argb, hsl)
+    val hue = hsl[0]
+    val sat = hsl[1].coerceIn(0.25f, 0.95f)
 
-    fun blend(a: Int, b2: Int, ratio: Float) = (a + (b2 - a) * ratio).toInt().coerceIn(0, 255)
-    fun tint(target: Int, ratio: Float, r0: Int, g0: Int, b0: Int) =
-        Color(blend(r0, target, ratio), blend(g0, target, ratio), blend(b0, target, ratio))
+    fun hslColor(h: Float, s: Float, l: Float): Color {
+        val clampedH = (h % 360f + 360f) % 360f
+        val clampedS = s.coerceIn(0f, 1f)
+        val clampedL = l.coerceIn(0f, 1f)
+        return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(clampedH, clampedS, clampedL)))
+    }
 
-    val secR = blend(r, 128, 0.4f)
-    val secG = blend(g, 128, 0.4f)
-    val secB = blend(b, 128, 0.4f)
-    val secondary = Color(secR, secG, secB)
+    val neutralHue = hue
+    val secHue = hue
+    val tertHue = (hue + 50f) % 360f
 
-    val terR = blend(b, r, 0.3f)
-    val terG = blend(r, g, 0.3f)
-    val terB = blend(g, b, 0.3f)
-    val tertiary = Color(terR, terG, terB)
+    val secSat = (sat * 0.45f).coerceIn(0.18f, 0.50f)
+    val tertSat = (sat * 0.55f).coerceIn(0.20f, 0.60f)
 
     return if (dark) {
-        val primaryContainer = Color(
-            blend(r, 255, 0.55f),
-            blend(g, 255, 0.55f),
-            blend(b, 255, 0.55f)
-        )
-        val onPrimaryContainer = Color(
-            blend(r, 0, 0.7f),
-            blend(g, 0, 0.7f),
-            blend(b, 0, 0.7f)
-        )
-        val secondaryDark = Color(blend(secR, 200, 0.5f), blend(secG, 200, 0.5f), blend(secB, 200, 0.5f))
-        val tertiaryDark = Color(blend(terR, 200, 0.5f), blend(terG, 200, 0.5f), blend(terB, 200, 0.5f))
+        val neutralSat = (sat * 0.28f).coerceIn(0.12f, 0.28f)
+        val variantSat = (sat * 0.35f).coerceIn(0.16f, 0.35f)
+        val containerSat = (sat * 0.35f).coerceIn(0.18f, 0.42f)
+
         darkColorScheme(
-            primary = primaryContainer,
-            onPrimary = onPrimaryContainer,
-            primaryContainer = Color(blend(r, 40, 0.7f), blend(g, 40, 0.7f), blend(b, 40, 0.7f)),
-            onPrimaryContainer = primaryContainer,
-            secondary = secondaryDark,
-            secondaryContainer = tint(40, 0.7f, secR, secG, secB),
-            onSecondaryContainer = secondaryDark,
-            tertiary = tertiaryDark,
-            tertiaryContainer = tint(40, 0.7f, terR, terG, terB),
-            onTertiaryContainer = tertiaryDark,
-            inversePrimary = Color(blend(r, 0, 0.35f), blend(g, 0, 0.35f), blend(b, 0, 0.35f))
-        ).copy(
-            background           = Color(0xFF1C1B1F),
-            surface              = Color(0xFF1C1B1F),
-            surfaceVariant       = Color(0xFF49454F),
-            surfaceContainer     = Color(0xFF211F26),
-            surfaceContainerLow  = Color(0xFF1D1B20),
-            surfaceContainerHigh = Color(0xFF2B2930),
-            surfaceContainerHighest = Color(0xFF36343B),
-            surfaceContainerLowest  = Color(0xFF0F0D13)
+            primary = hslColor(hue, sat, 0.80f),
+            onPrimary = hslColor(hue, sat, 0.20f),
+            primaryContainer = hslColor(hue, (sat * 0.80f).coerceIn(0.35f, 0.85f), 0.30f),
+            onPrimaryContainer = hslColor(hue, (sat * 0.80f).coerceIn(0.35f, 0.85f), 0.90f),
+            inversePrimary = hslColor(hue, sat, 0.40f),
+
+            secondary = hslColor(secHue, secSat, 0.80f),
+            onSecondary = hslColor(secHue, secSat, 0.20f),
+            secondaryContainer = hslColor(secHue, secSat, 0.28f),
+            onSecondaryContainer = hslColor(secHue, secSat, 0.90f),
+
+            tertiary = hslColor(tertHue, tertSat, 0.80f),
+            onTertiary = hslColor(tertHue, tertSat, 0.20f),
+            tertiaryContainer = hslColor(tertHue, tertSat, 0.28f),
+            onTertiaryContainer = hslColor(tertHue, tertSat, 0.90f),
+
+            background = hslColor(neutralHue, neutralSat, 0.06f),
+            onBackground = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.90f),
+            surface = hslColor(neutralHue, neutralSat, 0.06f),
+            onSurface = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.90f),
+            surfaceVariant = hslColor(neutralHue, variantSat, 0.22f),
+            onSurfaceVariant = hslColor(neutralHue, variantSat, 0.80f),
+
+            surfaceContainerLowest = hslColor(neutralHue, neutralSat, 0.04f),
+            surfaceContainerLow = hslColor(neutralHue, containerSat, 0.10f),
+            surfaceContainer = hslColor(neutralHue, containerSat, 0.14f),
+            surfaceContainerHigh = hslColor(neutralHue, containerSat, 0.18f),
+            surfaceContainerHighest = hslColor(neutralHue, containerSat, 0.22f),
+
+            outline = hslColor(neutralHue, variantSat, 0.58f),
+            outlineVariant = hslColor(neutralHue, variantSat, 0.28f),
+            inverseSurface = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.90f),
+            inverseOnSurface = hslColor(neutralHue, neutralSat, 0.15f)
         )
     } else {
-        val primaryContainer = Color(
-            blend(r, 255, 0.75f),
-            blend(g, 255, 0.75f),
-            blend(b, 255, 0.75f)
-        )
-        val onPrimaryContainer = Color(
-            blend(r, 0, 0.7f),
-            blend(g, 0, 0.7f),
-            blend(b, 0, 0.7f)
-        )
+        val neutralSat = (sat * 0.30f).coerceIn(0.12f, 0.30f)
+        val variantSat = (sat * 0.38f).coerceIn(0.18f, 0.40f)
+        val containerSat = (sat * 0.38f).coerceIn(0.18f, 0.45f)
+
         lightColorScheme(
-            primary = primary,
+            primary = hslColor(hue, sat, 0.40f),
             onPrimary = Color.White,
-            primaryContainer = primaryContainer,
-            onPrimaryContainer = onPrimaryContainer,
-            secondary = secondary,
-            secondaryContainer = tint(255, 0.8f, secR, secG, secB),
-            onSecondaryContainer = tint(0, 0.7f, secR, secG, secB),
-            tertiary = tertiary,
-            tertiaryContainer = tint(255, 0.8f, terR, terG, terB),
-            onTertiaryContainer = tint(0, 0.7f, terR, terG, terB),
-            inversePrimary = Color(blend(r, 255, 0.55f), blend(g, 255, 0.55f), blend(b, 255, 0.55f))
-        ).copy(
-            background           = Color(0xFFFFFBFE),
-            surface              = Color(0xFFFFFBFE),
-            surfaceVariant       = Color(0xFFE7E0EC),
-            surfaceContainer     = Color(0xFFF3EDF7),
-            surfaceContainerLow  = Color(0xFFF7F2FA),
-            surfaceContainerHigh = Color(0xFFECE6F0),
-            surfaceContainerHighest = Color(0xFFE6E0E9),
-            surfaceContainerLowest  = Color(0xFFFFFFFF)
+            primaryContainer = hslColor(hue, (sat * 0.75f).coerceIn(0.30f, 0.85f), 0.90f),
+            onPrimaryContainer = hslColor(hue, sat, 0.10f),
+            inversePrimary = hslColor(hue, sat, 0.80f),
+
+            secondary = hslColor(secHue, secSat, 0.40f),
+            onSecondary = Color.White,
+            secondaryContainer = hslColor(secHue, secSat, 0.90f),
+            onSecondaryContainer = hslColor(secHue, secSat, 0.10f),
+
+            tertiary = hslColor(tertHue, tertSat, 0.40f),
+            onTertiary = Color.White,
+            tertiaryContainer = hslColor(tertHue, tertSat, 0.90f),
+            onTertiaryContainer = hslColor(tertHue, tertSat, 0.10f),
+
+            background = hslColor(neutralHue, neutralSat, 0.98f),
+            onBackground = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.10f),
+            surface = hslColor(neutralHue, neutralSat, 0.98f),
+            onSurface = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.10f),
+            surfaceVariant = hslColor(neutralHue, variantSat, 0.88f),
+            onSurfaceVariant = hslColor(neutralHue, variantSat, 0.30f),
+
+            surfaceContainerLowest = Color.White,
+            surfaceContainerLow = hslColor(neutralHue, containerSat, 0.95f),
+            surfaceContainer = hslColor(neutralHue, containerSat, 0.92f),
+            surfaceContainerHigh = hslColor(neutralHue, containerSat, 0.88f),
+            surfaceContainerHighest = hslColor(neutralHue, containerSat, 0.84f),
+
+            outline = hslColor(neutralHue, variantSat, 0.50f),
+            outlineVariant = hslColor(neutralHue, variantSat, 0.80f),
+            inverseSurface = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.20f),
+            inverseOnSurface = hslColor(neutralHue, (neutralSat * 0.4f).coerceIn(0.04f, 0.12f), 0.95f)
         )
+    }
+}
+
+private fun applySaturatedContainers(
+    scheme: androidx.compose.material3.ColorScheme,
+    seedColor: Color,
+    darkTheme: Boolean,
+    themeMode: String
+): androidx.compose.material3.ColorScheme {
+    val argb = seedColor.toArgb()
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(argb, hsl)
+    val hue = hsl[0]
+    val sat = (hsl[1] * 0.45f).coerceIn(0.25f, 0.65f)
+
+    fun hslColor(h: Float, s: Float, l: Float): Color {
+        val clampedH = (h % 360f + 360f) % 360f
+        val clampedS = s.coerceIn(0f, 1f)
+        val clampedL = l.coerceIn(0f, 1f)
+        return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(clampedH, clampedS, clampedL)))
+    }
+
+    return if (darkTheme) {
+        val low = hslColor(hue, sat, 0.10f)
+        val normal = hslColor(hue, sat, 0.14f)
+        val high = hslColor(hue, sat, 0.18f)
+        val highest = hslColor(hue, sat, 0.22f)
+        val variant = hslColor(hue, sat, 0.24f)
+        when (themeMode) {
+            "black" -> scheme.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+            "auto_bw" -> scheme.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+            else -> scheme.copy(
+                background = hslColor(hue, (sat * 0.4f).coerceIn(0.10f, 0.30f), 0.06f),
+                surface = hslColor(hue, (sat * 0.4f).coerceIn(0.10f, 0.30f), 0.06f),
+                surfaceContainerLowest = hslColor(hue, sat, 0.07f),
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+        }
+    } else {
+        val lowest = Color.White
+        val low = hslColor(hue, sat, 0.94f)
+        val normal = hslColor(hue, sat, 0.90f)
+        val high = hslColor(hue, sat, 0.86f)
+        val highest = hslColor(hue, sat, 0.82f)
+        val variant = hslColor(hue, sat, 0.84f)
+        when (themeMode) {
+            "white" -> scheme.copy(
+                background = Color.White,
+                surface = Color.White,
+                surfaceContainerLowest = Color.White,
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+            "auto_bw" -> scheme.copy(
+                background = Color.White,
+                surface = Color.White,
+                surfaceContainerLowest = Color.White,
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+            else -> scheme.copy(
+                background = hslColor(hue, (sat * 0.3f).coerceIn(0.08f, 0.25f), 0.98f),
+                surface = hslColor(hue, (sat * 0.3f).coerceIn(0.08f, 0.25f), 0.98f),
+                surfaceContainerLowest = lowest,
+                surfaceContainerLow = low,
+                surfaceContainer = normal,
+                surfaceContainerHigh = high,
+                surfaceContainerHighest = highest,
+                surfaceVariant = variant
+            )
+        }
     }
 }
 
@@ -132,6 +244,7 @@ fun Rivo4Theme(
 
     val themeMode      = prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto"
     val dynamicColor   = prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)
+    val saturatedColors = prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)
     val customPrimaryInt = prefs.getInt("custom_primary_color", 0)
     val customFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     val fontSizeScale  = prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
@@ -157,31 +270,42 @@ fun Rivo4Theme(
         }
     }
 
-    colorScheme = when (themeMode) {
-        "black" -> colorScheme.copy(
-            background = Color.Black, surface = Color.Black,
-            surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
-            surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
-            surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
-        )
-        "white" -> colorScheme.copy(
-            background = Color.White, surface = Color.White,
-            surfaceContainer = Color(0xFFF8F8F8), surfaceContainerLow = Color(0xFFF4F4F4),
-            surfaceContainerHigh = Color(0xFFEEEEEE), surfaceContainerHighest = Color(0xFFE8E8E8),
-            surfaceContainerLowest = Color.White, surfaceVariant = Color(0xFFF0F0F0)
-        )
-        "auto_bw" -> if (darkTheme) colorScheme.copy(
-            background = Color.Black, surface = Color.Black,
-            surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
-            surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
-            surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
-        ) else colorScheme.copy(
-            background = Color.White, surface = Color.White,
-            surfaceContainer = Color(0xFFF8F8F8), surfaceContainerLow = Color(0xFFF4F4F4),
-            surfaceContainerHigh = Color(0xFFEEEEEE), surfaceContainerHighest = Color(0xFFE8E8E8),
-            surfaceContainerLowest = Color.White, surfaceVariant = Color(0xFFF0F0F0)
-        )
-        else -> colorScheme
+    val seedColor = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        colorScheme.primary
+    } else {
+        if (customPrimaryInt != 0) Color(customPrimaryInt.toLong() and 0xFFFFFFFFL)
+        else defaultPrimary
+    }
+
+    if (saturatedColors) {
+        colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode)
+    } else {
+        colorScheme = when (themeMode) {
+            "black" -> colorScheme.copy(
+                background = Color.Black, surface = Color.Black,
+                surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
+                surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
+                surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
+            )
+            "white" -> colorScheme.copy(
+                background = Color.White, surface = Color.White,
+                surfaceContainer = Color.White, surfaceContainerLow = Color(0xFFF4F4F4),
+                surfaceContainerHigh = Color(0xFFEEEEEE), surfaceContainerHighest = Color(0xFFE8E8E8),
+                surfaceContainerLowest = Color.White, surfaceVariant = Color(0xFFF0F0F0)
+            )
+            "auto_bw" -> if (darkTheme) colorScheme.copy(
+                background = Color.Black, surface = Color.Black,
+                surfaceContainer = Color.Black, surfaceContainerLow = Color(0xFF0A0A0A),
+                surfaceContainerHigh = Color(0xFF151515), surfaceContainerHighest = Color(0xFF1A1A1A),
+                surfaceContainerLowest = Color.Black, surfaceVariant = Color(0xFF1A1A1A)
+            ) else colorScheme.copy(
+                background = Color.White, surface = Color.White,
+                surfaceContainer = Color.White, surfaceContainerLow = Color(0xFFF4F4F4),
+                surfaceContainerHigh = Color(0xFFEEEEEE), surfaceContainerHighest = Color(0xFFE8E8E8),
+                surfaceContainerLowest = Color.White, surfaceVariant = Color(0xFFF0F0F0)
+            )
+            else -> colorScheme
+        }
     }
 
     // ── Sync status bar / nav bar with theme ──────────────────────────────────

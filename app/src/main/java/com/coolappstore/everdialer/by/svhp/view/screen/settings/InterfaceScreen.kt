@@ -108,6 +108,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
 
     var themeMode           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
     var dynamicColors       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
+    var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
     var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
@@ -831,6 +832,22 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         }
                                     }
                                 }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Saturated Colors",
+                                    supporting = "Apply rich saturated colors behind containers",
+                                    leadingIcon = Icons.Outlined.ColorLens,
+                                    iconContainerColor = Color(0xFFFF9800),
+                                    checked = saturatedColors,
+                                    onCheckedChange = {
+                                        saturatedColors = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SATURATED_COLORS, it)
+                                        triggerRestartPrompt(scope, snackbarHostState, context)
+                                    }
+                                )
                             }
                         }
                     }
@@ -846,7 +863,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     headline = "Dynamic Colors",
                                     supporting = "Wallpaper based app color theming",
                                     leadingIcon = Icons.Outlined.Palette,
-                                    iconContainerColor = MaterialTheme.colorScheme.primary,
+                                    iconContainerColor = Color(0xFFE91E63),
                                     checked = dynamicColors,
                                     modifier = Modifier.settingsSearchHighlight("dynamic_colors", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = {

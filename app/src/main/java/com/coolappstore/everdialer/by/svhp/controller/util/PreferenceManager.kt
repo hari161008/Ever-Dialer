@@ -178,6 +178,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
         const val KEY_THEME_MODE            = "theme_mode"
+        const val KEY_SATURATED_COLORS      = "saturated_colors"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
@@ -299,6 +300,9 @@ class PreferenceManager(context: Context) {
         const val KEY_RAISE_TO_ANSWER_DECLINE_FLIP = "raise_to_answer_decline_flip"
         const val KEY_RAISE_TO_ANSWER_BEEP         = "raise_to_answer_beep"
         const val KEY_RAISE_TO_ANSWER_VIBRATE      = "raise_to_answer_vibrate"
+        // Rain Mode
+        const val KEY_RAIN_MODE_ENABLED            = "rain_mode_enabled"
+        const val KEY_RAIN_MODE_VIBRATE            = "rain_mode_vibrate"
         // Auto Redial
         const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
         // Updates — version tag of the APK currently sitting in Downloads (if any)

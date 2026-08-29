@@ -86,6 +86,8 @@ import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.koinInject
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.controller.util.ContactRingtoneUtils
+import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
+import androidx.compose.material.icons.outlined.Block
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -138,6 +140,7 @@ fun ContactDetailsScreen(
     var showNoteEditor by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showBlockConfirm by remember { mutableStateOf(false) }
     var showChooseSimDialog by remember { mutableStateOf(false) }
     // Contact Info → "Ringtone" — per-contact custom ringtone (ContactsContract CUSTOM_RINGTONE),
     // same mechanism the system Contacts app and Telecom's incoming-call ringer use. Bumped after
@@ -182,6 +185,13 @@ fun ContactDetailsScreen(
     }
 
     val isFavorite = contact?.isFavorite ?: false
+    val isContactBlocked = remember(settingsVer, contact, phoneNumber) {
+        if (contact != null) {
+            contact.phoneNumbers.any { BlockedNumbersManager.isBlocked(prefs, it) }
+        } else if (phoneNumber != null && phoneNumber != "Unknown") {
+            BlockedNumbersManager.isBlocked(prefs, phoneNumber)
+        } else false
+    }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -461,6 +471,80 @@ fun ContactDetailsScreen(
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
         )
     }
+    if (showBlockConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBlockConfirm = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = if (isContactBlocked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Block,
+                            contentDescription = null,
+                            tint = if (isContactBlocked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = if (isContactBlocked) "Unblock $displayName?" else "Block $displayName?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = if (isContactBlocked) "You will start receiving incoming calls and messages from this contact again."
+                    else "You will no longer receive incoming calls or messages from this contact. Calls from blocked numbers will be declined automatically.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBlockConfirm = false
+                        val numbersToToggle = if (contact != null) contact.phoneNumbers else listOfNotNull(phoneNumber).filter { it != "Unknown" }
+                        numbersToToggle.forEach { num ->
+                            if (isContactBlocked) {
+                                BlockedNumbersManager.unblock(context, prefs, num)
+                            } else {
+                                BlockedNumbersManager.block(context, prefs, num)
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(100),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isContactBlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        contentColor = if (isContactBlocked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(if (isContactBlocked) "Unblock" else "Block", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                FilledTonalButton(
+                    onClick = { showBlockConfirm = false },
+                    shape = RoundedCornerShape(100),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         Box(modifier = Modifier.fillMaxSize().alpha(screenAlpha).offset(y = screenOffsetY)) {
@@ -490,9 +574,9 @@ fun ContactDetailsScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(onClick = { navigateBack() }) {
@@ -521,11 +605,25 @@ fun ContactDetailsScreen(
                                     IconButton(onClick = { contactsViewModel.toggleFavorite(contact) }) {
                                         Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = if (isFavorite) Color.Red else LocalContentColor.current)
                                     }
+                                    IconButton(onClick = { showBlockConfirm = true }) {
+                                        Icon(
+                                            if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
+                                            contentDescription = if (isContactBlocked) "Unblock" else "Block",
+                                            tint = if (isContactBlocked) MaterialTheme.colorScheme.error else LocalContentColor.current
+                                        )
+                                    }
                                     IconButton(onClick = {
                                         val intent = Intent(Intent.ACTION_EDIT).apply { data = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contact.id.toLong()) }
                                         context.startActivity(intent)
                                     }) { Icon(Icons.Default.Edit, "Edit") }
                                 } else if (phoneNumber != null && phoneNumber != "Unknown") {
+                                    IconButton(onClick = { showBlockConfirm = true }) {
+                                        Icon(
+                                            if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
+                                            contentDescription = if (isContactBlocked) "Unblock" else "Block",
+                                            tint = if (isContactBlocked) MaterialTheme.colorScheme.error else LocalContentColor.current
+                                        )
+                                    }
                                     IconButton(onClick = {
                                         val intent = Intent(Intent.ACTION_INSERT).apply { type = ContactsContract.RawContacts.CONTENT_TYPE; putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber) }
                                         context.startActivity(intent)
@@ -534,10 +632,13 @@ fun ContactDetailsScreen(
                             }
                         }
 
+                        val avatarGlowColor = remember(displayName) {
+                            com.coolappstore.everdialer.by.svhp.view.components.avatarColors[kotlin.math.abs(displayName.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size]
+                        }
                         Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(modifier = Modifier.size(400.dp), contentAlignment = Alignment.Center) {
-                                Box(modifier = Modifier.size(330.dp).background(brush = Brush.radialGradient(colors = listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f), Color.Transparent))).blur(60.dp))
-                                RivoAvatar(name = displayName, photoUri = contact?.photoUri, modifier = Modifier.size(240.dp), shape = CircleShape)
+                                Box(modifier = Modifier.size(330.dp).background(brush = Brush.radialGradient(colors = listOf(avatarGlowColor.copy(alpha = 0.45f), Color.Transparent))).blur(60.dp))
+                                RivoAvatar(name = displayName, photoUri = contact?.photoUri, forcePersonIcon = true, modifier = Modifier.size(240.dp), shape = CircleShape)
                             }
                             Text(text = displayName, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                         }

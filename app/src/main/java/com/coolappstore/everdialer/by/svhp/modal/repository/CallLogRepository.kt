@@ -212,15 +212,21 @@ class CallLogRepository(
                 val phoneAccountId = if (phoneAccountIdIdx >= 0) cursor.getString(phoneAccountIdIdx) else null
                 val simSlot = if (phoneAccountId.isNullOrBlank()) -1 else
                     simSlotCache.getOrPut(phoneAccountId) { getSimSlotForPhoneAccountId(phoneAccountId) }
+                val type = cursor.getInt(typeIdx)
+                val date = cursor.getLong(dateIdx)
+                var duration = cursor.getLong(durationIdx)
+                if (type == CallLog.Calls.MISSED_TYPE && duration <= 0L) {
+                    duration = com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.getDuration(context, number, date)
+                }
 
                 rows.add(
                     RawCall(
                         number = number,
                         digits = number.filter { it.isDigit() },
                         cachedName = cursor.getString(cachedNameIdx),
-                        type = cursor.getInt(typeIdx),
-                        date = cursor.getLong(dateIdx),
-                        duration = cursor.getLong(durationIdx),
+                        type = type,
+                        date = date,
+                        duration = duration,
                         simSlot = simSlot
                     )
                 )

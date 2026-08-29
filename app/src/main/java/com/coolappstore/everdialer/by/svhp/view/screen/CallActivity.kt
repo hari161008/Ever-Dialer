@@ -14,6 +14,10 @@ import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -63,7 +67,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
-import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForAccountHandle
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
@@ -297,7 +301,62 @@ class CallActivity : FragmentActivity() {
         (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
     }
 
+    // Rain mode tracking
+    private var isVolUpPressed = false
+    private var isVolDownPressed = false
+    private var rainModeJob: Job? = null
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            val isRainMode = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
+            if (isRainMode) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = true
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = true
+
+                    if (isVolUpPressed && isVolDownPressed) {
+                        if (rainModeJob?.isActive != true) {
+                            rainModeJob = lifecycleScope.launch {
+                                delay(3000L)
+                                if (isVolUpPressed && isVolDownPressed) {
+                                    val currentSession = CallService.currentCallSession.value ?: CallService.heldCallSession.value
+                                    val currentCall = currentSession?.call
+                                    if (currentCall != null) {
+                                        val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
+                                        if (currentCall.state == Call.STATE_RINGING) {
+                                            CallService.answerCall()
+                                            if (vibrateFeedback) {
+                                                com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this@CallActivity, longArrayOf(0, 120, 80, 120))
+                                            }
+                                        } else {
+                                            CallService.declineCall()
+                                            if (vibrateFeedback) {
+                                                com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this@CallActivity, longArrayOf(0, 180, 80, 180))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return true
+                    }
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = false
+                    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = false
+
+                    rainModeJob?.cancel()
+                    rainModeJob = null
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isVolUpPressed && isVolDownPressed) {
+            return true
+        }
         val session = CallService.currentCallSession.value
         val isRinging = session?.state == Call.STATE_RINGING
         if (isRinging) {
@@ -322,42 +381,6 @@ class CallActivity : FragmentActivity() {
 }
 
 private fun sanitizedPhoneForChatApps(number: String): String = number.filter { it.isDigit() || it == '+' }
-
-/** Resolves a telecom PhoneAccountHandle (as reported on the live Call object) to a
- *  0-based SIM slot index via SubscriptionManager, or -1 if it can't be determined.
- *  This is how we can show a "SIM 1"/"SIM 2" badge on the in-call screen for an
- *  *incoming* call — unlike outgoing calls (where the app already knows which SIM
- *  it dialed out on), there was previously no way to tell which SIM an incoming
- *  call is arriving on. */
-private fun getSimSlotForAccountHandle(context: Context, accountHandle: android.telecom.PhoneAccountHandle?): Int {
-    if (accountHandle == null) return -1
-    return try {
-        val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
-                as? android.telephony.SubscriptionManager ?: return -1
-        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-        val phoneAccount = tm?.getPhoneAccount(accountHandle)
-        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)?.takeIf { it != -1 }
-            ?: accountHandle.id.toIntOrNull()
-        if (subId != null && subId != -1) {
-            val slot = sm.getActiveSubscriptionInfo(subId)?.simSlotIndex
-            if (slot != null && slot in 0..1) return slot
-        }
-        val activeList = sm.activeSubscriptionInfoList
-        if (!activeList.isNullOrEmpty()) {
-            val match = activeList.firstOrNull { sub ->
-                accountHandle.id.contains(sub.subscriptionId.toString()) ||
-                        (sub.iccId != null && accountHandle.id.contains(sub.iccId))
-            }
-            if (match != null && match.simSlotIndex in 0..1) {
-                return match.simSlotIndex
-            }
-            if (activeList.size == 1) {
-                return activeList[0].simSlotIndex
-            }
-        }
-        -1
-    } catch (_: Exception) { -1 }
-}
 
 private fun openSmsApp(context: Context, number: String) {
     try {
@@ -975,8 +998,8 @@ fun ExpressiveCallScreen(
         "dark" -> true
         else -> isDark
     }
-    val incomingElemBgColor = if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
-    val incomingElemFgColor = if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
+    val incomingElemBgColor = if (isIncomingElementsDark) MaterialTheme.colorScheme.surfaceContainerHigh else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    val incomingElemFgColor = if (isIncomingElementsDark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
 
     val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -1329,8 +1352,28 @@ fun ExpressiveCallScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             if (showContactPfp) {
-                                Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
-                                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
+                                val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
+                                    val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+                                    val base = com.coolappstore.everdialer.by.svhp.view.components.avatarColors[
+                                        kotlin.math.abs(key.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size
+                                    ]
+                                    base to Color.White
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (hasCustomBg) controlBtnColor
+                                            else callerAvatarBg
+                                        )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.Center).size(52.dp),
+                                        tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
+                                    )
                                     if (!photoUri.isNullOrEmpty()) {
                                         AsyncImage(
                                             model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
@@ -1543,9 +1586,36 @@ fun ExpressiveCallScreen(
                         val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
 
                         if (showContactPfp) {
-                            Box(modifier = Modifier.size(callAvatarSize).clip(CircleShape).background(controlBtnColor)) {
+                            val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
+                                val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+                                val base = com.coolappstore.everdialer.by.svhp.view.components.avatarColors[
+                                    kotlin.math.abs(key.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size
+                                ]
+                                base to Color.White
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(callAvatarSize)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (hasCustomBg) Modifier.background(controlBtnColor)
+                                        else Modifier.background(
+                                            Brush.radialGradient(
+                                                listOf(
+                                                    callerAvatarBg,
+                                                    callerAvatarBg.copy(alpha = 0.85f)
+                                                )
+                                            )
+                                        )
+                                    )
+                            ) {
                                 // Always render Icon as base layer so layout never shifts
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize),
+                                    tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
+                                )
                                 if (!photoUri.isNullOrEmpty()) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
@@ -2443,7 +2513,7 @@ fun NewSwipeToAnswer(
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
-    val handleColor = MaterialTheme.colorScheme.surface
+    val handleColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surface
     val handleFg = MaterialTheme.colorScheme.onSurface
 
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
@@ -2505,7 +2575,7 @@ fun NewSwipeToAnswer(
     val hintSpec = if (hintNearEnd) tween<Float>(180, easing = FastOutSlowInEasing) else tween<Float>(700, easing = FastOutSlowInEasing)
     val pulseGrowth by animateFloatAsState(targetValue = hintTarget, animationSpec = hintSpec, label = "pulseGrowth")
     val pulseAlpha by animateFloatAsState(targetValue = hintTarget * 0.09f, animationSpec = hintSpec, label = "pulseAlpha")
-    val pulseColor = if (isDark) Color(0xFF212121) else Color.White
+    val pulseColor = if (isDark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f) else Color.White
 
     Column(
         modifier = Modifier

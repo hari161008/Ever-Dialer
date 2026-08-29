@@ -1,4 +1,4 @@
-﻿package com.coolappstore.everdialer.by.svhp.controller
+package com.coolappstore.everdialer.by.svhp.controller
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -22,6 +22,12 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class VolumeDndAccessibilityService : AccessibilityService() {
 
@@ -29,6 +35,11 @@ class VolumeDndAccessibilityService : AccessibilityService() {
     private var lastPressTimestamp = 0L
     private var mediaSession: MediaSession? = null
     private var screenReceiver: BroadcastReceiver? = null
+
+    private var isVolUpPressed = false
+    private var isVolDownPressed = false
+    private var rainModeJob: Job? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -125,6 +136,8 @@ class VolumeDndAccessibilityService : AccessibilityService() {
                 screenReceiver = null
             }
         } catch (_: Exception) {}
+        rainModeJob?.cancel()
+        rainModeJob = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -133,22 +146,74 @@ class VolumeDndAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         sequenceBuffer.clear()
+        rainModeJob?.cancel()
+        rainModeJob = null
+        isVolUpPressed = false
+        isVolDownPressed = false
     }
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
-        if (event == null || event.action != KeyEvent.ACTION_DOWN) {
-            return super.onKeyEvent(event)
-        }
+        if (event == null) return super.onKeyEvent(event)
 
         val keyCode = event.keyCode
-        if (keyCode != KeyEvent.KEYCODE_VOLUME_UP && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
-            return super.onKeyEvent(event)
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = true
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = true
+
+                val rainTriggered = checkRainModeTrigger()
+
+                val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
+                val handled = handleKeyInput(inputChar)
+                if (handled || rainTriggered) return true
+            } else if (event.action == KeyEvent.ACTION_UP) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = false
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = false
+
+                rainModeJob?.cancel()
+                rainModeJob = null
+            }
         }
 
-        val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
-        val handled = handleKeyInput(inputChar)
+        return super.onKeyEvent(event)
+    }
 
-        return if (handled) false else super.onKeyEvent(event)
+    private fun checkRainModeTrigger(): Boolean {
+        val prefs = PreferenceManager(this)
+        val isRainModeEnabled = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
+        if (!isRainModeEnabled) return false
+
+        if (isVolUpPressed && isVolDownPressed) {
+            if (rainModeJob?.isActive == true) return true
+
+            val activeCall = CallService.currentCallSession.value?.call ?: CallService.heldCallSession.value?.call
+            if (activeCall == null || activeCall.state == android.telecom.Call.STATE_DISCONNECTED || activeCall.state == android.telecom.Call.STATE_DISCONNECTING) {
+                return false
+            }
+
+            rainModeJob = serviceScope.launch {
+                delay(3000L)
+                if (isVolUpPressed && isVolDownPressed) {
+                    val callToAct = CallService.currentCallSession.value?.call ?: CallService.heldCallSession.value?.call
+                    if (callToAct != null) {
+                        val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
+                        if (callToAct.state == android.telecom.Call.STATE_RINGING) {
+                            CallService.answerCall()
+                            if (vibrateFeedback) {
+                                performVibration(this@VolumeDndAccessibilityService, longArrayOf(0, 120, 80, 120))
+                            }
+                        } else {
+                            CallService.declineCall()
+                            if (vibrateFeedback) {
+                                performVibration(this@VolumeDndAccessibilityService, longArrayOf(0, 180, 80, 180))
+                            }
+                        }
+                    }
+                }
+            }
+            return true
+        }
+        return false
     }
 
     private fun handleKeyInput(inputChar: Char): Boolean {
@@ -330,7 +395,7 @@ class VolumeDndAccessibilityService : AccessibilityService() {
             }
         }
 
-        private fun performVibration(context: Context, pattern: LongArray) {
+        fun performVibration(context: Context, pattern: LongArray) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val vm = context.getSystemService(VibratorManager::class.java)

@@ -55,6 +55,7 @@ fun CallLogTile(
     SingleTile(
         title = displayTitle,
         photoUri = log.photoUri,
+        forcePersonIcon = log.name.isNullOrEmpty(),
         isMissedCall = isMissed,
         modifier = modifier,
         titleTrailing = if (log.isCallerIdName) {

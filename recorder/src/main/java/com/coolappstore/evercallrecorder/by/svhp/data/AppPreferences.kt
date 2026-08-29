@@ -354,7 +354,13 @@ class AppPreferences(private val context: Context) {
     fun getShizukuAuthKey() = getString(Key.SHIZUKU_AUTH_KEY, DefaultsValue.SHIZUKU_AUTH_KEY) ?: DefaultsValue.SHIZUKU_AUTH_KEY
     fun setShizukuAuthKey(key: String) = setString(Key.SHIZUKU_AUTH_KEY, key)
     /** Returns the custom accent color as ARGB-packed Int (used when dynamic color is disabled). */
-    fun getAccentColor(): Int = getInt(Key.ACCENT_COLOR, DefaultsValue.ACCENT_COLOR)
+    fun getAccentColor(): Int {
+        val rivoCustomColor = try {
+            context.getSharedPreferences(RIVO_PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt("custom_primary_color", 0)
+        } catch (_: Exception) { 0 }
+        return if (rivoCustomColor != 0) rivoCustomColor else getInt(Key.ACCENT_COLOR, DefaultsValue.ACCENT_COLOR)
+    }
     /** Stores the custom accent color as ARGB-packed Int. */
     fun setAccentColor(argb: Int) = setInt(Key.ACCENT_COLOR, argb)
 

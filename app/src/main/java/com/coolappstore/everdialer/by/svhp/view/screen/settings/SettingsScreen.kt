@@ -921,7 +921,12 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Floating Ongoing Call", "Draggable floating bubble during calls", "floating_ongoing_call", Icons.Outlined.Sensors, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "floating_ongoing_call")) },
         SettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, ColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
         SettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_speaker")) },
+        SettingsSearchEntry("Rain Mode", "Answer/decline calls with simultaneous 3-second volume button hold", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
         SettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_redial")) },
+
+        // ── Rain Mode screen ─────────────────────────────────────────────────
+        SettingsSearchEntry("Enable Rain Mode", "Answer or decline calls using hardware volume buttons", "enable_rain_mode", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination(highlightKey = "enable_rain_mode")) },
+        SettingsSearchEntry("Rain Mode Vibration Feedback", "Vibrate when call is answered or declined via Rain Mode", "rain_mode_vibrate", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RainModeScreenDestination(highlightKey = "rain_mode_vibrate")) },
 
         // ── Raise to Answer screen ───────────────────────────────────────────
         SettingsSearchEntry("Enable Raise to Answer", "Answer calls by raising the phone to your ear", "enable_raise_to_answer", Icons.Outlined.Vibration, ColorTeal) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "enable_raise_to_answer")) },
@@ -929,6 +934,29 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Decline by Flipping", "Flip the phone face down to decline a call", "decline_by_flipping", Icons.Outlined.Vibration, ColorRed) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "decline_by_flipping")) },
         SettingsSearchEntry("Raise to Answer Beep Feedback", "Play a beep when raise/flip is detected", "raise_beep_feedback", Icons.Outlined.Vibration, ColorAmber) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "raise_beep_feedback")) },
         SettingsSearchEntry("Raise to Answer Vibrate Feedback", "Vibrate when raise/flip is detected", "raise_vibrate_feedback", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "raise_vibrate_feedback")) },
+
+        // ── Ever Call Recorder Settings ──────────────────────────────────────
+        SettingsSearchEntry("Call Recording Master Switch", "Enable or disable all background call recording", "call_recording_master", Icons.Default.FiberManualRecord, Color(0xFFE53935)) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Auto Record Incoming Calls", "Automatically record incoming calls from all or specific contacts", "auto_record_incoming", Icons.Outlined.CallReceived, ColorGreen) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Auto Record Outgoing Calls", "Automatically record outgoing calls to all or specific contacts", "auto_record_outgoing", Icons.Outlined.CallMade, ColorBlue) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Recording Storage Location", "Choose custom folder or app-private storage for recordings", "recording_storage", Icons.Outlined.Folder, ColorAmber) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Recording Audio Source", "Microphone, media projection, or internal call stream", "recording_audio_source", Icons.Outlined.Mic, ColorTeal) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Recording Audio Codec", "Audio recording format (AAC, Opus, etc.)", "recording_audio_codec", Icons.Outlined.GraphicEq, ColorPurple) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Recording Sample Rate", "Audio quality sample rate (e.g. 48kHz, 44.1kHz)", "recording_sample_rate", Icons.Outlined.Equalizer, ColorIndigo) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Auto Delete Old Recordings", "Clean up call recordings older than 7/30/90 days", "auto_delete_recordings", Icons.Outlined.DeleteSweep, ColorRed) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Recording Notifications", "Show persistent notification while recording calls", "recording_notifications", Icons.Outlined.Notifications, ColorAmber) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Post-Recording File Actions", "Quick play, share, or delete notification after call ends", "post_recording_actions", Icons.Outlined.DoneAll, ColorGreen) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Call Recording App Lock", "Require PIN or biometric authentication for recordings", "recording_app_lock", Icons.Default.Fingerprint, Color(0xFF6750A4)) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+        SettingsSearchEntry("Separate Audio Channels", "Record caller and receiver on left and right channels", "separate_channels", Icons.Outlined.Headphones, ColorCyan) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
+
+        // ── 4G/5G Network Switch Settings ─────────────────────────────────────
+        SettingsSearchEntry("4G/5G Network Switcher", "Force LTE/NR network mode or per-app automation", "network_switcher_app", Icons.Outlined.NetworkCell, ColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Per-App Network Mode Automation", "Automatically switch network mode per application", "network_automation", Icons.Outlined.AutoMode, ColorIndigo) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Preferred Network Mode", "Select 5G NR, 4G LTE, 3G, or 2G network modes", "preferred_network_mode", Icons.Outlined.SignalCellularAlt, ColorTeal) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Network Switcher Shizuku Mode", "Switch network modes without root using Shizuku", "network_shizuku", Icons.Outlined.Security, ColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Network Switcher Root Mode", "Direct shell network mode execution with root access", "network_root", Icons.Outlined.AdminPanelSettings, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Network Switch Quick Settings Tile", "Toggle 4G/5G directly from Android notification shade", "network_tile", Icons.Outlined.ViewStream, ColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
+        SettingsSearchEntry("Network Switch Floating Hint", "Show on-screen network mode floating indicator", "network_floating_hint", Icons.Outlined.PictureInPicture, ColorCyan) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
 
         // ── Sound & Vibration screen ──────────────────────────────────────────
         SettingsSearchEntry("DTMF Tone", "Play tones when dialing digits", "dtmf_tone", Icons.Outlined.VolumeUp, ColorBlue) { it.navigate(SoundVibrationScreenDestination(highlightKey = "dtmf_tone")) },

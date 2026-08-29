@@ -16,12 +16,21 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ImageSpan
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.graphics.drawable.IconCompat
 import com.coolappstore.everdialer.by.svhp.MainActivity
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForAccountHandle
 import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.screen.BiometricCallActivity
@@ -57,6 +66,26 @@ class CallService : InCallService() {
     // away from the real one. This map remembers the real moment each call became ACTIVE once,
     // so every later rebuild reuses that same timestamp instead of a fresh "now".
     private val callConnectTimes = mutableMapOf<Call, Long>()
+    private val callRingStartTimes = mutableMapOf<Call, Long>()
+    private val callAnsweredSet = mutableSetOf<Call>()
+
+    private fun recordMissedCallDurationIfNeeded(call: Call) {
+        val ringStart = callRingStartTimes.remove(call)
+        val wasAnswered = callAnsweredSet.remove(call)
+        if (ringStart != null && !wasAnswered) {
+            val ringDurationSec = ((System.currentTimeMillis() - ringStart) / 1000L).coerceAtLeast(1L)
+            val number = call.details?.handle?.schemeSpecificPart?.let { android.net.Uri.decode(it) } ?: ""
+            val callDate = call.details?.creationTimeMillis?.takeIf { it > 0 } ?: ringStart
+            if (number.isNotBlank()) {
+                com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.saveDuration(
+                    this, number, callDate, ringDurationSec
+                )
+                com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.updateProviderDuration(
+                    this, number, ringDurationSec
+                )
+            }
+        }
+    }
 
     // ── Proximity screen-off (plain + "Device Orientation with Proximity Sensor") ──────────
     // This used to live entirely inside CallActivity, acquiring/releasing a real
@@ -259,8 +288,26 @@ class CallService : InCallService() {
 
         fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
         fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
-        fun answerCall() { _currentCallSession.value?.call?.answer(VideoProfile.STATE_AUDIO_ONLY) }
-        fun declineCall() { _currentCallSession.value?.call?.disconnect() }
+        fun answerCall() {
+            val primary = _currentCallSession.value?.call
+            val held = _heldCallSession.value?.call
+            if (primary?.state == Call.STATE_RINGING) {
+                primary.answer(VideoProfile.STATE_AUDIO_ONLY)
+            } else if (held?.state == Call.STATE_RINGING) {
+                held.answer(VideoProfile.STATE_AUDIO_ONLY)
+            } else {
+                primary?.answer(VideoProfile.STATE_AUDIO_ONLY)
+            }
+        }
+        fun declineCall() {
+            val primary = _currentCallSession.value?.call
+            val held = _heldCallSession.value?.call
+            if (primary != null) {
+                primary.disconnect()
+            } else if (held != null) {
+                held.disconnect()
+            }
+        }
 
         fun mergeCalls() {
             val primary = _currentCallSession.value?.call ?: return
@@ -383,16 +430,17 @@ class CallService : InCallService() {
                 _heldCallSession.value?.call == call   -> _heldCallSession.value   = CallSession(call, state)
             }
 
-            // Call reached its "answered/connected" state through this dialer (outgoing: call timer started;
-            // incoming: accepted here). Lets the recorder module start recording when the
-            // "Record Only When Call Answered" preference is enabled. Safe to call multiple times.
-            if (state == Call.STATE_ACTIVE) {
+            if (state == Call.STATE_RINGING) {
+                callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
+            } else if (state == Call.STATE_ACTIVE) {
+                callAnsweredSet.add(call)
                 callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
                 com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(this@CallService)
                     .notifyCallAnsweredInDialer()
             }
 
             if (state == Call.STATE_DISCONNECTED) {
+                recordMissedCallDurationIfNeeded(call)
                 val cause = call.details?.disconnectCause
                 android.util.Log.w(
                     "EverDialerCall",
@@ -430,9 +478,15 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
-            if (state == Call.STATE_ACTIVE) callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
+            if (state == Call.STATE_RINGING) {
+                callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
+            } else if (state == Call.STATE_ACTIVE) {
+                callAnsweredSet.add(call)
+                callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
+            }
             _heldCallSession.value = CallSession(call, state)
             if (state == Call.STATE_DISCONNECTED) {
+                recordMissedCallDurationIfNeeded(call)
                 _heldCallSession.value = null
             } else {
                 updateNotification(call)
@@ -443,6 +497,7 @@ class CallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         RaiseToAnswerManager.stop(this)
+        recordMissedCallDurationIfNeeded(call)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
         callConnectTimes.remove(call)
@@ -494,6 +549,12 @@ class CallService : InCallService() {
             removeForeground()
             cancelNotification()
         }
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this)
+            } catch (_: Exception) {}
+        }, 600)
     }
 
     private fun removeForeground() {
@@ -580,6 +641,7 @@ class CallService : InCallService() {
         }
 
         if (call.state == Call.STATE_RINGING) {
+            callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
             RaiseToAnswerManager.onCallStateChanged(this, call)
         }
 
@@ -769,10 +831,19 @@ class CallService : InCallService() {
             Intent(this, CallService::class.java).apply { action = "SILENCE_CALL" },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
+        val isDualSim = prefs.getActiveSimCount() >= 2
+        val simSlot = if (isDualSim) getSimSlotForAccountHandle(this, call.details?.accountHandle) else -1
+        val contentText = buildCallNotificationContentText(this, isRinging, isDualSim, simSlot)
+
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(currentCallSmallIcon())
             .setContentTitle(contactName)
-            .setContentText(if (isRinging) "Incoming call" else "Active call")
+            .setContentText(contentText)
+            .apply {
+                if (isDualSim && simSlot in 0..1) {
+                    setSubText("SIM ${simSlot + 1}")
+                }
+            }
             .setPriority(if (isFullScreenIncoming) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .apply {
@@ -869,5 +940,53 @@ class CallService : InCallService() {
 
     private fun cancelNotification() {
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+    }
+
+    private fun createSimBadgeBitmap(context: Context, slot: Int): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val widthPx = (15 * density).toInt().coerceAtLeast(1)
+        val heightPx = (18 * density).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (slot == 0) android.graphics.Color.parseColor("#2E7D32") else android.graphics.Color.parseColor("#C62828")
+            style = Paint.Style.FILL
+        }
+        val cornerRadius = 4 * density
+        val rect = RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat())
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 9.5f * density
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        val fontMetrics = textPaint.fontMetrics
+        val textY = (heightPx - (fontMetrics.descent + fontMetrics.ascent)) / 2f
+        canvas.drawText((slot + 1).toString(), widthPx / 2f, textY, textPaint)
+
+        return bitmap
+    }
+
+    private fun buildCallNotificationContentText(
+        context: Context,
+        isRinging: Boolean,
+        isDualSim: Boolean,
+        simSlot: Int
+    ): CharSequence {
+        val baseText = if (isRinging) "Incoming call" else "Active call"
+        if (!isDualSim || simSlot !in 0..1) return baseText
+
+        val simTag = "SIM ${simSlot + 1}"
+        val fullText = "$simTag  $baseText"
+        val ssb = SpannableStringBuilder(fullText)
+        try {
+            val bitmap = createSimBadgeBitmap(context, simSlot)
+            val imageSpan = ImageSpan(context, bitmap, ImageSpan.ALIGN_BOTTOM)
+            ssb.setSpan(imageSpan, 0, simTag.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } catch (_: Exception) {}
+        return ssb
     }
 }

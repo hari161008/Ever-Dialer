@@ -885,6 +885,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".controller.util.MissedCallDismissReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

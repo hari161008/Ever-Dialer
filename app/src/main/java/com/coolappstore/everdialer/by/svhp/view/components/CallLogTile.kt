@@ -105,6 +105,7 @@ fun CallLogTileSimple(log: CallLogEntry) {
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    val isMissed = log.type == CallLog.Calls.MISSED_TYPE
 
     val icon = when (log.type) {
         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
@@ -112,6 +113,9 @@ fun CallLogTileSimple(log: CallLogEntry) {
         CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
         else                        -> Icons.Default.Call
     }
+    val ringDurationText = if (isMissed && log.duration > 0) "${log.duration}s rang" else null
+    val durationText = if (isMissed) ringDurationText else if (log.duration > 0) android.text.format.DateUtils.formatElapsedTime(log.duration) else null
+
     RivoListItem(
         headline = when (log.type) {
             CallLog.Calls.INCOMING_TYPE -> "Incoming"
@@ -119,8 +123,9 @@ fun CallLogTileSimple(log: CallLogEntry) {
             CallLog.Calls.MISSED_TYPE   -> "Missed"
             else                        -> "Call"
         },
-        supporting = "${formatDate(log.date, use24HourTime)}${if (log.duration > 0) " • ${android.text.format.DateUtils.formatElapsedTime(log.duration)}" else ""}",
+        supporting = "${formatDate(log.date, use24HourTime)}${if (durationText != null) " • $durationText" else ""}",
         leadingIcon = icon,
+        iconContainerColor = if (isMissed) MaterialTheme.colorScheme.errorContainer else null,
         onClick = { }
     )
 }
@@ -187,6 +192,8 @@ fun CallLogTile(
         else -> nationalNumberDigits(log.number).ifEmpty { "Unknown" }
     }
 
+    val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(
             visible = selectionMode,
@@ -215,17 +222,21 @@ fun CallLogTile(
                 if (showNumberOnSupportingLine) append(log.number)
             },
             avatarName  = avatarSourceName,
+            avatarForcePersonIcon = !isContact,
             photoUri    = log.photoUri,
             headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
             supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
             trailingText = formatTimeOnly(log.date, use24HourTime),
+            trailingTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
+            trailingSubText = if (isMissed && log.duration > 0) "${log.duration}s" else null,
+            trailingSubTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
-
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
                 CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
                 else                        -> Icons.Default.Call
             },
+            trailingIconTint = if (isMissed) MaterialTheme.colorScheme.error else null,
             onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log) }) else null,
             onLongClick = {
                 if (selectionMode) onSelectToggle?.invoke(log)

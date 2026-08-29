@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Backspace
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -69,6 +70,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RaiseToAnswerScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RainModeScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -641,6 +643,21 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
+                            val isRainModeAccessibilityGranted = remember { VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context) }
+                            var rainModeEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)) }
+                            RivoListItem(
+                                headline   = "Rain Mode",
+                                supporting = if (rainModeEnabled && isRainModeAccessibilityGranted) "On" else if (rainModeEnabled && !isRainModeAccessibilityGranted) "Permission required" else "Off",
+                                leadingIcon = Icons.Outlined.WaterDrop,
+                                iconContainerColor = Color(0xFF0288D1),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("rain_mode_link", highlightedKey) { highlightedKey = null },
+                                onClick = { navigator.navigate(RainModeScreenDestination()) }
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
                             var autoRedial by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_REDIAL_ENABLED, false)) }
                             RivoSwitchListItem(
                                 headline   = "Auto Redial",
@@ -941,25 +958,84 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
 
                                 // Delay Timeout Settings Card
                                 Surface(
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = RoundedCornerShape(24.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        verticalArrangement = Arrangement.spacedBy(14.dp)
                                     ) {
-                                        Text(
-                                            text = "Trigger Delay Timeout",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.Timer,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "Trigger Delay Timeout",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+
+                                            // Material You value pill badge
+                                            Surface(
+                                                shape = RoundedCornerShape(50.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ) {
+                                                Text(
+                                                    text = "${volumeDndTimeoutMs.ifEmpty { "600" }} ms",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+
                                         Text(
                                             text = "Maximum delay in milliseconds between button clicks. Smaller numbers require faster clicks.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+
+                                        // Responsive Slider with Material You styling
+                                        val currentTimeoutFloat = volumeDndTimeoutMs.toFloatOrNull()?.coerceIn(100f, 3000f) ?: 600f
+                                        Slider(
+                                            value = currentTimeoutFloat,
+                                            onValueChange = { newMs ->
+                                                val rounded = (newMs / 50).toInt() * 50
+                                                volumeDndTimeoutMs = rounded.toString()
+                                                prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, rounded)
+                                            },
+                                            valueRange = 100f..3000f,
+                                            colors = SliderDefaults.colors(
+                                                thumbColor = MaterialTheme.colorScheme.primary,
+                                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
                                         OutlinedTextField(
                                             value = volumeDndTimeoutMs,
                                             onValueChange = { input ->
@@ -967,7 +1043,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                                 volumeDndTimeoutMs = digits
                                                 val num = digits.toIntOrNull()
                                                 if (num != null && num in 100..5000) {
-                                                    prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, num)
+                                                   prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, num)
                                                 }
                                             },
                                             label = { Text("Delay (milliseconds)") },
@@ -975,25 +1051,61 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                             shape = RoundedCornerShape(16.dp),
                                             colors = OutlinedTextFieldDefaults.colors(
                                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f)
                                             ),
                                             modifier = Modifier.fillMaxWidth(),
+                                            leadingIcon = {
+                                                Icon(Icons.Outlined.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            },
                                             trailingIcon = {
                                                 Text("ms", modifier = Modifier.padding(end = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         )
-                                        Row(
+
+                                        // Screen-adaptive FlowRow for preset chips with Material You colors & selection
+                                        FlowRow(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            listOf(400 to "400ms (Fast)", 600 to "600ms (Default)", 800 to "800ms", 1200 to "1.2s").forEach { (presetMs, label) ->
-                                                AssistChip(
+                                            val presets = listOf(
+                                                300 to "300ms (Fastest)",
+                                                400 to "400ms (Fast)",
+                                                600 to "600ms (Default)",
+                                                800 to "800ms (Normal)",
+                                                1200 to "1.2s (Relaxed)"
+                                            )
+                                            val currentMs = volumeDndTimeoutMs.toIntOrNull()
+                                            presets.forEach { (presetMs, label) ->
+                                                val isSelected = currentMs == presetMs
+                                                FilterChip(
+                                                    selected = isSelected,
                                                     onClick = {
                                                         volumeDndTimeoutMs = presetMs.toString()
                                                         prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, presetMs)
                                                     },
-                                                    label = { Text(label, fontSize = 11.sp) },
-                                                    shape = RoundedCornerShape(12.dp)
+                                                    label = {
+                                                        Text(label, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                                    },
+                                                    leadingIcon = if (isSelected) {
+                                                        {
+                                                            Icon(
+                                                                Icons.Filled.Check,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    } else null,
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                                    ),
+                                                    border = null
                                                 )
                                             }
                                         }

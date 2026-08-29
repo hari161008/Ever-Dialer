@@ -196,6 +196,8 @@ fun ContactSearchContent(
         }
     }
 
+    val globalSettings = remember { buildGlobalSettingsSearchEntries() }
+
     // ── Synchronous, same-frame search ──────────────────────────────────────────────────────
     // Deliberately NOT a LaunchedEffect/coroutine + mutableStateOf combo: that pattern always
     // renders one extra frame with the *previous* (often empty) results before the new ones
@@ -210,10 +212,11 @@ fun ContactSearchContent(
         val nonContacts: List<CallLogEntry>,
         val notes: List<NoteEntry>,
         val recordingNotes: List<RecordingItem>,
-        val recordings: List<RecordingItem>
+        val recordings: List<RecordingItem>,
+        val settings: List<GlobalSettingsSearchEntry>
     )
-    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
-    val searchResults = remember(query, contactIndex, callLogs, allNotes, recordings, filterState) {
+    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
+    val searchResults = remember(query, contactIndex, callLogs, allNotes, recordings, globalSettings, filterState) {
         val q = query
         if (q.isBlank()) return@remember emptySearchResults
 
@@ -266,16 +269,21 @@ fun ContactSearchContent(
                             rec.phoneNumber.replace(" ", "").contains(qDigits))
         }
 
-        SearchResults(fc, ncr, cnr, rnr, rr)
+        val sr = globalSettings.filter { entry ->
+            entry.title.contains(q, ignoreCase = true) || entry.subtitle.contains(q, ignoreCase = true)
+        }
+
+        SearchResults(fc, ncr, cnr, rnr, rr, sr)
     }
     val filteredContacts = searchResults.contacts
     val nonContactResults = searchResults.nonContacts
     val contactNoteResults = searchResults.notes
     val recordingNoteResults = searchResults.recordingNotes
     val recordingResults = searchResults.recordings
+    val settingResults = searchResults.settings
 
     val totalResults = filteredContacts.size + nonContactResults.size + recordingResults.size +
-            contactNoteResults.size + recordingNoteResults.size
+            contactNoteResults.size + recordingNoteResults.size + settingResults.size
     val hasAnyResults = totalResults > 0
 
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
@@ -709,6 +717,52 @@ fun ContactSearchContent(
                                 }
                             }
                         }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                    }
+
+                    if (settingResults.isNotEmpty()) {
+                        item {
+                            RivoSectionHeader(title = "Settings")
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        itemsIndexed(
+                            items = settingResults,
+                            key = { _, entry -> "setting_${entry.key}_${entry.title}" }
+                        ) { index, entry ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItem(
+                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                    ),
+                                shape = groupedRowShape(index, settingResults.size),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow
+                            ) {
+                                Column {
+                                    RivoListItem(
+                                        headline = entry.title,
+                                        supporting = entry.subtitle,
+                                        leadingIcon = entry.icon,
+                                        iconContainerColor = entry.iconContainerColor,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = {
+                                            keyboardController?.hide()
+                                            NavBarVisibilityState.hideForSettingsEntry = true
+                                            entry.navigateTo(navigator)
+                                        }
+                                    )
+                                    if (index < settingResults.size - 1) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
 
                     item { Spacer(modifier = Modifier.height(100.dp)) }

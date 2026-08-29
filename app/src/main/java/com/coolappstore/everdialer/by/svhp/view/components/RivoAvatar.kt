@@ -29,7 +29,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import org.koin.compose.koinInject
 import kotlin.math.abs
 
-private val avatarColors = listOf(
+val avatarColors = listOf(
     Color(0xFFC62828), Color(0xFFAD1457), Color(0xFF6A1B9A), Color(0xFF4527A0),
     Color(0xFF283593), Color(0xFF1565C0), Color(0xFF0277BD), Color(0xFF00838F),
     Color(0xFF00695C), Color(0xFF2E7D32), Color(0xFF558B2F), Color(0xFF9E9D24),
@@ -43,6 +43,7 @@ fun RivoAvatar(
     icon: ImageVector? = null,
     /** Optional explicit tint colour for vector icon tiles. */
     iconContainerColor: Color? = null,
+    forcePersonIcon: Boolean = false,
     modifier: Modifier = Modifier,
     shape: Shape = CircleShape
 ) {
@@ -72,7 +73,7 @@ fun RivoAvatar(
         contentAlignment = Alignment.Center
     ) {
         val letterFontSize = (maxWidth.value * 0.40f).coerceIn(14f, 72f).sp
-        val iconSize       = (maxWidth.value * 0.55f).coerceIn(16f, 48f).dp
+        val iconSize       = (maxWidth.value * 0.55f).coerceIn(16f, 130f).dp
 
         when {
             showPicture && !photoUri.isNullOrEmpty() -> {
@@ -86,7 +87,7 @@ fun RivoAvatar(
             icon != null -> {
                 Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
             }
-            showFirstLetter && hasName -> {
+            !forcePersonIcon && showFirstLetter && hasName -> {
                 Text(
                     text = name.trim().take(1).uppercase(),
                     fontSize = letterFontSize,

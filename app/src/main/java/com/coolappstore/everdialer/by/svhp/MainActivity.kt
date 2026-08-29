@@ -934,6 +934,11 @@ class MainActivity : FragmentActivity() {
         }
         requestPermissionsLauncher.launch(permissions.toTypedArray())
     }
+
+    override fun onResume() {
+        super.onResume()
+        com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(this)
+    }
 }
 
 @androidx.compose.runtime.Composable

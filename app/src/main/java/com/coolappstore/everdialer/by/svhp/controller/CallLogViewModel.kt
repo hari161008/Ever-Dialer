@@ -195,6 +195,7 @@ class CallLogViewModel(
                     _allCallLogs.value = result
                 }
             }
+            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(getApplication())
         } finally {
             isFetching = false
         }

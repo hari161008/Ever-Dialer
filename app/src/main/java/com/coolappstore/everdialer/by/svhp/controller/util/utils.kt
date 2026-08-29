@@ -76,6 +76,38 @@ fun hasDualSim(context: Context): Boolean {
     }
 }
 
+/** Resolves a telecom PhoneAccountHandle (as reported on the live Call object) to a
+ *  0-based SIM slot index via SubscriptionManager, or -1 if it can't be determined. */
+fun getSimSlotForAccountHandle(context: Context, accountHandle: PhoneAccountHandle?): Int {
+    if (accountHandle == null) return -1
+    return try {
+        val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                as? android.telephony.SubscriptionManager ?: return -1
+        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val phoneAccount = tm?.getPhoneAccount(accountHandle)
+        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)?.takeIf { it != -1 }
+            ?: accountHandle.id.toIntOrNull()
+        if (subId != null && subId != -1) {
+            val slot = sm.getActiveSubscriptionInfo(subId)?.simSlotIndex
+            if (slot != null && slot in 0..1) return slot
+        }
+        val activeList = sm.activeSubscriptionInfoList
+        if (!activeList.isNullOrEmpty()) {
+            val match = activeList.firstOrNull { sub ->
+                accountHandle.id.contains(sub.subscriptionId.toString()) ||
+                        (sub.iccId != null && accountHandle.id.contains(sub.iccId))
+            }
+            if (match != null && match.simSlotIndex in 0..1) {
+                return match.simSlotIndex
+            }
+            if (activeList.size == 1) {
+                return activeList[0].simSlotIndex
+            }
+        }
+        -1
+    } catch (_: Exception) { -1 }
+}
+
 fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null) {
     val sanitized = number.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     if (sanitized.isEmpty()) {

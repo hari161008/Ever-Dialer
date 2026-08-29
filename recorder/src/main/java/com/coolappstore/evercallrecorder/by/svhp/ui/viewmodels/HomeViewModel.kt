@@ -609,52 +609,69 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    private fun numbersMatch(a: String, b: String): Boolean {
+        if (a.isBlank() || b.isBlank()) return false
+        if (a == b) return true
+        try {
+            if (android.telephony.PhoneNumberUtils.compare(a, b)) return true
+        } catch (_: Exception) {}
+
+        fun normDigits(s: String): String {
+            val d = s.filter { it.isDigit() }
+            return when {
+                d.length > 10 && d.startsWith("91") -> d.substring(2)
+                d.length > 10 && d.startsWith("1") -> d.substring(1)
+                d.length > 10 && d.startsWith("00") -> d.substring(2)
+                d.length > 10 && d.startsWith("0") -> d.substring(1)
+                d.startsWith("0") -> d.substring(1)
+                else -> d
+            }
+        }
+
+        val rawA = a.filter { it.isDigit() }
+        val rawB = b.filter { it.isDigit() }
+        if (rawA.isEmpty() || rawB.isEmpty()) return false
+        if (rawA == rawB || rawA.endsWith(rawB) || rawB.endsWith(rawA)) return true
+
+        val da = normDigits(a)
+        val db = normDigits(b)
+        if (da.isEmpty() || db.isEmpty()) return false
+        if (da == db || da.endsWith(db) || db.endsWith(da)) return true
+
+        val minLen = minOf(da.length, db.length)
+        if (minLen >= 7) {
+            val checkLen = minOf(minLen, 10)
+            for (len in checkLen downTo 7) {
+                if (da.takeLast(len) == db.takeLast(len)) return true
+            }
+        }
+        return false
+    }
+
     private fun resolveContactName(context: Context, phoneNumber: String): String? {
         return try {
-            // The raw phone number parsed from a recording's filename can still contain
-            // formatting characters (spaces, dashes, parentheses, etc). Passing that raw
-            // string straight into PhoneLookup's filter URI makes the underlying loose
-            // number-matching unreliable, and it can end up matching a *different*
-            // contact that merely shares some of the same digits — which is exactly why
-            // the wrong contact name/photo could show up for a recording. Normalising the
-            // number first (digits only, keeping a leading '+') and safely encoding it
-            // before appending it to the URI ensures each recording is looked up against
-            // its own, correct number.
             val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
             if (normalized.isBlank()) return null
             val lookupUri = Uri.withAppendedPath(
                 ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
                 Uri.encode(normalized)
             )
-            val queryDigits = normalized.filter { it.isDigit() }
-            context.contentResolver.query(
+            val directMatch = context.contentResolver.query(
                 lookupUri,
                 arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.NUMBER),
                 null, null, null
             )?.use { cursor ->
-                // Defensive check: only trust a row if its returned contact number actually
-                // shares the normalized digits with the number we looked up, guarding against
-                // loose-match false positives returning an unrelated contact.
-                //
-                // Bug fix: a contact saved with multiple numbers (home/mobile/work) can produce
-                // several rows here, one per raw number PhoneLookup fuzzy-matched against.
-                // Only ever checking the first row meant that if *that* row's number wasn't a
-                // plausible match to the number we're resolving, the lookup gave up entirely —
-                // even when a later row for the very same contact was the correct match. That's
-                // why a recording made from a contact's 2nd/3rd saved number could fail to show
-                // the contact's name. Walk every row and accept the first genuine match.
                 var matchedName: String? = null
                 while (cursor.moveToNext()) {
-                    val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
-                    val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
-                    val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
-                        (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
-                    if (!isPlausibleMatch) continue
-                    matchedName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
-                    break
+                    val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull() ?: ""
+                    if (numbersMatch(phoneNumber, matchedNumber)) {
+                        matchedName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+                        break
+                    }
                 }
                 matchedName
-            } ?: fallbackScanContactName(context, queryDigits)
+            }
+            directMatch ?: fallbackScanContactName(context, phoneNumber)
         } catch (_: Exception) { null }
     }
 
@@ -663,8 +680,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      *  is WITHOUT one (or vice versa), especially when it disagrees with the device's detected
      *  region — row-walking above can't help then since there's nothing to walk. Recover by
      *  scanning every saved phone number directly with the same plausibility check. */
-    private fun fallbackScanContactName(context: Context, queryDigits: String): String? {
-        if (queryDigits.isEmpty()) return null
+    private fun fallbackScanContactName(context: Context, queryNumber: String): String? {
+        if (queryNumber.isBlank()) return null
         return try {
             context.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -675,12 +692,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val numberIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 var matchedName: String? = null
                 while (cursor.moveToNext()) {
-                    val savedDigits = cursor.getString(numberIdx)?.filter { it.isDigit() }.orEmpty()
-                    val isPlausibleMatch = savedDigits.isNotEmpty() &&
-                        (savedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(savedDigits.takeLast(7)))
-                    if (!isPlausibleMatch) continue
-                    matchedName = cursor.getString(nameIdx)
-                    break
+                    val savedNumber = cursor.getString(numberIdx) ?: continue
+                    if (numbersMatch(queryNumber, savedNumber)) {
+                        matchedName = cursor.getString(nameIdx)
+                        break
+                    }
                 }
                 matchedName
             }

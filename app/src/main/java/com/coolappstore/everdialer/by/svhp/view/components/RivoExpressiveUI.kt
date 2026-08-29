@@ -52,6 +52,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
@@ -495,13 +496,18 @@ fun RivoListItem(
     leadingIcon: ImageVector? = null,
     iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
+    trailingIconTint: Color? = null,
     trailingText: String? = null,
+    trailingTextColor: Color? = null,
+    trailingSubText: String? = null,
+    trailingSubTextColor: Color? = null,
     trailingStartContent: (@Composable () -> Unit)? = null,
     headlineStartContent: (@Composable () -> Unit)? = null,
     supportingStartContent: (@Composable () -> Unit)? = null,
     headlineEndContent: (@Composable () -> Unit)? = null,
     supportingEndContent: (@Composable () -> Unit)? = null,
     avatarName: String? = null,
+    avatarForcePersonIcon: Boolean = false,
     photoUri: String? = null,
     onClick: () -> Unit,
     onAvatarClick: (() -> Unit)? = null,
@@ -553,13 +559,14 @@ fun RivoListItem(
                 RivoAvatar(
                     name = avatarName ?: "",
                     photoUri = photoUri,
+                    forcePersonIcon = avatarForcePersonIcon,
                     modifier = Modifier
                         .size(48.dp)
                         .then(
                             if (onAvatarClick != null)
                                 Modifier
-                                    .clip(CircleShape)
-                                    .combinedClickable(onClick = onAvatarClick)
+                                     .clip(CircleShape)
+                                     .combinedClickable(onClick = onAvatarClick)
                             else Modifier
                         )
                 )
@@ -638,21 +645,39 @@ fun RivoListItem(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            if (trailingText != null) {
-                Text(
-                    text = trailingText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            if (trailingText != null || trailingSubText != null) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(end = 8.dp)
-                )
+                ) {
+                    if (trailingText != null) {
+                        Text(
+                            text = trailingText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = trailingTextColor ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (trailingSubText != null) {
+                        Text(
+                            text = trailingSubText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 11.sp,
+                            color = trailingSubTextColor ?: MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             if (trailingIcon != null) {
                 Icon(
                     trailingIcon, null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
             }
