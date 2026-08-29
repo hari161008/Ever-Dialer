@@ -91,9 +91,10 @@ private fun Modifier.immediateDrag(
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
-fun CallerUIScreen(navigator: DestinationsNavigator) {
+fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
     val settingsVersion by prefs.settingsChanged.collectAsState()
+    var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     var showOngoingCallUIWhenAnswered by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true))
@@ -149,6 +150,9 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
     }
     var showContactPfp by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true))
+    }
+    var showPhoneNumber by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER, true))
     }
 
     val bgLabel = when (ongoingBgType) {
@@ -248,7 +252,24 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                 onCheckedChange = {
                                     showContactPfp = it
                                     prefs.setBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, it)
-                                }
+                                },
+                                modifier = Modifier.settingsSearchHighlight("ongoing_show_contact_pfp", highlightedKey) { highlightedKey = null }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Show Phone Number",
+                                supporting = "Display the phone number on the ongoing call screen",
+                                leadingIcon = Icons.Outlined.Call,
+                                iconContainerColor = Color(0xFF4CAF50),
+                                checked = showPhoneNumber,
+                                onCheckedChange = {
+                                    showPhoneNumber = it
+                                    prefs.setBoolean(PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER, it)
+                                },
+                                modifier = Modifier.settingsSearchHighlight("ongoing_show_phone_number", highlightedKey) { highlightedKey = null }
                             )
                         }
                     }

@@ -226,6 +226,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             ContextMenuItemOption("select",           "Select",                    Icons.Default.CheckBox),
             ContextMenuItemOption("call_back",         "Call back",                 Icons.Default.Call),
             ContextMenuItemOption("call_chat_via",     "Call/Chat Via",             Icons.AutoMirrored.Filled.Chat),
+            ContextMenuItemOption("search_truecaller", "Search Truecaller",         Icons.Default.Search),
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
             ContextMenuItemOption("add_to_contacts",   "Add to contacts",           Icons.Default.PersonAdd),
             ContextMenuItemOption("block_number",      "Block/Unblock number",      Icons.Default.Block),
@@ -1127,7 +1128,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     iconContainerColor = ColorBlue,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier.settingsSearchHighlight("caller_ui_link", highlightedKey) { highlightedKey = null },
-                                    onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.CallerUIScreenDestination) }
+                                    onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.CallerUIScreenDestination()) }
                                 )
 
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),

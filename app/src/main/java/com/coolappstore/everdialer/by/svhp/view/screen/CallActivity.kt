@@ -10,6 +10,7 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.DisconnectCause
 import android.telecom.VideoProfile
+import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp as colorLerp
@@ -295,6 +297,18 @@ class CallActivity : FragmentActivity() {
         (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val session = CallService.currentCallSession.value
+        val isRinging = session?.state == Call.STATE_RINGING
+        if (isRinging) {
+            if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(this)
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         sensorManager?.unregisterListener(proxSensorListener)
@@ -318,15 +332,30 @@ private fun sanitizedPhoneForChatApps(number: String): String = number.filter { 
 private fun getSimSlotForAccountHandle(context: Context, accountHandle: android.telecom.PhoneAccountHandle?): Int {
     if (accountHandle == null) return -1
     return try {
-        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-        val phoneAccount = tm?.getPhoneAccount(accountHandle)
-        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)
-            ?.takeIf { it != -1 }
-            ?: accountHandle.id.toIntOrNull()
-            ?: return -1
         val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
                 as? android.telephony.SubscriptionManager ?: return -1
-        sm.getActiveSubscriptionInfo(subId)?.simSlotIndex ?: -1
+        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+        val phoneAccount = tm?.getPhoneAccount(accountHandle)
+        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)?.takeIf { it != -1 }
+            ?: accountHandle.id.toIntOrNull()
+        if (subId != null && subId != -1) {
+            val slot = sm.getActiveSubscriptionInfo(subId)?.simSlotIndex
+            if (slot != null && slot in 0..1) return slot
+        }
+        val activeList = sm.activeSubscriptionInfoList
+        if (!activeList.isNullOrEmpty()) {
+            val match = activeList.firstOrNull { sub ->
+                accountHandle.id.contains(sub.subscriptionId.toString()) ||
+                        (sub.iccId != null && accountHandle.id.contains(sub.iccId))
+            }
+            if (match != null && match.simSlotIndex in 0..1) {
+                return match.simSlotIndex
+            }
+            if (activeList.size == 1) {
+                return activeList[0].simSlotIndex
+            }
+        }
+        -1
     } catch (_: Exception) { -1 }
 }
 
@@ -390,6 +419,7 @@ private data class CallBackgroundConfig(
     val fontColorMode: String = "default",
     val customFontColorInt: Int = android.graphics.Color.WHITE,
     val showContactPfp: Boolean = true,
+    val showPhoneNumber: Boolean = true,
     val elementsTheme: String = "auto"
 )
 
@@ -898,6 +928,8 @@ fun ExpressiveCallScreen(
         val customFontColorInt = prefs?.getInt("${prefix}_font_color", defaultFontColor ?: android.graphics.Color.WHITE) ?: (defaultFontColor ?: android.graphics.Color.WHITE)
         val showContactPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
                              else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
+        val showPhoneNumber = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true) ?: true
+                              else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER, true) ?: true
         val defaultElementsTheme = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto" else "auto"
         val elementsTheme = prefs?.getString("${prefix}_elements_theme", defaultElementsTheme) ?: defaultElementsTheme
 
@@ -918,6 +950,7 @@ fun ExpressiveCallScreen(
             fontColorMode = fontColorMode,
             customFontColorInt = customFontColorInt,
             showContactPfp = showContactPfp,
+            showPhoneNumber = showPhoneNumber,
             elementsTheme = elementsTheme
         )
     }
@@ -934,22 +967,16 @@ fun ExpressiveCallScreen(
     val fontColorMode = currentBgConfig.fontColorMode
     val customFontColorInt = currentBgConfig.customFontColorInt
     val showContactPfp = currentBgConfig.showContactPfp
+    val showPhoneNumber = currentBgConfig.showPhoneNumber
+    val showIncomingMuteButton = remember(settingsVersion) { prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_MUTE_BUTTON, false) ?: false }
 
     val isIncomingElementsDark = when (incomingBgConfig.elementsTheme) {
         "light" -> false
         "dark" -> true
         else -> isDark
     }
-    val incomingElemBgColor = if (incomingBgConfig.hasCustomBg) {
-        if (isIncomingElementsDark) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.85f)
-    } else {
-        if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
-    }
-    val incomingElemFgColor = if (incomingBgConfig.hasCustomBg) {
-        if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
-    } else {
-        if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
-    }
+    val incomingElemBgColor = if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    val incomingElemFgColor = if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
 
     val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -1272,65 +1299,98 @@ fun ExpressiveCallScreen(
                         .scale(acceptScale).alpha(acceptAlpha)
                 ) {
                     // Left panel: avatar + caller info
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxHeight().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (showContactPfp) {
-                            Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
-                                if (!photoUri.isNullOrEmpty()) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(20.dp))
-                        }
-                        Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = contactName.ifEmpty { "" },
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    shadow = textShadow
-                                ),
-                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-                            if (showSimBadge && simSlot in 0..1) {
-                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp), shape = RoundedCornerShape(percent = 25))
-                            }
-                            Text(
-                                text = when {
-                                    isOnHold -> "On Hold"
-                                    callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                    callState == Call.STATE_DIALING -> "Calling"
-                                    callState == Call.STATE_RINGING -> "Incoming"
-                                    callState == Call.STATE_CONNECTING -> "Calling"
-                                    callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
-                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            if (showContactPfp) {
+                                Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
+                                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
+                                    if (!photoUri.isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
                                     }
-                                    else -> "Connecting..."
-                                },
-                                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                style = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
-                            )
-                        }
-                        if (hasHeldCall) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
-                                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
-                                    Text(text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50))
                                 }
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+                            Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = contactName.ifEmpty { "" },
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        shadow = textShadow
+                                    ),
+                                    color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+                                if (showSimBadge && simSlot in 0..1) {
+                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp), shape = RoundedCornerShape(percent = 25))
+                                }
+                                Text(
+                                    text = when {
+                                        isOnHold -> "On Hold"
+                                        callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                        callState == Call.STATE_DIALING -> "Calling"
+                                        callState == Call.STATE_RINGING -> "Incoming"
+                                        callState == Call.STATE_CONNECTING -> "Calling"
+                                        callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
+                                            if (isIncomingMode) "Declined" else "Hanging up..."
+                                        }
+                                        else -> "Connecting..."
+                                    },
+                                    color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                                    style = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
+                                )
+                            }
+                            if (hasHeldCall) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
+                                    Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
+                                        Text(text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50))
+                                    }
+                                }
+                            }
+                        }
+                        if (!isIncomingMode) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showNoteWindow,
+                                enter = fadeIn(tween(250, easing = FastOutSlowInEasing)) +
+                                        scaleIn(
+                                            initialScale = 0.92f,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                        ),
+                                exit = fadeOut(tween(200, easing = FastOutLinearInEasing)) +
+                                       scaleOut(
+                                           targetScale = 0.92f,
+                                           animationSpec = tween(200)
+                                       ),
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .imePadding()
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                                    .zIndex(20f)
+                            ) {
+                                FloatingCallNoteBox(
+                                    contactName = contactName,
+                                    noteText = noteText,
+                                    onNoteChange = { noteText = it },
+                                    onClose = { showNoteWindow = false }
+                                )
                             }
                         }
                     }
@@ -1339,7 +1399,7 @@ fun ExpressiveCallScreen(
                     if (!isIncomingMode) {
                         Surface(modifier = Modifier.weight(1f).fillMaxHeight(), color = overlayColor) {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                // Scrollable area: feature buttons + note editor. Independent of
+                                // Scrollable area: feature buttons. Independent of
                                 // display/font scale — this area shrinks and scrolls internally,
                                 // it never pushes the End Call button below the visible screen.
                                 Column(
@@ -1359,20 +1419,6 @@ fun ExpressiveCallScreen(
                                             freeformPositions = freeformPositions,
                                             rowSpacing = 16.dp
                                         ) { id -> RenderFeatureButton(id) }
-                                    }
-                                    AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                                        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                                             Column(modifier = Modifier.padding(16.dp)) {
-                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                    Text("Note — $contactName", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                                    IconButton(onClick = { if (phoneNumber.isNotEmpty()) NoteManager.writeNote(context, contactName, phoneNumber, noteText); showNoteWindow = false }, modifier = Modifier.size(32.dp)) {
-                                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                                    }
-                                                }
-                                                Spacer(Modifier.height(8.dp))
-                                                OutlinedTextField(value = noteText, onValueChange = { noteText = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 140.dp), placeholder = { Text("Type your note...") }, shape = RoundedCornerShape(12.dp), minLines = 3, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant))
-                                             }
-                                        }
                                     }
                                 }
                                 // Fixed footer: End Call button — always visible, never affected
@@ -1428,6 +1474,8 @@ fun ExpressiveCallScreen(
                                     }
                                 },
                                 onMessage = onMessageButtonClick,
+                                onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                showMuteButton = showIncomingMuteButton,
                                 labelColor = incomingElemFgColor,
                                 bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
@@ -1508,8 +1556,8 @@ fun ExpressiveCallScreen(
                         // Show the number this specific call is on — resolved once for this
                         // call session, so it's always the single correct number even when
                         // the matched contact has multiple saved numbers. Hidden if it would
-                        // just duplicate the name shown above (e.g. unknown callers).
-                        if (phoneNumber.isNotBlank() && phoneNumber != contactName) {
+                        // just duplicate the name shown above (e.g. unknown callers), or if disabled in settings.
+                        if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
                             Text(
                                 text = phoneNumber,
                                 style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
@@ -1589,62 +1637,6 @@ fun ExpressiveCallScreen(
                                     ) { id -> RenderFeatureButton(id) }
                                 }
 
-                                AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                                        Surface(
-                                            shape = RoundedCornerShape(20.dp),
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(modifier = Modifier.padding(16.dp)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        "Note — $contactName",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    Row {
-                                                        IconButton(onClick = {
-                                                            if (phoneNumber.isNotEmpty()) {
-                                                                NoteManager.writeNote(context, contactName, phoneNumber, noteText)
-                                                            }
-                                                            showNoteWindow = false
-                                                        }, modifier = Modifier.size(32.dp)) {
-                                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                                        }
-                                                    }
-                                                }
-                                                Spacer(Modifier.height(8.dp))
-                                                OutlinedTextField(
-                                                    value = noteText,
-                                                    onValueChange = { noteText = it },
-                                                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
-                                                    placeholder = { Text("Type your note...") },
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    minLines = 4,
-                                                    colors = OutlinedTextFieldDefaults.colors(
-                                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                                                    )
-                                                )
-                                                if (noteText.isNotBlank()) {
-                                                    Text(
-                                                        "Syncing...",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                        modifier = Modifier.padding(top = 4.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
                                 if (!freeformEnabled) {
                                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -1718,16 +1710,47 @@ fun ExpressiveCallScreen(
                                     }
                                 },
                                 onMessage = onMessageButtonClick,
+                                onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                showMuteButton = showIncomingMuteButton,
                                 labelColor = incomingElemFgColor,
                                 bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
                                 isDark = isIncomingElementsDark
                             )
                         }
-                } // end portrait Box
-            } // end portrait
-        }
-    }
+                    }
+
+                    // Floating Notes Box centered on screen, adapts to keyboard
+                    if (!isIncomingMode) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showNoteWindow,
+                            enter = fadeIn(tween(250, easing = FastOutSlowInEasing)) +
+                                    scaleIn(
+                                        initialScale = 0.88f,
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy)
+                                    ),
+                            exit = fadeOut(tween(200, easing = FastOutLinearInEasing)) +
+                                   scaleOut(
+                                       targetScale = 0.88f,
+                                       animationSpec = tween(200)
+                                   ),
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .imePadding()
+                                .padding(horizontal = 24.dp)
+                                .zIndex(20f)
+                        ) {
+                            FloatingCallNoteBox(
+                                contactName = contactName,
+                                noteText = noteText,
+                                onNoteChange = { noteText = it },
+                                onClose = { showNoteWindow = false },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
 
         // ── Call biometric — direct prompt, no overlay ────────────────────
         if (showCallBiometricUnlock && prefs != null) {
@@ -1957,6 +1980,7 @@ fun ExpressiveCallScreen(
                 }
             }
         }
+    }
     }
     }
 }
@@ -2385,7 +2409,17 @@ fun AnimatedCallButton(
 }
 
 @Composable
-fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, onMessage: () -> Unit = {}, labelColor: Color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f), bgColor: Color = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f), isPocketBlocked: () -> Boolean = { false }, isDark: Boolean = isSystemInDarkTheme()) {
+fun NewSwipeToAnswer(
+    onAnswer: () -> Unit,
+    onDecline: () -> Unit,
+    onMessage: () -> Unit = {},
+    onMute: () -> Unit = {},
+    showMuteButton: Boolean = false,
+    labelColor: Color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f),
+    bgColor: Color = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
+    isPocketBlocked: () -> Boolean = { false },
+    isDark: Boolean = isSystemInDarkTheme()
+) {
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
@@ -2460,20 +2494,47 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, onMessage: () 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Message quick-reply pill
-        Surface(
-            onClick = onMessage,
-            shape = CircleShape,
-            color = bgColor,
-            modifier = Modifier.height(45.dp).width(140.dp)
+        // Centered Quick Action Pills (Message, and optional Mute ringer)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            // Message quick-reply pill
+            Surface(
+                onClick = onMessage,
+                shape = CircleShape,
+                color = bgColor,
+                modifier = Modifier.height(45.dp).width(if (showMuteButton) 130.dp else 140.dp)
             ) {
-                Icon(Icons.Default.ChatBubble, null, tint = labelColor, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Default.ChatBubble, null, tint = labelColor, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (showMuteButton) {
+                Spacer(Modifier.width(16.dp))
+                // Mute ringer pill
+                Surface(
+                    onClick = onMute,
+                    shape = CircleShape,
+                    color = bgColor,
+                    modifier = Modifier.height(45.dp).width(130.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.VolumeOff, null, tint = labelColor, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mute", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -2727,6 +2788,107 @@ private fun AutoRedialDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FloatingCallNoteBox(
+    contactName: String,
+    noteText: String,
+    onNoteChange: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(32.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 8.dp,
+        shadowElevation = 14.dp,
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(22.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.EditNote,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = "Call Note",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (contactName.isNotBlank()) {
+                            Text(
+                                text = contactName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close Note",
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = noteText,
+                onValueChange = onNoteChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 140.dp, max = 260.dp),
+                placeholder = {
+                    Text(
+                        "Add a note for this call...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                shape = RoundedCornerShape(20.dp),
+                minLines = 4,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                )
+            )
         }
     }
 }

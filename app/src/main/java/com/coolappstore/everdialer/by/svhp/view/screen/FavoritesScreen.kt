@@ -609,15 +609,36 @@ private fun FavoriteContactCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (selectionMode) {
-                    Checkbox(
-                        checked = isSelected,
-                        onCheckedChange = { onSelectToggle?.invoke() },
-                        modifier = Modifier.size(24.dp)
-                    )
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                            expandHorizontally(
+                                animationSpec = spring(
+                                    stiffness = Spring.StiffnessMediumLow,
+                                    dampingRatio = Spring.DampingRatioNoBouncy
+                                ),
+                                expandFrom = Alignment.Start,
+                                clip = false
+                            ),
+                    exit = fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
+                           shrinkHorizontally(
+                               animationSpec = tween(220, easing = FastOutLinearInEasing),
+                               shrinkTowards = Alignment.Start,
+                               clip = false
+                           )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp)
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
 
                 Box(modifier = Modifier.size(48.dp)) {
@@ -628,6 +649,8 @@ private fun FavoriteContactCard(
                         shape = CircleShape
                     )
                 }
+
+                Spacer(modifier = Modifier.width(14.dp))
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -651,6 +674,8 @@ private fun FavoriteContactCard(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(12.dp))
 
                 Surface(
                     shape = CircleShape,
@@ -725,7 +750,7 @@ private fun FavoriteContactCard(
                     ) {
                         Checkbox(
                             checked = isSelected,
-                            onCheckedChange = { onSelectToggle?.invoke() },
+                            onCheckedChange = null,
                             modifier = Modifier.size(28.dp)
                         )
                     }

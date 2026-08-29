@@ -243,10 +243,11 @@ fun CallLogTile(
             com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                 prefs,
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
-                listOf("select", "call_back", "call_chat_via", "copy_number", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
+                listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
             ).filter { key ->
                 when (key) {
                     "add_to_contacts" -> !isContact
+                    "search_truecaller" -> !isContact && log.number.isNotBlank()
                     "fake_call" -> fakeCallInContextMenu
                     "call_chat_via" -> log.number.isNotBlank()
                     else -> true
@@ -288,6 +289,18 @@ fun CallLogTile(
                         onClick  = {
                             showMenu = false
                             showCallChatViaPicker = true
+                        }
+                    )
+                    "search_truecaller" -> RivoDropdownMenuItem(
+                        text     = "Search Truecaller",
+                        icon     = Icons.Default.Search,
+                        iconTint = Color(0xFF0084FF),
+                        onClick  = {
+                            showMenu = false
+                            val isLaunched: Boolean = com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller(context, log.number)
+                            if (!isLaunched) {
+                                Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                     "copy_number" -> RivoDropdownMenuItem(

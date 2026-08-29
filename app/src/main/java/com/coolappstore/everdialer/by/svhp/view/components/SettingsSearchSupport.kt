@@ -261,10 +261,15 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
 
     // ── Incoming Call UI screen ──────────────────────────────────────────────
     GlobalSettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, GsColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
+    GlobalSettingsSearchEntry("Show Mute button", "Show a button to silence ringtone during incoming calls", "incoming_show_mute_button", Icons.Outlined.VolumeUp, GsColorAmber) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_mute_button")) },
+    GlobalSettingsSearchEntry("Show Contact PFP", "Display caller's avatar photo over incoming call screen", "incoming_show_contact_pfp", Icons.Outlined.Contacts, GsColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_contact_pfp")) },
+    GlobalSettingsSearchEntry("Show Phone Number", "Display caller's phone number on incoming call screen", "incoming_show_phone_number", Icons.Outlined.Call, GsColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_phone_number")) },
     GlobalSettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, GsColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
 
     // ── Ongoing Call UI screen ───────────────────────────────────────────────
-    GlobalSettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, GsColorBlue) { it.navigate(CallerUIScreenDestination) },
+    GlobalSettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, GsColorBlue) { it.navigate(CallerUIScreenDestination()) },
+    GlobalSettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, GsColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
+    GlobalSettingsSearchEntry("Show Phone Number in Ongoing Call", "Display phone number on ongoing call screen", "ongoing_show_phone_number", Icons.Outlined.Call, GsColorGreen) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_phone_number")) },
 
     // ── About screen ──────────────────────────────────────────────────────────
     GlobalSettingsSearchEntry("Made By Hari", "Developer info", "made_by_hari", Icons.Outlined.Info, GsColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "made_by_hari")) },

@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
 const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
 const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
+const val TRUECALLER_PACKAGE = "com.truecaller"
 
 fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
     packages.any { pkg ->
@@ -90,6 +91,17 @@ fun getGoogleMeetIcon(context: Context): ImageBitmap? {
     return try {
         context.packageManager.getPackageInfo(GOOGLE_MEET_PACKAGE, 0)
         drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
+    } catch (_: Exception) { null }
+}
+
+/** True if Truecaller is installed on the device. */
+fun isTruecallerInstalled(context: Context): Boolean = isPackageInstalled(context, TRUECALLER_PACKAGE)
+
+/** Loads Truecaller's real launcher icon if it's installed. */
+fun getTruecallerIcon(context: Context): ImageBitmap? {
+    return try {
+        context.packageManager.getPackageInfo(TRUECALLER_PACKAGE, 0)
+        drawableToImageBitmap(context.packageManager.getApplicationIcon(TRUECALLER_PACKAGE))
     } catch (_: Exception) { null }
 }
 
@@ -443,4 +455,62 @@ fun startTelegramVideoCall(context: Context, phoneNumber: String): Boolean {
         } catch (_: Exception) { openTelegramChat(context, phoneNumber) }
     }
     return openTelegramChat(context, phoneNumber)
+}
+
+/**
+ * Opens Truecaller targeted at [phoneNumber] (so Truecaller searches/identifies or prepares to call
+ * the number). Falls back to opening the Truecaller app if the specific number intent cannot be handled.
+ * Returns false only if Truecaller is not installed.
+ */
+fun openTruecaller(context: Context, phoneNumber: String): Boolean {
+    if (!isTruecallerInstalled(context)) return false
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    if (clean.isEmpty()) return false
+
+    // Attempt 1: ACTION_VIEW with tel: URI directed to Truecaller package
+    val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tel:$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (viewIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(viewIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 2: ACTION_DIAL directed to Truecaller package
+    val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (dialIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(dialIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 3: Truecaller URI scheme search
+    val customUriIntent = Intent(Intent.ACTION_VIEW, Uri.parse("truecaller://search?q=$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (customUriIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(customUriIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 4: Launch Truecaller directly
+    val launchIntent = try { context.packageManager.getLaunchIntentForPackage(TRUECALLER_PACKAGE) } catch (_: Exception) { null }
+    if (launchIntent != null) {
+        return try {
+            context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
+
+    return false
 }

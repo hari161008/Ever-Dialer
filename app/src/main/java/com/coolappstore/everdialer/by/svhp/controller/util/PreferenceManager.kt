@@ -182,6 +182,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
         const val KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS = "show_fullscreen_call_ui_on_any_apps"
+        const val KEY_INCOMING_SHOW_MUTE_BUTTON             = "incoming_show_mute_button"
         const val KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED    = "show_ongoing_call_ui_when_answered"
         const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
@@ -357,6 +358,7 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_BG_BLUR          = "incoming_bg_blur"
         const val KEY_INCOMING_BG_VIDEO_SPEED   = "incoming_bg_video_speed"
         const val KEY_INCOMING_SHOW_CONTACT_PFP = "incoming_show_contact_pfp"
+        const val KEY_INCOMING_SHOW_PHONE_NUMBER = "incoming_show_phone_number"
         const val KEY_INCOMING_FONT_COLOR_MODE  = "incoming_font_color_mode" // "default" | "custom"
         const val KEY_INCOMING_FONT_COLOR       = "incoming_font_color"      // Int ARGB
         const val KEY_INCOMING_ELEMENTS_THEME   = "incoming_elements_theme"  // "auto" | "light" | "dark"
@@ -371,6 +373,7 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_BG_BLUR           = "ongoing_bg_blur"
         const val KEY_ONGOING_BG_VIDEO_SPEED    = "ongoing_bg_video_speed"
         const val KEY_ONGOING_SHOW_CONTACT_PFP  = "ongoing_show_contact_pfp"
+        const val KEY_ONGOING_SHOW_PHONE_NUMBER = "ongoing_show_phone_number"
         const val KEY_ONGOING_FONT_COLOR_MODE   = "ongoing_font_color_mode"  // "default" | "custom"
         const val KEY_ONGOING_FONT_COLOR        = "ongoing_font_color"       // Int ARGB
         const val KEY_ONGOING_AUTO_REFRESH_WALLPAPER  = "ongoing_auto_refresh_wallpaper"

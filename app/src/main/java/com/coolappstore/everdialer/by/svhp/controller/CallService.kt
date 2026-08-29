@@ -659,6 +659,9 @@ class CallService : InCallService() {
                     declineCall()
                 }
             }
+            "SILENCE_CALL" -> {
+                com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(this)
+            }
             "MUTE_CALL"    -> setMuted(!(_audioState.value?.isMuted ?: false))
             "SPEAKER_CALL" -> {
                 val isSpeaker = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_SPEAKER
@@ -762,6 +765,10 @@ class CallService : InCallService() {
         val connectTime = call.details?.connectTimeMillis?.takeIf { it > 0L }
             ?: callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
 
+        val silencePi = PendingIntent.getService(this, 8,
+            Intent(this, CallService::class.java).apply { action = "SILENCE_CALL" },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(currentCallSmallIcon())
             .setContentTitle(contactName)
@@ -787,6 +794,17 @@ class CallService : InCallService() {
                 else           NotificationCompat.CallStyle.forOngoingCall(person, declinePi)
             )
             .setColorized(false)
+
+        val showIncomingMute = prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_MUTE_BUTTON, false)
+        if (isRinging && showIncomingMute) {
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    R.drawable.ic_notif_volume_off,
+                    "Mute",
+                    silencePi
+                ).build()
+            )
+        }
 
         // Add extra action buttons for ongoing calls
         if (!isRinging) {

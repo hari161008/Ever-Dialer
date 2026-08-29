@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.koinInject
 import java.util.Locale
+import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 
 @Destination<RootGraph>(route = "call_log_detail_screen")
@@ -48,7 +49,9 @@ fun CallLogFullScreen(
     phoneNumber: String? = null
 ) {
     val viewModel: CallLogViewModel = koinActivityViewModel()
+    val contactsViewModel: ContactsViewModel = koinActivityViewModel()
     val allLogs by viewModel.allCallLogs.collectAsState()
+    val contacts by contactsViewModel.allContacts.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -76,18 +79,32 @@ fun CallLogFullScreen(
     )
     LaunchedEffect(Unit) { screenVisible = true }
 
-    val filteredLogsByContact = remember(allLogs, contactId, phoneNumber) {
-        // numbersLikelyMatch — `.contains()` would wrongly pull in entries for unrelated short
-        // numbers/codes that merely appear as a substring of the requested number.
+    val matchedContact = remember(contactId, phoneNumber, contacts) {
+        if (contactId != null && contactId != "null") contacts.find { it.id == contactId }
+        else if (phoneNumber != null && phoneNumber != "null") {
+            contacts.find { c -> c.phoneNumbers.any { n -> numbersLikelyMatch(phoneNumber, n) } }
+        } else null
+    }
+
+    val filteredLogsByContact = remember(allLogs, matchedContact, contactId, phoneNumber) {
         if (contactId == null && phoneNumber == null) allLogs
-        else allLogs.filter { log ->
-            (contactId != null && contactId != "null" && log.contactId == contactId) ||
-            (phoneNumber != null && numbersLikelyMatch(log.number, phoneNumber))
+        else {
+            val allTargetNumbers = mutableSetOf<String>()
+            matchedContact?.phoneNumbers?.forEach { if (it.isNotBlank()) allTargetNumbers.add(it) }
+            if (!phoneNumber.isNullOrBlank() && phoneNumber != "null") allTargetNumbers.add(phoneNumber)
+
+            allLogs.filter { log ->
+                (matchedContact != null && log.contactId == matchedContact.id) ||
+                (contactId != null && contactId != "null" && log.contactId == contactId) ||
+                allTargetNumbers.any { target -> numbersLikelyMatch(log.number, target) }
+            }
         }
     }
 
-    val contactName = remember(filteredLogsByContact) {
-        filteredLogsByContact.firstOrNull { it.name != null && it.name != it.number }?.name ?: phoneNumber
+    val contactName = remember(matchedContact, filteredLogsByContact, phoneNumber) {
+        matchedContact?.name
+            ?: filteredLogsByContact.firstOrNull { it.name != null && it.name != it.number }?.name
+            ?: phoneNumber?.takeIf { it != "null" }
     }
 
     if (showSimPicker && pendingNumber != null) {

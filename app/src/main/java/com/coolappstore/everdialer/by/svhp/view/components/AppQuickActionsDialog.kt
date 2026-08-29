@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoCall
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.PhoneCallback
@@ -25,11 +26,14 @@ import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
+import com.coolappstore.everdialer.by.svhp.controller.util.getTruecallerIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.openTelegramChat
+import com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller
 import com.coolappstore.everdialer.by.svhp.controller.util.openWhatsAppChat
 import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVoiceCall
@@ -137,6 +141,14 @@ fun CallChatViaOverlay(
     var selectedNumber by remember { mutableStateOf<String?>(null) }
 
     fun chooseApp(app: String) {
+        if (app == "truecaller") {
+            if (allNumbers.size > 1) {
+                pendingAppForNumberPick = "truecaller"
+            } else {
+                openTruecaller(context, allNumbers.first())
+            }
+            return
+        }
         if (allNumbers.size > 1) {
             pendingAppForNumberPick = app
         } else {
@@ -149,6 +161,7 @@ fun CallChatViaOverlay(
         val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
         val hasTelegram = remember(context) { isTelegramInstalled(context) }
         val hasGoogleMeet = remember(context, showGoogleMeet) { showGoogleMeet && isGoogleMeetInstalled(context) }
+        val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
         RivoDropdownMenu(expanded = showPicker, onDismissRequest = onPickerDismiss) {
             if (hasWhatsApp) {
                 RivoDropdownMenuItem(
@@ -172,6 +185,14 @@ fun CallChatViaOverlay(
                     onClick = { onPickerDismiss(); chooseApp("googlemeet") }
                 )
             }
+            if (hasTruecaller) {
+                RivoDropdownMenuItem(
+                    text = "Truecaller",
+                    icon = Icons.Default.Search,
+                    iconBitmap = remember(context) { getTruecallerIcon(context) },
+                    onClick = { onPickerDismiss(); chooseApp("truecaller") }
+                )
+            }
             if (showFakeCall && onFakeCall != null) {
                 RivoDropdownMenuItem(
                     text = "Fake Call",
@@ -179,7 +200,7 @@ fun CallChatViaOverlay(
                     onClick = { onPickerDismiss(); onFakeCall() }
                 )
             }
-            if (!hasWhatsApp && !hasTelegram && !hasGoogleMeet && !(showFakeCall && onFakeCall != null)) {
+            if (!hasWhatsApp && !hasTelegram && !hasGoogleMeet && !hasTruecaller && !(showFakeCall && onFakeCall != null)) {
                 RivoDropdownMenuItem(
                     text = "No apps installed",
                     icon = Icons.Default.Info,
@@ -196,8 +217,12 @@ fun CallChatViaOverlay(
             onDismissRequest = { pendingAppForNumberPick = null },
             onNumberSelected = { number ->
                 pendingAppForNumberPick = null
-                selectedNumber = number
-                showAppQuickActions = app
+                if (app == "truecaller") {
+                    openTruecaller(context, number)
+                } else {
+                    selectedNumber = number
+                    showAppQuickActions = app
+                }
             }
         )
     }

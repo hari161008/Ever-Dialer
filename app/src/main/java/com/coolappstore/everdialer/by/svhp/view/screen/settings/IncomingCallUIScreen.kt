@@ -37,12 +37,18 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
     var showFullScreenCallUIOnAnyApps by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false))
     }
+    var showIncomingMuteButton by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_MUTE_BUTTON, false))
+    }
 
     val incomingBgType = remember(settingsVersion) {
         prefs.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none"
     }
     var showContactPfp by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true))
+    }
+    var showPhoneNumber by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true))
     }
 
     val bgLabel = when (incomingBgType) {
@@ -105,6 +111,22 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                             },
                             modifier = Modifier.settingsSearchHighlight("show_fullscreen_call_ui_on_any_apps", highlightedKey) { highlightedKey = null }
                         )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoSwitchListItem(
+                            headline = "Show Mute button",
+                            supporting = "Show a button to silence ringtone during incoming calls",
+                            leadingIcon = Icons.Default.VolumeOff,
+                            iconContainerColor = Color(0xFFFF9800),
+                            checked = showIncomingMuteButton,
+                            onCheckedChange = {
+                                showIncomingMuteButton = it
+                                prefs.setBoolean(PreferenceManager.KEY_INCOMING_SHOW_MUTE_BUTTON, it)
+                            },
+                            modifier = Modifier.settingsSearchHighlight("incoming_show_mute_button", highlightedKey) { highlightedKey = null }
+                        )
                     }
                 }
             }
@@ -143,6 +165,22 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                                 prefs.setBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, it)
                             },
                             modifier = Modifier.settingsSearchHighlight("incoming_show_contact_pfp", highlightedKey) { highlightedKey = null }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoSwitchListItem(
+                            headline = "Show Phone Number",
+                            supporting = "Display the caller's phone number on the incoming call screen",
+                            leadingIcon = Icons.Outlined.Call,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            checked = showPhoneNumber,
+                            onCheckedChange = {
+                                showPhoneNumber = it
+                                prefs.setBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, it)
+                            },
+                            modifier = Modifier.settingsSearchHighlight("incoming_show_phone_number", highlightedKey) { highlightedKey = null }
                         )
                     }
                 }

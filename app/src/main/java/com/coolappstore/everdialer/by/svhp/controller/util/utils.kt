@@ -251,13 +251,23 @@ private const val MIN_TRUSTED_SUFFIX_MATCH_LEN = 7
  * digits somewhere in it. Used to decide whether a call-log number belongs to a saved contact.
  */
 fun numbersLikelyMatch(a: String, b: String): Boolean {
+    if (a.isBlank() || b.isBlank()) return false
+    if (a == b) return true
+    try {
+        if (android.telephony.PhoneNumberUtils.compare(a, b)) return true
+    } catch (_: Exception) {}
     val da = normalizeNumberDigits(a).filter { it.isDigit() }
     val db = normalizeNumberDigits(b).filter { it.isDigit() }
     if (da.isEmpty() || db.isEmpty()) return false
     if (da == db) return true
     val shorterLen = minOf(da.length, db.length)
     if (shorterLen < MIN_TRUSTED_SUFFIX_MATCH_LEN) return false
-    return da.endsWith(db) || db.endsWith(da)
+    if (da.endsWith(db) || db.endsWith(da)) return true
+    val matchLen = minOf(shorterLen, 10)
+    for (len in matchLen downTo MIN_TRUSTED_SUFFIX_MATCH_LEN) {
+        if (da.takeLast(len) == db.takeLast(len)) return true
+    }
+    return false
 }
 
 fun openInContacts(context: Context, contactId: String) {
@@ -271,4 +281,11 @@ fun openLink(context: Context, link: String) {
     val intent = Intent(Intent.ACTION_VIEW,
         link.toUri())
     context.startActivity(intent)
+}
+
+fun silenceRingingCall(context: Context) {
+    try {
+        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        tm?.silenceRinger()
+    } catch (_: Exception) {}
 }

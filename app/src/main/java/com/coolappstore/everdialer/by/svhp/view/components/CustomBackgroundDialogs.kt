@@ -93,18 +93,36 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val textureView = TextureView(context)
-    private var mediaPlayer: MediaPlayer? = null
-    private var surface: Surface? = null
+    private val textureViewA = TextureView(context)
+    private val textureViewB = TextureView(context)
+
+    private var playerA: MediaPlayer? = null
+    private var playerB: MediaPlayer? = null
+
+    private var surfaceA: Surface? = null
+    private var surfaceB: Surface? = null
+
     private var videoFile: File? = null
-    private var isPrepared = false
+    private var isPreparedA = false
+    private var isPreparedB = false
+
+    private var activePlayerIndex = 0 // 0 = A, 1 = B
+    private var isCrossfading = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val loopCheckRunnable = object : Runnable {
+        override fun run() {
+            checkLoopCrossfade()
+            mainHandler.postDelayed(this, 25)
+        }
+    }
 
     var isMuted: Boolean = true
         set(value) {
             field = value
-            try {
-                mediaPlayer?.setVolume(if (value) 0f else 1f, if (value) 0f else 1f)
-            } catch (_: Exception) {}
+            val vol = if (value) 0f else 1f
+            try { playerA?.setVolume(vol, vol) } catch (_: Exception) {}
+            try { playerB?.setVolume(vol, vol) } catch (_: Exception) {}
         }
 
     var videoSpeed: Float = 1.0f
@@ -112,47 +130,73 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             val clamped = value.coerceIn(0.25f, 3.0f)
             if (field == clamped) return
             field = clamped
-            if (isPrepared && mediaPlayer != null) {
-                applyPlaybackSpeed(mediaPlayer, clamped)
-            }
+            if (isPreparedA && playerA != null) applyPlaybackSpeed(playerA, clamped)
+            if (isPreparedB && playerB != null) applyPlaybackSpeed(playerB, clamped)
         }
 
     init {
-        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        setupTextureListener()
+        addView(textureViewA, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(textureViewB, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        textureViewA.alpha = 1f
+        textureViewB.alpha = 0f
+        setupTextureListeners()
     }
 
-    private fun setupTextureListener() {
-        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+    private fun setupTextureListeners() {
+        textureViewA.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                surface?.release()
-                surface = Surface(st)
-                initPlayer(w, h)
+                surfaceA?.release()
+                surfaceA = Surface(st)
+                initPlayerA(w, h)
             }
-
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                mediaPlayer?.let { applyCenterCrop(textureView, it, w, h) }
+                playerA?.let { applyCenterCrop(textureViewA, it, w, h) }
             }
-
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                surface?.release()
-                surface = null
-                releasePlayer()
+                surfaceA?.release()
+                surfaceA = null
+                releasePlayerA()
                 return true
             }
+            override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+        }
 
+        textureViewB.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                surfaceB?.release()
+                surfaceB = Surface(st)
+                initPlayerB(w, h)
+            }
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                playerB?.let { applyCenterCrop(textureViewB, it, w, h) }
+            }
+            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                surfaceB?.release()
+                surfaceB = null
+                releasePlayerB()
+                return true
+            }
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
         }
     }
 
     fun setVideoFile(file: File) {
-        if (videoFile?.absolutePath == file.absolutePath && mediaPlayer != null) {
+        if (!file.exists()) return
+        val isSameFile = videoFile?.absolutePath == file.absolutePath
+        videoFile = file
+        if (isSameFile && (playerA != null || playerB != null)) {
+            val currentActive = if (activePlayerIndex == 0) playerA else playerB
+            try {
+                val isReady = if (activePlayerIndex == 0) isPreparedA else isPreparedB
+                if (currentActive != null && !currentActive.isPlaying && isReady) {
+                    currentActive.start()
+                }
+            } catch (_: Exception) {}
+            startMonitoring()
             return
         }
-        videoFile = file
-        if (textureView.isAvailable) {
-            initPlayer(textureView.width, textureView.height)
-        }
+        if (textureViewA.isAvailable) initPlayerA(textureViewA.width, textureViewA.height)
+        if (textureViewB.isAvailable) initPlayerB(textureViewB.width, textureViewB.height)
     }
 
     private fun applyPlaybackSpeed(mp: MediaPlayer?, speed: Float) {
@@ -195,75 +239,246 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         texture.setTransform(matrix)
     }
 
-    private fun initPlayer(w: Int, h: Int) {
+    private fun initPlayerA(w: Int, h: Int) {
         val file = videoFile ?: return
-        val surf = surface ?: return
+        val surf = surfaceA ?: return
         if (!file.exists()) return
 
         try {
-            releasePlayer()
-            isPrepared = false
+            releasePlayerA()
+            isPreparedA = false
             val mp = MediaPlayer().apply {
                 setSurface(surf)
                 setDataSource(file.absolutePath)
-                isLooping = true
-                setVolume(if (isMuted) 0f else 1f, if (isMuted) 0f else 1f)
+                isLooping = false
+                val vol = if (isMuted) 0f else 1f
+                setVolume(vol, vol)
 
                 setOnVideoSizeChangedListener { p, _, _ ->
-                    applyCenterCrop(textureView, p, w, h)
+                    applyCenterCrop(textureViewA, p, w, h)
                 }
 
                 setOnPreparedListener { p ->
-                    isPrepared = true
-                    applyCenterCrop(textureView, p, w, h)
+                    isPreparedA = true
+                    applyCenterCrop(textureViewA, p, w, h)
                     applyPlaybackSpeed(p, videoSpeed)
-                    try {
-                        p.start()
-                    } catch (_: Exception) {}
+                    if (activePlayerIndex == 0) {
+                        textureViewA.alpha = 1f
+                        try { p.start() } catch (_: Exception) {}
+                        startMonitoring()
+                    }
                 }
 
                 setOnCompletionListener { p ->
                     try {
-                        p.seekTo(0)
-                        p.start()
+                        if (activePlayerIndex == 0 && !isCrossfading) {
+                            triggerCrossfade()
+                        } else {
+                            p.seekTo(0)
+                            p.start()
+                        }
                     } catch (_: Exception) {}
                 }
 
                 setOnErrorListener { p, _, _ ->
-                    try {
-                        p.reset()
-                    } catch (_: Exception) {}
+                    try { p.reset() } catch (_: Exception) {}
                     true
                 }
 
                 prepareAsync()
             }
-            mediaPlayer = mp
+            playerA = mp
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun releasePlayer() {
-        isPrepared = false
+    private fun initPlayerB(w: Int, h: Int) {
+        val file = videoFile ?: return
+        val surf = surfaceB ?: return
+        if (!file.exists()) return
+
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
+            releasePlayerB()
+            isPreparedB = false
+            val mp = MediaPlayer().apply {
+                setSurface(surf)
+                setDataSource(file.absolutePath)
+                isLooping = false
+                val vol = if (isMuted) 0f else 1f
+                setVolume(vol, vol)
+
+                setOnVideoSizeChangedListener { p, _, _ ->
+                    applyCenterCrop(textureViewB, p, w, h)
+                }
+
+                setOnPreparedListener { p ->
+                    isPreparedB = true
+                    applyCenterCrop(textureViewB, p, w, h)
+                    applyPlaybackSpeed(p, videoSpeed)
+                    if (activePlayerIndex == 1) {
+                        textureViewB.alpha = 1f
+                        try { p.start() } catch (_: Exception) {}
+                        startMonitoring()
+                    }
+                }
+
+                setOnCompletionListener { p ->
+                    try {
+                        if (activePlayerIndex == 1 && !isCrossfading) {
+                            triggerCrossfade()
+                        } else {
+                            p.seekTo(0)
+                            p.start()
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                setOnErrorListener { p, _, _ ->
+                    try { p.reset() } catch (_: Exception) {}
+                    true
+                }
+
+                prepareAsync()
+            }
+            playerB = mp
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun startMonitoring() {
+        mainHandler.removeCallbacks(loopCheckRunnable)
+        mainHandler.post(loopCheckRunnable)
+    }
+
+    private fun triggerCrossfade() {
+        val currentActivePlayer = if (activePlayerIndex == 0) playerA else playerB
+        val nextPlayer = if (activePlayerIndex == 0) playerB else playerA
+        val activeTexture = if (activePlayerIndex == 0) textureViewA else textureViewB
+        val nextTexture = if (activePlayerIndex == 0) textureViewB else textureViewA
+        val isNextPrepared = if (activePlayerIndex == 0) isPreparedB else isPreparedA
+
+        if (currentActivePlayer == null) return
+
+        if (nextPlayer == null || !isNextPrepared) {
+            // Fallback: loop current player directly without interruption
+            try {
+                currentActivePlayer.seekTo(0)
+                currentActivePlayer.start()
+            } catch (_: Exception) {}
+            return
+        }
+
+        try {
+            val dur = currentActivePlayer.duration
+            val crossfadeDuration = if (dur > 0) minOf(1200L, (dur * 0.4f).toLong().coerceAtLeast(350L)) else 800L
+
+            isCrossfading = true
+            nextPlayer.seekTo(0)
+            nextPlayer.start()
+            nextTexture.alpha = 0f
+            nextTexture.animate().cancel()
+            activeTexture.animate().cancel()
+
+            nextTexture.animate()
+                .alpha(1f)
+                .setDuration(crossfadeDuration)
+                .setInterpolator(android.view.animation.LinearInterpolator())
+                .start()
+
+            activeTexture.animate()
+                .alpha(0f)
+                .setDuration(crossfadeDuration)
+                .setInterpolator(android.view.animation.LinearInterpolator())
+                .setListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        try {
+                            currentActivePlayer.pause()
+                            currentActivePlayer.seekTo(0)
+                        } catch (_: Exception) {}
+                        isCrossfading = false
+                    }
+                })
+                .start()
+
+            activePlayerIndex = 1 - activePlayerIndex
+        } catch (e: Exception) {
+            isCrossfading = false
+            try {
+                currentActivePlayer.seekTo(0)
+                currentActivePlayer.start()
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun checkLoopCrossfade() {
+        val currentActivePlayer = if (activePlayerIndex == 0) playerA else playerB
+        val isCurrentPrepared = if (activePlayerIndex == 0) isPreparedA else isPreparedB
+
+        if (currentActivePlayer == null || !isCurrentPrepared) return
+
+        try {
+            if (!currentActivePlayer.isPlaying && !isCrossfading) {
+                try { currentActivePlayer.start() } catch (_: Exception) {}
+            }
+
+            val pos = currentActivePlayer.currentPosition
+            val dur = currentActivePlayer.duration
+            if (dur <= 0) return
+
+            val crossfadeDuration = minOf(1200L, (dur * 0.4f).toLong().coerceAtLeast(350L))
+            val triggerPosition = dur - crossfadeDuration
+
+            if (pos >= triggerPosition && !isCrossfading) {
+                triggerCrossfade()
+            }
         } catch (_: Exception) {}
-        mediaPlayer = null
+    }
+
+    private fun releasePlayerA() {
+        isPreparedA = false
+        try {
+            playerA?.stop()
+            playerA?.release()
+        } catch (_: Exception) {}
+        playerA = null
+    }
+
+    private fun releasePlayerB() {
+        isPreparedB = false
+        try {
+            playerB?.stop()
+            playerB?.release()
+        } catch (_: Exception) {}
+        playerB = null
+    }
+
+    private fun releasePlayer() {
+        mainHandler.removeCallbacks(loopCheckRunnable)
+        textureViewA.animate().cancel()
+        textureViewB.animate().cancel()
+        releasePlayerA()
+        releasePlayerB()
+        isCrossfading = false
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (mediaPlayer == null && videoFile != null && textureView.isAvailable) {
-            initPlayer(textureView.width, textureView.height)
-        } else {
-            try {
-                if (mediaPlayer?.isPlaying == false && isPrepared) {
-                    mediaPlayer?.start()
-                }
-            } catch (_: Exception) {}
+        if (playerA == null && videoFile != null && textureViewA.isAvailable) {
+            initPlayerA(textureViewA.width, textureViewA.height)
         }
+        if (playerB == null && videoFile != null && textureViewB.isAvailable) {
+            initPlayerB(textureViewB.width, textureViewB.height)
+        }
+        val currentActive = if (activePlayerIndex == 0) playerA else playerB
+        val isReady = if (activePlayerIndex == 0) isPreparedA else isPreparedB
+        try {
+            if (currentActive != null && !currentActive.isPlaying && isReady) {
+                currentActive.start()
+            }
+        } catch (_: Exception) {}
+        startMonitoring()
     }
 
     override fun onDetachedFromWindow() {

@@ -107,6 +107,11 @@ fun CustomBackgroundPickerScreen(
         if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true)
         else prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true)
     }
+    val showPhoneNumber = remember(settingsVersion) {
+        if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true)
+        else prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER, true)
+    }
+    val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
 
     var elementsThemeMode by remember(settingsVersion) {
         mutableStateOf(
@@ -495,29 +500,33 @@ fun CustomBackgroundPickerScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(
-                                                "+1 (555) 234-5678",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow,
-                                                    fontSize = 10.sp
-                                                ),
-                                                color = effectiveTextColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            if (showPhoneNumber) {
+                                                Text(
+                                                    "+1 (555) 234-5678",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        shadow = textShadow,
+                                                        fontSize = 10.sp
+                                                    ),
+                                                    color = effectiveTextColor,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                             Spacer(Modifier.height(4.dp))
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(3.dp),
-                                                    color = Color(0xFF1E88E5),
-                                                    modifier = Modifier.size(width = 12.dp, height = 14.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                if (isDualSim) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(3.dp),
+                                                        color = Color(0xFF1E88E5),
+                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                        }
                                                     }
                                                 }
                                                 Text(
@@ -623,29 +632,33 @@ fun CustomBackgroundPickerScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(
-                                                "+1 (555) 234-5678",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow,
-                                                    fontSize = 10.sp
-                                                ),
-                                                color = effectiveTextColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            if (showPhoneNumber) {
+                                                Text(
+                                                    "+1 (555) 234-5678",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        shadow = textShadow,
+                                                        fontSize = 10.sp
+                                                    ),
+                                                    color = effectiveTextColor,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                             Spacer(Modifier.height(3.dp))
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(3.dp),
-                                                    color = Color(0xFF1E88E5),
-                                                    modifier = Modifier.size(width = 12.dp, height = 14.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                if (isDualSim) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(3.dp),
+                                                        color = Color(0xFF1E88E5),
+                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                        }
                                                     }
                                                 }
                                                 Text(
