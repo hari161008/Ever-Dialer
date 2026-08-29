@@ -46,6 +46,15 @@ object AutomationSwitchStore {
         initialized = true
     }
 
+    @Synchronized
+    fun reload(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _screenStateEnabled.value = prefs.getBoolean(KEY_SCREEN_STATE_ENABLED, false)
+        _batterySaverEnabled.value = prefs.getBoolean(KEY_BATTERY_SAVER_ENABLED, false)
+        _appLaunchEnabled.value = prefs.getBoolean(KEY_APP_LAUNCH_ENABLED, false)
+        initialized = true
+    }
+
     fun isAnyEnabled(context: Context): Boolean {
         init(context)
         return _screenStateEnabled.value || _batterySaverEnabled.value || _appLaunchEnabled.value

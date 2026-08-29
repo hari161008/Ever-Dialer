@@ -179,6 +179,8 @@ class PreferenceManager(context: Context) {
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
+        const val KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS = "show_fullscreen_call_ui_on_any_apps"
+        const val KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED    = "show_ongoing_call_ui_when_answered"
         const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
         /** When enabled, screen-off during calls requires BOTH the proximity sensor reading
@@ -342,6 +344,25 @@ class PreferenceManager(context: Context) {
         const val KEY_FLOATING_CALL_POS_LANDSCAPE_Y = "floating_call_pos_landscape_y"
 
         const val KEY_NAME_NON_CONTACTS_AS_UNKNOWN  = "name_non_contacts_as_unknown"
+
+        // Custom Call Backgrounds (Incoming & Ongoing)
+        const val KEY_INCOMING_BG_TYPE          = "incoming_bg_type"         // "none" | "wallpaper" | "picture" | "video"
+        const val KEY_INCOMING_BG_PATH          = "incoming_bg_path"
+        const val KEY_INCOMING_BG_ZOOM          = "incoming_bg_zoom"
+        const val KEY_INCOMING_BG_PAN_X         = "incoming_bg_pan_x"
+        const val KEY_INCOMING_BG_PAN_Y         = "incoming_bg_pan_y"
+        const val KEY_INCOMING_BG_DIM           = "incoming_bg_dim"
+        const val KEY_INCOMING_BG_BLUR          = "incoming_bg_blur"
+        const val KEY_INCOMING_SHOW_CONTACT_PFP = "incoming_show_contact_pfp"
+
+        const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
+        const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"
+        const val KEY_ONGOING_BG_ZOOM           = "ongoing_bg_zoom"
+        const val KEY_ONGOING_BG_PAN_X          = "ongoing_bg_pan_x"
+        const val KEY_ONGOING_BG_PAN_Y          = "ongoing_bg_pan_y"
+        const val KEY_ONGOING_BG_DIM            = "ongoing_bg_dim"
+        const val KEY_ONGOING_BG_BLUR           = "ongoing_bg_blur"
+        const val KEY_ONGOING_SHOW_CONTACT_PFP  = "ongoing_show_contact_pfp"
     }
 }
 

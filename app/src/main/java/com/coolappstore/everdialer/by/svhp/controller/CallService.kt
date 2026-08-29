@@ -613,14 +613,22 @@ class CallService : InCallService() {
                 _heldCallSession.value = CallSession(call, call.state)
             }
             updateNotification(call)
-            if (call.state != Call.STATE_RINGING) launchCallActivity()
+            if (call.state != Call.STATE_RINGING) {
+                launchCallActivity()
+            } else if (prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false)) {
+                launchCallActivity()
+            }
             return
         }
 
         call.registerCallback(callCallback)
         _currentCallSession.value = CallSession(call, call.state)
         updateNotification(call)
-        if (call.state != Call.STATE_RINGING) launchCallActivity()
+        if (call.state != Call.STATE_RINGING) {
+            launchCallActivity()
+        } else if (prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false)) {
+            launchCallActivity()
+        }
     }
 
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
@@ -637,7 +645,10 @@ class CallService : InCallService() {
                 if (prefs.shouldGateCallWithBiometric(phoneNumber)) {
                     launchBiometricCallActivity("ANSWER")
                 } else {
-                    answerCall(); launchCallActivity(answeredFromNotification = true)
+                    answerCall()
+                    if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
+                        launchCallActivity(answeredFromNotification = true)
+                    }
                 }
             }
             "DECLINE_CALL" -> {

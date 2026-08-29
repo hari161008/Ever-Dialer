@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
+import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
@@ -166,6 +167,12 @@ class CallActivity : FragmentActivity() {
         proximitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
         proximitySensor?.let {
             sensorManager?.registerListener(proxSensorListener, it, SensorManager.SENSOR_DELAY_UI)
+        }
+
+        val answeredFromNotif = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
+        if (answeredFromNotif && !prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
+            finishAndRemoveTask()
+            return
         }
 
         setContent {
@@ -663,6 +670,12 @@ fun ExpressiveCallScreen(
         if (callState == Call.STATE_RINGING) wasRinging = true
         // If call returns to active from holding (e.g. held call restored), sync isOnHold
         if (callState == Call.STATE_ACTIVE && isOnHold) isOnHold = false
+        if (callState == Call.STATE_ACTIVE && wasRinging) {
+            val showOngoingUI = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) ?: true
+            if (!showOngoingUI) {
+                (context as? Activity)?.finishAndRemoveTask()
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -931,6 +944,40 @@ fun ExpressiveCallScreen(
         label = "dialpadAlpha"
     )
 
+    val isIncoming = effectiveCallState == Call.STATE_RINGING
+    val bgType = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none"
+        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
+    }
+    val bgPath = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") ?: ""
+        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "") ?: ""
+    }
+    val bgZoom = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) ?: 1f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f) ?: 1f
+    }
+    val bgPanX = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f) ?: 0f
+    }
+    val bgPanY = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f) ?: 0f
+    }
+    val bgDim = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f) ?: 0f
+    }
+    val bgBlur = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f) ?: 0f
+    }
+    val showContactPfp = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
+        else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
+    }
+
     androidx.compose.runtime.CompositionLocalProvider(LocalDensity provides clampedCallDensity) {
     Box(
         modifier = Modifier
@@ -942,10 +989,55 @@ fun ExpressiveCallScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Blurred background photo
-            if (!photoUri.isNullOrEmpty()) {
-                Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
-                    AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(if (isDark) 0.35f else 0.2f), contentScale = ContentScale.Crop)
+            val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
+            val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+            if (hasCustomBg && bgFile != null) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (bgType == "video") {
+                        com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
+                            videoFile = bgFile,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = bgZoom
+                                    scaleY = bgZoom
+                                    translationX = bgPanX
+                                    translationY = bgPanY
+                                }
+                                .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
+                        )
+                    } else {
+                        AsyncImage(
+                            model = bgFile,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = bgZoom
+                                    scaleY = bgZoom
+                                    translationX = bgPanX
+                                    translationY = bgPanY
+                                }
+                                .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
+                        )
+                    }
+
+                    if (bgDim > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = bgDim))
+                        )
+                    }
+                }
+            } else {
+                // Blurred background photo (Default)
+                if (!photoUri.isNullOrEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
+                        AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(if (isDark) 0.35f else 0.2f), contentScale = ContentScale.Crop)
+                    }
                 }
             }
 
@@ -966,18 +1058,20 @@ fun ExpressiveCallScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
-                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
-                            if (!photoUri.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                        if (showContactPfp) {
+                            Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
+                                if (!photoUri.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(20.dp))
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
                         Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
                             Text(
                                 text = contactName.ifEmpty { "" },
@@ -1044,7 +1138,7 @@ fun ExpressiveCallScreen(
                                     }
                                     AnimatedVisibility(visible = showNoteWindow, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                                            Column(modifier = Modifier.padding(16.dp)) {
+                                             Column(modifier = Modifier.padding(16.dp)) {
                                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                     Text("Note — $contactName", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                                     IconButton(onClick = { if (phoneNumber.isNotEmpty()) NoteManager.writeNote(context, contactName, phoneNumber, noteText); showNoteWindow = false }, modifier = Modifier.size(32.dp)) {
@@ -1085,8 +1179,16 @@ fun ExpressiveCallScreen(
                                     if (!isPocketBlocked()) {
                                         if (callBiometricUnlocked) {
                                             try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                            if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                (context as? Activity)?.finishAndRemoveTask()
+                                            }
                                         } else {
-                                            pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
+                                            pendingAction = {
+                                                try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                    (context as? Activity)?.finishAndRemoveTask()
+                                                }
+                                            }
                                             showCallBiometricUnlock = true
                                         }
                                     }
@@ -1136,7 +1238,7 @@ fun ExpressiveCallScreen(
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .align(Alignment.TopCenter)
-                            .padding(top = if (isIncomingRinging) 130.dp else 100.dp),
+                            .padding(top = if (isIncomingRinging) (if (showContactPfp) 130.dp else 180.dp) else (if (showContactPfp) 100.dp else 140.dp)),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Top
                     ) {
@@ -1148,23 +1250,25 @@ fun ExpressiveCallScreen(
                             MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium)
                         val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
 
-                        Box(modifier = Modifier.size(callAvatarSize).clip(CircleShape).background(controlBtnColor)) {
-                            // Always render Icon as base layer so layout never shifts
-                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize), tint = subtleColor)
-                            if (!photoUri.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(photoUri)
-                                        .crossfade(300)
-                                        .build(),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                        if (showContactPfp) {
+                            Box(modifier = Modifier.size(callAvatarSize).clip(CircleShape).background(controlBtnColor)) {
+                                // Always render Icon as base layer so layout never shifts
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize), tint = subtleColor)
+                                if (!photoUri.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(photoUri)
+                                            .crossfade(300)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
+                            Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
+                        }
 
                         // Fixed height box so layout never shifts when name loads
                         Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
@@ -1360,8 +1464,16 @@ fun ExpressiveCallScreen(
                                     if (!isPocketBlocked()) {
                                         if (callBiometricUnlocked) {
                                             try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                            if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                (context as? Activity)?.finishAndRemoveTask()
+                                            }
                                         } else {
-                                            pendingAction = { try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {} }
+                                            pendingAction = {
+                                                try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                    (context as? Activity)?.finishAndRemoveTask()
+                                                }
+                                            }
                                             showCallBiometricUnlock = true
                                         }
                                     }

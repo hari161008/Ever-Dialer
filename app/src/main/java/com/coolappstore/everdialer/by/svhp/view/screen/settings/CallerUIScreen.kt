@@ -38,6 +38,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonSpec
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -91,6 +93,10 @@ private fun Modifier.immediateDrag(
 fun CallerUIScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
 
+    var showOngoingCallUIWhenAnswered by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true))
+    }
+
     var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f).coerceIn(0.1f, 1.0f)) }
 
     // ── Feature Buttons state ────────────────────────────────────────────
@@ -136,6 +142,61 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
         CallButtonPrefs.setDisabled(prefs, defaultDisabled)
     }
 
+    var ongoingBgType by remember {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none")
+    }
+    var showContactPfp by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true))
+    }
+
+    var showBgOptionsPopup by remember { mutableStateOf(false) }
+    var editorMediaState by remember {
+        mutableStateOf<Triple<java.io.File, Boolean, String>?>(null)
+    }
+
+    val bgLabel = when (ongoingBgType) {
+        "wallpaper" -> "Device Wallpaper"
+        "picture"   -> "Custom Picture"
+        "video"     -> "Custom Video"
+        else        -> "None (Default)"
+    }
+
+    if (showBgOptionsPopup) {
+        com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundOptionsPopup(
+            target = com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget.ONGOING,
+            currentType = ongoingBgType,
+            onDismiss = { showBgOptionsPopup = false },
+            onSelectNone = {
+                ongoingBgType = "none"
+                prefs.setString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none")
+                prefs.setString(PreferenceManager.KEY_ONGOING_BG_PATH, "")
+            },
+            onOpenEditor = { file, isVideo, bgType ->
+                showBgOptionsPopup = false
+                editorMediaState = Triple(file, isVideo, bgType)
+            }
+        )
+    }
+
+    editorMediaState?.let { (file, isVideo, bgType) ->
+        com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEditorDialog(
+            target = com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget.ONGOING,
+            mediaFile = file,
+            isVideo = isVideo,
+            bgType = bgType,
+            initialZoom = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f),
+            initialPanX = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f),
+            initialPanY = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f),
+            initialDim = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f),
+            initialBlur = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f),
+            onDismiss = { editorMediaState = null },
+            onSaveSuccess = {
+                ongoingBgType = bgType
+                editorMediaState = null
+            }
+        )
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
@@ -163,7 +224,67 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
             // from under the drag — see [isDraggingAnyButton].
             userScrollEnabled = !isDraggingAnyButton
         ) {
+            item {
+                com.coolappstore.everdialer.by.svhp.view.components.SettingsSearchEntryPoint(navigator = navigator)
+            }
 
+            // ── Show ongoing call UI when the call is answered ───────
+            item {
+                RivoAnimatedSection(delayMs = 0L) {
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Show ongoing call UI when the call is answered",
+                            supporting = "Display the full screen in-call screen when a call is answered",
+                            leadingIcon = Icons.Outlined.Call,
+                            iconContainerColor = Color(0xFF2196F3),
+                            checked = showOngoingCallUIWhenAnswered,
+                            onCheckedChange = {
+                                showOngoingCallUIWhenAnswered = it
+                                prefs.setBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, it)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ── Custom Background & Contact Photo ───────────────
+            item {
+                RivoAnimatedSection(delayMs = 20L) {
+                    Column {
+                        Text(
+                            "Appearance & Background",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                        )
+                        RivoExpressiveCard {
+                            com.coolappstore.everdialer.by.svhp.view.components.RivoListItem(
+                                headline = "Choose Custom Background",
+                                supporting = "Currently: $bgLabel",
+                                leadingIcon = Icons.Outlined.Wallpaper,
+                                iconContainerColor = Color(0xFF9C27B0),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { showBgOptionsPopup = true }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Show Contact PFP",
+                                supporting = "Display the contact avatar photo on the ongoing call screen",
+                                leadingIcon = Icons.Outlined.AccountCircle,
+                                iconContainerColor = Color(0xFF00BCD4),
+                                checked = showContactPfp,
+                                onCheckedChange = {
+                                    showContactPfp = it
+                                    prefs.setBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, it)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             // ── Feature Buttons ───────────────────────────────────────
             item {

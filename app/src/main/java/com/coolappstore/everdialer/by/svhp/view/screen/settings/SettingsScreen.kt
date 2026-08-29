@@ -53,6 +53,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -159,6 +165,9 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     }
 
     var backupState       by remember { mutableStateOf<BackupDialogState>(BackupDialogState.Idle) }
+    var showBackupDialog  by remember { mutableStateOf(false) }
+    var pendingBackupSettings by remember { mutableStateOf(true) }
+    var pendingBackupCallingCards by remember { mutableStateOf(true) }
 
     var visible by remember { mutableStateOf(false) }
     var isClosing by remember { mutableStateOf(false) }
@@ -184,11 +193,39 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     )
     LaunchedEffect(Unit) { visible = true }
 
+    // Save backup file picker
+    val saveBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val ok = context.contentResolver.openOutputStream(uri)?.use { output ->
+                        BackupManager.writeBackup(context, output, pendingBackupSettings, pendingBackupCallingCards)
+                    } ?: false
+                    withContext(Dispatchers.Main) {
+                        backupState = if (ok) {
+                            BackupDialogState.BackupSuccess("Backup saved successfully")
+                        } else {
+                            BackupDialogState.Error("Failed to save backup")
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        backupState = BackupDialogState.Error(e.message ?: "Failed to save backup")
+                    }
+                }
+            }
+        }
+    }
+
     // Restore file picker
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
-                backupState = BackupDialogState.Restoring
+            scope.launch(Dispatchers.IO) {
+                withContext(Dispatchers.Main) {
+                    backupState = BackupDialogState.Restoring
+                }
                 try {
                     val tmpFile = File(context.cacheDir, "restore_tmp.everdialer")
                     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -196,9 +233,13 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                     val ok = BackupManager.restoreBackup(context, tmpFile)
                     tmpFile.delete()
-                    backupState = if (ok) BackupDialogState.RestoreSuccess else BackupDialogState.Error("Restore failed")
+                    withContext(Dispatchers.Main) {
+                        backupState = if (ok) BackupDialogState.RestoreSuccess else BackupDialogState.Error("Restore failed")
+                    }
                 } catch (e: Exception) {
-                    backupState = BackupDialogState.Error(e.message ?: "Unknown error")
+                    withContext(Dispatchers.Main) {
+                        backupState = BackupDialogState.Error(e.message ?: "Unknown error")
+                    }
                 }
             }
         }
@@ -786,6 +827,43 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     }
 
     // ── Backup Dialogs ────────────────────────────────────────────────────────
+    if (showBackupDialog) {
+        CreateBackupDialog(
+            onDismiss = { showBackupDialog = false },
+            onShare = { backupSettings, backupCallingCards ->
+                showBackupDialog = false
+                scope.launch(Dispatchers.IO) {
+                    val file = BackupManager.createBackup(context, backupSettings, backupCallingCards)
+                    withContext(Dispatchers.Main) {
+                        if (file != null) {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.provider",
+                                file
+                            )
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/octet-stream"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Backup"))
+                            backupState = BackupDialogState.BackupSuccess(file.absolutePath)
+                        } else {
+                            backupState = BackupDialogState.Error("Failed to create backup")
+                        }
+                    }
+                }
+            },
+            onSave = { backupSettings, backupCallingCards ->
+                showBackupDialog = false
+                pendingBackupSettings = backupSettings
+                pendingBackupCallingCards = backupCallingCards
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
+            }
+        )
+    }
+
     when (val state = backupState) {
         is BackupDialogState.Restoring -> Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -824,8 +902,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, ColorRed),
         SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, ColorBluGrey),
         SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, ColorAmber) { it.navigate(UpdatesScreenDestination) },
-        SettingsSearchEntry("Create Backup", "Save app configuration and notes", "create_backup", Icons.Default.Backup, ColorGreen),
-        SettingsSearchEntry("Restore Backup", "Restore app configuration and notes", "restore_backup", Icons.Default.Restore, ColorBrown),
+        SettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, ColorGreen),
+        SettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, ColorBrown),
         SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, ColorBluGrey),
 
         // ── App Settings screen ──────────────────────────────────────────────
@@ -892,7 +970,11 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("App Name", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
 
         // ── Incoming Call UI screen ───────────────────────────────────────────
+        SettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
         SettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, ColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
+
+        // ── Ongoing Call UI screen ────────────────────────────────────────────
+        SettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, ColorBlue) { it.navigate(CallerUIScreenDestination) },
 
         // ── About screen ───────────────────────────────────────────────────────
         SettingsSearchEntry("Made By Hari", "Developer info", "made_by_hari", Icons.Outlined.Info, ColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "made_by_hari")) },
@@ -1495,31 +1577,17 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         RivoExpressiveCard {
                             RivoListItem(
                                 headline   = "Create Backup",
-                                supporting = "Save app configuration and notes",
+                                supporting = "Save app configuration, settings and calling cards",
                                 leadingIcon = Icons.Default.Backup,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
                                 modifier = Modifier.settingsSearchHighlight("create_backup", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
-                                    scope.launch {
-                                        val file = BackupManager.createBackup(context)
-                                        backupState = if (file != null) {
-                                            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "application/octet-stream"
-                                                putExtra(Intent.EXTRA_STREAM, uri)
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Save Backup"))
-                                            BackupDialogState.BackupSuccess(file.absolutePath)
-                                        } else {
-                                            BackupDialogState.Error("Failed to create backup")
-                                        }
-                                    }
+                                    showBackupDialog = true
                                 }
                             )
                             CardDivider()
-                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration and notes", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("restore_backup", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { restoreLauncher.launch("*/*") })
+                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration, settings and calling cards", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("restore_backup", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { restoreLauncher.launch("*/*") })
                         }
                     }
                 }
@@ -1594,4 +1662,135 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
     val top = if (index == 0) corner else 0.dp
     val bottom = if (index == count - 1) corner else 0.dp
     return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
+@Composable
+private fun CreateBackupDialog(
+    onDismiss: () -> Unit,
+    onShare: (backupSettings: Boolean, backupCallingCards: Boolean) -> Unit,
+    onSave: (backupSettings: Boolean, backupCallingCards: Boolean) -> Unit
+) {
+    var backupSettings by remember { mutableStateOf(true) }
+    var backupCallingCards by remember { mutableStateOf(true) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Backup,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Create Backup",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Select items to include in your backup",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+
+                RivoExpressiveCard(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    RivoSwitchListItem(
+                        headline = "Backup settings",
+                        supporting = "App preferences, Call Recorder & Network Switcher settings",
+                        leadingIcon = Icons.Outlined.Settings,
+                        iconContainerColor = Color(0xFF4CAF50),
+                        checked = backupSettings,
+                        onCheckedChange = { backupSettings = it }
+                    )
+                    CardDivider()
+                    RivoSwitchListItem(
+                        headline = "Backup calling cards",
+                        supporting = "Saved contact notes and calling cards",
+                        leadingIcon = Icons.Outlined.ContactPhone,
+                        iconContainerColor = Color(0xFF2196F3),
+                        checked = backupCallingCards,
+                        onCheckedChange = { backupCallingCards = it }
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { onShare(backupSettings, backupCallingCards) },
+                        enabled = backupSettings || backupCallingCards,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Share", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+
+                    Button(
+                        onClick = { onSave(backupSettings, backupCallingCards) },
+                        enabled = backupSettings || backupCallingCards,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp)
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Save", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                TextButton(
+                    onClick = onDismiss
+                ) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
 }

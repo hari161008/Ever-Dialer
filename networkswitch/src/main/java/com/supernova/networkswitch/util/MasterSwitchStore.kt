@@ -40,6 +40,13 @@ object MasterSwitchStore {
         initialized = true
     }
 
+    @Synchronized
+    fun reload(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _enabled.value = prefs.getBoolean(KEY_ENABLED, DEFAULT_ENABLED)
+        initialized = true
+    }
+
     /** Synchronous read of the current state. Safe to call from anywhere once [init] has run. */
     fun isEnabled(): Boolean = _enabled.value
 

@@ -79,6 +79,7 @@ import com.ramcosta.composedestinations.generated.destinations.AboutAppScreenDes
 import com.ramcosta.composedestinations.generated.destinations.AppSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.BiometricScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.CallerUIScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.IncomingCallUIScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.InterfaceScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RaiseToAnswerScreenDestination
@@ -189,8 +190,8 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
     GlobalSettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, GsColorRed) { it.navigate(SettingsScreenDestination(highlightKey = "silence_unknown")) },
     GlobalSettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, GsColorBluGrey) { it.navigate(SettingsScreenDestination(highlightKey = "blocked_numbers")) },
     GlobalSettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, GsColorAmber) { it.navigate(SettingsScreenDestination(highlightKey = "auto_check_updates")) },
-    GlobalSettingsSearchEntry("Create Backup", "Save app configuration and notes", "create_backup", Icons.Default.Backup, GsColorGreen) { it.navigate(SettingsScreenDestination(highlightKey = "create_backup")) },
-    GlobalSettingsSearchEntry("Restore Backup", "Restore app configuration and notes", "restore_backup", Icons.Default.Restore, GsColorBrown) { it.navigate(SettingsScreenDestination(highlightKey = "restore_backup")) },
+    GlobalSettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, GsColorGreen) { it.navigate(SettingsScreenDestination(highlightKey = "create_backup")) },
+    GlobalSettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, GsColorBrown) { it.navigate(SettingsScreenDestination(highlightKey = "restore_backup")) },
     GlobalSettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, GsColorBluGrey) { it.navigate(SettingsScreenDestination(highlightKey = "about_app")) },
 
     // ── App Settings screen ──────────────────────────────────────────────────
@@ -257,7 +258,11 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
     GlobalSettingsSearchEntry("App Name", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
 
     // ── Incoming Call UI screen ──────────────────────────────────────────────
+    GlobalSettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, GsColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
     GlobalSettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, GsColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
+
+    // ── Ongoing Call UI screen ───────────────────────────────────────────────
+    GlobalSettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, GsColorBlue) { it.navigate(CallerUIScreenDestination) },
 
     // ── About screen ──────────────────────────────────────────────────────────
     GlobalSettingsSearchEntry("Made By Hari", "Developer info", "made_by_hari", Icons.Outlined.Info, GsColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "made_by_hari")) },
