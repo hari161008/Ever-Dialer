@@ -387,7 +387,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
         is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer
                               else MaterialTheme.colorScheme.secondaryContainer
         is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer
-        else -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer
     }
 
     val animatedContainerColor by animateColorAsState(
@@ -424,8 +424,8 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                     when (state) {
                         is CheckState.Checking -> ExpressiveStatusChip(
                             text = "Checking…",
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                            contentColor = MaterialTheme.colorScheme.onTertiary,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                             pulsing = true
                         )
                         is CheckState.Done -> if (state.isNewer && state.latest != null) {
@@ -521,8 +521,8 @@ private fun HeroStatusIcon(checkState: CheckState) {
     val (icon, iconBgColor, iconTintColor) = when (checkState) {
         is CheckState.Checking -> Triple(
             Icons.Default.SystemUpdate,
-            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
-            MaterialTheme.colorScheme.tertiary
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+            MaterialTheme.colorScheme.primary
         )
         is CheckState.Done -> if (checkState.isNewer) {
             Triple(
@@ -1373,7 +1373,7 @@ private fun PermissionToDownloadDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         icon = {
-            val iconColor = if (readyToInstall) ColorGreen else ColorBlue
+            val iconColor = if (readyToInstall) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = iconColor.copy(alpha = 0.16f),

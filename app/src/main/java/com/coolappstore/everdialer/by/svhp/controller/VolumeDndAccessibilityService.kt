@@ -17,6 +17,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
+import android.telecom.Call
 import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -35,10 +36,6 @@ class VolumeDndAccessibilityService : AccessibilityService() {
     private var lastPressTimestamp = 0L
     private var mediaSession: MediaSession? = null
     private var screenReceiver: BroadcastReceiver? = null
-
-    private var isVolUpPressed = false
-    private var isVolDownPressed = false
-    private var rainModeJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onServiceConnected() {
@@ -136,8 +133,6 @@ class VolumeDndAccessibilityService : AccessibilityService() {
                 screenReceiver = null
             }
         } catch (_: Exception) {}
-        rainModeJob?.cancel()
-        rainModeJob = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -146,72 +141,92 @@ class VolumeDndAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         sequenceBuffer.clear()
-        rainModeJob?.cancel()
-        rainModeJob = null
-        isVolUpPressed = false
-        isVolDownPressed = false
+        rainSequenceBuffer.clear()
     }
+
+    private val rainSequenceBuffer = StringBuilder()
+    private var rainLastPressTimestamp = 0L
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event == null) return super.onKeyEvent(event)
 
         val keyCode = event.keyCode
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = true
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = true
-
-                val rainTriggered = checkRainModeTrigger()
-
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
-                val handled = handleKeyInput(inputChar)
-                if (handled || rainTriggered) return true
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = false
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = false
 
-                rainModeJob?.cancel()
-                rainModeJob = null
+                val rainHandled = handleRainModeKeyInput(inputChar)
+                if (rainHandled) return true
+
+                val dndHandled = handleKeyInput(inputChar)
+                if (dndHandled) return true
             }
         }
 
         return super.onKeyEvent(event)
     }
 
-    private fun checkRainModeTrigger(): Boolean {
+    private fun handleRainModeKeyInput(inputChar: Char): Boolean {
         val prefs = PreferenceManager(this)
-        val isRainModeEnabled = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
-        if (!isRainModeEnabled) return false
+        val isEnabled = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
+        if (!isEnabled) {
+            rainSequenceBuffer.clear()
+            return false
+        }
 
-        if (isVolUpPressed && isVolDownPressed) {
-            if (rainModeJob?.isActive == true) return true
+        val activeCall = CallService.currentCallSession.value?.call
+            ?: CallService.heldCallSession.value?.call
 
-            val activeCall = CallService.currentCallSession.value?.call ?: CallService.heldCallSession.value?.call
-            if (activeCall == null || activeCall.state == android.telecom.Call.STATE_DISCONNECTED || activeCall.state == android.telecom.Call.STATE_DISCONNECTING) {
-                return false
-            }
+        if (activeCall == null || activeCall.state == Call.STATE_DISCONNECTED || activeCall.state == Call.STATE_DISCONNECTING) {
+            rainSequenceBuffer.clear()
+            return false
+        }
 
-            rainModeJob = serviceScope.launch {
-                delay(3000L)
-                if (isVolUpPressed && isVolDownPressed) {
-                    val callToAct = CallService.currentCallSession.value?.call ?: CallService.heldCallSession.value?.call
-                    if (callToAct != null) {
-                        val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
-                        if (callToAct.state == android.telecom.Call.STATE_RINGING) {
-                            CallService.answerCall()
-                            if (vibrateFeedback) {
-                                performVibration(this@VolumeDndAccessibilityService, longArrayOf(0, 120, 80, 120))
-                            }
-                        } else {
-                            CallService.declineCall()
-                            if (vibrateFeedback) {
-                                performVibration(this@VolumeDndAccessibilityService, longArrayOf(0, 180, 80, 180))
-                            }
-                        }
+        val timeoutMs = prefs.getInt(
+            PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS,
+            PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS
+        ).toLong().coerceIn(500L, 5000L)
+
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - rainLastPressTimestamp > timeoutMs) {
+            rainSequenceBuffer.clear()
+        }
+        rainLastPressTimestamp = currentTime
+
+        val targetSequence = (prefs.getString(
+            PreferenceManager.KEY_RAIN_MODE_SEQUENCE,
+            PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE
+        ) ?: PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE)
+            .uppercase()
+            .filter { it == 'U' || it == 'D' }
+
+        if (targetSequence.isEmpty()) return false
+
+        rainSequenceBuffer.append(inputChar)
+
+        if (targetSequence.startsWith(rainSequenceBuffer.toString())) {
+            if (rainSequenceBuffer.toString() == targetSequence) {
+                rainSequenceBuffer.clear()
+                val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
+                if (activeCall.state == Call.STATE_RINGING) {
+                    CallService.answerCall()
+                    if (vibrateFeedback) {
+                        performVibration(this, longArrayOf(0, 120, 80, 120))
+                    }
+                } else {
+                    CallService.declineCall()
+                    if (vibrateFeedback) {
+                        performVibration(this, longArrayOf(0, 180, 80, 180))
                     }
                 }
             }
             return true
+        } else {
+            rainSequenceBuffer.clear()
+            if (targetSequence.startsWith(inputChar.toString())) {
+                rainSequenceBuffer.append(inputChar)
+                return true
+            }
         }
         return false
     }

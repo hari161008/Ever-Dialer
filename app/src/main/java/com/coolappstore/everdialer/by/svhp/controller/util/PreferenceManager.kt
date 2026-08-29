@@ -303,6 +303,10 @@ class PreferenceManager(context: Context) {
         // Rain Mode
         const val KEY_RAIN_MODE_ENABLED            = "rain_mode_enabled"
         const val KEY_RAIN_MODE_VIBRATE            = "rain_mode_vibrate"
+        const val KEY_RAIN_MODE_SEQUENCE           = "rain_mode_sequence"
+        const val KEY_RAIN_MODE_TIMEOUT_MS         = "rain_mode_timeout_ms"
+        const val DEFAULT_RAIN_MODE_SEQUENCE       = "UDUD"
+        const val DEFAULT_RAIN_MODE_TIMEOUT_MS     = 2000
         // Auto Redial
         const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
         // Updates — version tag of the APK currently sitting in Downloads (if any)

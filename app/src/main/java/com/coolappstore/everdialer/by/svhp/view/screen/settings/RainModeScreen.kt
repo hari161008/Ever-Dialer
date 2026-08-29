@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp.view.screen.settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,8 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
     var enabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)) }
     var vibrateFeedback by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)) }
+    var timeoutMs by remember { mutableIntStateOf(prefs.getInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS)) }
+    var showDurationDialog by remember { mutableStateOf(false) }
 
     var visible by remember { mutableStateOf(false) }
     val screenAlpha by animateFloatAsState(
@@ -109,14 +112,14 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Hardware Button Call Control",
+                                "Volume Key Sequence Control",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "When water or rain makes your touch screen unresponsive, press and hold both Volume Up & Volume Down buttons simultaneously for 3 seconds to answer an incoming call or decline/end an active call.",
+                                "When water or rain makes your touch screen unresponsive, press the volume buttons in sequence (Volume Up, Down, Up, Down) within ${timeoutMs / 1000}s between presses to answer an incoming call or decline/end an active call.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -146,7 +149,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 )
                             }
                             Text(
-                                "Rain Mode requires accessibility service permissions to detect simultaneous hardware volume button presses.",
+                                "Rain Mode requires accessibility service permissions to detect hardware volume button sequence presses.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -169,7 +172,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoExpressiveCard {
                         RivoSwitchListItem(
                             headline = "Enable Rain Mode",
-                            supporting = "Answer ringing calls or decline/end active calls by holding both volume buttons for 3 seconds",
+                            supporting = "Answer ringing calls or decline/end active calls by pressing Volume Up, Down, Up, Down (UDUD)",
                             leadingIcon = Icons.Outlined.WaterDrop,
                             iconContainerColor = Color(0xFF0288D1),
                             checked = enabled,
@@ -187,11 +190,19 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             AnimatedVisibility(visible = enabled) {
                 RivoAnimatedSection(delayMs = 120L) {
                     Column {
-                        RainModeSectionLabel("Feedback & Duration")
+                        RainModeSectionLabel("Sequence & Feedback")
                         RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Required Button Sequence",
+                                supporting = "Volume Up → Down → Up → Down (UDUD)",
+                                leadingIcon = Icons.Outlined.Pin,
+                                iconContainerColor = Color(0xFF009688),
+                                onClick = {}
+                            )
+                            CardDivider()
                             RivoSwitchListItem(
                                 headline = "Vibration Feedback",
-                                supporting = "Vibrate when a call is answered or hung up via volume button press",
+                                supporting = "Vibrate when a call is answered or hung up via volume sequence",
                                 leadingIcon = Icons.Outlined.Vibration,
                                 iconContainerColor = Color(0xFF9C27B0),
                                 checked = vibrateFeedback,
@@ -203,11 +214,12 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             )
                             CardDivider()
                             RivoListItem(
-                                headline = "Required Hold Duration",
-                                supporting = "3 seconds simultaneous press of Volume Up and Volume Down buttons",
+                                headline = "Sequence Timeout Delay",
+                                supporting = "${timeoutMs / 1000} second${if (timeoutMs != 1000) "s" else ""} maximum delay between button presses",
                                 leadingIcon = Icons.Outlined.Timer,
                                 iconContainerColor = Color(0xFFFFB300),
-                                onClick = {}
+                                modifier = Modifier.settingsSearchHighlight("rain_mode_timeout", highlightedKey) { highlightedKey = null },
+                                onClick = { showDurationDialog = true }
                             )
                         }
                     }
@@ -216,6 +228,88 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    if (showDurationDialog) {
+        val durationOptions = listOf(
+            1000 to "1 sec",
+            2000 to "2 sec (Default)",
+            3000 to "3 sec",
+            4000 to "4 sec"
+        )
+        AlertDialog(
+            onDismissRequest = { showDurationDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            icon = {
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = "Sequence Timeout",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    durationOptions.forEach { (ms, label) ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (timeoutMs == ms) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    timeoutMs = ms
+                                    prefs.setInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, ms)
+                                    showDurationDialog = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                RadioButton(
+                                    selected = timeoutMs == ms,
+                                    onClick = {
+                                        timeoutMs = ms
+                                        prefs.setInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, ms)
+                                        showDurationDialog = false
+                                    }
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (timeoutMs == ms) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (timeoutMs == ms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDurationDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

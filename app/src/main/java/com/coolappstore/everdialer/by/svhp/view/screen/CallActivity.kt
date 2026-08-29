@@ -302,51 +302,62 @@ class CallActivity : FragmentActivity() {
     }
 
     // Rain mode tracking
-    private var isVolUpPressed = false
-    private var isVolDownPressed = false
-    private var rainModeJob: Job? = null
+    private val rainSequenceBuffer = StringBuilder()
+    private var rainLastPressTimestamp = 0L
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             val isRainMode = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
-            if (isRainMode) {
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = true
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = true
+            if (isRainMode && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
+                val timeoutMs = prefs.getInt(
+                    PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS,
+                    PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS
+                ).toLong().coerceIn(500L, 5000L)
 
-                    if (isVolUpPressed && isVolDownPressed) {
-                        if (rainModeJob?.isActive != true) {
-                            rainModeJob = lifecycleScope.launch {
-                                delay(3000L)
-                                if (isVolUpPressed && isVolDownPressed) {
-                                    val currentSession = CallService.currentCallSession.value ?: CallService.heldCallSession.value
-                                    val currentCall = currentSession?.call
-                                    if (currentCall != null) {
-                                        val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
-                                        if (currentCall.state == Call.STATE_RINGING) {
-                                            CallService.answerCall()
-                                            if (vibrateFeedback) {
-                                                com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this@CallActivity, longArrayOf(0, 120, 80, 120))
-                                            }
-                                        } else {
-                                            CallService.declineCall()
-                                            if (vibrateFeedback) {
-                                                com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this@CallActivity, longArrayOf(0, 180, 80, 180))
-                                            }
-                                        }
-                                    }
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - rainLastPressTimestamp > timeoutMs) {
+                    rainSequenceBuffer.clear()
+                }
+                rainLastPressTimestamp = currentTime
+
+                val targetSequence = (prefs.getString(
+                    PreferenceManager.KEY_RAIN_MODE_SEQUENCE,
+                    PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE
+                ) ?: PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE)
+                    .uppercase()
+                    .filter { it == 'U' || it == 'D' }
+
+                if (targetSequence.isNotEmpty()) {
+                    rainSequenceBuffer.append(inputChar)
+                    if (targetSequence.startsWith(rainSequenceBuffer.toString())) {
+                        if (rainSequenceBuffer.toString() == targetSequence) {
+                            rainSequenceBuffer.clear()
+                            val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
+                            val session = CallService.currentCallSession.value ?: CallService.heldCallSession.value
+                            val call = session?.call
+                            val isRinging = call?.state == Call.STATE_RINGING
+                            if (isRinging) {
+                                CallService.answerCall()
+                                if (vibrateFeedback) {
+                                    com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this, longArrayOf(0, 120, 80, 120))
+                                }
+                            } else {
+                                CallService.declineCall()
+                                if (vibrateFeedback) {
+                                    com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this, longArrayOf(0, 180, 80, 180))
                                 }
                             }
                         }
                         return true
+                    } else {
+                        rainSequenceBuffer.clear()
+                        if (targetSequence.startsWith(inputChar.toString())) {
+                            rainSequenceBuffer.append(inputChar)
+                            return true
+                        }
                     }
-                } else if (event.action == KeyEvent.ACTION_UP) {
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolUpPressed = false
-                    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) isVolDownPressed = false
-
-                    rainModeJob?.cancel()
-                    rainModeJob = null
                 }
             }
         }
@@ -354,9 +365,6 @@ class CallActivity : FragmentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isVolUpPressed && isVolDownPressed) {
-            return true
-        }
         val session = CallService.currentCallSession.value
         val isRinging = session?.state == Call.STATE_RINGING
         if (isRinging) {

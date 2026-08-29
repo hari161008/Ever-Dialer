@@ -289,24 +289,29 @@ class CallService : InCallService() {
         fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
         fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
         fun answerCall() {
-            val primary = _currentCallSession.value?.call
-            val held = _heldCallSession.value?.call
-            if (primary?.state == Call.STATE_RINGING) {
-                primary.answer(VideoProfile.STATE_AUDIO_ONLY)
-            } else if (held?.state == Call.STATE_RINGING) {
-                held.answer(VideoProfile.STATE_AUDIO_ONLY)
-            } else {
-                primary?.answer(VideoProfile.STATE_AUDIO_ONLY)
-            }
+            val call = _currentCallSession.value?.call
+                ?: _heldCallSession.value?.call
+                ?: instance?.calls?.find { it.state == Call.STATE_RINGING }
+                ?: instance?.calls?.firstOrNull()
+            try {
+                call?.answer(VideoProfile.STATE_AUDIO_ONLY)
+            } catch (_: Exception) {}
+            try {
+                instance?.let { s ->
+                    val showUi = PreferenceManager(s).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+                    if (showUi) {
+                        s.launchCallActivity(answeredFromNotification = true)
+                    }
+                }
+            } catch (_: Exception) {}
         }
         fun declineCall() {
-            val primary = _currentCallSession.value?.call
-            val held = _heldCallSession.value?.call
-            if (primary != null) {
-                primary.disconnect()
-            } else if (held != null) {
-                held.disconnect()
-            }
+            val call = _currentCallSession.value?.call
+                ?: _heldCallSession.value?.call
+                ?: instance?.calls?.firstOrNull()
+            try {
+                call?.disconnect()
+            } catch (_: Exception) {}
         }
 
         fun mergeCalls() {
