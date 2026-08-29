@@ -42,6 +42,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
@@ -92,6 +93,7 @@ private fun Modifier.immediateDrag(
 @Composable
 fun CallerUIScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
 
     var showOngoingCallUIWhenAnswered by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true))
@@ -142,16 +144,11 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
         CallButtonPrefs.setDisabled(prefs, defaultDisabled)
     }
 
-    var ongoingBgType by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none")
+    val ongoingBgType = remember(settingsVersion) {
+        prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
     }
     var showContactPfp by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true))
-    }
-
-    var showBgOptionsPopup by remember { mutableStateOf(false) }
-    var editorMediaState by remember {
-        mutableStateOf<Triple<java.io.File, Boolean, String>?>(null)
     }
 
     val bgLabel = when (ongoingBgType) {
@@ -159,42 +156,6 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
         "picture"   -> "Custom Picture"
         "video"     -> "Custom Video"
         else        -> "None (Default)"
-    }
-
-    if (showBgOptionsPopup) {
-        com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundOptionsPopup(
-            target = com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget.ONGOING,
-            currentType = ongoingBgType,
-            onDismiss = { showBgOptionsPopup = false },
-            onSelectNone = {
-                ongoingBgType = "none"
-                prefs.setString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none")
-                prefs.setString(PreferenceManager.KEY_ONGOING_BG_PATH, "")
-            },
-            onOpenEditor = { file, isVideo, bgType ->
-                showBgOptionsPopup = false
-                editorMediaState = Triple(file, isVideo, bgType)
-            }
-        )
-    }
-
-    editorMediaState?.let { (file, isVideo, bgType) ->
-        com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEditorDialog(
-            target = com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget.ONGOING,
-            mediaFile = file,
-            isVideo = isVideo,
-            bgType = bgType,
-            initialZoom = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f),
-            initialPanX = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f),
-            initialPanY = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f),
-            initialDim = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f),
-            initialBlur = prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f),
-            onDismiss = { editorMediaState = null },
-            onSaveSuccess = {
-                ongoingBgType = bgType
-                editorMediaState = null
-            }
-        )
     }
 
     Scaffold(
@@ -264,7 +225,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = Icons.Outlined.Wallpaper,
                                 iconContainerColor = Color(0xFF9C27B0),
                                 trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { showBgOptionsPopup = true }
+                                onClick = { navigator.navigate(CustomBackgroundPickerScreenDestination(isIncoming = false)) }
                             )
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp),

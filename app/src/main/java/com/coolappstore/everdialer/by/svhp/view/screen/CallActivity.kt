@@ -686,13 +686,70 @@ fun ExpressiveCallScreen(
         }
     }
 
+    val isIncoming = effectiveCallState == Call.STATE_RINGING
+    val bgType = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none"
+        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
+    }
+    val bgPath = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") ?: ""
+        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "") ?: ""
+    }
+    val bgZoom = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) ?: 1f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f) ?: 1f
+    }
+    val bgPanX = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f) ?: 0f
+    }
+    val bgPanY = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f) ?: 0f
+    }
+    val bgDim = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f) ?: 0f
+    }
+    val bgBlur = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) ?: 0f
+        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f) ?: 0f
+    }
+    val showContactPfp = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
+        else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
+    }
+    val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
+    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+    val fontColorMode = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
+        else prefs?.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
+    }
+    val customFontColorInt = remember(settingsVersion, isIncoming) {
+        if (isIncoming) prefs?.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) ?: android.graphics.Color.WHITE
+        else prefs?.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE) ?: android.graphics.Color.WHITE
+    }
+
+    val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
+        else if (hasCustomBg) Color.White
+        else MaterialTheme.colorScheme.onSurface
+    val effectiveSubtleColor = if (fontColorMode == "custom") Color(customFontColorInt).copy(alpha = 0.85f)
+        else if (hasCustomBg) Color.White.copy(alpha = 0.85f)
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    val textShadow = if (hasCustomBg || fontColorMode == "custom") androidx.compose.ui.graphics.Shadow(
+        color = Color.Black.copy(alpha = 0.80f),
+        blurRadius = 8f,
+        offset = androidx.compose.ui.geometry.Offset(0f, 2f)
+    ) else null
+
     val bgColor = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primary, 0.035f)
-    val onBgColor = MaterialTheme.colorScheme.onSurface
-    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val overlayColor = if (isDark) Color.White.copy(0.08f) else Color.Black.copy(0.06f)
-    val controlBtnColor = if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f)
-    val controlBtnActiveColor = if (isDark) Color.White else Color.Black
-    val controlBtnActiveFg = if (isDark) Color.Black else Color.White
+    val onBgColor = effectiveOnBgColor
+    val subtleColor = effectiveSubtleColor
+    val overlayColor = if (hasCustomBg) Color.Black.copy(0.35f) else (if (isDark) Color.White.copy(0.08f) else Color.Black.copy(0.06f))
+    val controlBtnColor = if (hasCustomBg) Color.Black.copy(0.45f) else (if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f))
+    val controlBtnActiveColor = if (isDark || hasCustomBg) Color.White else Color.Black
+    val controlBtnActiveFg = if (isDark || hasCustomBg) Color.Black else Color.White
     val controlBtnFg = onBgColor
 
     // ── Feature Buttons — renders one configurable ongoing-call button by id, honoring the
@@ -944,40 +1001,6 @@ fun ExpressiveCallScreen(
         label = "dialpadAlpha"
     )
 
-    val isIncoming = effectiveCallState == Call.STATE_RINGING
-    val bgType = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none"
-        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
-    }
-    val bgPath = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") ?: ""
-        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "") ?: ""
-    }
-    val bgZoom = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) ?: 1f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f) ?: 1f
-    }
-    val bgPanX = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f) ?: 0f
-    }
-    val bgPanY = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f) ?: 0f
-    }
-    val bgDim = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f) ?: 0f
-    }
-    val bgBlur = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f) ?: 0f
-    }
-    val showContactPfp = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
-        else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
-    }
-
     androidx.compose.runtime.CompositionLocalProvider(LocalDensity provides clampedCallDensity) {
     Box(
         modifier = Modifier
@@ -989,9 +1012,6 @@ fun ExpressiveCallScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
-            val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
-
             if (hasCustomBg && bgFile != null) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (bgType == "video") {
@@ -1041,6 +1061,25 @@ fun ExpressiveCallScreen(
                 }
             }
 
+            // Top contrast gradient scrim for maximum text & detail legibility on photos/videos
+            if (hasCustomBg) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.60f),
+                                    Color.Black.copy(alpha = 0.30f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+
             if (isLandscape) {
                 // ── LANDSCAPE: two-panel layout ─────────────────────────────
                 val lsStatusBarHeight = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
@@ -1060,7 +1099,7 @@ fun ExpressiveCallScreen(
                     ) {
                         if (showContactPfp) {
                             Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(controlBtnColor)) {
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = subtleColor)
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(48.dp), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
                                 if (!photoUri.isNullOrEmpty()) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
@@ -1075,7 +1114,10 @@ fun ExpressiveCallScreen(
                         Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
                             Text(
                                 text = contactName.ifEmpty { "" },
-                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium),
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    shadow = textShadow
+                                ),
                                 color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -1097,7 +1139,7 @@ fun ExpressiveCallScreen(
                                     else -> "Connecting..."
                                 },
                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                style = MaterialTheme.typography.titleSmall
+                                style = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
                             )
                         }
                         if (hasHeldCall) {
@@ -1253,7 +1295,7 @@ fun ExpressiveCallScreen(
                         if (showContactPfp) {
                             Box(modifier = Modifier.size(callAvatarSize).clip(CircleShape).background(controlBtnColor)) {
                                 // Always render Icon as base layer so layout never shifts
-                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize), tint = subtleColor)
+                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize), tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else subtleColor)
                                 if (!photoUri.isNullOrEmpty()) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
@@ -1274,7 +1316,7 @@ fun ExpressiveCallScreen(
                         Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
                             Text(
                                 text = contactName.ifEmpty { "" },
-                                style = callNameStyle,
+                                style = callNameStyle.copy(shadow = textShadow),
                                 color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1288,7 +1330,10 @@ fun ExpressiveCallScreen(
                         if (phoneNumber.isNotBlank() && phoneNumber != contactName) {
                             Text(
                                 text = phoneNumber,
-                                style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(fontWeight = FontWeight.Bold),
+                                style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
+                                    fontWeight = FontWeight.Bold,
+                                    shadow = textShadow
+                                ),
                                 color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1310,7 +1355,7 @@ fun ExpressiveCallScreen(
                                     else -> "Connecting..."
                                 },
                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                style = if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge
+                                style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
                             )
                         }
 

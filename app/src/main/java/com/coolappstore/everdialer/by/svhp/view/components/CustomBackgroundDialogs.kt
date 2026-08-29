@@ -77,6 +77,29 @@ fun LoopingVideoPlayer(
     AndroidView(
         factory = { ctx ->
             TextureView(ctx).apply {
+                fun applyCenterCrop(player: MediaPlayer, viewW: Int, viewH: Int) {
+                    if (viewW <= 0 || viewH <= 0) return
+                    val vW = player.videoWidth
+                    val vH = player.videoHeight
+                    if (vW <= 0 || vH <= 0) return
+
+                    val viewRatio = viewW.toFloat() / viewH
+                    val videoRatio = vW.toFloat() / vH
+                    var scaleX = 1f
+                    var scaleY = 1f
+                    if (videoRatio > viewRatio) {
+                        // Video is wider than view -> scale X to crop sides and maintain aspect ratio
+                        scaleX = videoRatio / viewRatio
+                    } else {
+                        // Video is taller than view -> scale Y to crop top/bottom and maintain aspect ratio
+                        scaleY = viewRatio / videoRatio
+                    }
+                    val matrix = android.graphics.Matrix().apply {
+                        setScale(scaleX, scaleY, viewW / 2f, viewH / 2f)
+                    }
+                    setTransform(matrix)
+                }
+
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
                         try {
@@ -86,10 +109,14 @@ fun LoopingVideoPlayer(
                                 setDataSource(videoFile.absolutePath)
                                 isLooping = true
                                 if (isMuted) setVolume(0f, 0f)
-                                prepareAsync()
+                                setOnVideoSizeChangedListener { player, _, _ ->
+                                    applyCenterCrop(player, width, height)
+                                }
                                 setOnPreparedListener { player ->
+                                    applyCenterCrop(player, width, height)
                                     player.start()
                                 }
+                                prepareAsync()
                             }
                             mediaPlayerRef = mp
                         } catch (e: Exception) {
@@ -97,7 +124,11 @@ fun LoopingVideoPlayer(
                         }
                     }
 
-                    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+                        mediaPlayerRef?.let { mp ->
+                            applyCenterCrop(mp, width, height)
+                        }
+                    }
 
                     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
                         try {
@@ -417,19 +448,11 @@ fun CustomBackgroundEditorDialog(
     var panX by remember { mutableFloatStateOf(initialPanX) }
     var panY by remember { mutableFloatStateOf(initialPanY) }
 
-    // Dim values cycle: 0% -> 25% -> 50% -> 75% -> 0%
-    val dimSteps = listOf(0.0f, 0.25f, 0.50f, 0.75f)
-    var dimIndex by remember {
-        mutableIntStateOf(dimSteps.indexOfFirst { kotlin.math.abs(it - initialDim) < 0.1f }.coerceAtLeast(0))
-    }
-    val currentDim = dimSteps[dimIndex]
+    var dimValue by remember { mutableFloatStateOf(initialDim.coerceIn(0f, 0.90f)) }
+    var blurValue by remember { mutableFloatStateOf(initialBlur.coerceIn(0f, 50f)) }
 
-    // Blur values cycle: 0dp -> 12dp -> 24dp -> 36dp -> 48dp -> 0dp
-    val blurSteps = listOf(0.0f, 12.0f, 24.0f, 36.0f, 48.0f)
-    var blurIndex by remember {
-        mutableIntStateOf(blurSteps.indexOfFirst { kotlin.math.abs(it - initialBlur) < 5f }.coerceAtLeast(0))
-    }
-    val currentBlur = blurSteps[blurIndex]
+    // Active adjustable slider: null | "dim" | "blur"
+    var activeSlider by remember { mutableStateOf<String?>(null) }
 
     var isSaving by remember { mutableStateOf(false) }
 
@@ -449,8 +472,8 @@ fun CustomBackgroundEditorDialog(
                 prefs.setFloat("${p}_bg_zoom", zoom)
                 prefs.setFloat("${p}_bg_pan_x", panX)
                 prefs.setFloat("${p}_bg_pan_y", panY)
-                prefs.setFloat("${p}_bg_dim", currentDim)
-                prefs.setFloat("${p}_bg_blur", currentBlur)
+                prefs.setFloat("${p}_bg_dim", dimValue)
+                prefs.setFloat("${p}_bg_blur", blurValue)
 
                 withContext(Dispatchers.Main) {
                     isSaving = false
@@ -478,16 +501,17 @@ fun CustomBackgroundEditorDialog(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Media Layer with Transform Gestures
+            // Media Layer with Transform Gestures - allow horizontal & vertical panning even at 1x zoom
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, gestureZoom, _ ->
                             zoom = (zoom * gestureZoom).coerceIn(1f, 4f)
-                            val maxPan = (zoom - 1f) * 600f
-                            panX = (panX + pan.x).coerceIn(-maxPan, maxPan)
-                            panY = (panY + pan.y).coerceIn(-maxPan, maxPan)
+                            val maxPanX = 1200f * zoom
+                            val maxPanY = 1600f * zoom
+                            panX = (panX + pan.x).coerceIn(-maxPanX, maxPanX)
+                            panY = (panY + pan.y).coerceIn(-maxPanY, maxPanY)
                         }
                     }
             ) {
@@ -502,7 +526,7 @@ fun CustomBackgroundEditorDialog(
                                 translationX = panX
                                 translationY = panY
                             }
-                            .then(if (currentBlur > 0f) Modifier.blur(currentBlur.dp) else Modifier)
+                            .then(if (blurValue > 0f) Modifier.blur(blurValue.dp) else Modifier)
                     )
                 } else {
                     AsyncImage(
@@ -517,110 +541,120 @@ fun CustomBackgroundEditorDialog(
                                 translationX = panX
                                 translationY = panY
                             }
-                            .then(if (currentBlur > 0f) Modifier.blur(currentBlur.dp) else Modifier)
+                            .then(if (blurValue > 0f) Modifier.blur(blurValue.dp) else Modifier)
                     )
                 }
 
                 // Dim overlay
-                if (currentDim > 0f) {
+                if (dimValue > 0f) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = currentDim))
+                            .background(Color.Black.copy(alpha = dimValue))
                     )
                 }
             }
 
-            // Top overlay bar with title and quick zoom reset
+            // Top overlay bar with M3 Expressive floating glass pill
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
-                        )
-                    )
-                    .padding(top = 48.dp, start = 20.dp, end = 20.dp, bottom = 24.dp)
+                    .padding(top = 44.dp, start = 16.dp, end = 16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
-                        Text(
-                            "Background Editor",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            "Pinch or drag to zoom & position",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.75f)
-                        )
-                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Background Editor",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Pinch or drag to position & scale",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
 
-                    if (zoom > 1.05f || panX != 0f || panY != 0f) {
-                        Surface(
-                            onClick = {
-                                zoom = 1.0f
-                                panX = 0f
-                                panY = 0f
-                            },
-                            shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.22f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        if (zoom > 1.05f || panX != 0f || panY != 0f || dimValue > 0f || blurValue > 0f) {
+                            FilledTonalButton(
+                                onClick = {
+                                    zoom = 1.0f
+                                    panX = 0f
+                                    panY = 0f
+                                    dimValue = 0f
+                                    blurValue = 0f
+                                    activeSlider = null
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                Text("Reset", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
             }
 
-            // Floating Zoom Buttons (Right side)
-            Column(
+            // Floating Zoom Buttons (Right side) - M3 Expressive Tonal Pill
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.90f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                shadowElevation = 6.dp,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(end = 16.dp)
             ) {
-                Surface(
-                    onClick = { zoom = (zoom + 0.25f).coerceAtMost(4f) },
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.55f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                    modifier = Modifier.size(44.dp)
+                Column(
+                    modifier = Modifier.padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = Color.White, modifier = Modifier.size(20.dp))
+                    FilledTonalIconButton(
+                        onClick = { zoom = (zoom + 0.25f).coerceAtMost(4f) },
+                        modifier = Modifier.size(40.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Zoom In", modifier = Modifier.size(20.dp))
                     }
-                }
-                Surface(
-                    onClick = {
-                        zoom = (zoom - 0.25f).coerceAtLeast(1f)
-                        if (zoom == 1f) { panX = 0f; panY = 0f }
-                    },
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.55f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Remove, contentDescription = "Zoom Out", tint = Color.White, modifier = Modifier.size(20.dp))
+                    FilledTonalIconButton(
+                        onClick = { zoom = (zoom - 0.25f).coerceAtLeast(1f) },
+                        modifier = Modifier.size(40.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Zoom Out", modifier = Modifier.size(20.dp))
                     }
                 }
             }
 
-            // Bottom Control Area
-            Box(
+            // Bottom Control Area (M3 Expressive Sliders Panel + Floating Action Bar)
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
@@ -629,137 +663,275 @@ fun CustomBackgroundEditorDialog(
                             colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
                         )
                     )
-                    .padding(start = 20.dp, end = 20.dp, bottom = 40.dp, top = 28.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 36.dp, top = 16.dp)
             ) {
+                // Interactive Adjustable Slider Panel (Dim or Blur)
+                AnimatedVisibility(
+                    visible = activeSlider != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        shadowElevation = 10.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (activeSlider == "dim") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Outlined.Brightness4, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                        Text(
+                                            "Dim Intensity: ${(dimValue * 100).toInt()}%",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (dimValue > 0f) {
+                                            FilledTonalIconButton(
+                                                onClick = { dimValue = 0f },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = "Reset Dim", modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = { activeSlider = null },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Close Slider", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                                Slider(
+                                    value = dimValue,
+                                    onValueChange = { dimValue = it },
+                                    valueRange = 0f..0.90f,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else if (activeSlider == "blur") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Outlined.BlurOn, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                        Text(
+                                            "Blur Intensity: ${blurValue.toInt()} dp",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (blurValue > 0f) {
+                                            FilledTonalIconButton(
+                                                onClick = { blurValue = 0f },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = "Reset Blur", modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = { activeSlider = null },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Close Slider", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                                Slider(
+                                    value = blurValue,
+                                    onValueChange = { blurValue = it },
+                                    valueRange = 0f..50f,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.tertiary,
+                                        activeTrackColor = MaterialTheme.colorScheme.tertiary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Separate Back Button on the LEFT side of the bottom screen
+                    // M3 Expressive Back Button
                     Surface(
                         onClick = onDismiss,
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.2f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                        modifier = Modifier.size(56.dp)
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.size(52.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                     }
 
-                    Spacer(Modifier.weight(1f))
-
-                    // Floating Pill-Styled Buttons (Dim, Blur, Save)
+                    // M3 Expressive Floating Action Bar (Dim, Blur, Save)
                     Surface(
-                        shape = RoundedCornerShape(32.dp),
-                        color = Color(0xFF1E1E1E).copy(alpha = 0.92f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                        shadowElevation = 10.dp
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.weight(1f)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // Dim Button
+                            // Dim Button - toggles Dim Slider
+                            val isDimActive = activeSlider == "dim"
                             Surface(
                                 onClick = {
-                                    dimIndex = (dimIndex + 1) % dimSteps.size
+                                    activeSlider = if (isDimActive) null else "dim"
                                 },
-                                shape = RoundedCornerShape(24.dp),
-                                color = if (currentDim > 0f) Color(0xFFFFB74D).copy(alpha = 0.25f)
-                                        else Color.White.copy(alpha = 0.1f),
-                                modifier = Modifier.height(44.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isDimActive) MaterialTheme.colorScheme.primaryContainer
+                                        else if (dimValue > 0f) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                border = if (isDimActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                modifier = Modifier.weight(1f).height(44.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
                                         Icons.Outlined.Brightness4,
                                         contentDescription = "Dim",
-                                        tint = if (currentDim > 0f) Color(0xFFFFB74D) else Color.White,
+                                        tint = if (dimValue > 0f || isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
                                     )
+                                    Spacer(Modifier.width(4.dp))
                                     Text(
-                                        if (currentDim > 0f) "${(currentDim * 100).toInt()}%" else "Dim",
-                                        color = if (currentDim > 0f) Color(0xFFFFB74D) else Color.White,
+                                        if (dimValue > 0f) "${(dimValue * 100).toInt()}%" else "Dim",
+                                        color = if (dimValue > 0f || isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
 
-                            // Blur Button
+                            // Blur Button - toggles Blur Slider
+                            val isBlurActive = activeSlider == "blur"
                             Surface(
                                 onClick = {
-                                    blurIndex = (blurIndex + 1) % blurSteps.size
+                                    activeSlider = if (isBlurActive) null else "blur"
                                 },
-                                shape = RoundedCornerShape(24.dp),
-                                color = if (currentBlur > 0f) Color(0xFF81D4FA).copy(alpha = 0.25f)
-                                        else Color.White.copy(alpha = 0.1f),
-                                modifier = Modifier.height(44.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isBlurActive) MaterialTheme.colorScheme.tertiaryContainer
+                                        else if (blurValue > 0f) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                border = if (isBlurActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary) else null,
+                                modifier = Modifier.weight(1f).height(44.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
                                         Icons.Outlined.BlurOn,
                                         contentDescription = "Blur",
-                                        tint = if (currentBlur > 0f) Color(0xFF81D4FA) else Color.White,
+                                        tint = if (blurValue > 0f || isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
                                     )
+                                    Spacer(Modifier.width(4.dp))
                                     Text(
-                                        if (currentBlur > 0f) "${currentBlur.toInt()}dp" else "Blur",
-                                        color = if (currentBlur > 0f) Color(0xFF81D4FA) else Color.White,
+                                        if (blurValue > 0f) "${blurValue.toInt()}dp" else "Blur",
+                                        color = if (blurValue > 0f || isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
 
-                            // Save Button
-                            Surface(
+                            // Save Button - M3 Primary Filled
+                            Button(
                                 onClick = { saveBackground() },
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 modifier = Modifier.height(44.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 20.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    if (isSaving) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = "Save",
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Text(
-                                        "Save",
+                                if (isSaving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
                                         color = MaterialTheme.colorScheme.onPrimary,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Save",
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Save",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }

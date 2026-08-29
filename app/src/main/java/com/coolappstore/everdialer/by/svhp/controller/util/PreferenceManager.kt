@@ -354,6 +354,8 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_BG_DIM           = "incoming_bg_dim"
         const val KEY_INCOMING_BG_BLUR          = "incoming_bg_blur"
         const val KEY_INCOMING_SHOW_CONTACT_PFP = "incoming_show_contact_pfp"
+        const val KEY_INCOMING_FONT_COLOR_MODE  = "incoming_font_color_mode" // "default" | "custom"
+        const val KEY_INCOMING_FONT_COLOR       = "incoming_font_color"      // Int ARGB
 
         const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"
@@ -363,6 +365,8 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_BG_DIM            = "ongoing_bg_dim"
         const val KEY_ONGOING_BG_BLUR           = "ongoing_bg_blur"
         const val KEY_ONGOING_SHOW_CONTACT_PFP  = "ongoing_show_contact_pfp"
+        const val KEY_ONGOING_FONT_COLOR_MODE   = "ongoing_font_color_mode"  // "default" | "custom"
+        const val KEY_ONGOING_FONT_COLOR        = "ongoing_font_color"       // Int ARGB
     }
 }
 
