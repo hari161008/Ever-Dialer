@@ -1258,9 +1258,14 @@ fun ExpressiveCallScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            val isSameBg = incomingBgConfig.bgType == ongoingBgConfig.bgType &&
+            val isBothVideo = incomingBgConfig.hasCustomBg && ongoingBgConfig.hasCustomBg &&
+                    incomingBgConfig.bgType == "video" && ongoingBgConfig.bgType == "video"
+
+            val isSameBg = (incomingBgConfig.bgType == ongoingBgConfig.bgType &&
                     incomingBgConfig.hasCustomBg == ongoingBgConfig.hasCustomBg &&
-                    incomingBgConfig.bgFile?.absolutePath == ongoingBgConfig.bgFile?.absolutePath
+                    (incomingBgConfig.bgFile?.absolutePath == ongoingBgConfig.bgFile?.absolutePath ||
+                     (incomingBgConfig.bgFile != null && ongoingBgConfig.bgFile != null &&
+                      incomingBgConfig.bgFile.length() == ongoingBgConfig.bgFile.length() && incomingBgConfig.bgFile.length() > 0))) || isBothVideo
 
             if (isSameBg) {
                 CallBackgroundLayer(

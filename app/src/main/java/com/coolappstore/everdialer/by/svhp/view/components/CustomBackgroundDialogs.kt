@@ -187,7 +187,8 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     fun setVideoFile(file: File) {
         if (!file.exists()) return
-        val isSameFile = videoFile?.absolutePath == file.absolutePath
+        val isSameFile = videoFile?.absolutePath == file.absolutePath ||
+                (videoFile != null && videoFile!!.exists() && file.exists() && videoFile!!.length() == file.length() && videoFile!!.length() > 0)
         videoFile = file
         if (isSameFile && (playerA != null || playerB != null)) {
             val currentActive = if (activePlayerIndex == 0) playerA else playerB
