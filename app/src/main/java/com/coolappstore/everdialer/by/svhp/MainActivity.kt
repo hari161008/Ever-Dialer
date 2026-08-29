@@ -147,6 +147,12 @@ class MainActivity : FragmentActivity() {
         // On first launch, show default dialer prompt first; welcome dialog appears after.
         requestDefaultDialer()
 
+        // Auto refresh system wallpaper if enabled
+        try {
+            val appPrefs = org.koin.core.context.GlobalContext.get().get<PreferenceManager>()
+            com.coolappstore.everdialer.by.svhp.controller.util.WallpaperExportHelper.refreshAutoWallpaperIfEnabled(this, appPrefs)
+        } catch (_: Exception) {}
+
         pendingIntent = intent
 
         setContent {

@@ -85,19 +85,27 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
 
             // ── Show Full screen call UI on any apps ───────────────
             RivoAnimatedSection(delayMs = 0L) {
-                RivoExpressiveCard {
-                    RivoSwitchListItem(
-                        headline = "Show Full screen call UI on any apps",
-                        supporting = "Open full screen incoming call UI over any app when a call rings",
-                        leadingIcon = Icons.Default.Call,
-                        iconContainerColor = Color(0xFF4CAF50),
-                        checked = showFullScreenCallUIOnAnyApps,
-                        onCheckedChange = {
-                            showFullScreenCallUIOnAnyApps = it
-                            prefs.setBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, it)
-                        },
-                        modifier = Modifier.settingsSearchHighlight("show_fullscreen_call_ui_on_any_apps", highlightedKey) { highlightedKey = null }
+                Column {
+                    Text(
+                        "Full Screen Display",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                     )
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Show Full screen call UI on any apps",
+                            supporting = "Open full screen incoming call UI over any app when a call rings",
+                            leadingIcon = Icons.Default.Call,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            checked = showFullScreenCallUIOnAnyApps,
+                            onCheckedChange = {
+                                showFullScreenCallUIOnAnyApps = it
+                                prefs.setBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, it)
+                            },
+                            modifier = Modifier.settingsSearchHighlight("show_fullscreen_call_ui_on_any_apps", highlightedKey) { highlightedKey = null }
+                        )
+                    }
                 }
             }
 

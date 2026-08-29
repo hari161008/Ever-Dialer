@@ -213,6 +213,7 @@ class CallActivity : FragmentActivity() {
                     // text below the name), so there is no visible content gap.
                     var contactName by remember { mutableStateOf("") }
                     var photoUri by remember { mutableStateOf<String?>(null) }
+                    var contactId by remember { mutableStateOf<String?>(null) }
 
                     val heldCall = heldSession?.call
                     val heldNumber = heldCall?.details?.handle?.schemeSpecificPart ?: ""
@@ -227,11 +228,14 @@ class CallActivity : FragmentActivity() {
                                 val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                                 contactName = if (hideNames && contact.id in hiddenIds) number else contact.name
                                 photoUri = if (hideNames && contact.id in hiddenIds) null else contact.photoUri
+                                contactId = contact.id
                             } else {
                                 contactName = number
+                                contactId = null
                             }
                         } else {
                             contactName = "Unknown"
+                            contactId = null
                         }
                     }
 
@@ -252,6 +256,7 @@ class CallActivity : FragmentActivity() {
                         call = call,
                         callState = session?.state ?: Call.STATE_ACTIVE,
                         contactName = contactName,
+                        contactId = contactId,
                         phoneNumber = number,
                         photoUri = photoUri,
                         audioState = audioState,
@@ -371,12 +376,128 @@ private fun openMessageApp(context: Context, number: String, appKey: String) {
     }
 }
 
+private data class CallBackgroundConfig(
+    val bgType: String = "none",
+    val bgPath: String = "",
+    val bgZoom: Float = 1f,
+    val bgPanX: Float = 0f,
+    val bgPanY: Float = 0f,
+    val bgDim: Float = 0f,
+    val bgBlur: Float = 0f,
+    val bgVideoSpeed: Float = 1.0f,
+    val bgFile: java.io.File? = null,
+    val hasCustomBg: Boolean = false,
+    val fontColorMode: String = "default",
+    val customFontColorInt: Int = android.graphics.Color.WHITE,
+    val showContactPfp: Boolean = true,
+    val elementsTheme: String = "auto"
+)
+
+@Composable
+private fun CallBackgroundLayer(
+    config: CallBackgroundConfig,
+    photoUri: String?,
+    isDark: Boolean,
+    driftX: Float,
+    driftY: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        if (config.hasCustomBg && config.bgFile != null) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (config.bgType == "video") {
+                    com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
+                        videoFile = config.bgFile,
+                        videoSpeed = config.bgVideoSpeed,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = config.bgZoom
+                                scaleY = config.bgZoom
+                                translationX = config.bgPanX
+                                translationY = config.bgPanY
+                            }
+                            .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
+                    )
+                } else {
+                    AsyncImage(
+                        model = config.bgFile,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = config.bgZoom
+                                scaleY = config.bgZoom
+                                translationX = config.bgPanX
+                                translationY = config.bgPanY
+                            }
+                            .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
+                    )
+                }
+
+                if (config.bgDim > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = config.bgDim))
+                    )
+                }
+            }
+        } else {
+            // Blurred background photo (Default)
+            if (!photoUri.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationX = driftX
+                            translationY = driftY
+                            scaleX = 1.4f
+                            scaleY = 1.4f
+                        }
+                ) {
+                    AsyncImage(
+                        model = photoUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(80.dp)
+                            .alpha(if (isDark) 0.35f else 0.2f),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+
+        // Top contrast gradient scrim for maximum text & detail legibility on custom backgrounds
+        if (config.hasCustomBg) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.60f),
+                                Color.Black.copy(alpha = 0.30f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressiveCallScreen(
     call: Call,
     callState: Int,
     contactName: String,
+    contactId: String? = null,
     phoneNumber: String = "",
     photoUri: String?,
     audioState: CallAudioState?,
@@ -647,27 +768,19 @@ fun ExpressiveCallScreen(
         label = "disconnectAlpha"
     )
 
-    var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING) }
+    var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING && !skipIncomingScreen) }
     var screenEntered by remember { mutableStateOf(true) }
 
     // Smooth answer transition: when ringing → active, gently scale + fade the UI in.
-    var callAnswered by remember { mutableStateOf(false) }
+    var callAnswered by remember { mutableStateOf(skipIncomingScreen || (callState == Call.STATE_ACTIVE && !wasRinging)) }
     LaunchedEffect(callState) {
-        if (callState == Call.STATE_ACTIVE && wasRinging && !callAnswered) {
+        if (callState == Call.STATE_ACTIVE) {
             callAnswered = true
         }
-    }
-    val answerProgress by animateFloatAsState(
-        targetValue = if (wasRinging && !callAnswered) 0f else 1f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "answerProgress"
-    )
-    val acceptScale = if (wasRinging && callAnswered) lerp(0.97f, 1f, answerProgress) else 1f
-    val acceptAlpha = if (wasRinging && callAnswered) lerp(0.88f, 1f, answerProgress) else 1f
-
-    LaunchedEffect(callState) {
+        if (callState == Call.STATE_RINGING && !skipIncomingScreen) {
+            wasRinging = true
+        }
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
-        if (callState == Call.STATE_RINGING) wasRinging = true
         // If call returns to active from holding (e.g. held call restored), sync isOnHold
         if (callState == Call.STATE_ACTIVE && isOnHold) isOnHold = false
         if (callState == Call.STATE_ACTIVE && wasRinging) {
@@ -678,6 +791,16 @@ fun ExpressiveCallScreen(
         }
     }
 
+    val isIncomingMode = (callState == Call.STATE_RINGING || (wasRinging && !callAnswered)) && !skipIncomingScreen
+
+    val answerProgress by animateFloatAsState(
+        targetValue = if (wasRinging && !callAnswered) 0f else 1f,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "answerProgress"
+    )
+    val acceptScale = if (wasRinging && callAnswered) lerp(0.97f, 1f, answerProgress) else 1f
+    val acceptAlpha = if (wasRinging && callAnswered) lerp(0.88f, 1f, answerProgress) else 1f
+
     LaunchedEffect(Unit) {
         while (true) {
             val connectTime = call.details?.connectTimeMillis ?: 0L
@@ -686,49 +809,146 @@ fun ExpressiveCallScreen(
         }
     }
 
-    val isIncoming = effectiveCallState == Call.STATE_RINGING
-    val bgType = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none"
-        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
-    }
-    val bgPath = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") ?: ""
-        else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "") ?: ""
-    }
-    val bgZoom = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) ?: 1f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f) ?: 1f
-    }
-    val bgPanX = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f) ?: 0f
-    }
-    val bgPanY = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f) ?: 0f
-    }
-    val bgDim = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f) ?: 0f
-    }
-    val bgBlur = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) ?: 0f
-        else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f) ?: 0f
-    }
-    val showContactPfp = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
-        else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
-    }
-    val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
-    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+    var resolvedContactId by remember(contactId, phoneNumber) { mutableStateOf(contactId) }
+    var resolvedContact by remember(phoneNumber) { mutableStateOf<Contact?>(null) }
 
-    val fontColorMode = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
-        else prefs?.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
+    LaunchedEffect(phoneNumber, contactsRepo) {
+        if (phoneNumber.isNotEmpty() && contactsRepo != null) {
+            val c = try { contactsRepo.getContactByNumber(phoneNumber) } catch (_: Exception) { null }
+            resolvedContact = c
+            if (c?.id != null) {
+                resolvedContactId = c.id
+            }
+        }
     }
-    val customFontColorInt = remember(settingsVersion, isIncoming) {
-        if (isIncoming) prefs?.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) ?: android.graphics.Color.WHITE
-        else prefs?.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE) ?: android.graphics.Color.WHITE
+
+    // Prioritize contact-specific calling background if configured
+    val getCustomPrefixFor = { targetPrefix: String ->
+        if (prefs == null) null
+        else {
+            val cleanNum = phoneNumber.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            val digitsOnly = cleanNum.filter { it.isDigit() }
+            val last10 = if (digitsOnly.length >= 10) digitsOnly.takeLast(10) else ""
+            val last7 = if (digitsOnly.length >= 7) digitsOnly.takeLast(7) else ""
+
+            val candidates = mutableSetOf<String>()
+            contactId?.let { if (it.isNotBlank()) candidates.add(it) }
+            resolvedContactId?.let { if (it.isNotBlank()) candidates.add(it) }
+            resolvedContact?.id?.let { if (it.isNotBlank()) candidates.add(it) }
+            resolvedContact?.phoneNumbers?.forEach { pn ->
+                val pNum = pn.trim()
+                if (pNum.isNotBlank()) {
+                    candidates.add(pNum)
+                    val cDigits = pNum.filter { it.isDigit() }
+                    if (cDigits.isNotBlank()) candidates.add(cDigits)
+                    if (cDigits.length >= 10) candidates.add(cDigits.takeLast(10))
+                    if (cDigits.length >= 7) candidates.add(cDigits.takeLast(7))
+                }
+            }
+            if (phoneNumber.isNotBlank()) candidates.add(phoneNumber.trim())
+            if (cleanNum.isNotBlank()) candidates.add(cleanNum)
+            if (digitsOnly.isNotBlank()) candidates.add(digitsOnly)
+            if (last10.isNotBlank()) candidates.add(last10)
+            if (last7.isNotBlank()) candidates.add(last7)
+            if (contactName.isNotBlank() && contactName != "Unknown" && contactName != phoneNumber) {
+                candidates.add(contactName.trim())
+            }
+
+            var foundPrefix: String? = null
+            for (cand in candidates) {
+                val prefKey = "contact_${cand}_${targetPrefix}_bg_type"
+                val type = prefs.getString(prefKey, null)
+                if (!type.isNullOrEmpty() && type != "none") {
+                    foundPrefix = "contact_${cand}_$targetPrefix"
+                    break
+                }
+            }
+            foundPrefix
+        }
+    }
+
+    val incomingPrefix = remember(settingsVersion, phoneNumber, contactName, contactId, resolvedContactId, resolvedContact) {
+        getCustomPrefixFor("incoming") ?: "incoming"
+    }
+    val ongoingPrefix = remember(settingsVersion, phoneNumber, contactName, contactId, resolvedContactId, resolvedContact) {
+        getCustomPrefixFor("ongoing") ?: "ongoing"
+    }
+
+    fun loadBgConfig(prefix: String, isForIncoming: Boolean): CallBackgroundConfig {
+        val defaultType = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none")
+        val defaultPath = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") else prefs?.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "")
+        val defaultZoom = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f)
+        val defaultPanX = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f)
+        val defaultPanY = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f)
+        val defaultDim = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f)
+        val defaultBlur = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f)
+        val defaultVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_VIDEO_SPEED, 1.0f)
+        val defaultFontMode = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") else prefs?.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default")
+        val defaultFontColor = if (isForIncoming) prefs?.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) else prefs?.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+
+        val bgType = prefs?.getString("${prefix}_bg_type", defaultType ?: "none") ?: (defaultType ?: "none")
+        val bgPath = prefs?.getString("${prefix}_bg_path", defaultPath ?: "") ?: (defaultPath ?: "")
+        val bgZoom = prefs?.getFloat("${prefix}_bg_zoom", defaultZoom ?: 1f) ?: (defaultZoom ?: 1f)
+        val bgPanX = prefs?.getFloat("${prefix}_bg_pan_x", defaultPanX ?: 0f) ?: (defaultPanX ?: 0f)
+        val bgPanY = prefs?.getFloat("${prefix}_bg_pan_y", defaultPanY ?: 0f) ?: (defaultPanY ?: 0f)
+        val bgDim = prefs?.getFloat("${prefix}_bg_dim", defaultDim ?: 0f) ?: (defaultDim ?: 0f)
+        val bgBlur = prefs?.getFloat("${prefix}_bg_blur", defaultBlur ?: 0f) ?: (defaultBlur ?: 0f)
+        val bgVideoSpeed = prefs?.getFloat("${prefix}_bg_video_speed", defaultVideoSpeed ?: 1.0f) ?: (defaultVideoSpeed ?: 1.0f)
+        val fontColorMode = prefs?.getString("${prefix}_font_color_mode", defaultFontMode ?: "default") ?: (defaultFontMode ?: "default")
+        val customFontColorInt = prefs?.getInt("${prefix}_font_color", defaultFontColor ?: android.graphics.Color.WHITE) ?: (defaultFontColor ?: android.graphics.Color.WHITE)
+        val showContactPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
+                             else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
+        val defaultElementsTheme = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto" else "auto"
+        val elementsTheme = prefs?.getString("${prefix}_elements_theme", defaultElementsTheme) ?: defaultElementsTheme
+
+        val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
+        val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+        return CallBackgroundConfig(
+            bgType = bgType,
+            bgPath = bgPath,
+            bgZoom = bgZoom,
+            bgPanX = bgPanX,
+            bgPanY = bgPanY,
+            bgDim = bgDim,
+            bgBlur = bgBlur,
+            bgVideoSpeed = bgVideoSpeed,
+            bgFile = bgFile,
+            hasCustomBg = hasCustomBg,
+            fontColorMode = fontColorMode,
+            customFontColorInt = customFontColorInt,
+            showContactPfp = showContactPfp,
+            elementsTheme = elementsTheme
+        )
+    }
+
+    val incomingBgConfig = remember(settingsVersion, incomingPrefix) {
+        loadBgConfig(incomingPrefix, isForIncoming = true)
+    }
+    val ongoingBgConfig = remember(settingsVersion, ongoingPrefix) {
+        loadBgConfig(ongoingPrefix, isForIncoming = false)
+    }
+
+    val currentBgConfig = if (isIncomingMode) incomingBgConfig else ongoingBgConfig
+    val hasCustomBg = currentBgConfig.hasCustomBg
+    val fontColorMode = currentBgConfig.fontColorMode
+    val customFontColorInt = currentBgConfig.customFontColorInt
+    val showContactPfp = currentBgConfig.showContactPfp
+
+    val isIncomingElementsDark = when (incomingBgConfig.elementsTheme) {
+        "light" -> false
+        "dark" -> true
+        else -> isDark
+    }
+    val incomingElemBgColor = if (incomingBgConfig.hasCustomBg) {
+        if (isIncomingElementsDark) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.85f)
+    } else {
+        if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    }
+    val incomingElemFgColor = if (incomingBgConfig.hasCustomBg) {
+        if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
+    } else {
+        if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
     }
 
     val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
@@ -1000,7 +1220,6 @@ fun ExpressiveCallScreen(
         animationSpec = tween(220),
         label = "dialpadAlpha"
     )
-
     androidx.compose.runtime.CompositionLocalProvider(LocalDensity provides clampedCallDensity) {
     Box(
         modifier = Modifier
@@ -1012,70 +1231,31 @@ fun ExpressiveCallScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            if (hasCustomBg && bgFile != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (bgType == "video") {
-                        com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
-                            videoFile = bgFile,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    scaleX = bgZoom
-                                    scaleY = bgZoom
-                                    translationX = bgPanX
-                                    translationY = bgPanY
-                                }
-                                .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
-                        )
-                    } else {
-                        AsyncImage(
-                            model = bgFile,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    scaleX = bgZoom
-                                    scaleY = bgZoom
-                                    translationX = bgPanX
-                                    translationY = bgPanY
-                                }
-                                .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
-                        )
-                    }
-
-                    if (bgDim > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = bgDim))
-                        )
-                    }
-                }
-            } else {
-                // Blurred background photo (Default)
-                if (!photoUri.isNullOrEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = driftX; translationY = driftY; scaleX = 1.4f; scaleY = 1.4f }) {
-                        AsyncImage(model = photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(if (isDark) 0.35f else 0.2f), contentScale = ContentScale.Crop)
-                    }
-                }
-            }
-
-            // Top contrast gradient scrim for maximum text & detail legibility on photos/videos
-            if (hasCustomBg) {
-                Box(
+            if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
+                CallBackgroundLayer(
+                    config = incomingBgConfig,
+                    photoUri = photoUri,
+                    isDark = isDark,
+                    driftX = driftX,
+                    driftY = driftY,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(340.dp)
-                        .align(Alignment.TopCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Black.copy(alpha = 0.60f),
-                                    Color.Black.copy(alpha = 0.30f),
-                                    Color.Transparent
-                                )
-                            )
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = 1f - answerProgress }
+                )
+            }
+            if (!wasRinging || skipIncomingScreen || answerProgress > 0f) {
+                CallBackgroundLayer(
+                    config = ongoingBgConfig,
+                    photoUri = photoUri,
+                    isDark = isDark,
+                    driftX = driftX,
+                    driftY = driftY,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (wasRinging && !skipIncomingScreen && answerProgress < 1f) {
+                                Modifier.graphicsLayer { alpha = answerProgress }
+                            } else Modifier
                         )
                 )
             }
@@ -1135,7 +1315,9 @@ fun ExpressiveCallScreen(
                                     callState == Call.STATE_DIALING -> "Calling"
                                     callState == Call.STATE_RINGING -> "Incoming"
                                     callState == Call.STATE_CONNECTING -> "Calling"
-                                    callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                    callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
+                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                                    }
                                     else -> "Connecting..."
                                 },
                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
@@ -1154,7 +1336,7 @@ fun ExpressiveCallScreen(
                     }
 
                     // Right panel: controls
-                    if (effectiveCallState != Call.STATE_RINGING) {
+                    if (!isIncomingMode) {
                         Surface(modifier = Modifier.weight(1f).fillMaxHeight(), color = overlayColor) {
                             Column(modifier = Modifier.fillMaxSize()) {
                                 // Scrollable area: feature buttons + note editor. Independent of
@@ -1189,7 +1371,7 @@ fun ExpressiveCallScreen(
                                                 }
                                                 Spacer(Modifier.height(8.dp))
                                                 OutlinedTextField(value = noteText, onValueChange = { noteText = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 140.dp), placeholder = { Text("Type your note...") }, shape = RoundedCornerShape(12.dp), minLines = 3, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant))
-                                            }
+                                             }
                                         }
                                     }
                                 }
@@ -1246,10 +1428,10 @@ fun ExpressiveCallScreen(
                                     }
                                 },
                                 onMessage = onMessageButtonClick,
-                                labelColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f),
-                                bgColor = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
+                                labelColor = incomingElemFgColor,
+                                bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
-                                isDark = isDark
+                                isDark = isIncomingElementsDark
                             )
                         }
                     }
@@ -1274,7 +1456,7 @@ fun ExpressiveCallScreen(
                         .alpha(acceptAlpha)
                 ) {
                     // ── Top: caller info — absolutely top-anchored, never affected by bottom content ──
-                    val isIncomingRinging = effectiveCallState == Call.STATE_RINGING
+                    val isIncomingRinging = isIncomingMode
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1351,7 +1533,9 @@ fun ExpressiveCallScreen(
                                     callState == Call.STATE_DIALING -> "Calling"
                                     callState == Call.STATE_RINGING -> "Incoming"
                                     callState == Call.STATE_CONNECTING -> "Calling"
-                                    callState == Call.STATE_DISCONNECTING || isDisconnecting -> "Hanging up..."
+                                    callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
+                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                                    }
                                     else -> "Connecting..."
                                 },
                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
@@ -1383,7 +1567,7 @@ fun ExpressiveCallScreen(
                     }
 
                     // ── Bottom: controls — anchored to bottom ─────────────────
-                    if (effectiveCallState != Call.STATE_RINGING) {
+                    if (!isIncomingMode) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1534,16 +1718,16 @@ fun ExpressiveCallScreen(
                                     }
                                 },
                                 onMessage = onMessageButtonClick,
-                                labelColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f),
-                                bgColor = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
+                                labelColor = incomingElemFgColor,
+                                bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
-                                isDark = isDark
+                                isDark = isIncomingElementsDark
                             )
                         }
-                    }
                 } // end portrait Box
             } // end portrait
         }
+    }
 
         // ── Call biometric — direct prompt, no overlay ────────────────────
         if (showCallBiometricUnlock && prefs != null) {
@@ -2280,16 +2464,16 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, onMessage: () 
         Surface(
             onClick = onMessage,
             shape = CircleShape,
-            color = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
+            color = bgColor,
             modifier = Modifier.height(45.dp).width(140.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.Default.ChatBubble, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.ChatBubble, null, tint = labelColor, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Message", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -2350,8 +2534,8 @@ fun NewSwipeToAnswer(onAnswer: () -> Unit, onDecline: () -> Unit, onMessage: () 
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp).alpha(labelFade),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Decline", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text("Answer",  color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text("Answer",  color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             }
 
             // Draggable handle — the pill itself stays a fixed neutral color while

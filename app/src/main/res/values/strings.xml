@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Ever Dialer</string>
     <string name="widget_description">Recent calls with quick dial</string>
+    <string name="volume_dnd_accessibility_description">Allows Ever Dialer to detect volume button combinations to toggle Do Not Disturb (DND) mode.</string>
 </resources>

@@ -1,11 +1,18 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.content.Context
+import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.util.AttributeSet
 import android.view.Surface
 import android.view.TextureView
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,91 +67,209 @@ enum class CustomBackgroundTarget(val prefix: String, val title: String) {
 fun LoopingVideoPlayer(
     videoFile: File,
     modifier: Modifier = Modifier,
-    isMuted: Boolean = true
+    isMuted: Boolean = true,
+    videoSpeed: Float = 1.0f
 ) {
-    var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
-
-    DisposableEffect(videoFile.absolutePath) {
-        onDispose {
-            try {
-                mediaPlayerRef?.stop()
-                mediaPlayerRef?.release()
-            } catch (_: Exception) {}
-            mediaPlayerRef = null
-        }
-    }
-
     AndroidView(
         factory = { ctx ->
-            TextureView(ctx).apply {
-                fun applyCenterCrop(player: MediaPlayer, viewW: Int, viewH: Int) {
-                    if (viewW <= 0 || viewH <= 0) return
-                    val vW = player.videoWidth
-                    val vH = player.videoHeight
-                    if (vW <= 0 || vH <= 0) return
-
-                    val viewRatio = viewW.toFloat() / viewH
-                    val videoRatio = vW.toFloat() / vH
-                    var scaleX = 1f
-                    var scaleY = 1f
-                    if (videoRatio > viewRatio) {
-                        // Video is wider than view -> scale X to crop sides and maintain aspect ratio
-                        scaleX = videoRatio / viewRatio
-                    } else {
-                        // Video is taller than view -> scale Y to crop top/bottom and maintain aspect ratio
-                        scaleY = viewRatio / videoRatio
-                    }
-                    val matrix = android.graphics.Matrix().apply {
-                        setScale(scaleX, scaleY, viewW / 2f, viewH / 2f)
-                    }
-                    setTransform(matrix)
-                }
-
-                surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                    override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
-                        try {
-                            mediaPlayerRef?.release()
-                            val mp = MediaPlayer().apply {
-                                setSurface(Surface(surfaceTexture))
-                                setDataSource(videoFile.absolutePath)
-                                isLooping = true
-                                if (isMuted) setVolume(0f, 0f)
-                                setOnVideoSizeChangedListener { player, _, _ ->
-                                    applyCenterCrop(player, width, height)
-                                }
-                                setOnPreparedListener { player ->
-                                    applyCenterCrop(player, width, height)
-                                    player.start()
-                                }
-                                prepareAsync()
-                            }
-                            mediaPlayerRef = mp
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-
-                    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-                        mediaPlayerRef?.let { mp ->
-                            applyCenterCrop(mp, width, height)
-                        }
-                    }
-
-                    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-                        try {
-                            mediaPlayerRef?.stop()
-                            mediaPlayerRef?.release()
-                        } catch (_: Exception) {}
-                        mediaPlayerRef = null
-                        return true
-                    }
-
-                    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
-                }
+            SeamlessLoopingVideoView(ctx).apply {
+                this.isMuted = isMuted
+                this.videoSpeed = videoSpeed
+                setVideoFile(videoFile)
             }
+        },
+        update = { view ->
+            view.isMuted = isMuted
+            view.videoSpeed = videoSpeed
+            view.setVideoFile(videoFile)
         },
         modifier = modifier
     )
+}
+
+class SeamlessLoopingVideoView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : FrameLayout(context, attrs, defStyleAttr) {
+
+    private val textureView = TextureView(context)
+    private var mediaPlayer: MediaPlayer? = null
+    private var surface: Surface? = null
+    private var videoFile: File? = null
+    private var isPrepared = false
+
+    var isMuted: Boolean = true
+        set(value) {
+            field = value
+            try {
+                mediaPlayer?.setVolume(if (value) 0f else 1f, if (value) 0f else 1f)
+            } catch (_: Exception) {}
+        }
+
+    var videoSpeed: Float = 1.0f
+        set(value) {
+            val clamped = value.coerceIn(0.25f, 3.0f)
+            if (field == clamped) return
+            field = clamped
+            if (isPrepared && mediaPlayer != null) {
+                applyPlaybackSpeed(mediaPlayer, clamped)
+            }
+        }
+
+    init {
+        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        setupTextureListener()
+    }
+
+    private fun setupTextureListener() {
+        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                surface?.release()
+                surface = Surface(st)
+                initPlayer(w, h)
+            }
+
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                mediaPlayer?.let { applyCenterCrop(textureView, it, w, h) }
+            }
+
+            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                surface?.release()
+                surface = null
+                releasePlayer()
+                return true
+            }
+
+            override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+        }
+    }
+
+    fun setVideoFile(file: File) {
+        if (videoFile?.absolutePath == file.absolutePath && mediaPlayer != null) {
+            return
+        }
+        videoFile = file
+        if (textureView.isAvailable) {
+            initPlayer(textureView.width, textureView.height)
+        }
+    }
+
+    private fun applyPlaybackSpeed(mp: MediaPlayer?, speed: Float) {
+        if (mp == null) return
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val params = mp.playbackParams
+                params.speed = speed
+                params.pitch = 1.0f
+                mp.playbackParams = params
+            } catch (_: Exception) {
+                try {
+                    val params = android.media.PlaybackParams()
+                    params.speed = speed
+                    params.pitch = 1.0f
+                    mp.playbackParams = params
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun applyCenterCrop(texture: TextureView, player: MediaPlayer, viewW: Int, viewH: Int) {
+        if (viewW <= 0 || viewH <= 0) return
+        val vW = try { player.videoWidth } catch (_: Exception) { 0 }
+        val vH = try { player.videoHeight } catch (_: Exception) { 0 }
+        if (vW <= 0 || vH <= 0) return
+
+        val viewRatio = viewW.toFloat() / viewH
+        val videoRatio = vW.toFloat() / vH
+        var scaleX = 1f
+        var scaleY = 1f
+        if (videoRatio > viewRatio) {
+            scaleX = videoRatio / viewRatio
+        } else {
+            scaleY = viewRatio / videoRatio
+        }
+        val matrix = Matrix().apply {
+            setScale(scaleX, scaleY, viewW / 2f, viewH / 2f)
+        }
+        texture.setTransform(matrix)
+    }
+
+    private fun initPlayer(w: Int, h: Int) {
+        val file = videoFile ?: return
+        val surf = surface ?: return
+        if (!file.exists()) return
+
+        try {
+            releasePlayer()
+            isPrepared = false
+            val mp = MediaPlayer().apply {
+                setSurface(surf)
+                setDataSource(file.absolutePath)
+                isLooping = true
+                setVolume(if (isMuted) 0f else 1f, if (isMuted) 0f else 1f)
+
+                setOnVideoSizeChangedListener { p, _, _ ->
+                    applyCenterCrop(textureView, p, w, h)
+                }
+
+                setOnPreparedListener { p ->
+                    isPrepared = true
+                    applyCenterCrop(textureView, p, w, h)
+                    applyPlaybackSpeed(p, videoSpeed)
+                    try {
+                        p.start()
+                    } catch (_: Exception) {}
+                }
+
+                setOnCompletionListener { p ->
+                    try {
+                        p.seekTo(0)
+                        p.start()
+                    } catch (_: Exception) {}
+                }
+
+                setOnErrorListener { p, _, _ ->
+                    try {
+                        p.reset()
+                    } catch (_: Exception) {}
+                    true
+                }
+
+                prepareAsync()
+            }
+            mediaPlayer = mp
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun releasePlayer() {
+        isPrepared = false
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (_: Exception) {}
+        mediaPlayer = null
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (mediaPlayer == null && videoFile != null && textureView.isAvailable) {
+            initPlayer(textureView.width, textureView.height)
+        } else {
+            try {
+                if (mediaPlayer?.isPlaying == false && isPrepared) {
+                    mediaPlayer?.start()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        releasePlayer()
+    }
 }
 
 /**
@@ -204,6 +329,39 @@ fun CustomBackgroundOptionsPopup(
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Failed to load video", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    val systemFilePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val cr = context.contentResolver
+                    val mime = cr.getType(uri) ?: ""
+                    val uriStr = uri.toString().lowercase()
+                    val isVideo = mime.startsWith("video") || uriStr.endsWith(".mp4") || uriStr.endsWith(".mkv") || uriStr.endsWith(".webm") || uriStr.endsWith(".mov") || uriStr.endsWith(".3gp")
+                    val ext = if (isVideo) ".mp4" else ".png"
+                    val tempFile = File(context.cacheDir, "picked_file_${System.currentTimeMillis()}$ext")
+                    cr.openInputStream(uri)?.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        if (tempFile.exists() && tempFile.length() > 0) {
+                            onOpenEditor(tempFile, isVideo, if (isVideo) "video" else "picture")
+                        } else {
+                            Toast.makeText(context, "Could not open selected file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to load file: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -273,8 +431,8 @@ fun CustomBackgroundOptionsPopup(
                     // Option 1: None (Default)
                     BackgroundOptionItem(
                         icon = Icons.Outlined.NotInterested,
-                        iconTint = Color(0xFFE53935),
-                        iconContainerColor = Color(0xFFE53935).copy(alpha = 0.12f),
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "None",
                         subtitle = "Default caller background",
                         isSelected = currentType == "none" || currentType.isEmpty(),
@@ -289,8 +447,8 @@ fun CustomBackgroundOptionsPopup(
                     // Option 2: Wallpaper
                     BackgroundOptionItem(
                         icon = Icons.Outlined.PhoneAndroid,
-                        iconTint = Color(0xFF2196F3),
-                        iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.12f),
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "Wallpaper",
                         subtitle = if (isLoadingWallpaper) "Extracting wallpaper..." else "Current device system wallpaper",
                         isSelected = currentType == "wallpaper",
@@ -317,8 +475,8 @@ fun CustomBackgroundOptionsPopup(
                     // Option 3: Custom Picture
                     BackgroundOptionItem(
                         icon = Icons.Outlined.Image,
-                        iconTint = Color(0xFF4CAF50),
-                        iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.12f),
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "Custom Picture",
                         subtitle = "Pick a photo or image from gallery",
                         isSelected = currentType == "picture",
@@ -332,13 +490,28 @@ fun CustomBackgroundOptionsPopup(
                     // Option 4: Custom Video
                     BackgroundOptionItem(
                         icon = Icons.Outlined.Videocam,
-                        iconTint = Color(0xFF9C27B0),
-                        iconContainerColor = Color(0xFF9C27B0).copy(alpha = 0.12f),
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "Custom Video",
                         subtitle = "Pick a looping video background",
                         isSelected = currentType == "video",
                         onClick = {
                             videoPickerLauncher.launch("video/*")
+                        }
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Option 5: File Manager (any picture or video)
+                    BackgroundOptionItem(
+                        icon = Icons.Outlined.FolderOpen,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        title = "Choose from File Manager",
+                        subtitle = "Select any picture or video file",
+                        isSelected = false,
+                        onClick = {
+                            systemFilePickerLauncher.launch(arrayOf("image/*", "video/*", "*/*"))
                         }
                     )
 
@@ -362,7 +535,7 @@ fun CustomBackgroundOptionsPopup(
 }
 
 @Composable
-private fun BackgroundOptionItem(
+internal fun BackgroundOptionItem(
     icon: ImageVector,
     iconTint: Color,
     iconContainerColor: Color,
@@ -423,7 +596,7 @@ private fun BackgroundOptionItem(
 /**
  * Full-screen Interactive Background Editor Menu:
  * - Zoom in / out (interactive pinch and pan gesture + zoom buttons)
- * - Floating pill-styled buttons: Save, Dim, Blur
+ * - Floating pill-styled buttons: Save, Dim, Blur, Speed
  * - Separate Back button on the left side in the bottom of the screen
  */
 @Composable
@@ -432,11 +605,13 @@ fun CustomBackgroundEditorDialog(
     mediaFile: File,
     isVideo: Boolean,
     bgType: String,
+    prefixOverride: String? = null,
     initialZoom: Float = 1.0f,
     initialPanX: Float = 0f,
     initialPanY: Float = 0f,
     initialDim: Float = 0f,
     initialBlur: Float = 0f,
+    initialVideoSpeed: Float = 1.0f,
     onDismiss: () -> Unit,
     onSaveSuccess: () -> Unit
 ) {
@@ -450,8 +625,9 @@ fun CustomBackgroundEditorDialog(
 
     var dimValue by remember { mutableFloatStateOf(initialDim.coerceIn(0f, 0.90f)) }
     var blurValue by remember { mutableFloatStateOf(initialBlur.coerceIn(0f, 50f)) }
+    var videoSpeed by remember { mutableFloatStateOf(initialVideoSpeed.coerceIn(0.25f, 3.0f)) }
 
-    // Active adjustable slider: null | "dim" | "blur"
+    // Active adjustable slider: null | "dim" | "blur" | "speed"
     var activeSlider by remember { mutableStateOf<String?>(null) }
 
     var isSaving by remember { mutableStateOf(false) }
@@ -463,10 +639,10 @@ fun CustomBackgroundEditorDialog(
             try {
                 val bgDir = File(context.filesDir, "backgrounds").apply { mkdirs() }
                 val ext = if (isVideo) "mp4" else "png"
-                val destFile = File(bgDir, "custom_bg_${target.prefix}.$ext")
+                val p = prefixOverride ?: target.prefix
+                val destFile = File(bgDir, "custom_bg_${p}.$ext")
                 mediaFile.copyTo(destFile, overwrite = true)
 
-                val p = target.prefix
                 prefs.setString("${p}_bg_type", bgType)
                 prefs.setString("${p}_bg_path", destFile.absolutePath)
                 prefs.setFloat("${p}_bg_zoom", zoom)
@@ -474,6 +650,9 @@ fun CustomBackgroundEditorDialog(
                 prefs.setFloat("${p}_bg_pan_y", panY)
                 prefs.setFloat("${p}_bg_dim", dimValue)
                 prefs.setFloat("${p}_bg_blur", blurValue)
+                if (isVideo) {
+                    prefs.setFloat("${p}_bg_video_speed", videoSpeed)
+                }
 
                 withContext(Dispatchers.Main) {
                     isSaving = false
@@ -518,6 +697,7 @@ fun CustomBackgroundEditorDialog(
                 if (isVideo) {
                     LoopingVideoPlayer(
                         videoFile = mediaFile,
+                        videoSpeed = videoSpeed,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -590,7 +770,7 @@ fun CustomBackgroundEditorDialog(
                             )
                         }
 
-                        if (zoom > 1.05f || panX != 0f || panY != 0f || dimValue > 0f || blurValue > 0f) {
+                        if (zoom > 1.05f || panX != 0f || panY != 0f || dimValue > 0f || blurValue > 0f || videoSpeed != 1.0f) {
                             FilledTonalButton(
                                 onClick = {
                                     zoom = 1.0f
@@ -598,6 +778,7 @@ fun CustomBackgroundEditorDialog(
                                     panY = 0f
                                     dimValue = 0f
                                     blurValue = 0f
+                                    videoSpeed = 1.0f
                                     activeSlider = null
                                 },
                                 shape = RoundedCornerShape(16.dp),
@@ -665,7 +846,7 @@ fun CustomBackgroundEditorDialog(
                     )
                     .padding(start = 16.dp, end = 16.dp, bottom = 36.dp, top = 16.dp)
             ) {
-                // Interactive Adjustable Slider Panel (Dim or Blur)
+                // Interactive Adjustable Slider Panel (Dim, Blur, or Speed)
                 AnimatedVisibility(
                     visible = activeSlider != null,
                     enter = fadeIn() + expandVertically(),
@@ -673,9 +854,9 @@ fun CustomBackgroundEditorDialog(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                        shadowElevation = 10.dp,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.98f),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                        shadowElevation = 12.dp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)
@@ -734,7 +915,7 @@ fun CustomBackgroundEditorDialog(
                                     colors = SliderDefaults.colors(
                                         thumbColor = MaterialTheme.colorScheme.primary,
                                         activeTrackColor = MaterialTheme.colorScheme.primary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -788,10 +969,79 @@ fun CustomBackgroundEditorDialog(
                                     colors = SliderDefaults.colors(
                                         thumbColor = MaterialTheme.colorScheme.tertiary,
                                         activeTrackColor = MaterialTheme.colorScheme.tertiary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                            } else if (activeSlider == "speed") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Outlined.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                        Text(
+                                            "Playback Speed: ${String.format(java.util.Locale.US, "%.2f", videoSpeed)}x",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (videoSpeed != 1.0f) {
+                                            FilledTonalIconButton(
+                                                onClick = { videoSpeed = 1.0f },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = "Reset Speed", modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = { activeSlider = null },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Close Slider", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                                Slider(
+                                    value = videoSpeed,
+                                    onValueChange = { videoSpeed = it },
+                                    valueRange = 0.25f..2.5f,
+                                    steps = 8,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.secondary,
+                                        activeTrackColor = MaterialTheme.colorScheme.secondary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { preset ->
+                                        SuggestionChip(
+                                            onClick = { videoSpeed = preset },
+                                            label = { Text("${preset}x", style = MaterialTheme.typography.labelSmall) },
+                                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                                containerColor = if (kotlin.math.abs(videoSpeed - preset) < 0.05f) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -807,7 +1057,7 @@ fun CustomBackgroundEditorDialog(
                         onClick = onDismiss,
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         shadowElevation = 6.dp,
                         modifier = Modifier.size(52.dp)
                     ) {
@@ -821,11 +1071,11 @@ fun CustomBackgroundEditorDialog(
                         }
                     }
 
-                    // M3 Expressive Floating Action Bar (Dim, Blur, Save)
+                    // M3 Expressive Floating Action Bar (Dim, Blur, Speed, Save)
                     Surface(
                         shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         shadowElevation = 8.dp,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -844,11 +1094,14 @@ fun CustomBackgroundEditorDialog(
                                 color = if (isDimActive) MaterialTheme.colorScheme.primaryContainer
                                         else if (dimValue > 0f) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                                         else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                border = if (isDimActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    if (isDimActive) 1.5.dp else 1.dp,
+                                    if (isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                ),
                                 modifier = Modifier.weight(1f).height(44.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
@@ -878,11 +1131,14 @@ fun CustomBackgroundEditorDialog(
                                 color = if (isBlurActive) MaterialTheme.colorScheme.tertiaryContainer
                                         else if (blurValue > 0f) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
                                         else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                border = if (isBlurActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary) else null,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    if (isBlurActive) 1.5.dp else 1.dp,
+                                    if (isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                ),
                                 modifier = Modifier.weight(1f).height(44.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
@@ -899,6 +1155,45 @@ fun CustomBackgroundEditorDialog(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
+                                }
+                            }
+
+                            // Speed Button (video only)
+                            if (isVideo) {
+                                val isSpeedActive = activeSlider == "speed"
+                                Surface(
+                                    onClick = {
+                                        activeSlider = if (isSpeedActive) null else "speed"
+                                    },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = if (isSpeedActive) MaterialTheme.colorScheme.secondaryContainer
+                                            else if (videoSpeed != 1.0f) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                                            else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (isSpeedActive) 1.5.dp else 1.dp,
+                                        if (isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                    ),
+                                    modifier = Modifier.weight(1f).height(44.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Speed,
+                                            contentDescription = "Speed",
+                                            tint = if (videoSpeed != 1.0f || isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            if (videoSpeed != 1.0f) "${String.format(java.util.Locale.US, "%.1f", videoSpeed)}x" else "Speed",
+                                            color = if (videoSpeed != 1.0f || isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
 

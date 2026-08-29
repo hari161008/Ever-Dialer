@@ -23,12 +23,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -51,6 +55,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.RaiseToAnswerManager
+import com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
 import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
@@ -302,6 +307,41 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
     var defaultSim by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())) }
     var showSimDialog by remember { mutableStateOf(false) }
+
+    // ── Volume DND State ──────────────────────────────────────────────
+    var volumeDndEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_VOLUME_DND_ENABLED, false)) }
+    var volumeDndSequence by remember {
+        mutableStateOf(
+            prefs.getString(PreferenceManager.KEY_VOLUME_DND_SEQUENCE, PreferenceManager.DEFAULT_VOLUME_DND_SEQUENCE)
+                ?: PreferenceManager.DEFAULT_VOLUME_DND_SEQUENCE
+        )
+    }
+    var volumeDndLockScreenOnly by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_VOLUME_DND_LOCK_SCREEN_ONLY, false))
+    }
+    var volumeDndTimeoutMs by remember {
+        mutableStateOf(
+            prefs.getInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, PreferenceManager.DEFAULT_VOLUME_DND_TIMEOUT_MS).toString()
+        )
+    }
+    var showPermissionCardDialog by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var isAccessibilityGranted by remember { mutableStateOf(VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)) }
+    var isDndGranted by remember { mutableStateOf(VolumeDndAccessibilityService.isDndAccessGranted(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                isAccessibilityGranted = VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)
+                isDndGranted = VolumeDndAccessibilityService.isDndAccessGranted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var visible by remember { mutableStateOf(false) }
     val screenAlpha by animateFloatAsState(
@@ -636,8 +676,487 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                     }
                 }
 
+            // ── Volume DND ────────────────────────────────────────────────────
+                RivoAnimatedSection(delayMs = 150L) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CallSettingsSectionLabel("Volume DND")
+                        RivoExpressiveCard {
+                            RivoSwitchListItem(
+                                headline = "Volume DND",
+                                supporting = "Toggle Do Not Disturb (DND) using a volume button sequence",
+                                leadingIcon = Icons.Outlined.DoNotDisturbOn,
+                                iconContainerColor = Color(0xFF7C4DFF),
+                                checked = volumeDndEnabled,
+                                modifier = Modifier.settingsSearchHighlight("volume_dnd", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { newValue ->
+                                    volumeDndEnabled = newValue
+                                    prefs.setBoolean(PreferenceManager.KEY_VOLUME_DND_ENABLED, newValue)
+                                    if (newValue) {
+                                        isAccessibilityGranted = VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)
+                                        isDndGranted = VolumeDndAccessibilityService.isDndAccessGranted(context)
+                                        if (!isAccessibilityGranted || !isDndGranted) {
+                                            showPermissionCardDialog = true
+                                        }
+                                    }
+                                }
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                // Missing permissions warning banner if any permission is missing
+                                if (!isAccessibilityGranted || !isDndGranted) {
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.Warning,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Text(
+                                                    "Permissions Required",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                            }
+                                            Text(
+                                                "Volume DND requires Accessibility Service to capture volume button presses and Do Not Disturb permission to toggle DND.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (!isAccessibilityGranted) {
+                                                    Button(
+                                                        onClick = { VolumeDndAccessibilityService.openAccessibilitySettings(context) },
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = MaterialTheme.colorScheme.error,
+                                                            contentColor = MaterialTheme.colorScheme.onError
+                                                        ),
+                                                        modifier = Modifier.weight(1f),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                                                    ) {
+                                                        Text("Accessibility", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                if (!isDndGranted) {
+                                                    Button(
+                                                        onClick = { VolumeDndAccessibilityService.openDndAccessSettings(context) },
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = MaterialTheme.colorScheme.error,
+                                                            contentColor = MaterialTheme.colorScheme.onError
+                                                        ),
+                                                        modifier = Modifier.weight(1f),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                                                    ) {
+                                                        Text("DND Access", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+
+                                // Volume Combination Card
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Volume button combination",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            if (volumeDndSequence != PreferenceManager.DEFAULT_VOLUME_DND_SEQUENCE) {
+                                                TextButton(
+                                                    onClick = {
+                                                        volumeDndSequence = PreferenceManager.DEFAULT_VOLUME_DND_SEQUENCE
+                                                        prefs.setString(PreferenceManager.KEY_VOLUME_DND_SEQUENCE, PreferenceManager.DEFAULT_VOLUME_DND_SEQUENCE)
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text("Reset (UUDD)", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
+
+                                        Text(
+                                            text = "Click volume buttons in this order with under ${volumeDndTimeoutMs}ms delay to trigger DND:",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        // Dynamic Sequence Badges
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainer,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState())
+                                                    .padding(12.dp),
+                                                horizontalArrangement = if (volumeDndSequence.isEmpty()) Arrangement.Center else Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (volumeDndSequence.isEmpty()) {
+                                                    Text(
+                                                        "No keys added (tap below to add)",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                } else {
+                                                    volumeDndSequence.forEachIndexed { _, char ->
+                                                        Surface(
+                                                            shape = RoundedCornerShape(12.dp),
+                                                            color = if (char == 'U') MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                                            contentColor = if (char == 'U') MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary,
+                                                            shadowElevation = 1.dp
+                                                        ) {
+                                                            Row(
+                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = if (char == 'U') Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
+                                                                    contentDescription = null,
+                                                                    modifier = Modifier.size(14.dp)
+                                                                )
+                                                                Text(
+                                                                    text = if (char == 'U') "UP" else "DOWN",
+                                                                    style = MaterialTheme.typography.labelMedium,
+                                                                    fontWeight = FontWeight.Bold
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Horizontal action buttons
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    if (volumeDndSequence.length < 16) {
+                                                        val updated = volumeDndSequence + "U"
+                                                        volumeDndSequence = updated
+                                                        prefs.setString(PreferenceManager.KEY_VOLUME_DND_SEQUENCE, updated)
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(14.dp),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.primary
+                                                ),
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                                            ) {
+                                                Icon(Icons.Outlined.ArrowUpward, null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Vol Up", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    if (volumeDndSequence.length < 16) {
+                                                        val updated = volumeDndSequence + "D"
+                                                        volumeDndSequence = updated
+                                                        prefs.setString(PreferenceManager.KEY_VOLUME_DND_SEQUENCE, updated)
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(14.dp),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondary
+                                                ),
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                                            ) {
+                                                Icon(Icons.Outlined.ArrowDownward, null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Vol Down", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    if (volumeDndSequence.isNotEmpty()) {
+                                                        val updated = volumeDndSequence.dropLast(1)
+                                                        volumeDndSequence = updated
+                                                        prefs.setString(PreferenceManager.KEY_VOLUME_DND_SEQUENCE, updated)
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(14.dp),
+                                                colors = ButtonDefaults.filledTonalButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                ),
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                                                enabled = volumeDndSequence.isNotEmpty()
+                                            ) {
+                                                Icon(Icons.AutoMirrored.Outlined.Backspace, null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Delete", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Delay Timeout Settings Card
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(
+                                            text = "Trigger Delay Timeout",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Maximum delay in milliseconds between button clicks. Smaller numbers require faster clicks.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        OutlinedTextField(
+                                            value = volumeDndTimeoutMs,
+                                            onValueChange = { input ->
+                                                val digits = input.filter { it.isDigit() }.take(5)
+                                                volumeDndTimeoutMs = digits
+                                                val num = digits.toIntOrNull()
+                                                if (num != null && num in 100..5000) {
+                                                    prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, num)
+                                                }
+                                            },
+                                            label = { Text("Delay (milliseconds)") },
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                            ),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            trailingIcon = {
+                                                Text("ms", modifier = Modifier.padding(end = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            listOf(400 to "400ms (Fast)", 600 to "600ms (Default)", 800 to "800ms", 1200 to "1.2s").forEach { (presetMs, label) ->
+                                                AssistChip(
+                                                    onClick = {
+                                                        volumeDndTimeoutMs = presetMs.toString()
+                                                        prefs.setInt(PreferenceManager.KEY_VOLUME_DND_TIMEOUT_MS, presetMs)
+                                                    },
+                                                    label = { Text(label, fontSize = 11.sp) },
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Lock screen only card
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .clickable {
+                                                val newVal = !volumeDndLockScreenOnly
+                                                volumeDndLockScreenOnly = newVal
+                                                prefs.setBoolean(PreferenceManager.KEY_VOLUME_DND_LOCK_SCREEN_ONLY, newVal)
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.size(44.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ScreenLockPortrait,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "Enable only in lock screen & screen off",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                "Only triggers when screen is off or on lock screen; ignored on home screen",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Switch(
+                                            checked = volumeDndLockScreenOnly,
+                                            onCheckedChange = { newVal ->
+                                                volumeDndLockScreenOnly = newVal
+                                                prefs.setBoolean(PreferenceManager.KEY_VOLUME_DND_LOCK_SCREEN_ONLY, newVal)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    // ── Permission Card Popup Dialog ──────────────────────────────────────────
+    if (showPermissionCardDialog && (!isAccessibilityGranted || !isDndGranted)) {
+        AlertDialog(
+            onDismissRequest = { showPermissionCardDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            icon = {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            },
+            title = { Text("Permissions Required", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "To detect volume button sequences and toggle Do Not Disturb (DND), please grant the following permissions:",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (!isAccessibilityGranted) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.Accessibility, null, tint = MaterialTheme.colorScheme.primary)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Accessibility Service", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text("Required to capture volume key combinations", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Button(
+                                    onClick = { VolumeDndAccessibilityService.openAccessibilitySettings(context) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Enable", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    if (!isDndGranted) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.DoNotDisturbOn, null, tint = MaterialTheme.colorScheme.primary)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Do Not Disturb Access", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text("Required to toggle system DND state", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Button(
+                                    onClick = { VolumeDndAccessibilityService.openDndAccessSettings(context) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Grant", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showPermissionCardDialog = false }
+                ) {
+                    Text("Done")
+                }
+            }
+        )
     }
 }
 

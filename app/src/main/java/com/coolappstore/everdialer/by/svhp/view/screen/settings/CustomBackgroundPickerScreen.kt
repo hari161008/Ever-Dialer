@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.WallpaperExportHelper
 import com.coolappstore.everdialer.by.svhp.view.components.*
@@ -63,14 +64,17 @@ import java.io.FileOutputStream
 @Composable
 fun CustomBackgroundPickerScreen(
     navigator: DestinationsNavigator,
-    isIncoming: Boolean = true
+    isIncoming: Boolean = true,
+    contactKey: String? = null,
+    contactDisplayName: String? = null
 ) {
     val context = LocalContext.current
     val prefs: PreferenceManager = koinInject()
     val scope = rememberCoroutineScope()
 
     val target = if (isIncoming) CustomBackgroundTarget.INCOMING else CustomBackgroundTarget.ONGOING
-    val prefix = target.prefix
+    val basePrefix = target.prefix
+    val prefix = if (!contactKey.isNullOrEmpty()) "contact_${contactKey}_$basePrefix" else basePrefix
 
     // Track reactive settings
     val settingsVersion by prefs.settingsChanged.collectAsState()
@@ -96,28 +100,49 @@ fun CustomBackgroundPickerScreen(
     var bgBlur by remember(settingsVersion) {
         mutableFloatStateOf(prefs.getFloat("${prefix}_bg_blur", 0f))
     }
+    var bgVideoSpeed by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_video_speed", 1.0f))
+    }
     val showContactPfp = remember(settingsVersion) {
         if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true)
         else prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true)
     }
 
+    var elementsThemeMode by remember(settingsVersion) {
+        mutableStateOf(
+            prefs.getString(
+                "${prefix}_elements_theme",
+                prefs.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto"
+            ) ?: "auto"
+        )
+    }
+    var showElementsThemePopup by remember { mutableStateOf(false) }
+
+    val autoRefreshKey = "${prefix}_auto_refresh_wallpaper"
+    var autoRefreshWallpaper by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(autoRefreshKey, false))
+    }
+
     var fontColorMode by remember(settingsVersion) {
         mutableStateOf(
             prefs.getString(
-                if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE,
-                "default"
+                "${prefix}_font_color_mode",
+                if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
+                else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
             ) ?: "default"
         )
     }
     var customFontColorInt by remember(settingsVersion) {
         mutableIntStateOf(
             prefs.getInt(
-                if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR,
-                android.graphics.Color.WHITE
+                "${prefix}_font_color",
+                if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE)
+                else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
             )
         )
     }
 
+    var showOptionsPopup by remember { mutableStateOf(false) }
     var isLoadingWallpaper by remember { mutableStateOf(false) }
     var editorMediaState by remember {
         mutableStateOf<Triple<File, Boolean, String>?>(null)
@@ -171,6 +196,39 @@ fun CustomBackgroundPickerScreen(
         }
     }
 
+    val systemFilePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val cr = context.contentResolver
+                    val mime = cr.getType(uri) ?: ""
+                    val uriStr = uri.toString().lowercase()
+                    val isVideo = mime.startsWith("video") || uriStr.endsWith(".mp4") || uriStr.endsWith(".mkv") || uriStr.endsWith(".webm") || uriStr.endsWith(".mov") || uriStr.endsWith(".3gp")
+                    val ext = if (isVideo) ".mp4" else ".png"
+                    val tempFile = File(context.cacheDir, "picked_file_${System.currentTimeMillis()}$ext")
+                    cr.openInputStream(uri)?.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        if (tempFile.exists() && tempFile.length() > 0) {
+                            editorMediaState = Triple(tempFile, isVideo, if (isVideo) "video" else "picture")
+                        } else {
+                            Toast.makeText(context, "Could not open selected file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to load file: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
     // Editor Dialog
     editorMediaState?.let { (file, isVideo, type) ->
         CustomBackgroundEditorDialog(
@@ -178,11 +236,13 @@ fun CustomBackgroundPickerScreen(
             mediaFile = file,
             isVideo = isVideo,
             bgType = type,
+            prefixOverride = prefix,
             initialZoom = bgZoom,
             initialPanX = bgPanX,
             initialPanY = bgPanY,
             initialDim = bgDim,
             initialBlur = bgBlur,
+            initialVideoSpeed = bgVideoSpeed,
             onDismiss = { editorMediaState = null },
             onSaveSuccess = {
                 bgType = type
@@ -192,13 +252,52 @@ fun CustomBackgroundPickerScreen(
                 bgPanY = prefs.getFloat("${prefix}_bg_pan_y", 0f)
                 bgDim = prefs.getFloat("${prefix}_bg_dim", 0f)
                 bgBlur = prefs.getFloat("${prefix}_bg_blur", 0f)
+                bgVideoSpeed = prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
                 editorMediaState = null
             }
         )
     }
 
+    val isFreeform = remember(settingsVersion) {
+        CallButtonPrefs.isFreeformEnabled(prefs)
+    }
+    val freeformPositions = remember(settingsVersion) {
+        CallButtonPrefs.getFreeformPositions(prefs)
+    }
+    val activeButtons = remember(settingsVersion) {
+        CallButtonPrefs.getActiveActionIds(prefs)
+    }
+    val hangupWidthFraction = remember(settingsVersion) {
+        prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.8f)
+    }
+
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+    val systemDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val appThemePref = prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto"
+    val appIsDark = when (appThemePref) {
+        "light", "white" -> false
+        "dark", "black" -> true
+        else -> systemDarkTheme
+    }
+    val isIncomingElementsDark = when (elementsThemeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> appIsDark
+    }
+
+    val previewElemBg = if (hasCustomBg) {
+        if (isIncomingElementsDark) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.85f)
+    } else {
+        if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    }
+    val previewElemFg = if (hasCustomBg) {
+        if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
+    } else {
+        if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val previewHandleBg = if (isIncomingElementsDark && hasCustomBg) Color.White else (if (isIncomingElementsDark) Color(0xFF383A40) else Color.White)
 
     val effectiveTextColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -218,16 +317,40 @@ fun CustomBackgroundPickerScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Custom Background", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            if (isIncoming) "Incoming Call Screen" else "Ongoing Call Screen",
+                            if (!contactKey.isNullOrEmpty()) "${contactDisplayName ?: "Contact"} — ${if (isIncoming) "Incoming" else "Ongoing"}"
+                            else if (isIncoming) "Incoming Call Background" else "Ongoing Call Background",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (!contactKey.isNullOrEmpty()) "Custom background for this contact"
+                            else if (isIncoming) "Customize incoming call screen" else "Customize ongoing call screen",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 navigationIcon = {
-                    SettingsBackIconButton(onClick = { navigator.navigateUp() })
+                    IconButton(onClick = { navigator.navigateUp() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (hasCustomBg) {
+                        IconButton(onClick = {
+                            prefs.remove("${prefix}_bg_type")
+                            prefs.remove("${prefix}_bg_path")
+                            bgType = "none"
+                            bgPath = ""
+                            Toast.makeText(context, "Background reset to default", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Reset Background",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             )
         },
@@ -239,34 +362,25 @@ fun CustomBackgroundPickerScreen(
             modifier = Modifier
                 .padding(top = padding.calculateTopPadding())
                 .fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 24.dp + navBarBottom),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ── Live Call UI Real Preview Window ────────────────────────────
+            // ── Live Preview Mockup Frame ────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 0L) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            "Live Preview",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 8.dp, bottom = 8.dp)
-                        )
-
-                        // Real Phone Mockup Frame
                         Surface(
                             shape = RoundedCornerShape(32.dp),
                             color = Color(0xFF101216),
                             border = androidx.compose.foundation.BorderStroke(2.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                             shadowElevation = 12.dp,
                             modifier = Modifier
-                                .width(220.dp)
-                                .height(390.dp)
+                                .width(185.dp)
+                                .height(370.dp)
                                 .clip(RoundedCornerShape(32.dp))
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -276,6 +390,7 @@ fun CustomBackgroundPickerScreen(
                                         if (bgType == "video") {
                                             LoopingVideoPlayer(
                                                 videoFile = bgFile,
+                                                videoSpeed = bgVideoSpeed,
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .graphicsLayer {
@@ -312,7 +427,6 @@ fun CustomBackgroundPickerScreen(
                                         }
                                     }
                                 } else {
-                                    // Default dialer background
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -327,27 +441,12 @@ fun CustomBackgroundPickerScreen(
                                     )
                                 }
 
-                                // Soft contrast scrim at top
-                                if (hasCustomBg) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(150.dp)
-                                            .align(Alignment.TopCenter)
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color.Black.copy(alpha = 0.60f), Color.Transparent)
-                                                )
-                                            )
-                                    )
-                                }
-
                                 // Realistic Camera Punch Hole
                                 Box(
                                     modifier = Modifier
-                                        .size(10.dp)
+                                        .size(9.dp)
                                         .align(Alignment.TopCenter)
-                                        .offset(y = 8.dp)
+                                        .offset(y = 7.dp)
                                         .clip(CircleShape)
                                         .background(Color.Black)
                                 )
@@ -358,19 +457,19 @@ fun CustomBackgroundPickerScreen(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(top = 28.dp, bottom = 20.dp, start = 12.dp, end = 12.dp),
+                                            .padding(top = 22.dp, bottom = 14.dp, start = 8.dp, end = 8.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         // Caller Info Area
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.padding(top = 8.dp)
+                                            modifier = Modifier.padding(top = 6.dp)
                                         ) {
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(68.dp)
+                                                        .size(54.dp)
                                                         .clip(CircleShape)
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
@@ -379,17 +478,18 @@ fun CustomBackgroundPickerScreen(
                                                         Icons.Default.Person,
                                                         contentDescription = null,
                                                         tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.size(38.dp)
+                                                        modifier = Modifier.size(30.dp)
                                                     )
                                                 }
-                                                Spacer(Modifier.height(10.dp))
+                                                Spacer(Modifier.height(8.dp))
                                             }
 
                                             Text(
                                                 "Jane Doe",
                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow
+                                                    shadow = textShadow,
+                                                    fontSize = 15.sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -399,30 +499,31 @@ fun CustomBackgroundPickerScreen(
                                                 "+1 (555) 234-5678",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow
+                                                    shadow = textShadow,
+                                                    fontSize = 10.sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Spacer(Modifier.height(6.dp))
+                                            Spacer(Modifier.height(4.dp))
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 Surface(
-                                                    shape = RoundedCornerShape(4.dp),
+                                                    shape = RoundedCornerShape(3.dp),
                                                     color = Color(0xFF1E88E5),
-                                                    modifier = Modifier.size(width = 14.dp, height = 16.dp)
+                                                    modifier = Modifier.size(width = 12.dp, height = 14.dp)
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
-                                                        Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold))
+                                                        Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
                                                     }
                                                 }
                                                 Text(
                                                     "Incoming",
                                                     color = effectiveSubtleColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(shadow = textShadow)
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
                                                 )
                                             }
                                         }
@@ -430,32 +531,32 @@ fun CustomBackgroundPickerScreen(
                                         // Real Swipe To Answer Section (matching NewSwipeToAnswer)
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                                            modifier = Modifier.padding(bottom = 12.dp)
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.padding(bottom = 6.dp)
                                         ) {
                                             // Message quick-reply pill
                                             Surface(
                                                 shape = CircleShape,
-                                                color = if (hasCustomBg) Color.Black.copy(0.45f) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
-                                                modifier = Modifier.height(26.dp).width(90.dp)
+                                                color = previewElemBg,
+                                                modifier = Modifier.height(26.dp).width(86.dp)
                                             ) {
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     horizontalArrangement = Arrangement.Center
                                                 ) {
-                                                    Icon(Icons.Default.ChatBubble, null, tint = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(11.dp))
+                                                    Icon(Icons.Default.ChatBubble, null, tint = previewElemFg, modifier = Modifier.size(11.dp))
                                                     Spacer(Modifier.width(4.dp))
-                                                    Text("Message", color = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                                                    Text("Message", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold))
                                                 }
                                             }
 
                                             // Real Swipe Pill
                                             Box(
                                                 modifier = Modifier
-                                                    .height(52.dp)
-                                                    .fillMaxWidth(0.92f)
+                                                    .height(48.dp)
+                                                    .fillMaxWidth(0.95f)
                                                     .clip(CircleShape)
-                                                    .background(if (hasCustomBg) Color.Black.copy(0.50f) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)),
+                                                    .background(previewElemBg),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Row(
@@ -463,16 +564,16 @@ fun CustomBackgroundPickerScreen(
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Text("Decline", color = if (hasCustomBg) Color(0xFFFF8A80) else MaterialTheme.colorScheme.onPrimaryContainer.copy(0.8f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                                                    Text("Answer", color = if (hasCustomBg) Color(0xFFB9F6CA) else MaterialTheme.colorScheme.onPrimaryContainer.copy(0.8f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                                                    Text("Decline", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                                                    Text("Answer", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
                                                 }
 
                                                 // Draggable Phone Handle in Center
                                                 Surface(
                                                     shape = CircleShape,
-                                                    color = Color.White,
-                                                    shadowElevation = 4.dp,
-                                                    modifier = Modifier.size(38.dp)
+                                                    color = previewHandleBg,
+                                                    shadowElevation = 3.dp,
+                                                    modifier = Modifier.size(36.dp)
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
                                                         Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
@@ -484,21 +585,19 @@ fun CustomBackgroundPickerScreen(
                                 } else {
                                     // ── ONGOING CALL SCREEN REAL PREVIEW ──────────────
                                     Column(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(top = 28.dp, bottom = 14.dp, start = 12.dp, end = 12.dp),
+                                        modifier = Modifier.fillMaxSize(),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         // Top info
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.padding(top = 8.dp)
+                                            modifier = Modifier.padding(top = 26.dp, start = 8.dp, end = 8.dp)
                                         ) {
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(56.dp)
+                                                        .size(52.dp)
                                                         .clip(CircleShape)
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
@@ -507,17 +606,18 @@ fun CustomBackgroundPickerScreen(
                                                         Icons.Default.Person,
                                                         contentDescription = null,
                                                         tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.size(32.dp)
+                                                        modifier = Modifier.size(28.dp)
                                                     )
                                                 }
-                                                Spacer(Modifier.height(8.dp))
+                                                Spacer(Modifier.height(6.dp))
                                             }
 
                                             Text(
                                                 "Jane Doe",
                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow
+                                                    shadow = textShadow,
+                                                    fontSize = 15.sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -527,55 +627,134 @@ fun CustomBackgroundPickerScreen(
                                                 "+1 (555) 234-5678",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow
+                                                    shadow = textShadow,
+                                                    fontSize = 10.sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Spacer(Modifier.height(4.dp))
-                                            Text(
-                                                "00:45",
-                                                color = effectiveSubtleColor,
-                                                style = MaterialTheme.typography.labelSmall.copy(shadow = textShadow)
-                                            )
+                                            Spacer(Modifier.height(3.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(3.dp),
+                                                    color = Color(0xFF1E88E5),
+                                                    modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                    }
+                                                }
+                                                Text(
+                                                    "00:45",
+                                                    color = effectiveSubtleColor,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                )
+                                            }
                                         }
 
-                                        // Real Ongoing Call Buttons Grid (2 rows x 3 columns)
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.padding(bottom = 6.dp)
-                                        ) {
-                                            val btnBg = if (hasCustomBg) Color.Black.copy(0.40f) else MaterialTheme.colorScheme.surfaceVariant
-                                            val btnFg = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onSurface
+                                        // Real Ongoing Call Bottom Control Sheet (matching CallActivity)
+                                        val btnBg = if (hasCustomBg) Color.Black.copy(0.40f) else MaterialTheme.colorScheme.surfaceVariant
+                                        val btnFg = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onSurface
 
-                                            // Row 1
-                                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                                MiniOngoingButton(Icons.Default.MicOff, "Mute", btnBg, btnFg, effectiveSubtleColor)
-                                                MiniOngoingButton(Icons.Default.Dialpad, "Keypad", btnBg, btnFg, effectiveSubtleColor)
-                                                MiniOngoingButton(Icons.AutoMirrored.Filled.VolumeUp, "Speaker", btnBg, btnFg, effectiveSubtleColor)
-                                            }
-
-                                            // Row 2
-                                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                                MiniOngoingButton(Icons.Default.Add, "Add", btnBg, btnFg, effectiveSubtleColor)
-                                                MiniOngoingButton(Icons.Default.Pause, "Hold", btnBg, btnFg, effectiveSubtleColor)
-                                                MiniOngoingButton(Icons.Default.EditNote, "Notes", btnBg, btnFg, effectiveSubtleColor)
-                                            }
-
-                                            Spacer(Modifier.height(4.dp))
-
-                                            // Hang Up Button
+                                        if (isFreeform) {
+                                            // Real Freeform Button Layout matching user's custom positions
+                                            val freeformButtonIds = activeButtons + CallButtonPrefs.ID_HANGUP
+                                            val density = androidx.compose.ui.platform.LocalDensity.current
                                             Surface(
-                                                shape = RoundedCornerShape(20.dp),
-                                                color = Color(0xFFD32F2F),
-                                                modifier = Modifier
-                                                    .width(130.dp)
-                                                    .height(34.dp)
+                                                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                                                color = if (hasCustomBg) Color.Black.copy(alpha = 0.50f) else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.Default.CallEnd, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                                BoxWithConstraints(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(130.dp)
+                                                        .padding(4.dp)
+                                                ) {
+                                                    val containerWidthPx = with(density) { maxWidth.toPx() }
+                                                    val containerHeightPx = with(density) { maxHeight.toPx() }
+                                                    val tileWidthPx = with(density) { 34.dp.toPx() }
+                                                    val tileHeightPx = with(density) { 38.dp.toPx() }
+
+                                                    freeformButtonIds.forEachIndexed { index, id ->
+                                                        val (fx, fy) = freeformPositions[id] ?: CallButtonPrefs.defaultFreeformFraction(id, index, freeformButtonIds.size)
+                                                        Box(
+                                                            modifier = Modifier.offset {
+                                                                val cx = (fx * containerWidthPx - tileWidthPx / 2f).coerceIn(0f, (containerWidthPx - tileWidthPx).coerceAtLeast(0f))
+                                                                val cy = (fy * containerHeightPx - tileHeightPx / 2f).coerceIn(0f, (containerHeightPx - tileHeightPx).coerceAtLeast(0f))
+                                                                androidx.compose.ui.unit.IntOffset(kotlin.math.round(cx).toInt(), kotlin.math.round(cy).toInt())
+                                                            }
+                                                        ) {
+                                                            if (id == CallButtonPrefs.ID_HANGUP) {
+                                                                Surface(
+                                                                    shape = CircleShape,
+                                                                    color = Color(0xFFD32F2F),
+                                                                    modifier = Modifier.size(32.dp)
+                                                                ) {
+                                                                    Box(contentAlignment = Alignment.Center) {
+                                                                        Icon(Icons.Default.CallEnd, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                val spec = CallButtonPrefs.specFor(id)
+                                                                if (spec != null) {
+                                                                    MiniOngoingButton(spec.icon, spec.label, btnBg, btnFg, effectiveSubtleColor)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            Surface(
+                                                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                                                color = if (hasCustomBg) Color.Black.copy(alpha = 0.50f) else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 6.dp, vertical = 10.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    val previewButtonIds = if (activeButtons.isNotEmpty()) activeButtons.take(6)
+                                                        else listOf("mute", "dialpad", "speaker", "add", "hold", "note")
+
+                                                    previewButtonIds.chunked(3).forEach { rowIds ->
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceEvenly
+                                                        ) {
+                                                            rowIds.forEach { id ->
+                                                                val spec = CallButtonPrefs.specFor(id)
+                                                                if (spec != null) {
+                                                                    MiniOngoingButton(spec.icon, spec.label, btnBg, btnFg, effectiveSubtleColor)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Spacer(Modifier.height(2.dp))
+
+                                                    // Real Hang Up Button with configured width
+                                                    val isCircleHangup = hangupWidthFraction <= 0.1f
+                                                    Surface(
+                                                        shape = if (isCircleHangup) CircleShape else RoundedCornerShape(16.dp),
+                                                        color = Color(0xFFD32F2F),
+                                                        modifier = if (isCircleHangup) Modifier.size(32.dp)
+                                                                   else Modifier
+                                                                        .fillMaxWidth(hangupWidthFraction.coerceIn(0.40f, 0.95f))
+                                                                        .height(32.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Default.CallEnd, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -603,16 +782,110 @@ fun CustomBackgroundPickerScreen(
                 }
             }
 
+            // ── Incoming UI Elements Theme ────────────────────────────────
+            if (isIncoming) {
+                item {
+                    RivoAnimatedSection(delayMs = 10L) {
+                        Column {
+                            Text(
+                                "Incoming UI Elements Theme",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                            )
+
+                            RivoExpressiveCard {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    val currentThemeTitle = when (elementsThemeMode) {
+                                        "light" -> "Light mode"
+                                        "dark" -> "Dark mode"
+                                        else -> "App preference (Default)"
+                                    }
+                                    val currentThemeSubtitle = when (elementsThemeMode) {
+                                        "light" -> "Force light styling for slider & message button"
+                                        "dark" -> "Force dark styling for slider & message button"
+                                        else -> "Follows appearance settings"
+                                    }
+                                    val currentThemeIcon = when (elementsThemeMode) {
+                                        "light" -> Icons.Outlined.LightMode
+                                        "dark" -> Icons.Outlined.DarkMode
+                                        else -> Icons.Outlined.BrightnessAuto
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.size(48.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    currentThemeIcon,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                currentThemeTitle,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                currentThemeSubtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = { showElementsThemePopup = true },
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Change Elements Theme", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ── Text & Font Color Customizer ─────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 15L) {
                     Column {
-                        Text(
-                            "Caller Info Font Color",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-                        )
+                        ) {
+                            Icon(
+                                Icons.Outlined.FormatColorText,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                "Caller Info Font Color",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
                         RivoExpressiveCard {
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -729,81 +1002,282 @@ fun CustomBackgroundPickerScreen(
                 RivoAnimatedSection(delayMs = 25L) {
                     Column {
                         Text(
-                            "Choose Background",
+                            "Background Source",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
                         )
 
                         RivoExpressiveCard {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                // Option 1: None (Default)
-                                BackgroundChoiceCard(
-                                    icon = Icons.Outlined.NotInterested,
-                                    iconTint = Color(0xFFE53935),
-                                    iconContainerColor = Color(0xFFE53935).copy(alpha = 0.12f),
-                                    title = "None (Default)",
-                                    subtitle = "Use the default dialer theme background",
-                                    isSelected = bgType == "none" || bgType.isEmpty(),
-                                    onClick = {
-                                        bgType = "none"
-                                        prefs.setString("${prefix}_bg_type", "none")
-                                        prefs.setString("${prefix}_bg_path", "")
-                                        Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                val currentSourceIcon = when (bgType) {
+                                    "wallpaper" -> Icons.Outlined.PhoneAndroid
+                                    "picture" -> Icons.Outlined.Image
+                                    "video" -> Icons.Outlined.Videocam
+                                    else -> Icons.Outlined.NotInterested
+                                }
+                                val currentSourceTitle = when (bgType) {
+                                    "wallpaper" -> "Device Wallpaper"
+                                    "picture" -> "Custom Picture"
+                                    "video" -> "Custom Video"
+                                    else -> "None (Default)"
+                                }
+                                val currentSourceSubtitle = when (bgType) {
+                                    "wallpaper" -> "Active device system wallpaper"
+                                    "picture" -> "Custom photo selected"
+                                    "video" -> "Custom looping video selected"
+                                    else -> "Using default solid background"
+                                }
+                                val currentContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                val currentIconColor = MaterialTheme.colorScheme.primary
 
-                                // Option 2: Device Wallpaper
-                                BackgroundChoiceCard(
-                                    icon = Icons.Outlined.PhoneAndroid,
-                                    iconTint = Color(0xFF2196F3),
-                                    iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.12f),
-                                    title = "Device Wallpaper",
-                                    subtitle = if (isLoadingWallpaper) "Extracting wallpaper..." else "Use your current system wallpaper",
-                                    isSelected = bgType == "wallpaper",
-                                    onClick = {
-                                        if (!isLoadingWallpaper) {
-                                            isLoadingWallpaper = true
-                                            scope.launch(Dispatchers.IO) {
-                                                val wallpaperFile = WallpaperExportHelper.extractWallpaperToFile(context)
-                                                withContext(Dispatchers.Main) {
-                                                    isLoadingWallpaper = false
-                                                    if (wallpaperFile != null) {
-                                                        editorMediaState = Triple(wallpaperFile, false, "wallpaper")
-                                                    } else {
-                                                        Toast.makeText(context, "Could not extract system wallpaper", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = currentContainerColor,
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                currentSourceIcon,
+                                                contentDescription = null,
+                                                tint = currentIconColor,
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         }
                                     }
-                                )
-
-                                // Option 3: Custom Picture
-                                BackgroundChoiceCard(
-                                    icon = Icons.Outlined.Image,
-                                    iconTint = Color(0xFF4CAF50),
-                                    iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.12f),
-                                    title = "Custom Picture",
-                                    subtitle = "Choose a photo from gallery & adjust framing",
-                                    isSelected = bgType == "picture",
-                                    onClick = {
-                                        imagePickerLauncher.launch("image/*")
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            currentSourceTitle,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            currentSourceSubtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-                                )
+                                }
 
-                                // Option 4: Custom Video
-                                BackgroundChoiceCard(
-                                    icon = Icons.Outlined.Videocam,
-                                    iconTint = Color(0xFF9C27B0),
-                                    iconContainerColor = Color(0xFF9C27B0).copy(alpha = 0.12f),
-                                    title = "Custom Video",
-                                    subtitle = "Choose a looping video background",
-                                    isSelected = bgType == "video",
-                                    onClick = {
-                                        videoPickerLauncher.launch("video/*")
+                                Button(
+                                    onClick = { showOptionsPopup = true },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Choose Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                }
+
+                                if (bgType == "wallpaper") {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                val next = !autoRefreshWallpaper
+                                                autoRefreshWallpaper = next
+                                                prefs.setBoolean(autoRefreshKey, next)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        Icons.Outlined.Sync,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                            Column {
+                                                Text(
+                                                    "Auto refresh wallpaper every app start",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    "Automatically refreshes the system wallpaper whenever you open the app",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Switch(
+                                            checked = autoRefreshWallpaper,
+                                            onCheckedChange = {
+                                                autoRefreshWallpaper = it
+                                                prefs.setBoolean(autoRefreshKey, it)
+                                            }
+                                        )
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showOptionsPopup) {
+        CustomBackgroundOptionsPopup(
+            target = target,
+            currentType = bgType,
+            onDismiss = { showOptionsPopup = false },
+            onSelectNone = {
+                bgType = "none"
+                prefs.setString("${prefix}_bg_type", "none")
+                prefs.setString("${prefix}_bg_path", "")
+                Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
+            },
+            onOpenEditor = { file, isVideo, type ->
+                editorMediaState = Triple(file, isVideo, type)
+                showOptionsPopup = false
+            }
+        )
+    }
+
+    if (showElementsThemePopup) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showElementsThemePopup = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { showElementsThemePopup = false }
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 12.dp,
+                    modifier = Modifier
+                        .widthIn(max = 380.dp)
+                        .fillMaxWidth()
+                        .clickable(enabled = false) {}
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.Palette,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Incoming UI Elements",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                Text(
+                                    "Slider & quick reply theme",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Option 1: App Preference
+                        BackgroundOptionItem(
+                            icon = Icons.Outlined.BrightnessAuto,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            title = "App preference (Default)",
+                            subtitle = "Follows appearance settings ($appThemePref)",
+                            isSelected = elementsThemeMode == "auto" || elementsThemeMode == "app" || elementsThemeMode.isEmpty(),
+                            onClick = {
+                                elementsThemeMode = "auto"
+                                val key = if (!contactKey.isNullOrEmpty()) "contact_${contactKey}_incoming_elements_theme" else PreferenceManager.KEY_INCOMING_ELEMENTS_THEME
+                                prefs.setString(key, "auto")
+                                showElementsThemePopup = false
+                            }
+                        )
+
+                        // Option 2: Light Mode
+                        BackgroundOptionItem(
+                            icon = Icons.Outlined.LightMode,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            title = "Light mode",
+                            subtitle = "Always show light elements",
+                            isSelected = elementsThemeMode == "light",
+                            onClick = {
+                                elementsThemeMode = "light"
+                                val key = if (!contactKey.isNullOrEmpty()) "contact_${contactKey}_incoming_elements_theme" else PreferenceManager.KEY_INCOMING_ELEMENTS_THEME
+                                prefs.setString(key, "light")
+                                showElementsThemePopup = false
+                            }
+                        )
+
+                        // Option 3: Dark Mode
+                        BackgroundOptionItem(
+                            icon = Icons.Outlined.DarkMode,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            title = "Dark mode",
+                            subtitle = "Always show dark elements",
+                            isSelected = elementsThemeMode == "dark",
+                            onClick = {
+                                elementsThemeMode = "dark"
+                                val key = if (!contactKey.isNullOrEmpty()) "contact_${contactKey}_incoming_elements_theme" else PreferenceManager.KEY_INCOMING_ELEMENTS_THEME
+                                prefs.setString(key, "dark")
+                                showElementsThemePopup = false
+                            }
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { showElementsThemePopup = false }) {
+                                Text("Cancel", fontWeight = FontWeight.Medium)
                             }
                         }
                     }

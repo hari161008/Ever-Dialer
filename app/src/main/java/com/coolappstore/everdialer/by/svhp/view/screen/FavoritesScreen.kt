@@ -272,22 +272,26 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     Text("Star a contact to add them here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
                 }
             } else {
+                val settingsVer by prefs.settingsChanged.collectAsState()
+                val favoritesInList = remember(settingsVer) {
+                    prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)
+                }
                 val gridState = rememberLazyGridState()
                 ScrollHapticsGridEffect(gridState = gridState)
+                val gridColumns = if (favoritesInList) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 100.dp)
+                val contentPadding = if (favoritesInList) PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp) else PaddingValues(12.dp)
+                val verticalSpacing = if (favoritesInList) 8.dp else 12.dp
+                val horizontalSpacing = if (favoritesInList) 0.dp else 12.dp
+
                 LazyVerticalGrid(
-                    // Fixed(3) always used exactly 3 columns even in landscape, where the
-                    // much wider screen made each of those 3 cells — and therefore each
-                    // favorite tile — stretch to a huge size. Adaptive sizes each column to
-                    // a sensible minimum width and lets the column count grow with the
-                    // available width instead, so tiles look right in both orientations.
-                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    columns = gridColumns,
                     state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(dragNestedScroll),
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+                    horizontalArrangement = Arrangement.spacedBy(horizontalSpacing)
                 ) {
                     if (isLandscape) {
                         item(
@@ -307,6 +311,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                                 contactsVM = contactsVM,
                                 navigator = navigator,
                                 context = context,
+                                isListView = favoritesInList,
                                 isSelected = selectedFavorites.contains(contact.id),
                                 selectionMode = selectionMode,
                                 isDragging = draggedContactId == contact.id,
@@ -463,6 +468,7 @@ private fun FavoriteContactCard(
     contactsVM: ContactsViewModel,
     navigator: DestinationsNavigator,
     context: android.content.Context,
+    isListView: Boolean = false,
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
     isDragging: Boolean = false,
@@ -493,10 +499,12 @@ private fun FavoriteContactCard(
     var showFakeCallSheet by remember { mutableStateOf(false) }
     var showCallChatViaPicker by remember { mutableStateOf(false) }
 
+    val phoneNumber = contact.phoneNumbers.firstOrNull()
+
     val scale by animateFloatAsState(
         targetValue = when {
-            isDragging -> 1.08f
-            isPressed || showMenu -> 0.93f
+            isDragging -> if (isListView) 1.03f else 1.08f
+            isPressed || showMenu -> 0.96f
             else -> 1f
         },
         animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -511,7 +519,7 @@ private fun FavoriteContactCard(
     )
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(if (isListView) 16.dp else 20.dp),
         color = cardBgColor,
         tonalElevation = if (isDragging) 8.dp else 2.dp,
         modifier = Modifier
@@ -523,7 +531,9 @@ private fun FavoriteContactCard(
                 if (isDragging && dragOffset != null) {
                     translationX = dragOffset.x
                     translationY = dragOffset.y
-                    scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 24f
+                    scaleX = if (isListView) 1.03f else 1.08f
+                    scaleY = if (isListView) 1.03f else 1.08f
+                    shadowElevation = 24f
                 }
             }
             .onGloballyPositioned { coords ->
@@ -594,73 +604,137 @@ private fun FavoriteContactCard(
                 }
             }
     ) {
-        Box {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
-                RivoAvatar(
-                    name = contact.name,
-                    photoUri = contact.photoUri,
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(CircleShape)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+        if (isListView) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                if (selectionMode) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onSelectToggle?.invoke() },
                         modifier = Modifier.size(24.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Call,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
+                    )
+                }
+
+                Box(modifier = Modifier.size(48.dp)) {
+                    RivoAvatar(
+                        name = contact.name,
+                        photoUri = contact.photoUri,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = contact.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!phoneNumber.isNullOrBlank()) {
+                        Text(
+                            text = phoneNumber,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Call",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
-            Text(
-                text = contact.name,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.labelMedium,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-        }
-        // Checkbox overlay — animated entry/exit
-        AnimatedVisibility(
-            visible = selectionMode,
-            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.6f),
-            exit  = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.6f),
-            modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                modifier = Modifier.size(28.dp)
-            ) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onSelectToggle?.invoke() },
-                    modifier = Modifier.size(28.dp)
-                )
+        } else {
+            Box {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+                        RivoAvatar(
+                            name = contact.name,
+                            photoUri = contact.photoUri,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
+                                .clip(CircleShape)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Call,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        text = contact.name,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                // Checkbox overlay — animated entry/exit
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.6f),
+                    exit  = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.6f),
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onSelectToggle?.invoke() },
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
             }
-        }
         }
     }
 
     // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
-    val phoneNumber = contact.phoneNumbers.firstOrNull()
     val favContextMenuKeys = remember(settingsVer, phoneNumber, fakeCallInContextMenu) {
         com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
             prefs,

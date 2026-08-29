@@ -210,6 +210,7 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
     GlobalSettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, GsColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
     GlobalSettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, GsColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_speaker")) },
     GlobalSettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, GsColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_redial")) },
+    GlobalSettingsSearchEntry("Volume DND", "Toggle Do Not Disturb using volume button combination", "volume_dnd", Icons.Outlined.VolumeUp, GsColorPurple) { it.navigate(CallSettingsScreenDestination(highlightKey = "volume_dnd")) },
 
     // ── Raise to Answer screen ───────────────────────────────────────────────
     GlobalSettingsSearchEntry("Enable Raise to Answer", "Answer calls by raising the phone to your ear", "enable_raise_to_answer", Icons.Outlined.Vibration, GsColorTeal) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "enable_raise_to_answer")) },
@@ -251,6 +252,7 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
     GlobalSettingsSearchEntry("Call Time Format in call logs", "12-hour or 24-hour time format", "call_time_format", Icons.Outlined.Palette, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "call_time_format")) },
     GlobalSettingsSearchEntry("Icon-Only Bottom Bar", "Hide labels on the bottom navigation bar", "icon_only_bottom_bar", Icons.Outlined.Palette, GsColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "icon_only_bottom_bar")) },
     GlobalSettingsSearchEntry("Open Dialpad by Default", "Launch straight into the dialpad", "open_dialpad_default", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "open_dialpad_default")) },
+    GlobalSettingsSearchEntry("Show favourites in list", "Display favourites in a vertical list instead of grid", "favorites_in_list", Icons.Outlined.Palette, GsColorPink) { it.navigate(InterfaceScreenDestination(highlightKey = "favorites_in_list")) },
     GlobalSettingsSearchEntry("Show First Letter in Avatar", "Fallback avatar shows a contact's initial", "avatar_first_letter", Icons.Outlined.Palette, GsColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_first_letter")) },
     GlobalSettingsSearchEntry("Use Colorful Avatars", "Give fallback avatars varied colors", "colorful_avatars", Icons.Outlined.Palette, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "colorful_avatars")) },
     GlobalSettingsSearchEntry("Show Picture in Avatar", "Show a contact's photo in their avatar", "avatar_picture", Icons.Outlined.Palette, GsColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_picture")) },

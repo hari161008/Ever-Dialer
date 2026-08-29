@@ -43,6 +43,12 @@ object BackupManager {
         return dir
     }
 
+    fun getBackgroundsDir(context: Context): File {
+        val dir = File(context.filesDir, "backgrounds")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
     fun writeBackup(
         context: Context,
         outputStream: OutputStream,
@@ -51,6 +57,8 @@ object BackupManager {
     ): Boolean {
         return try {
             ZipOutputStream(outputStream).use { zip ->
+                val backedUpFiles = mutableSetOf<String>()
+
                 if (backupSettings) {
                     val prefsToBackup = KNOWN_PREFS.toMutableSet()
                     try {
@@ -93,10 +101,47 @@ object BackupManager {
                             }
                         }
                     } catch (_: Exception) {}
+                } else if (backupCallingCards) {
+                    // Backup calling cards contact preferences only if settings backup is not selected
+                    val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
+                    val callingCardPrefs = filterCallingCardPrefs(rivoPrefs)
+                    if (callingCardPrefs.isNotEmpty()) {
+                        val prefsJson = mapToJson(callingCardPrefs)
+                        zip.putNextEntry(ZipEntry("prefs/$PREFS_RIVO.json"))
+                        zip.write(prefsJson.toByteArray(Charsets.UTF_8))
+                        zip.closeEntry()
+                    }
+                }
+
+                // 3. Backup Calling Cards Media (Backgrounds: images, videos, wallpapers)
+                if (backupSettings || backupCallingCards) {
+                    val bgDir = getBackgroundsDir(context)
+                    bgDir.listFiles()?.forEach { bgFile ->
+                        if (bgFile.isFile && !backedUpFiles.contains(bgFile.name)) {
+                            zip.putNextEntry(ZipEntry("backgrounds/${bgFile.name}"))
+                            FileInputStream(bgFile).use { it.copyTo(zip) }
+                            zip.closeEntry()
+                            backedUpFiles.add(bgFile.name)
+                        }
+                    }
+
+                    // Check any referenced files in SharedPreferences that might reside elsewhere
+                    val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
+                    rivoPrefs.all.forEach { (key, value) ->
+                        if (key.endsWith("_bg_path") && value is String && value.isNotBlank()) {
+                            val f = File(value)
+                            if (f.exists() && f.isFile && !backedUpFiles.contains(f.name)) {
+                                zip.putNextEntry(ZipEntry("backgrounds/${f.name}"))
+                                FileInputStream(f).use { it.copyTo(zip) }
+                                zip.closeEntry()
+                                backedUpFiles.add(f.name)
+                            }
+                        }
+                    }
                 }
 
                 if (backupCallingCards) {
-                    // 3. Backup notes & calling cards
+                    // 4. Backup notes & calling cards text files
                     val notesDir = NoteManager.getNotesDir(context)
                     notesDir.listFiles()?.filter { it.extension == "txt" }?.forEach { noteFile ->
                         zip.putNextEntry(ZipEntry("notes/${noteFile.name}"))
@@ -163,6 +208,16 @@ object BackupManager {
                                 restoredAny = true
                             }
                         }
+                        name.startsWith("backgrounds/") -> {
+                            val fileName = name.removePrefix("backgrounds/")
+                            if (fileName.isNotEmpty()) {
+                                val bgDir = getBackgroundsDir(context)
+                                val bgFile = File(bgDir, fileName)
+                                bgFile.parentFile?.mkdirs()
+                                FileOutputStream(bgFile).use { zip.copyTo(it) }
+                                restoredAny = true
+                            }
+                        }
                         name.startsWith("notes/") -> {
                             val fileName = name.removePrefix("notes/")
                             if (fileName.isNotEmpty()) {
@@ -177,6 +232,9 @@ object BackupManager {
                     entry = zip.nextEntry
                 }
             }
+
+            // Fix and validate all background paths after restore so they point to current device directories
+            fixBackgroundPathsAfterRestore(context)
 
             // Sync services and stores after restore
             try {
@@ -195,6 +253,54 @@ object BackupManager {
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun filterCallingCardPrefs(prefs: SharedPreferences): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        prefs.all.forEach { (key, value) ->
+            if (value != null) {
+                if (key.startsWith("contact_") ||
+                    key.startsWith("incoming_bg_") ||
+                    key.startsWith("ongoing_bg_") ||
+                    key.startsWith("incoming_font_") ||
+                    key.startsWith("ongoing_font_") ||
+                    key.startsWith("incoming_elements_") ||
+                    key.startsWith("ongoing_elements_") ||
+                    key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
+                    key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP
+                ) {
+                    result[key] = value
+                }
+            }
+        }
+        return result
+    }
+
+    private fun mapToJson(map: Map<String, Any>): String {
+        val json = JSONObject()
+        val meta = JSONObject()
+        map.forEach { (key, value) ->
+            when (value) {
+                is Boolean -> json.put(key, value)
+                is Int -> json.put(key, value)
+                is Long -> json.put(key, value)
+                is Float -> {
+                    json.put(key, value.toDouble())
+                    meta.put(key, "float")
+                }
+                is String -> json.put(key, value)
+                is Set<*> -> {
+                    val arr = JSONArray()
+                    value.forEach { item -> if (item != null) arr.put(item.toString()) }
+                    json.put(key, arr)
+                    meta.put(key, "string_set")
+                }
+            }
+        }
+        val wrapper = JSONObject()
+        wrapper.put("data", json)
+        wrapper.put("meta", meta)
+        return wrapper.toString()
     }
 
     private fun prefsToJson(prefs: SharedPreferences): String {
@@ -233,6 +339,8 @@ object BackupManager {
             val jsonObj = if (raw.has("data")) raw.getJSONObject("data") else raw
             val meta = if (raw.has("meta")) raw.getJSONObject("meta") else JSONObject()
 
+            val bgDir = getBackgroundsDir(context)
+
             jsonObj.keys().forEach { key ->
                 val typeHint = meta.optString(key, "")
                 when {
@@ -258,7 +366,17 @@ object BackupManager {
                                 else editor.putLong(key, value)
                             }
                             is Double -> editor.putFloat(key, value.toFloat())
-                            is String -> editor.putString(key, value)
+                            is String -> {
+                                // Remap background path to current device backgrounds dir if applicable
+                                val finalStr = if (key.endsWith("_bg_path") && value.isNotBlank()) {
+                                    val fileName = File(value).name
+                                    val localFile = File(bgDir, fileName)
+                                    if (localFile.exists()) localFile.absolutePath else value
+                                } else {
+                                    value
+                                }
+                                editor.putString(key, finalStr)
+                            }
                             is JSONArray -> {
                                 val set = mutableSetOf<String>()
                                 for (i in 0 until value.length()) {
@@ -271,6 +389,65 @@ object BackupManager {
                 }
             }
             editor.apply()
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Fixes any background file paths in SharedPreferences after a restore.
+     * Ensures all background paths point to existing files in the current device's backgrounds directory.
+     */
+    private fun fixBackgroundPathsAfterRestore(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+            val bgDir = getBackgroundsDir(context)
+            var modified = false
+
+            prefs.all.forEach { (key, value) ->
+                if (key.endsWith("_bg_path") && value is String && value.isNotBlank()) {
+                    val file = File(value)
+                    if (!file.exists()) {
+                        val fileName = file.name
+                        val localFile = File(bgDir, fileName)
+                        if (localFile.exists()) {
+                            editor.putString(key, localFile.absolutePath)
+                            modified = true
+                        }
+                    }
+                }
+            }
+
+            // Also check if any background type is configured but its path is empty or pointing to a missing file
+            val allKeys = prefs.all.keys.toList()
+            allKeys.forEach { key ->
+                if (key.endsWith("_bg_type")) {
+                    val prefix = key.removeSuffix("_bg_type")
+                    val type = prefs.getString(key, "none") ?: "none"
+                    if (type == "wallpaper" || type == "picture" || type == "video") {
+                        val pathKey = "${prefix}_bg_path"
+                        val currentPath = prefs.getString(pathKey, "") ?: ""
+                        val file = if (currentPath.isNotBlank()) File(currentPath) else null
+                        if (file == null || !file.exists()) {
+                            val candidatePng = File(bgDir, "custom_bg_${prefix}.png")
+                            val candidateMp4 = File(bgDir, "custom_bg_${prefix}.mp4")
+                            when {
+                                candidatePng.exists() -> {
+                                    editor.putString(pathKey, candidatePng.absolutePath)
+                                    modified = true
+                                }
+                                candidateMp4.exists() -> {
+                                    editor.putString(pathKey, candidateMp4.absolutePath)
+                                    modified = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (modified) {
+                editor.apply()
+            }
         } catch (_: Exception) {}
     }
 

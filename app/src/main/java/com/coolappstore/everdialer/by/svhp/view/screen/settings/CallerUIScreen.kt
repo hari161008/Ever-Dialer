@@ -192,18 +192,26 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
             // ── Show ongoing call UI when the call is answered ───────
             item {
                 RivoAnimatedSection(delayMs = 0L) {
-                    RivoExpressiveCard {
-                        RivoSwitchListItem(
-                            headline = "Show ongoing call UI when the call is answered",
-                            supporting = "Display the full screen in-call screen when a call is answered",
-                            leadingIcon = Icons.Outlined.Call,
-                            iconContainerColor = Color(0xFF2196F3),
-                            checked = showOngoingCallUIWhenAnswered,
-                            onCheckedChange = {
-                                showOngoingCallUIWhenAnswered = it
-                                prefs.setBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, it)
-                            }
+                    Column {
+                        Text(
+                            "Full Screen Display",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                         )
+                        RivoExpressiveCard {
+                            RivoSwitchListItem(
+                                headline = "Show ongoing call UI when the call is answered",
+                                supporting = "Display the full screen in-call screen when a call is answered",
+                                leadingIcon = Icons.Outlined.Call,
+                                iconContainerColor = Color(0xFF2196F3),
+                                checked = showOngoingCallUIWhenAnswered,
+                                onCheckedChange = {
+                                    showOngoingCallUIWhenAnswered = it
+                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, it)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -372,18 +380,19 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            // ── Element Size ─────────────────────────────────────────
+            // ── Button Sizing & Hang Up Width ───────────────────────
             item {
                 RivoAnimatedSection(delayMs = 50L) {
                     Column {
                         Text(
-                            "Element Size",
+                            "Button Sizing & Width",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                         )
                         RivoExpressiveCard {
                             Column(modifier = Modifier.padding(16.dp)) {
+                                // 1. Icon Size
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -417,9 +426,9 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
 
-                                Spacer(Modifier.height(20.dp))
+                                Spacer(Modifier.height(14.dp))
 
-                                // Slider
+                                // Slider: Icon Size
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -470,24 +479,13 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            }
-                        }
-                    }
-                }
-            }
 
-            // ── Hang Up Button ────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 60L) {
-                    Column {
-                        Text(
-                            "Hang Up Button",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
-                        RivoExpressiveCard {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // 2. Hang Up Button Width
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -508,7 +506,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     }
                                     Column {
                                         Text(
-                                            "Customise Width",
+                                            "Hang Up Button Width",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -520,7 +518,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
 
-                                Spacer(Modifier.height(20.dp))
+                                Spacer(Modifier.height(16.dp))
 
                                 // Live preview
                                 Box(
@@ -529,10 +527,10 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                 ) {
                                     val isCircle = hangupWidth <= 0.1f
                                     Surface(
-                                        shape = if (isCircle) CircleShape else RoundedCornerShape(28.dp),
+                                        shape = if (isCircle) CircleShape else RoundedCornerShape(24.dp),
                                         color = Color(0xFFD32F2F),
-                                        modifier = if (isCircle) Modifier.size(64.dp)
-                                            else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(64.dp)
+                                        modifier = if (isCircle) Modifier.size(52.dp)
+                                            else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(52.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Row(
@@ -543,13 +541,13 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                                     Icons.Default.CallEnd,
                                                     null,
                                                     tint = Color.White,
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(20.dp)
                                                 )
                                                 if (hangupWidth > 0.5f) {
                                                     Text(
                                                         "End Call",
                                                         color = Color.White,
-                                                        style = MaterialTheme.typography.labelLarge,
+                                                        style = MaterialTheme.typography.labelMedium,
                                                         fontWeight = FontWeight.SemiBold
                                                     )
                                                 }
@@ -558,7 +556,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator) {
                                     }
                                 }
 
-                                Spacer(Modifier.height(16.dp))
+                                Spacer(Modifier.height(14.dp))
 
                                 // Slider
                                 Row(
@@ -747,120 +745,126 @@ private fun FeatureButtonsPreview(
     }
     Spacer(Modifier.height(8.dp))
 
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color(0xFF2E2622) // approximates the ongoing-call screen's dark overlay so the preview reads the same as the real thing
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF2E2622),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp)
         ) {
-            if (freeformEnabled) {
-                // Hang Up joins the draggable canvas in Freeform mode, so it can be positioned
-                // anywhere too instead of staying pinned below as a fixed preview.
-                FreeformButtonsArea(
-                    gridIds = gridIds + CallButtonPrefs.ID_HANGUP,
-                    enabledMap = enabledMap,
-                    freeformPositions = freeformPositions,
-                    onDragActiveChanged = onDragActiveChanged,
-                    onPositionsChanged = onFreeformPositionsChanged,
-                    elementSize = elementSize,
-                    showNamesEnabled = showNamesEnabled
-                )
-            } else {
-                gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
-                    if (rowIndex > 0) Spacer(Modifier.height(20.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        rowIds.forEach { id ->
-                            val spec = CallButtonPrefs.specFor(id) ?: return@forEach
-                            val isSelected = selectedId == id
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (freeformEnabled) {
+                    // Hang Up joins the draggable canvas in Freeform mode, so it can be positioned
+                    // anywhere too instead of staying pinned below as a fixed preview.
+                    FreeformButtonsArea(
+                        gridIds = gridIds + CallButtonPrefs.ID_HANGUP,
+                        enabledMap = enabledMap,
+                        freeformPositions = freeformPositions,
+                        onDragActiveChanged = onDragActiveChanged,
+                        onPositionsChanged = onFreeformPositionsChanged,
+                        elementSize = elementSize,
+                        showNamesEnabled = showNamesEnabled
+                    )
+                } else {
+                    gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
+                        if (rowIndex > 0) Spacer(Modifier.height(20.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            rowIds.forEach { id ->
+                                val spec = CallButtonPrefs.specFor(id) ?: return@forEach
+                                val isSelected = selectedId == id
 
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    // Width must grow with elementSize too, otherwise once the
-                                    // 56.dp*elementSize icon circle exceeds this fixed 76.dp
-                                    // column it gets width-clamped by the parent while height
-                                    // keeps growing unconstrained — making the icon stretch
-                                    // vertically only instead of scaling uniformly.
-                                    .width((56.dp * elementSize + 20.dp).coerceAtLeast(76.dp))
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        val current = selectedId
-                                        when {
-                                            current == null -> selectedId = id
-                                            current == id -> selectedId = null
-                                            else -> {
-                                                // Swap the two selected tiles' positions outright,
-                                                // instead of shifting everything in between.
-                                                val fromIndex = buttonOrder.indexOf(current)
-                                                val toIndex = buttonOrder.indexOf(id)
-                                                if (fromIndex != -1 && toIndex != -1) {
-                                                    val tmp = buttonOrder[fromIndex]
-                                                    buttonOrder[fromIndex] = buttonOrder[toIndex]
-                                                    buttonOrder[toIndex] = tmp
-                                                    onOrderChanged()
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        // Width must grow with elementSize too, otherwise once the
+                                        // 56.dp*elementSize icon circle exceeds this fixed 76.dp
+                                        // column it gets width-clamped by the parent while height
+                                        // keeps growing unconstrained — making the icon stretch
+                                        // vertically only instead of scaling uniformly.
+                                        .width((56.dp * elementSize + 20.dp).coerceAtLeast(76.dp))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            val current = selectedId
+                                            when {
+                                                current == null -> selectedId = id
+                                                current == id -> selectedId = null
+                                                else -> {
+                                                    // Swap the two selected tiles' positions outright,
+                                                    // instead of shifting everything in between.
+                                                    val fromIndex = buttonOrder.indexOf(current)
+                                                    val toIndex = buttonOrder.indexOf(id)
+                                                    if (fromIndex != -1 && toIndex != -1) {
+                                                        val tmp = buttonOrder[fromIndex]
+                                                        buttonOrder[fromIndex] = buttonOrder[toIndex]
+                                                        buttonOrder[toIndex] = tmp
+                                                        onOrderChanged()
+                                                    }
+                                                    selectedId = null
                                                 }
-                                                selectedId = null
                                             }
                                         }
-                                    }
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                                            else Color.White.copy(alpha = 0.16f),
-                                    border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                                    modifier = Modifier.size(56.dp * elementSize)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            spec.icon,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp * elementSize)
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                                                else Color.White.copy(alpha = 0.16f),
+                                        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                                        modifier = Modifier.size(56.dp * elementSize)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                spec.icon,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp * elementSize)
+                                            )
+                                        }
+                                    }
+                                    if (showNamesEnabled) {
+                                        Text(
+                                            spec.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            modifier = Modifier.padding(top = 6.dp)
                                         )
                                     }
                                 }
-                                if (showNamesEnabled) {
-                                    Text(
-                                        spec.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        modifier = Modifier.padding(top = 6.dp)
-                                    )
-                                }
+                            }
+                            // Pad out the row with invisible spacers so a partial last row still aligns
+                            // left-to-right the same way the real call screen's SpaceEvenly row does.
+                            repeat(3 - rowIds.size) {
+                                Spacer(modifier = Modifier.width((56.dp * elementSize + 20.dp).coerceAtLeast(76.dp)))
                             }
                         }
-                        // Pad out the row with invisible spacers so a partial last row still aligns
-                        // left-to-right the same way the real call screen's SpaceEvenly row does.
-                        repeat(3 - rowIds.size) {
-                            Spacer(modifier = Modifier.width((56.dp * elementSize + 20.dp).coerceAtLeast(76.dp)))
-                        }
                     }
-                }
 
-                Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(28.dp))
 
-                // Fixed (non-draggable) Hang Up preview, matching the current width setting
-                // below. Only shown outside Freeform — in Freeform, Hang Up is a draggable tile
-                // inside FreeformButtonsArea above instead.
-                val isCircle = hangupWidth <= 0.1f
-                Surface(
-                    shape = if (isCircle) CircleShape else RoundedCornerShape(28.dp),
-                    color = Color(0xFFD32F2F),
-                    modifier = if (isCircle) Modifier.size(56.dp)
-                        else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(56.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            if (hangupWidth > 0.5f) {
-                                Text("End Call", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    // Fixed (non-draggable) Hang Up preview, matching the current width setting
+                    // below. Only shown outside Freeform — in Freeform, Hang Up is a draggable tile
+                    // inside FreeformButtonsArea above instead.
+                    val isCircle = hangupWidth <= 0.1f
+                    Surface(
+                        shape = if (isCircle) CircleShape else RoundedCornerShape(28.dp),
+                        color = Color(0xFFD32F2F),
+                        modifier = if (isCircle) Modifier.size(56.dp)
+                            else Modifier.fillMaxWidth(hangupWidth.coerceIn(0.1f, 1.0f)).height(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                if (hangupWidth > 0.5f) {
+                                    Text("End Call", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }

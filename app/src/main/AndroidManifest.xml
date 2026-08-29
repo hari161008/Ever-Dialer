@@ -37,6 +37,7 @@
         android:maxSdkVersion="29"
         tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:node="remove"/>
@@ -859,6 +860,19 @@
             <intent-filter>
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
+        </service>
+
+        <!-- Volume DND: accessibility service for volume key combination detection -->
+        <service
+            android:name=".controller.VolumeDndAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/volume_dnd_accessibility_service" />
         </service>
 
         <receiver

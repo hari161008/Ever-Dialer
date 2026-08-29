@@ -64,6 +64,8 @@ class PreferenceManager(context: Context) {
     fun setFloat(key: String, value: Float)            { prefs.edit().putFloat(key, value).apply(); _settingsChanged.value += 1 }
     fun getLong(key: String, defaultValue: Long)       = prefs.getLong(key, defaultValue)
     fun setLong(key: String, value: Long)              { prefs.edit().putLong(key, value).apply(); _settingsChanged.value += 1 }
+    fun remove(key: String)                            { prefs.edit().remove(key).apply(); _settingsChanged.value += 1 }
+    fun getAllKeys(): Set<String>                      = prefs.all.keys
 
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
     fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
@@ -353,9 +355,12 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_BG_PAN_Y         = "incoming_bg_pan_y"
         const val KEY_INCOMING_BG_DIM           = "incoming_bg_dim"
         const val KEY_INCOMING_BG_BLUR          = "incoming_bg_blur"
+        const val KEY_INCOMING_BG_VIDEO_SPEED   = "incoming_bg_video_speed"
         const val KEY_INCOMING_SHOW_CONTACT_PFP = "incoming_show_contact_pfp"
         const val KEY_INCOMING_FONT_COLOR_MODE  = "incoming_font_color_mode" // "default" | "custom"
         const val KEY_INCOMING_FONT_COLOR       = "incoming_font_color"      // Int ARGB
+        const val KEY_INCOMING_ELEMENTS_THEME   = "incoming_elements_theme"  // "auto" | "light" | "dark"
+        const val KEY_INCOMING_AUTO_REFRESH_WALLPAPER = "incoming_auto_refresh_wallpaper"
 
         const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"
@@ -364,9 +369,22 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_BG_PAN_Y          = "ongoing_bg_pan_y"
         const val KEY_ONGOING_BG_DIM            = "ongoing_bg_dim"
         const val KEY_ONGOING_BG_BLUR           = "ongoing_bg_blur"
+        const val KEY_ONGOING_BG_VIDEO_SPEED    = "ongoing_bg_video_speed"
         const val KEY_ONGOING_SHOW_CONTACT_PFP  = "ongoing_show_contact_pfp"
         const val KEY_ONGOING_FONT_COLOR_MODE   = "ongoing_font_color_mode"  // "default" | "custom"
         const val KEY_ONGOING_FONT_COLOR        = "ongoing_font_color"       // Int ARGB
+        const val KEY_ONGOING_AUTO_REFRESH_WALLPAPER  = "ongoing_auto_refresh_wallpaper"
+
+        // Volume DND — toggle system DND via volume button sequence using Accessibility
+        const val KEY_VOLUME_DND_ENABLED           = "volume_dnd_enabled"
+        const val KEY_VOLUME_DND_SEQUENCE          = "volume_dnd_sequence"
+        const val KEY_VOLUME_DND_LOCK_SCREEN_ONLY  = "volume_dnd_lock_screen_only"
+        const val KEY_VOLUME_DND_TIMEOUT_MS        = "volume_dnd_timeout_ms"
+        const val DEFAULT_VOLUME_DND_SEQUENCE      = "UUDD"
+        const val DEFAULT_VOLUME_DND_TIMEOUT_MS    = 600
+
+        // Favorites display mode (grid vs list)
+        const val KEY_FAVORITES_IN_LIST            = "favorites_in_list"
     }
 }
 

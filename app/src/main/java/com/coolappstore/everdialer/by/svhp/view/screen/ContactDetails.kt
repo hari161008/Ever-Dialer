@@ -35,6 +35,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
@@ -854,6 +855,67 @@ fun ContactDetailsScreen(
                             leadingIcon = Icons.Default.SimCard,
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { showChooseSimDialog = true }
+                        )
+                    }
+                }
+
+                // Calling Backgrounds — per-contact override for incoming and ongoing call screens
+                item {
+                    val incomingContactBgType = remember(settingsVer, contactSimKey) {
+                        prefs.getString("contact_${contactSimKey}_incoming_bg_type", null)
+                    }
+                    val ongoingContactBgType = remember(settingsVer, contactSimKey) {
+                        prefs.getString("contact_${contactSimKey}_ongoing_bg_type", null)
+                    }
+                    val incomingSupporting = when (incomingContactBgType) {
+                        "wallpaper" -> "Device Wallpaper (Customized)"
+                        "picture" -> "Custom Picture"
+                        "video" -> "Custom Video"
+                        "none" -> "None (Solid Background)"
+                        else -> "According to Settings (Default)"
+                    }
+                    val ongoingSupporting = when (ongoingContactBgType) {
+                        "wallpaper" -> "Device Wallpaper (Customized)"
+                        "picture" -> "Custom Picture"
+                        "video" -> "Custom Video"
+                        "none" -> "None (Solid Background)"
+                        else -> "According to Settings (Default)"
+                    }
+
+                    RivoExpressiveCard(title = "Calling Backgrounds", icon = Icons.Default.Wallpaper) {
+                        RivoListItem(
+                            headline = "Incoming Call Background",
+                            supporting = incomingSupporting,
+                            leadingIcon = Icons.Default.CallReceived,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = {
+                                navigator.navigate(
+                                    CustomBackgroundPickerScreenDestination(
+                                        isIncoming = true,
+                                        contactKey = contactSimKey.toString(),
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        RivoListItem(
+                            headline = "Ongoing Call Background",
+                            supporting = ongoingSupporting,
+                            leadingIcon = Icons.Default.PhoneInTalk,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = {
+                                navigator.navigate(
+                                    CustomBackgroundPickerScreenDestination(
+                                        isIncoming = false,
+                                        contactKey = contactSimKey.toString(),
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            }
                         )
                     }
                 }

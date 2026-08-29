@@ -241,5 +241,5 @@ The source code of Rate and Review are open, Check it out: [Click Here](https://
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
 ┈➤ [Network Switch](https://github.com/aunchagaonkar/NetworkSwitch)<br><br>
 ┈➤ [Raise To Answer](https://github.com/TheLastProject/RaiseToAnswer)<br><br>
-┈➤ [WallpaperExport](https://github.com/cvzi/WallpaperExport)<br><br>
+┈➤ [WallpaperExport](ttps://github.com/cvzi/WallpaperExport)<br><br>
 ┈➤ [LineageOS Dialer](https://github.com/Lineageos/android_packages_apps_Dialer)

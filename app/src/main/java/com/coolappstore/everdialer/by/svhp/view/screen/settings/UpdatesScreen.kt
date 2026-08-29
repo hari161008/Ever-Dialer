@@ -95,6 +95,17 @@ private sealed class DownloadState {
     object Failed : DownloadState()
 }
 
+private val ColorPurple  = Color(0xFF9C27B0)
+private val ColorOrange  = Color(0xFFFF9800)
+private val ColorBlue    = Color(0xFF2196F3)
+private val ColorGreen   = Color(0xFF4CAF50)
+private val ColorRed     = Color(0xFFE91E63)
+private val ColorTeal    = Color(0xFF009688)
+private val ColorIndigo  = Color(0xFF3F51B5)
+private val ColorBluGrey = Color(0xFF607D8B)
+private val ColorAmber   = Color(0xFFFFC107)
+private val ColorCyan    = Color(0xFF00BCD4)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
@@ -212,14 +223,14 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 icon = {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.errorContainer,
+                        color = ColorRed.copy(alpha = 0.16f),
                         modifier = Modifier.size(48.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.ErrorOutline,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
+                                tint = ColorRed,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -230,7 +241,8 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 confirmButton = {
                     Button(
                         onClick = { downloadState = DownloadState.Idle },
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("OK")
                     }
@@ -251,14 +263,6 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         )
     }
 
-    val infinite = rememberInfiniteTransition(label = "appBarSpin")
-    val spinAngle by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
-        label = "spinAngle"
-    )
-
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
@@ -266,18 +270,6 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 title = { Text("Updates", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                },
-                actions = {
-                    IconButton(
-                        onClick = { runCheck() },
-                        enabled = checkState !is CheckState.Checking
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Check again",
-                            modifier = if (checkState is CheckState.Checking) Modifier.rotate(spinAngle) else Modifier
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -296,29 +288,40 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── Hero Banner ──────────────────────────────────────────
+            // ── Unified Top Card with Background Container ───────────
             RivoAnimatedSection(delayMs = 0L) {
-                ExpressiveUpdateHeroCard(checkState = checkState)
-            }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(32.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                    shadowElevation = 0.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // ── Top Hero Banner (Dual Pane) ──
+                        ExpressiveUpdateHeroCard(checkState = checkState)
 
-            // ── Version Stat Cards ────────────────────────────────────
-            RivoAnimatedSection(delayMs = 60L) {
-                VersionStatsRow(checkState = checkState)
-            }
+                        // ── Version Stat Cards ──
+                        VersionStatsRow(checkState = checkState)
 
-            // ── Action Button Area ───────────────────────────────────
-            RivoAnimatedSection(delayMs = 120L) {
-                ExpressiveActionArea(
-                    checkState = checkState,
-                    onCheckAgain = { runCheck() },
-                    onUpdateClick = { latest ->
-                        triggerHaptic()
-                        val apkFile = getApkDestinationFile()
-                        val downloadedVersion = prefs.getString(PreferenceManager.KEY_DOWNLOADED_UPDATE_VERSION, null)
-                        val readyToInstall = apkFile.exists() && apkFile.length() > 0L && downloadedVersion == latest.tagName
-                        downloadState = DownloadState.Confirm(latest, readyToInstall)
+                        // ── Action Buttons ──
+                        ExpressiveActionArea(
+                            checkState = checkState,
+                            onCheckAgain = { runCheck() },
+                            onUpdateClick = { latest ->
+                                triggerHaptic()
+                                val apkFile = getApkDestinationFile()
+                                val downloadedVersion = prefs.getString(PreferenceManager.KEY_DOWNLOADED_UPDATE_VERSION, null)
+                                val readyToInstall = apkFile.exists() && apkFile.length() > 0L && downloadedVersion == latest.tagName
+                                downloadState = DownloadState.Confirm(latest, readyToInstall)
+                            }
+                        )
                     }
-                )
+                }
             }
 
             // ── Release Notes Section ────────────────────────────────
@@ -335,7 +338,9 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
 
             // ── Compare Release Notes ─────────────────────────────────
             RivoAnimatedSection(delayMs = 210L) {
-                RivoExpressiveCard {
+                RivoExpressiveCard(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                ) {
                     RivoListItem(
                         headline = "Compare Release Notes",
                         supporting = "Compare installed v$APP_VERSION with the latest release",
@@ -351,7 +356,9 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
             RivoAnimatedSection(delayMs = 240L) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     RivoSectionHeader(title = "Options")
-                    RivoExpressiveCard {
+                    RivoExpressiveCard(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                    ) {
                         RivoSwitchListItem(
                             headline = "Auto Check For Updates",
                             supporting = "Automatically check for new releases when app launches",
@@ -372,15 +379,15 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
     }
 }
 
-// ─── Expressive Hero Status Card ──────────────────────────────────────────
+// ─── Expressive Hero Status Card (Dual Pane Layout) ───────────────────────
 
 @Composable
 private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
     val containerColor = when (checkState) {
-        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                              else MaterialTheme.colorScheme.surfaceContainerLow
-        is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer
+                              else MaterialTheme.colorScheme.secondaryContainer
+        is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer
+        else -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
     val animatedContainerColor by animateColorAsState(
@@ -391,28 +398,70 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         color = animatedContainerColor,
-        tonalElevation = 1.dp
+        shadowElevation = 0.dp
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeroStatusIcon(checkState = checkState)
-
+            // ── Left Pane: Hero Status Icon & Badge ──
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HeroStatusIcon(checkState = checkState)
+
+                AnimatedContent(
+                    targetState = checkState,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "statusBadge"
+                ) { state ->
+                    when (state) {
+                        is CheckState.Checking -> ExpressiveStatusChip(
+                            text = "Checking…",
+                            containerColor = MaterialTheme.colorScheme.tertiary,
+                            contentColor = MaterialTheme.colorScheme.onTertiary,
+                            pulsing = true
+                        )
+                        is CheckState.Done -> if (state.isNewer && state.latest != null) {
+                            ExpressiveStatusChip(
+                                text = "New v${state.latest.tagName}",
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            ExpressiveStatusChip(
+                                text = "Latest Build",
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                                contentColor = MaterialTheme.colorScheme.onSecondary
+                            )
+                        }
+                        is CheckState.Failed -> ExpressiveStatusChip(
+                            text = "Error",
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                        else -> Spacer(Modifier.height(0.dp))
+                    }
+                }
+            }
+
+            // ── Right Pane: App Name, Headline & Description ──
+            Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Ever Dialer",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
+                    text = "EVER DIALER",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp
                 )
 
                 AnimatedContent(
@@ -424,65 +473,29 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                     label = "heroTitle"
                 ) { state ->
                     val (title, subtitle) = when (state) {
-                        is CheckState.Checking -> "Checking for updates…" to "Connecting to update repository"
+                        is CheckState.Checking -> "Checking for updates…" to "Connecting to release repository"
                         is CheckState.Done -> if (state.isNewer && state.latest != null) {
-                            "Update Available!" to "v${state.latest.tagName} is ready to download"
+                            "Update Available!" to "Version v${state.latest.tagName} is ready to download"
                         } else {
                             "You're Up to Date" to "Ever Dialer v$APP_VERSION is the latest version"
                         }
-                        is CheckState.Failed -> "Update Check Failed" to "Could not connect to update server"
-                        else -> "Ever Dialer Updates" to "Current version v$APP_VERSION"
+                        is CheckState.Failed -> "Update Check Failed" to "Could not connect to release server"
+                        else -> "Ever Dialer Updates" to "Current installed build v$APP_VERSION"
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            }
-
-            AnimatedContent(
-                targetState = checkState,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "statusBadge"
-            ) { state ->
-                when (state) {
-                    is CheckState.Checking -> ExpressiveStatusChip(
-                        text = "Checking…",
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        pulsing = true
-                    )
-                    is CheckState.Done -> if (state.isNewer && state.latest != null) {
-                        ExpressiveStatusChip(
-                            text = "New v${state.latest.tagName}",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    } else {
-                        ExpressiveStatusChip(
-                            text = "Latest Build",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    is CheckState.Failed -> ExpressiveStatusChip(
-                        text = "Connection Error",
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    else -> Spacer(Modifier.height(0.dp))
                 }
             }
         }
@@ -508,39 +521,39 @@ private fun HeroStatusIcon(checkState: CheckState) {
     val (icon, iconBgColor, iconTintColor) = when (checkState) {
         is CheckState.Checking -> Triple(
             Icons.Default.SystemUpdate,
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+            MaterialTheme.colorScheme.tertiary
         )
         is CheckState.Done -> if (checkState.isNewer) {
             Triple(
                 Icons.Default.NewReleases,
-                MaterialTheme.colorScheme.primaryContainer,
-                MaterialTheme.colorScheme.onPrimaryContainer
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                MaterialTheme.colorScheme.primary
             )
         } else {
             Triple(
                 Icons.Default.Verified,
-                MaterialTheme.colorScheme.primaryContainer,
-                MaterialTheme.colorScheme.onPrimaryContainer
+                MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f),
+                MaterialTheme.colorScheme.secondary
             )
         }
         is CheckState.Failed -> Triple(
             Icons.Default.CloudOff,
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer
+            MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
+            MaterialTheme.colorScheme.error
         )
         else -> Triple(
             Icons.Default.SystemUpdate,
-            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
             MaterialTheme.colorScheme.primary
         )
     }
 
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(22.dp),
         color = iconBgColor,
         modifier = Modifier
-            .size(76.dp)
+            .size(64.dp)
             .scale(if (checkState is CheckState.Done && checkState.isNewer) pulse else 1f),
         shadowElevation = 0.dp
     ) {
@@ -558,7 +571,7 @@ private fun HeroStatusIcon(checkState: CheckState) {
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTintColor,
-                    modifier = modifier.size(36.dp)
+                    modifier = modifier.size(30.dp)
                 )
             }
         }
@@ -587,10 +600,10 @@ private fun ExpressiveStatusChip(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = contentColor,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
@@ -610,14 +623,15 @@ private fun VersionStatsRow(checkState: CheckState) {
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         ExpressiveStatCard(
             label = "Installed",
             value = "v$APP_VERSION",
             icon = Icons.Outlined.PhoneAndroid,
             modifier = Modifier.weight(1f),
-            iconTint = MaterialTheme.colorScheme.primary
+            iconTint = MaterialTheme.colorScheme.primary,
+            containerBgColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
         )
 
         ExpressiveStatCard(
@@ -626,7 +640,9 @@ private fun VersionStatsRow(checkState: CheckState) {
             icon = if (isNewer) Icons.Outlined.CloudDownload else Icons.Outlined.CheckCircle,
             modifier = Modifier.weight(1f),
             iconTint = if (isNewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-            highlighted = isNewer
+            highlighted = isNewer,
+            containerBgColor = if (isNewer) MaterialTheme.colorScheme.primaryContainer
+                              else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
         )
     }
 }
@@ -638,27 +654,23 @@ private fun ExpressiveStatCard(
     icon: ImageVector,
     modifier: Modifier = Modifier,
     iconTint: Color = MaterialTheme.colorScheme.primary,
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    containerBgColor: Color = MaterialTheme.colorScheme.surfaceContainer
 ) {
-    val bgColor = if (highlighted) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = bgColor,
+        shape = RoundedCornerShape(20.dp),
+        color = containerBgColor,
+        shadowElevation = 0.dp,
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = iconTint.copy(alpha = 0.15f),
-                modifier = Modifier.size(36.dp)
+                color = iconTint.copy(alpha = 0.16f),
+                modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -712,8 +724,8 @@ private fun ExpressiveActionArea(
                     onClick = { onUpdateClick(state.latest) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(20.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -734,8 +746,8 @@ private fun ExpressiveActionArea(
                     onClick = onCheckAgain,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(20.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -753,11 +765,15 @@ private fun ExpressiveActionArea(
                     enabled = false,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(20.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 ) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         strokeWidth = 2.5.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -771,14 +787,14 @@ private fun ExpressiveActionArea(
                     onClick = onCheckAgain,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(20.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text("Check for Updates", fontWeight = FontWeight.SemiBold)
                 }
@@ -787,7 +803,7 @@ private fun ExpressiveActionArea(
     }
 }
 
-// ─── Expressive Release Notes Card ─────────────────────────────────────────
+// ─── Expressive Release Notes Card (Dual Pane Layout) ─────────────────────
 
 @Composable
 private fun ExpressiveReleaseNotesCard(
@@ -795,7 +811,7 @@ private fun ExpressiveReleaseNotesCard(
     installedNotes: String?,
     onCompareClick: () -> Unit
 ) {
-    RivoExpressiveCard {
+    RivoExpressiveCard(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)) {
         AnimatedContent(
             targetState = checkState,
             transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
@@ -813,92 +829,155 @@ private fun ExpressiveReleaseNotesCard(
 
                 is CheckState.Done -> {
                     if (state.isNewer && state.latest != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // ── Dual Pane Header ──
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // Left Pane: Icon Badge + Version Title + Tag
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        "v${state.latest.tagName}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    Column {
+                                        Text(
+                                            "v${state.latest.tagName}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "New Release",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
 
+                                // Right Pane: Date Badge
                                 if (state.latest.publishedAt != null) {
-                                    Text(
-                                        text = state.latest.publishedAt.substringBefore("T"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHighest
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(12.dp))
+                                            Text(
+                                                text = state.latest.publishedAt.substringBefore("T"),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
 
-                            SelectionContainer {
-                                ReleaseNotesText(state.latest.releaseNotes)
+                            // Inset content container
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(modifier = Modifier.padding(14.dp)) {
+                                    SelectionContainer {
+                                        ReleaseNotesText(state.latest.releaseNotes)
+                                    }
+                                }
                             }
                         }
                     } else {
-                        // Up to date
-                        Column(
+                        // Up to date (Dual Pane Layout)
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            // Left Pane: Status Icon Surface
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                modifier = Modifier.size(48.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                                modifier = Modifier.size(56.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         Icons.Default.CheckCircle,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(30.dp)
                                     )
                                 }
                             }
 
-                            Text(
-                                "You're on the latest build",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
+                            // Right Pane: Info & Action
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "You're on the latest build",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
 
-                            Text(
-                                "There are no pending updates. You're enjoying the most recent version of Ever Dialer.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
+                                Text(
+                                    "There are no pending updates. You're enjoying the most recent version of Ever Dialer.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
 
-                            if (!installedNotes.isNullOrBlank()) {
-                                Spacer(Modifier.height(4.dp))
-                                TextButton(
-                                    onClick = onCompareClick,
-                                    shape = RoundedCornerShape(14.dp)
-                                ) {
-                                    Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("View Installed Version Notes")
+                                if (!installedNotes.isNullOrBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Surface(
+                                        onClick = onCompareClick,
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.Description,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                "View Installed Version Notes",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -906,38 +985,47 @@ private fun ExpressiveReleaseNotesCard(
                 }
 
                 is CheckState.Failed -> {
-                    Column(
+                    // Failed (Dual Pane Layout)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // Left Pane: Error Icon Surface
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                            modifier = Modifier.size(48.dp)
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.CloudOff,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
                         }
-                        Text(
-                            "Couldn't check for updates",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Unable to reach the GitHub releases repository. Please verify your connection.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
+
+                        // Right Pane: Error Info
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "Couldn't check for updates",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Unable to reach the GitHub releases repository. Please verify your connection.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -1285,16 +1373,17 @@ private fun PermissionToDownloadDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         icon = {
+            val iconColor = if (readyToInstall) ColorGreen else ColorBlue
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = iconColor.copy(alpha = 0.16f),
                 modifier = Modifier.size(52.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         if (readyToInstall) Icons.Default.InstallMobile else Icons.Default.Download,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = iconColor,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -1352,14 +1441,14 @@ private fun DownloadingDialog(latestVersion: String, progress: Float) {
         icon = {
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = ColorIndigo.copy(alpha = 0.16f),
                 modifier = Modifier.size(52.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Downloading,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = ColorIndigo,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -1428,7 +1517,7 @@ private fun CompareReleaseNotesSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Column(
             modifier = Modifier
@@ -1490,7 +1579,7 @@ private fun CompareReleaseNotesSheet(
             ) { tab ->
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Box(
@@ -1530,7 +1619,7 @@ private fun ExpressiveSegmentedTab(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
             .padding(4.dp)
     ) {
         options.forEachIndexed { index, label ->

@@ -7,6 +7,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.os.Build
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 
@@ -53,6 +56,61 @@ object WallpaperExportHelper {
             tempFile
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Checks if auto-refresh wallpaper is enabled for incoming, ongoing or any contact custom wallpaper,
+     * and refreshes the wallpaper files automatically.
+     */
+    fun refreshAutoWallpaperIfEnabled(context: Context, prefs: PreferenceManager) {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val allKeys = prefs.getAllKeys()
+                val activeAutoRefreshPrefixes = mutableListOf<String>()
+
+                // Check default incoming
+                if (prefs.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") == "wallpaper" &&
+                    prefs.getBoolean(PreferenceManager.KEY_INCOMING_AUTO_REFRESH_WALLPAPER, false)
+                ) {
+                    activeAutoRefreshPrefixes.add("incoming")
+                }
+
+                // Check default ongoing
+                if (prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") == "wallpaper" &&
+                    prefs.getBoolean(PreferenceManager.KEY_ONGOING_AUTO_REFRESH_WALLPAPER, false)
+                ) {
+                    activeAutoRefreshPrefixes.add("ongoing")
+                }
+
+                // Check contact-specific prefixes
+                allKeys.forEach { key ->
+                    if (key.endsWith("_auto_refresh_wallpaper") && prefs.getBoolean(key, false)) {
+                        val prefix = key.removeSuffix("_auto_refresh_wallpaper")
+                        if (prefix != "incoming" && prefix != "ongoing") {
+                            val typeKey = "${prefix}_bg_type"
+                            if (prefs.getString(typeKey, "none") == "wallpaper") {
+                                activeAutoRefreshPrefixes.add(prefix)
+                            }
+                        }
+                    }
+                }
+
+                if (activeAutoRefreshPrefixes.isNotEmpty()) {
+                    val extracted = extractWallpaperToFile(context)
+                    if (extracted != null && extracted.exists()) {
+                        val bgDir = File(context.filesDir, "backgrounds").apply { mkdirs() }
+                        activeAutoRefreshPrefixes.forEach { prefix ->
+                            val currentPath = prefs.getString("${prefix}_bg_path", "") ?: ""
+                            val dest = if (currentPath.isNotEmpty()) File(currentPath) else File(bgDir, "custom_bg_${prefix}.png")
+                            extracted.copyTo(dest, overwrite = true)
+                            if (currentPath.isEmpty()) {
+                                prefs.setString("${prefix}_bg_path", dest.absolutePath)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 }

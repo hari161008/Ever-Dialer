@@ -125,6 +125,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
     var openDialpadDefault  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
+    var favoritesInList     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)) }
     var hideRateAndReview   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HIDE_RATE_AND_REVIEW, false)) }
     val rateReviewToggleSettingsVersion by prefs.settingsChanged.collectAsState()
     val rateReviewSecretActive = remember(rateReviewToggleSettingsVersion) {
@@ -1365,6 +1366,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         openDialpadDefault = it
                                         prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show favourites in list",
+                                    supporting = "Display favourite contacts in a vertical list instead of a grid",
+                                    leadingIcon = Icons.Outlined.FormatListBulleted,
+                                    iconContainerColor = Color(0xFFE91E63),
+                                    checked = favoritesInList,
+                                    modifier = Modifier.settingsSearchHighlight("favorites_in_list", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        favoritesInList = it
+                                        prefs.setBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, it)
                                     }
                                 )
                                 if (!rateReviewSecretActive) {

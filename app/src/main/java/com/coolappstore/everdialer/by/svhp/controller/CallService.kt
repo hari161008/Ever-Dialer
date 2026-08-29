@@ -752,7 +752,8 @@ class CallService : InCallService() {
         val isOnHold  = call.state == Call.STATE_HOLDING
         val bluetoothAvailable = (_audioState.value?.supportedRouteMask ?: 0) and android.telecom.CallAudioState.ROUTE_BLUETOOTH != 0
         val isBluetooth = _audioState.value?.route == android.telecom.CallAudioState.ROUTE_BLUETOOTH
-        val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ID
+        val isFullScreenIncoming = isRinging && prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false)
+        val channelId = if (isRinging && !isFullScreenIncoming) CHANNEL_INCOMING_ID else CHANNEL_ID
 
         // Use the call's real, authoritative connect time from Telecom (the same source
         // CallActivity's on-screen timer already trusts) — not "now" — so the notification's
@@ -765,15 +766,19 @@ class CallService : InCallService() {
             .setSmallIcon(currentCallSmallIcon())
             .setContentTitle(contactName)
             .setContentText(if (isRinging) "Incoming call" else "Active call")
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(if (isFullScreenIncoming) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setFullScreenIntent(fsi, true)
+            .apply {
+                if (!isFullScreenIncoming) {
+                    setFullScreenIntent(fsi, true)
+                }
+            }
             .setContentIntent(fsi)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(false)
-            .setSilent(!isRinging)
-            .setDefaults(if (isRinging) NotificationCompat.DEFAULT_ALL else 0)
+            .setSilent(!isRinging || isFullScreenIncoming)
+            .setDefaults(if (isRinging && !isFullScreenIncoming) NotificationCompat.DEFAULT_ALL else 0)
             .setWhen(connectTime)
             .setShowWhen(!isRinging)
             .setUsesChronometer(!isRinging)
