@@ -342,10 +342,10 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false) }
             val blurEffects = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false) }
-            val saturatedColors = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-            val fabBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-            val fabFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+            val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+            val fabBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+            val fabFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             val useBlur = blurEffects && blurRecentsFab && !useLiquidGlass
@@ -675,10 +675,10 @@ fun CallLogFullContent(
                     }
 
                     // ── Filter pills ──────────────────────────────────────────────
-                    val saturatedColors = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
                     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                    val activeChipBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                    val activeChipFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+                    val isSaturatedDark = remember(settingsVersion, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+                    val activeChipBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                    val activeChipFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
 
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -809,10 +809,10 @@ fun CallLogFullContent(
                                 }
                             }
                             item(key = "filter_pills", contentType = "filterPills") {
-                                val saturatedColors = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
                                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                                val activeChipBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                                val activeChipFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+                                val isSaturatedDark = remember(settingsVersion, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+                                val activeChipBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                                val activeChipFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
 
                                 LazyRow(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -975,19 +975,13 @@ private fun AnimatedStatCard(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     onClick: () -> Unit = {}
 ) {
-    val prefs = koinInject<PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
-    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val actualBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else containerColor
-
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(delayMs); visible = true }
     val cardAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "statAlpha")
     val cardOffset by animateDpAsState(if (visible) 0.dp else 16.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "statOffset")
     Box(modifier = Modifier.alpha(cardAlpha).offset(y = cardOffset)) {
-        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = actualBg, modifier = modifier) {
-            RivoStatCard(label = label, value = value, icon = icon, iconTint = iconTint, containerColor = Color.Transparent, modifier = Modifier.fillMaxWidth())
+        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = Color.Transparent, modifier = modifier) {
+            RivoStatCard(label = label, value = value, icon = icon, iconTint = iconTint, containerColor = containerColor, modifier = Modifier.fillMaxWidth())
         }
     }
 }

@@ -170,10 +170,10 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false) }
             val blurEffects = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, false) }
-            val saturatedColors = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-            val fabBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-            val fabFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+            val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs_ui.isSaturatedForTheme(isDark) }
+            val fabBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+            val fabFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgContactsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             val useBlur = blurEffects && blurContactsFab && !useLiquidGlass
@@ -365,10 +365,10 @@ fun ContactContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val saturatedColors = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                val activePillBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                val activePillFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+                val isSaturatedDark = remember(settingsVersion, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+                val activePillBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                val activePillFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
 
                 // ── Contacts count + account switcher pill ─────────────
                 Surface(

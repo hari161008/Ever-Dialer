@@ -316,7 +316,9 @@ fun Rivo4Theme(
         else defaultPrimary
     }
 
-    if (saturatedColors) {
+    val isSaturatedActive = prefs.isSaturatedForTheme(darkTheme)
+
+    if (isSaturatedActive) {
         colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode)
     } else {
         colorScheme = when (themeMode) {

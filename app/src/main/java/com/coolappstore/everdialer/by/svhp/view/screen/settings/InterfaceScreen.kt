@@ -121,7 +121,12 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var dynamicColors       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
     var showFloatingColorPicker by remember { mutableStateOf(false) }
     var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
+    var saturatedModes      by remember { mutableStateOf(prefs.getSaturatedModesSet()) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
+    var solidIconsLightStyle by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
+    var solidIconsDarkStyle  by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_DARK, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
+    var showSolidIconsLightDialog by remember { mutableStateOf(false) }
+    var showSolidIconsDarkDialog  by remember { mutableStateOf(false) }
     var circleIcons         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false)) }
     var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
@@ -987,6 +992,64 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         triggerRestartPrompt(scope, snackbarHostState, context)
                                     }
                                 )
+                                AnimatedVisibility(
+                                    visible = saturatedColors,
+                                    enter = expandVertically() + fadeIn(),
+                                    exit = shrinkVertically() + fadeOut()
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(50.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                val modesList = listOf("Light" to "light", "Dark" to "dark", "White" to "white", "Black" to "black")
+                                                val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
+                                                val selectedFg = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+                                                modesList.forEach { (label, key) ->
+                                                    val isSelected = saturatedModes.contains(key)
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            val nextModes = if (isSelected) {
+                                                                saturatedModes - key
+                                                            } else {
+                                                                saturatedModes + key
+                                                            }
+                                                            saturatedModes = nextModes
+                                                            prefs.setString(PreferenceManager.KEY_SATURATED_MODES, nextModes.joinToString(","))
+                                                        },
+                                                        label = {
+                                                            Text(
+                                                                label,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                            )
+                                                        },
+                                                        shape = RoundedCornerShape(50.dp),
+                                                        border = null,
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            containerColor = Color.Transparent,
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            selectedLabelColor = selectedFg
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -1000,6 +1063,55 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     modifier = Modifier.settingsSearchHighlight("solid_icons", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = { solidIcons = it; prefs.setBoolean(PreferenceManager.KEY_SOLID_ICONS, it) }
                                 )
+                                AnimatedVisibility(
+                                    visible = solidIcons,
+                                    enter = expandVertically() + fadeIn(),
+                                    exit = shrinkVertically() + fadeOut()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            FilterChip(
+                                                selected = true,
+                                                onClick = { showSolidIconsLightDialog = true },
+                                                label = {
+                                                    Text("Light: ${if (solidIconsLightStyle == "bright") "Dim" else "Bright"}")
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Outlined.LightMode,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                shape = RoundedCornerShape(50.dp),
+                                                border = null
+                                            )
+                                            FilterChip(
+                                                selected = true,
+                                                onClick = { showSolidIconsDarkDialog = true },
+                                                label = {
+                                                    Text("Dark: ${if (solidIconsDarkStyle == "bright") "Bright" else "Dim"}")
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Outlined.DarkMode,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                shape = RoundedCornerShape(50.dp),
+                                                border = null
+                                            )
+                                        }
+                                    }
+                                }
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -1595,6 +1707,86 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                     },
                     confirmButton = {
                         TextButton(onClick = { showAppNameDialog = false }) { Text("Done") }
+                    }
+                )
+            }
+
+            if (showSolidIconsLightDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSolidIconsLightDialog = false },
+                    title = { Text("Solid Icons in Light Mode") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                PreferenceManager.SOLID_ICONS_STYLE_DIM to ("Bright (Default)" to "Use bright container color for icon backgrounds"),
+                                PreferenceManager.SOLID_ICONS_STYLE_BRIGHT to ("Dim" to "Use dimmed primary color for icon backgrounds")
+                            ).forEach { (styleKey, pair) ->
+                                val (title, sub) = pair
+                                val isSelected = solidIconsLightStyle == styleKey
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            solidIconsLightStyle = styleKey
+                                            prefs.setString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, styleKey)
+                                            showSolidIconsLightDialog = false
+                                        }
+                                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                                ) {
+                                    RadioButton(selected = isSelected, onClick = null)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                        Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showSolidIconsLightDialog = false }) { Text("Done") }
+                    }
+                )
+            }
+
+            if (showSolidIconsDarkDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSolidIconsDarkDialog = false },
+                    title = { Text("Solid Icons in Dark Mode") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                PreferenceManager.SOLID_ICONS_STYLE_DIM to ("Dim (Default)" to "Use dimmed container color for icon backgrounds"),
+                                PreferenceManager.SOLID_ICONS_STYLE_BRIGHT to ("Bright" to "Use vibrant dynamic primary color for icon backgrounds")
+                            ).forEach { (styleKey, pair) ->
+                                val (title, sub) = pair
+                                val isSelected = solidIconsDarkStyle == styleKey
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            solidIconsDarkStyle = styleKey
+                                            prefs.setString(PreferenceManager.KEY_SOLID_ICONS_DARK, styleKey)
+                                            showSolidIconsDarkDialog = false
+                                        }
+                                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                                ) {
+                                    RadioButton(selected = isSelected, onClick = null)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                        Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showSolidIconsDarkDialog = false }) { Text("Done") }
                     }
                 )
             }

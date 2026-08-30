@@ -114,6 +114,34 @@ class PreferenceManager(context: Context) {
      *  settings never gets out of sync with the slide-animation direction on the main screen. */
     fun getTabOrder(): List<String> = parseTabOrder(getString(KEY_TAB_ORDER, null))
 
+    fun getSaturatedModesSet(): Set<String> {
+        val raw = getString(KEY_SATURATED_MODES, DEFAULT_SATURATED_MODES) ?: DEFAULT_SATURATED_MODES
+        return raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    fun isSaturatedForTheme(isDark: Boolean): Boolean {
+        if (!getBoolean(KEY_SATURATED_COLORS, false)) return false
+        val modes = getSaturatedModesSet()
+        val themeMode = getString(KEY_THEME_MODE, "auto") ?: "auto"
+        val effectiveMode = when (themeMode) {
+            "white" -> "white"
+            "black" -> "black"
+            "light" -> "light"
+            "dark" -> "dark"
+            "auto_bw" -> if (isDark) "black" else "white"
+            else -> if (isDark) "dark" else "light"
+        }
+        return modes.contains(effectiveMode)
+    }
+
+    fun getSolidIconsStyle(isDark: Boolean): String {
+        return if (isDark) {
+            getString(KEY_SOLID_ICONS_DARK, SOLID_ICONS_STYLE_DIM) ?: SOLID_ICONS_STYLE_DIM
+        } else {
+            getString(KEY_SOLID_ICONS_LIGHT, SOLID_ICONS_STYLE_DIM) ?: SOLID_ICONS_STYLE_DIM
+        }
+    }
+
     companion object {
         /** Parses a raw comma-separated tab-order preference string into an ordered list of
          *  valid tab keys, falling back to [DEFAULT_TAB_ORDER] and appending any tab keys
@@ -149,6 +177,10 @@ class PreferenceManager(context: Context) {
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
         const val KEY_SOLID_ICONS           = "solid_icons"
+        const val KEY_SOLID_ICONS_LIGHT     = "solid_icons_light"
+        const val KEY_SOLID_ICONS_DARK      = "solid_icons_dark"
+        const val SOLID_ICONS_STYLE_BRIGHT  = "bright"
+        const val SOLID_ICONS_STYLE_DIM     = "dim"
         const val KEY_CIRCLE_ICONS          = "circle_icons"
         const val KEY_SHOW_FIRST_LETTER     = "show_first_letter"
         const val KEY_COLORFUL_AVATARS      = "colorful_avatars"
@@ -181,6 +213,8 @@ class PreferenceManager(context: Context) {
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
         const val KEY_THEME_MODE            = "theme_mode"
         const val KEY_SATURATED_COLORS      = "saturated_colors"
+        const val KEY_SATURATED_MODES       = "saturated_modes"
+        const val DEFAULT_SATURATED_MODES   = "light,dark,white,black"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
