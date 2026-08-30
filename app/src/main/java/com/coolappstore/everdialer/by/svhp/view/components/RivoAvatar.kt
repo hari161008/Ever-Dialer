@@ -59,24 +59,39 @@ fun RivoAvatar(
     val colorfulAvatars = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true) }
     val solidIcons      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val solidStyle = remember(settingsState, isDark) { prefs.getSolidIconsStyle(isDark) }
 
     val hasName  = name.trim().isNotEmpty()
     val colorKey = if (hasName) name else "unknown_caller"
 
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
-    val solidContentColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+    val (solidBgColor, solidContentColor) = if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        if (isDark) {
+            primaryColor to Color(0xFF1C1B1F)
+        } else {
+            val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
+            primaryColor to (if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White)
+        }
+    } else {
+        val container = MaterialTheme.colorScheme.primaryContainer
+        if (isDark) {
+            container to Color.White
+        } else {
+            val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+            container to (if (isBright) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
 
     val (backgroundColor, contentColor) = when {
         iconContainerColor != null -> {
-            if (solidIcons) primaryColor to solidContentColor
+            if (solidIcons) solidBgColor to solidContentColor
             else {
                 val adjusted = adjustIconColorForTheme(iconContainerColor, isDark)
                 adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
             }
         }
         icon != null -> {
-            if (solidIcons) primaryColor to solidContentColor
+            if (solidIcons) solidBgColor to solidContentColor
             else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         }
         colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White

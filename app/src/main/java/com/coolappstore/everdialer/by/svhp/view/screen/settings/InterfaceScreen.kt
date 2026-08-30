@@ -122,6 +122,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showFloatingColorPicker by remember { mutableStateOf(false) }
     var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
     var saturatedModes      by remember { mutableStateOf(prefs.getSaturatedModesSet()) }
+    var saturationLevel     by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SATURATION_LEVEL, 1.0f)) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
     var solidIconsLightStyle by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
     var solidIconsDarkStyle  by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_DARK, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
@@ -989,6 +990,12 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         saturatedColors = it
                                         prefs.setBoolean(PreferenceManager.KEY_SATURATED_COLORS, it)
+                                        val newDarkStyle = if (it) PreferenceManager.SOLID_ICONS_STYLE_BRIGHT else PreferenceManager.SOLID_ICONS_STYLE_DIM
+                                        val newLightStyle = PreferenceManager.SOLID_ICONS_STYLE_DIM
+                                        solidIconsDarkStyle = newDarkStyle
+                                        solidIconsLightStyle = newLightStyle
+                                        prefs.setString(PreferenceManager.KEY_SOLID_ICONS_DARK, newDarkStyle)
+                                        prefs.setString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, newLightStyle)
                                         triggerRestartPrompt(scope, snackbarHostState, context)
                                     }
                                 )
@@ -997,7 +1004,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     enter = expandVertically() + fadeIn(),
                                     exit = shrinkVertically() + fadeOut()
                                 ) {
-                                    Box(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -1048,6 +1055,44 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                 }
                                             }
                                         }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Saturation Intensity",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    "${(saturationLevel * 100).toInt()}%",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Slider(
+                                                value = saturationLevel,
+                                                onValueChange = {
+                                                    saturationLevel = it
+                                                    prefs.setFloat(PreferenceManager.KEY_SATURATION_LEVEL, it)
+                                                },
+                                                valueRange = 0.2f..2.0f,
+                                                steps = 17,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
                                     }
                                 }
                                 HorizontalDivider(
@@ -1081,7 +1126,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                 selected = true,
                                                 onClick = { showSolidIconsLightDialog = true },
                                                 label = {
-                                                    Text("Light: ${if (solidIconsLightStyle == "bright") "Dim" else "Bright"}")
+                                                    Text("Light: ${if (solidIconsLightStyle == "bright") "Bright" else "Dim"}")
                                                 },
                                                 leadingIcon = {
                                                     Icon(
@@ -1718,8 +1763,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(
-                                PreferenceManager.SOLID_ICONS_STYLE_DIM to ("Bright (Default)" to "Use bright container color for icon backgrounds"),
-                                PreferenceManager.SOLID_ICONS_STYLE_BRIGHT to ("Dim" to "Use dimmed primary color for icon backgrounds")
+                                PreferenceManager.SOLID_ICONS_STYLE_DIM to ("Dim (Default)" to "Use dimmed container color for icon backgrounds"),
+                                PreferenceManager.SOLID_ICONS_STYLE_BRIGHT to ("Bright" to "Use vibrant primary color for icon backgrounds")
                             ).forEach { (styleKey, pair) ->
                                 val (title, sub) = pair
                                 val isSelected = solidIconsLightStyle == styleKey

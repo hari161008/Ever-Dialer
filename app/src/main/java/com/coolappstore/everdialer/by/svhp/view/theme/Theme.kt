@@ -139,7 +139,8 @@ private fun applySaturatedContainers(
     scheme: androidx.compose.material3.ColorScheme,
     seedColor: Color,
     darkTheme: Boolean,
-    themeMode: String
+    themeMode: String,
+    saturationScale: Float = 1.0f
 ): androidx.compose.material3.ColorScheme {
     val argb = seedColor.toArgb()
     val hsl = FloatArray(3)
@@ -160,11 +161,12 @@ private fun applySaturatedContainers(
         return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(clampedH, clampedS, clampedL)))
     }
 
-    val effectiveSat = if (containerHue in 30f..85f) {
+    val baseEffectiveSat = if (containerHue in 30f..85f) {
         containerSat.coerceIn(0.50f, 0.75f)
     } else {
         containerSat.coerceIn(0.60f, 0.90f)
     }
+    val effectiveSat = (baseEffectiveSat * saturationScale).coerceIn(0.10f, 1.0f)
 
     return if (darkTheme) {
         val low = hslColor(containerHue, effectiveSat, 0.12f)
@@ -287,6 +289,7 @@ fun Rivo4Theme(
     val customPrimaryInt = prefs.getInt("custom_primary_color", 0)
     val customFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     val fontSizeScale  = prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
+    val saturationScale = prefs.getFloat(PreferenceManager.KEY_SATURATION_LEVEL, 1.0f)
 
     val darkTheme = when (themeMode) {
         "light", "white"  -> false
@@ -319,7 +322,7 @@ fun Rivo4Theme(
     val isSaturatedActive = prefs.isSaturatedForTheme(darkTheme)
 
     if (isSaturatedActive) {
-        colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode)
+        colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode, saturationScale)
     } else {
         colorScheme = when (themeMode) {
             "black" -> colorScheme.copy(

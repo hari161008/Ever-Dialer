@@ -135,10 +135,13 @@ class PreferenceManager(context: Context) {
     }
 
     fun getSolidIconsStyle(isDark: Boolean): String {
+        val saturated = getBoolean(KEY_SATURATED_COLORS, false)
+        val defaultDark = if (saturated) SOLID_ICONS_STYLE_BRIGHT else SOLID_ICONS_STYLE_DIM
+        val defaultLight = SOLID_ICONS_STYLE_DIM
         return if (isDark) {
-            getString(KEY_SOLID_ICONS_DARK, SOLID_ICONS_STYLE_DIM) ?: SOLID_ICONS_STYLE_DIM
+            getString(KEY_SOLID_ICONS_DARK, defaultDark) ?: defaultDark
         } else {
-            getString(KEY_SOLID_ICONS_LIGHT, SOLID_ICONS_STYLE_DIM) ?: SOLID_ICONS_STYLE_DIM
+            getString(KEY_SOLID_ICONS_LIGHT, defaultLight) ?: defaultLight
         }
     }
 
@@ -215,6 +218,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SATURATED_COLORS      = "saturated_colors"
         const val KEY_SATURATED_MODES       = "saturated_modes"
         const val DEFAULT_SATURATED_MODES   = "light,dark,white,black"
+        const val KEY_SATURATION_LEVEL      = "saturation_level"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
