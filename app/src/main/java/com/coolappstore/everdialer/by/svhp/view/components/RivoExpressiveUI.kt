@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -441,13 +442,29 @@ fun RivoStatCard(
     }
 }
 
+// ─── Icon Color & Luminance Helper ────────────────────────────────────────────
+
+internal fun adjustIconColorForTheme(color: Color, isDark: Boolean): Color {
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(color.toArgb(), hsl)
+    return if (isDark) {
+        val newL = hsl[2].coerceAtLeast(0.72f)
+        val newS = hsl[1].coerceIn(0.65f, 1f)
+        Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hsl[0], newS, newL)))
+    } else {
+        val newL = hsl[2].coerceAtMost(0.42f)
+        val newS = hsl[1].coerceIn(0.65f, 1f)
+        Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hsl[0], newS, newL)))
+    }
+}
+
 // ─── Icon Container Helper ────────────────────────────────────────────────────
 /**
  * Renders a colored square icon box with translucent tinted background.
  * iconContainerColor = null → falls back to secondaryContainer theming.
  */
 @Composable
-internal fun RivoIconBox(
+fun RivoIconBox(
     icon: ImageVector,
     iconContainerColor: Color?,
     modifier: Modifier = Modifier
@@ -468,18 +485,16 @@ internal fun RivoIconBox(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
 
-    val bgColor = if (solidIcons) {
-        MaterialTheme.colorScheme.surfaceContainerHighest
+    val (bgColor, fgColor) = if (solidIcons) {
+        val primary = MaterialTheme.colorScheme.primary
+        val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
+        primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
     } else {
-        iconContainerColor?.copy(alpha = 0.15f)
-            ?: MaterialTheme.colorScheme.secondaryContainer
-    }
-    val fgColor = if (solidIcons) {
-        MaterialTheme.colorScheme.onSurface
-    } else {
-        iconContainerColor
-            ?: MaterialTheme.colorScheme.onSecondaryContainer
+        val baseColor = iconContainerColor ?: MaterialTheme.colorScheme.primary
+        val adjusted = adjustIconColorForTheme(baseColor, isDark)
+        adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
     }
 
     Surface(
@@ -602,6 +617,7 @@ fun RivoListItem(
                             text = headline,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -616,6 +632,7 @@ fun RivoListItem(
                         text = headline,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -678,7 +695,7 @@ fun RivoListItem(
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 11.sp,
                             color = trailingSubTextColor ?: MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = FontWeight.Normal,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -759,7 +776,8 @@ fun RivoSwitchListItem(
                 Text(
                     text = headline,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (supporting != null) {
                     Text(
@@ -770,14 +788,18 @@ fun RivoSwitchListItem(
                 }
             }
 
+            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+            val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    checkedThumbColor = if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    checkedBorderColor = Color.Transparent,
+                    uncheckedThumbColor = if (isDark) Color(0xFFB0B0B5) else Color(0xFF6B7280),
+                    uncheckedTrackColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E7EB),
+                    uncheckedBorderColor = if (isDark) Color(0xFF48484A) else Color(0xFF9CA3AF)
                 )
             )
         }
@@ -1017,20 +1039,26 @@ fun RivoDropdownMenuItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (icon != null || iconBitmap != null) {
-                // solid = LG on AND dropdown toggle on → fully opaque icon bg
-                // translucent = LG off OR LG on but dropdown toggle off → 0.15f alpha (same as settings icons)
-                val solidMode = liquidGlass2 && lgDropdown
-                val iconBgColor = when {
-                    solidMode && isDestructive -> Color(0xFFD32F2F)
-                    solidMode -> tintColor.copy(
-                        red   = (tintColor.red   * 1.15f).coerceAtMost(1f),
-                        green = (tintColor.green * 1.15f).coerceAtMost(1f),
-                        blue  = (tintColor.blue  * 1.15f).coerceAtMost(1f),
-                        alpha = 1f
-                    )
-                    else -> tintColor.copy(alpha = 0.15f)
+                val solidIcons = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+                val solidMode = solidIcons || (liquidGlass2 && lgDropdown)
+                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+
+                val (iconBgColor, iconTintColor) = when {
+                    solidMode && isDestructive -> Color(0xFFD32F2F) to Color.White
+                    solidMode -> {
+                        val primary = MaterialTheme.colorScheme.primary
+                        val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
+                        primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
+                    }
+                    isDestructive -> {
+                        val adjusted = adjustIconColorForTheme(Color(0xFFD32F2F), isDark)
+                        adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
+                    }
+                    else -> {
+                        val adjusted = adjustIconColorForTheme(tintColor, isDark)
+                        adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
+                    }
                 }
-                val iconTintColor = if (solidMode) Color.White else tintColor
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),

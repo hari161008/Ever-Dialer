@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -57,16 +58,27 @@ fun RivoAvatar(
     val showFirstLetter = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true) }
     val colorfulAvatars = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true) }
     val solidIcons      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
 
     val hasName  = name.trim().isNotEmpty()
     val colorKey = if (hasName) name else "unknown_caller"
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
+    val solidContentColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+
     val (backgroundColor, contentColor) = when {
         iconContainerColor != null -> {
-            if (solidIcons) MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
-            else iconContainerColor.copy(alpha = 0.18f) to iconContainerColor
+            if (solidIcons) primaryColor to solidContentColor
+            else {
+                val adjusted = adjustIconColorForTheme(iconContainerColor, isDark)
+                adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
+            }
         }
-        icon != null && solidIcons -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
+        icon != null -> {
+            if (solidIcons) primaryColor to solidContentColor
+            else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        }
         colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }

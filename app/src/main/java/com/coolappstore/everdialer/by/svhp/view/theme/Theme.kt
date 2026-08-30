@@ -160,26 +160,38 @@ private fun applySaturatedContainers(
         return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(clampedH, clampedS, clampedL)))
     }
 
+    val effectiveSat = if (containerHue in 30f..85f) {
+        containerSat.coerceIn(0.50f, 0.75f)
+    } else {
+        containerSat.coerceIn(0.60f, 0.90f)
+    }
+
     return if (darkTheme) {
-        val low = hslColor(containerHue, containerSat, 0.14f)
-        val normal = hslColor(containerHue, containerSat, 0.18f)
-        val high = hslColor(containerHue, containerSat, 0.22f)
-        val highest = hslColor(containerHue, containerSat, 0.26f)
-        val variant = hslColor(containerHue, containerSat, 0.28f)
+        val low = hslColor(containerHue, effectiveSat, 0.12f)
+        val normal = hslColor(containerHue, effectiveSat, 0.15f)
+        val high = hslColor(containerHue, effectiveSat, 0.19f)
+        val highest = hslColor(containerHue, effectiveSat, 0.23f)
+        val variant = hslColor(containerHue, effectiveSat, 0.26f)
+        val brightWhite = Color(0xFFFFFFFF)
+        val visibleGreyText = Color(0xFFD4D4D8)
+        val visibleOutline = Color(0xFF9E9E9E)
+        val vibrantPrimary = hslColor(containerHue, 0.90f, 0.58f)
+        val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(vibrantPrimary.toArgb()) > 0.40
+        val vibrantOnPrimary = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+        val vibrantPrimaryContainer = hslColor(containerHue, 0.85f, 0.32f)
+        val vibrantOnPrimaryContainer = if (androidx.core.graphics.ColorUtils.calculateLuminance(vibrantPrimaryContainer.toArgb()) > 0.40) Color(0xFF1C1B1F) else Color.White
         when (themeMode) {
-            "black" -> scheme.copy(
+            "black", "auto_bw" -> scheme.copy(
+                primary = vibrantPrimary,
+                onPrimary = vibrantOnPrimary,
+                primaryContainer = vibrantPrimaryContainer,
+                onPrimaryContainer = vibrantOnPrimaryContainer,
                 background = Color.Black,
                 surface = Color.Black,
-                surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = low,
-                surfaceContainer = normal,
-                surfaceContainerHigh = high,
-                surfaceContainerHighest = highest,
-                surfaceVariant = variant
-            )
-            "auto_bw" -> scheme.copy(
-                background = Color.Black,
-                surface = Color.Black,
+                onBackground = brightWhite,
+                onSurface = brightWhite,
+                onSurfaceVariant = visibleGreyText,
+                outline = visibleOutline,
                 surfaceContainerLowest = Color.Black,
                 surfaceContainerLow = low,
                 surfaceContainer = normal,
@@ -188,9 +200,17 @@ private fun applySaturatedContainers(
                 surfaceVariant = variant
             )
             else -> scheme.copy(
-                background = hslColor(containerHue, (containerSat * 0.35f).coerceIn(0.12f, 0.35f), 0.06f),
-                surface = hslColor(containerHue, (containerSat * 0.35f).coerceIn(0.12f, 0.35f), 0.06f),
-                surfaceContainerLowest = hslColor(containerHue, containerSat, 0.08f),
+                primary = vibrantPrimary,
+                onPrimary = vibrantOnPrimary,
+                primaryContainer = vibrantPrimaryContainer,
+                onPrimaryContainer = vibrantOnPrimaryContainer,
+                background = hslColor(containerHue, (effectiveSat * 0.35f).coerceIn(0.10f, 0.30f), 0.05f),
+                surface = hslColor(containerHue, (effectiveSat * 0.35f).coerceIn(0.10f, 0.30f), 0.05f),
+                onBackground = brightWhite,
+                onSurface = brightWhite,
+                onSurfaceVariant = visibleGreyText,
+                outline = visibleOutline,
+                surfaceContainerLowest = hslColor(containerHue, effectiveSat, 0.07f),
                 surfaceContainerLow = low,
                 surfaceContainer = normal,
                 surfaceContainerHigh = high,
@@ -199,26 +219,31 @@ private fun applySaturatedContainers(
             )
         }
     } else {
-        val lowest = hslColor(containerHue, (containerSat * 0.4f).coerceIn(0.15f, 0.40f), 0.96f)
-        val low = hslColor(containerHue, containerSat, 0.90f)
-        val normal = hslColor(containerHue, containerSat, 0.86f)
-        val high = hslColor(containerHue, containerSat, 0.82f)
-        val highest = hslColor(containerHue, containerSat, 0.78f)
-        val variant = hslColor(containerHue, containerSat, 0.80f)
+        val lowest = hslColor(containerHue, (effectiveSat * 0.4f).coerceIn(0.15f, 0.40f), 0.96f)
+        val low = hslColor(containerHue, effectiveSat, 0.90f)
+        val normal = hslColor(containerHue, effectiveSat, 0.86f)
+        val high = hslColor(containerHue, effectiveSat, 0.82f)
+        val highest = hslColor(containerHue, effectiveSat, 0.78f)
+        val variant = hslColor(containerHue, effectiveSat, 0.80f)
+        val crispDark = Color(0xFF111827)
+        val visibleDarkGreyText = Color(0xFF4B5563)
+        val visibleLightOutline = Color(0xFF757575)
+        val vibrantPrimaryLight = hslColor(containerHue, 0.90f, 0.42f)
+        val vibrantOnPrimaryLight = Color.White
+        val vibrantPrimaryContainerLight = hslColor(containerHue, 0.75f, 0.88f)
+        val vibrantOnPrimaryContainerLight = Color(0xFF111827)
         when (themeMode) {
-            "white" -> scheme.copy(
+            "white", "auto_bw" -> scheme.copy(
+                primary = vibrantPrimaryLight,
+                onPrimary = vibrantOnPrimaryLight,
+                primaryContainer = vibrantPrimaryContainerLight,
+                onPrimaryContainer = vibrantOnPrimaryContainerLight,
                 background = Color.White,
                 surface = Color.White,
-                surfaceContainerLowest = Color.White,
-                surfaceContainerLow = low,
-                surfaceContainer = normal,
-                surfaceContainerHigh = high,
-                surfaceContainerHighest = highest,
-                surfaceVariant = variant
-            )
-            "auto_bw" -> scheme.copy(
-                background = Color.White,
-                surface = Color.White,
+                onBackground = crispDark,
+                onSurface = crispDark,
+                onSurfaceVariant = visibleDarkGreyText,
+                outline = visibleLightOutline,
                 surfaceContainerLowest = Color.White,
                 surfaceContainerLow = low,
                 surfaceContainer = normal,
@@ -227,8 +252,16 @@ private fun applySaturatedContainers(
                 surfaceVariant = variant
             )
             else -> scheme.copy(
-                background = hslColor(containerHue, (containerSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
-                surface = hslColor(containerHue, (containerSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
+                primary = vibrantPrimaryLight,
+                onPrimary = vibrantOnPrimaryLight,
+                primaryContainer = vibrantPrimaryContainerLight,
+                onPrimaryContainer = vibrantOnPrimaryContainerLight,
+                background = hslColor(containerHue, (effectiveSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
+                surface = hslColor(containerHue, (effectiveSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
+                onBackground = crispDark,
+                onSurface = crispDark,
+                onSurfaceVariant = visibleDarkGreyText,
+                outline = visibleLightOutline,
                 surfaceContainerLowest = lowest,
                 surfaceContainerLow = low,
                 surfaceContainer = normal,
