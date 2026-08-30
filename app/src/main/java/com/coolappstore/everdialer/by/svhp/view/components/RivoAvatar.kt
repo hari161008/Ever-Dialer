@@ -56,12 +56,17 @@ fun RivoAvatar(
     val showPicture     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true) }
     val showFirstLetter = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true) }
     val colorfulAvatars = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true) }
+    val solidIcons      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
 
     val hasName  = name.trim().isNotEmpty()
     val colorKey = if (hasName) name else "unknown_caller"
 
     val (backgroundColor, contentColor) = when {
-        iconContainerColor != null -> iconContainerColor.copy(alpha = 0.18f) to iconContainerColor
+        iconContainerColor != null -> {
+            if (solidIcons) MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
+            else iconContainerColor.copy(alpha = 0.18f) to iconContainerColor
+        }
+        icon != null && solidIcons -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
         colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }

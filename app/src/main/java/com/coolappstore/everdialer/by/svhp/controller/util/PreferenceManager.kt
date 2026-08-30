@@ -148,6 +148,7 @@ class PreferenceManager(context: Context) {
         const val SIM_CHOICE_LAST_IN_CALL       = "last_in_call"
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
+        const val KEY_SOLID_ICONS           = "solid_icons"
         const val KEY_SHOW_FIRST_LETTER     = "show_first_letter"
         const val KEY_COLORFUL_AVATARS      = "colorful_avatars"
         const val KEY_SHOW_PICTURE          = "show_picture"

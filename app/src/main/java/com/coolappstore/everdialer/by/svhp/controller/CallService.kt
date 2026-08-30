@@ -846,7 +846,7 @@ class CallService : InCallService() {
             .setContentText(contentText)
             .apply {
                 if (isDualSim && simSlot in 0..1) {
-                    setSubText("SIM ${simSlot + 1}")
+                    setSubText(buildSimBadgeSpan(this@CallService, simSlot))
                 }
             }
             .setPriority(if (isFullScreenIncoming) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_MAX)
@@ -949,8 +949,8 @@ class CallService : InCallService() {
 
     private fun createSimBadgeBitmap(context: Context, slot: Int): Bitmap {
         val density = context.resources.displayMetrics.density
-        val widthPx = (15 * density).toInt().coerceAtLeast(1)
-        val heightPx = (18 * density).toInt().coerceAtLeast(1)
+        val widthPx = (16 * density).toInt().coerceAtLeast(1)
+        val heightPx = (19 * density).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -964,7 +964,7 @@ class CallService : InCallService() {
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
-            textSize = 9.5f * density
+            textSize = 10f * density
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
@@ -973,6 +973,19 @@ class CallService : InCallService() {
         canvas.drawText((slot + 1).toString(), widthPx / 2f, textY, textPaint)
 
         return bitmap
+    }
+
+    private fun buildSimBadgeSpan(context: Context, simSlot: Int): CharSequence {
+        if (simSlot !in 0..1) return ""
+        val simTag = "SIM ${simSlot + 1}"
+        val ssb = SpannableStringBuilder(simTag)
+        try {
+            val bitmap = createSimBadgeBitmap(context, simSlot)
+            val align = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ImageSpan.ALIGN_CENTER else ImageSpan.ALIGN_BOTTOM
+            val imageSpan = ImageSpan(context, bitmap, align)
+            ssb.setSpan(imageSpan, 0, simTag.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } catch (_: Exception) {}
+        return ssb
     }
 
     private fun buildCallNotificationContentText(
@@ -989,7 +1002,8 @@ class CallService : InCallService() {
         val ssb = SpannableStringBuilder(fullText)
         try {
             val bitmap = createSimBadgeBitmap(context, simSlot)
-            val imageSpan = ImageSpan(context, bitmap, ImageSpan.ALIGN_BOTTOM)
+            val align = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ImageSpan.ALIGN_CENTER else ImageSpan.ALIGN_BOTTOM
+            val imageSpan = ImageSpan(context, bitmap, align)
             ssb.setSpan(imageSpan, 0, simTag.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         } catch (_: Exception) {}
         return ssb

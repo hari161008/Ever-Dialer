@@ -218,9 +218,7 @@ fun CallLogTile(
                 append(displayName)
                 if (log.count > 1) append(" (${log.count})")
             },
-            supporting = buildString {
-                if (showNumberOnSupportingLine) append(log.number)
-            },
+            supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,
             avatarForcePersonIcon = !isContact,
             photoUri    = log.photoUri,

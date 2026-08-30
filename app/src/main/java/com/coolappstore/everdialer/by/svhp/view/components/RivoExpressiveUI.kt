@@ -465,10 +465,22 @@ internal fun RivoIconBox(
         label = "iconAlpha"
     )
 
-    val bgColor = iconContainerColor?.copy(alpha = 0.15f)
-        ?: MaterialTheme.colorScheme.secondaryContainer
-    val fgColor = iconContainerColor
-        ?: MaterialTheme.colorScheme.onSecondaryContainer
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+
+    val bgColor = if (solidIcons) {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        iconContainerColor?.copy(alpha = 0.15f)
+            ?: MaterialTheme.colorScheme.secondaryContainer
+    }
+    val fgColor = if (solidIcons) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        iconContainerColor
+            ?: MaterialTheme.colorScheme.onSecondaryContainer
+    }
 
     Surface(
         modifier = modifier.size(44.dp).scale(iconScale).alpha(iconAlpha),
@@ -608,7 +620,7 @@ fun RivoListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (supporting != null) {
+                if (!supporting.isNullOrBlank()) {
                     if (supportingStartContent != null || supportingEndContent != null) {
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             supportingStartContent?.let {

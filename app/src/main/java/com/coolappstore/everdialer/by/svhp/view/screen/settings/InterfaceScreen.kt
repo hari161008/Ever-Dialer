@@ -109,6 +109,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var themeMode           by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto") }
     var dynamicColors       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)) }
     var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
+    var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
     var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
@@ -832,22 +833,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         }
                                     }
                                 }
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                                RivoSwitchListItem(
-                                    headline = "Saturated Colors",
-                                    supporting = "Apply rich saturated colors behind containers",
-                                    leadingIcon = Icons.Outlined.ColorLens,
-                                    iconContainerColor = Color(0xFFFF9800),
-                                    checked = saturatedColors,
-                                    onCheckedChange = {
-                                        saturatedColors = it
-                                        prefs.setBoolean(PreferenceManager.KEY_SATURATED_COLORS, it)
-                                        triggerRestartPrompt(scope, snackbarHostState, context)
-                                    }
-                                )
                             }
                         }
                     }
@@ -871,6 +856,49 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         prefs.setBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, it)
                                         triggerRestartPrompt(scope, snackbarHostState, context)
                                     }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Saturated Colors",
+                                    supporting = "Apply rich saturated colors behind containers",
+                                    leadingIcon = Icons.Outlined.ColorLens,
+                                    iconContainerColor = Color(0xFFFF9800),
+                                    checked = saturatedColors,
+                                    modifier = Modifier.settingsSearchHighlight("saturated_colors", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        saturatedColors = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SATURATED_COLORS, it)
+                                        triggerRestartPrompt(scope, snackbarHostState, context)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Solid Icons",
+                                    supporting = "Use solid background behind icons without colors",
+                                    leadingIcon = Icons.Outlined.Palette,
+                                    iconContainerColor = Color(0xFF607D8B),
+                                    checked = solidIcons,
+                                    modifier = Modifier.settingsSearchHighlight("solid_icons", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { solidIcons = it; prefs.setBoolean(PreferenceManager.KEY_SOLID_ICONS, it) }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Use Colorful Avatars",
+                                    supporting = "Random colors based on contact name",
+                                    leadingIcon = Icons.Outlined.ColorLens,
+                                    iconContainerColor = ColorBlue,
+                                    checked = colorfulAvatars,
+                                    modifier = Modifier.settingsSearchHighlight("colorful_avatars", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { colorfulAvatars = it; prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it) }
                                 )
                                 if (!dynamicColors) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp),
@@ -1099,6 +1127,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
+                                    headline = "Scroll Animation",
+                                    supporting = "Fade-in animation for list items as you scroll",
+                                    leadingIcon = Icons.Outlined.Animation,
+                                    iconContainerColor = ColorBlue,
+                                    checked = scrollAnimation,
+                                    modifier = Modifier.settingsSearchHighlight("scroll_animation", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        scrollAnimation = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
                                     headline = "Hangup Animation",
                                     supporting = if (hangupAnimation)
                                         "The call screen smoothly slides away when a call ends"
@@ -1191,29 +1233,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier.settingsSearchHighlight("default_tab_section", highlightedKey) { highlightedKey = null },
                                     onClick = { showDefaultTabDialog = true }
-                                )
-                            }
-                        }
-                    }
-
-                // ── Animations ───────────────────────────────────────
-                    RivoAnimatedSection(delayMs = 115L) {
-                        Column {
-                            Text("Animations", style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
-                            RivoExpressiveCard {
-                                RivoSwitchListItem(
-                                    headline = "Scroll Animation",
-                                    supporting = "Fade-in animation for list items as you scroll",
-                                    leadingIcon = Icons.Outlined.Animation,
-                                    iconContainerColor = ColorBlue,
-                                    checked = scrollAnimation,
-                                    modifier = Modifier.settingsSearchHighlight("scroll_animation", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        scrollAnimation = it
-                                        prefs.setBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, it)
-                                    }
                                 )
                             }
                         }
@@ -1435,17 +1454,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     checked = showFirstLetter,
                                     modifier = Modifier.settingsSearchHighlight("avatar_first_letter", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = { showFirstLetter = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it) }
-                                )
-                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoSwitchListItem(
-                                    headline = "Use Colorful Avatars",
-                                    supporting = "Random colors based on contact name",
-                                    leadingIcon = Icons.Outlined.ColorLens,
-                                    iconContainerColor = ColorBlue,
-                                    checked = colorfulAvatars,
-                                    modifier = Modifier.settingsSearchHighlight("colorful_avatars", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = { colorfulAvatars = it; prefs.setBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, it) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

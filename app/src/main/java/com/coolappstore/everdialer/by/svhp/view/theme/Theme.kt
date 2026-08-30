@@ -145,7 +145,13 @@ private fun applySaturatedContainers(
     val hsl = FloatArray(3)
     androidx.core.graphics.ColorUtils.colorToHSL(argb, hsl)
     val hue = hsl[0]
-    val sat = (hsl[1] * 0.45f).coerceIn(0.25f, 0.65f)
+
+    val pcArgb = scheme.primaryContainer.toArgb()
+    val pcHsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(pcArgb, pcHsl)
+
+    val containerHue = if (pcHsl[1] > 0.15f) pcHsl[0] else hue
+    val containerSat = maxOf(hsl[1], pcHsl[1]).coerceIn(0.60f, 0.95f)
 
     fun hslColor(h: Float, s: Float, l: Float): Color {
         val clampedH = (h % 360f + 360f) % 360f
@@ -155,11 +161,11 @@ private fun applySaturatedContainers(
     }
 
     return if (darkTheme) {
-        val low = hslColor(hue, sat, 0.10f)
-        val normal = hslColor(hue, sat, 0.14f)
-        val high = hslColor(hue, sat, 0.18f)
-        val highest = hslColor(hue, sat, 0.22f)
-        val variant = hslColor(hue, sat, 0.24f)
+        val low = hslColor(containerHue, containerSat, 0.14f)
+        val normal = hslColor(containerHue, containerSat, 0.18f)
+        val high = hslColor(containerHue, containerSat, 0.22f)
+        val highest = hslColor(containerHue, containerSat, 0.26f)
+        val variant = hslColor(containerHue, containerSat, 0.28f)
         when (themeMode) {
             "black" -> scheme.copy(
                 background = Color.Black,
@@ -182,9 +188,9 @@ private fun applySaturatedContainers(
                 surfaceVariant = variant
             )
             else -> scheme.copy(
-                background = hslColor(hue, (sat * 0.4f).coerceIn(0.10f, 0.30f), 0.06f),
-                surface = hslColor(hue, (sat * 0.4f).coerceIn(0.10f, 0.30f), 0.06f),
-                surfaceContainerLowest = hslColor(hue, sat, 0.07f),
+                background = hslColor(containerHue, (containerSat * 0.35f).coerceIn(0.12f, 0.35f), 0.06f),
+                surface = hslColor(containerHue, (containerSat * 0.35f).coerceIn(0.12f, 0.35f), 0.06f),
+                surfaceContainerLowest = hslColor(containerHue, containerSat, 0.08f),
                 surfaceContainerLow = low,
                 surfaceContainer = normal,
                 surfaceContainerHigh = high,
@@ -193,12 +199,12 @@ private fun applySaturatedContainers(
             )
         }
     } else {
-        val lowest = Color.White
-        val low = hslColor(hue, sat, 0.94f)
-        val normal = hslColor(hue, sat, 0.90f)
-        val high = hslColor(hue, sat, 0.86f)
-        val highest = hslColor(hue, sat, 0.82f)
-        val variant = hslColor(hue, sat, 0.84f)
+        val lowest = hslColor(containerHue, (containerSat * 0.4f).coerceIn(0.15f, 0.40f), 0.96f)
+        val low = hslColor(containerHue, containerSat, 0.90f)
+        val normal = hslColor(containerHue, containerSat, 0.86f)
+        val high = hslColor(containerHue, containerSat, 0.82f)
+        val highest = hslColor(containerHue, containerSat, 0.78f)
+        val variant = hslColor(containerHue, containerSat, 0.80f)
         when (themeMode) {
             "white" -> scheme.copy(
                 background = Color.White,
@@ -221,8 +227,8 @@ private fun applySaturatedContainers(
                 surfaceVariant = variant
             )
             else -> scheme.copy(
-                background = hslColor(hue, (sat * 0.3f).coerceIn(0.08f, 0.25f), 0.98f),
-                surface = hslColor(hue, (sat * 0.3f).coerceIn(0.08f, 0.25f), 0.98f),
+                background = hslColor(containerHue, (containerSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
+                surface = hslColor(containerHue, (containerSat * 0.25f).coerceIn(0.08f, 0.25f), 0.98f),
                 surfaceContainerLowest = lowest,
                 surfaceContainerLow = low,
                 surfaceContainer = normal,

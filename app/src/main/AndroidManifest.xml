@@ -266,6 +266,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityRadiumGreenPhoneIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityGoogleDialerIcon"
             android:targetActivity=".MainActivity"
             android:label="@string/app_name"
@@ -345,6 +359,20 @@
             android:label="Call"
             android:icon="@mipmap/ic_launcher_custom_phone"
             android:roundIcon="@mipmap/ic_launcher_custom_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameCallRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="Call"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -438,6 +466,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNameDialRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="Dial"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNameDialGoogle"
             android:targetActivity=".MainActivity"
             android:label="Dial"
@@ -513,6 +555,20 @@
             android:label="True Phone"
             android:icon="@mipmap/ic_launcher_custom_phone"
             android:roundIcon="@mipmap/ic_launcher_custom_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameTruePhoneRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="True Phone"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -606,6 +662,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNamePhoneDialerRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="Phone Dialer"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNamePhoneDialerGoogle"
             android:targetActivity=".MainActivity"
             android:label="Phone Dialer"
@@ -690,6 +760,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNamePhoneRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="Phone"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNamePhoneGoogle"
             android:targetActivity=".MainActivity"
             android:label="Phone"
@@ -765,6 +849,20 @@
             android:label="Dialer"
             android:icon="@mipmap/ic_launcher_custom_phone"
             android:roundIcon="@mipmap/ic_launcher_custom_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameDialerRadiumGreenPhone"
+            android:targetActivity=".MainActivity"
+            android:label="Dialer"
+            android:icon="@mipmap/ic_launcher_radium_green_phone"
+            android:roundIcon="@mipmap/ic_launcher_radium_green_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

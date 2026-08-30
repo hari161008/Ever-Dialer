@@ -48,6 +48,7 @@ internal fun buildIcons(context: android.content.Context) = listOf(
     AppIconEntry("default",  "Default", "MainActivityDefaultIcon",      context.resources.getIdentifier("ic_launcher",              "mipmap", context.packageName)),
     AppIconEntry("phone",    "Phone",   "MainActivityPhoneIcon",        context.resources.getIdentifier("ic_launcher_phone",        "mipmap", context.packageName)),
     AppIconEntry("custom_phone", "Vertical phone", "MainActivityCustomPhoneIcon", context.resources.getIdentifier("ic_launcher_custom_phone", "mipmap", context.packageName)),
+    AppIconEntry("radium_green_phone", "Radium Green Phone", "MainActivityRadiumGreenPhoneIcon", context.resources.getIdentifier("ic_launcher_radium_green_phone", "mipmap", context.packageName)),
     AppIconEntry("google",   "Google",  "MainActivityGoogleDialerIcon", context.resources.getIdentifier("ic_launcher_google_dialer","mipmap", context.packageName)),
     AppIconEntry("nothing",  "NOTHING", "MainActivityNothingIcon",      context.resources.getIdentifier("ic_launcher_nothing",      "mipmap", context.packageName)),
     AppIconEntry("lineageos", "LineageOS Dialer", "MainActivityLineageOSIcon", context.resources.getIdentifier("ic_launcher_lineageos", "mipmap", context.packageName))
@@ -58,32 +59,34 @@ internal fun buildIcons(context: android.content.Context) = listOf(
 // computes a combined icon+name alias so changing one never resets the other.
 internal fun buildAppNamePresets(context: android.content.Context) = listOf(
     AppIconEntry("default",          "Ever Dialer (Default)", null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
+    AppIconEntry("name_phone",       "Phone",                  null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
+    AppIconEntry("name_dialer",      "Dialer",                 null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
     AppIconEntry("name_call",        "Call",                  null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
     AppIconEntry("name_dial",        "Dial",                  null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
     AppIconEntry("name_truephone",   "True Phone",             null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
-    AppIconEntry("name_phonedialer", "Phone Dialer",           null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
-    AppIconEntry("name_phone",       "Phone",                  null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)),
-    AppIconEntry("name_dialer",      "Dialer",                 null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName))
+    AppIconEntry("name_phonedialer", "Phone Dialer",           null, context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName))
 )
 
 private fun iconSuffix(iconKey: String): String = when (iconKey) {
-    "default"      -> "Default"
-    "phone"        -> "Phone"
-    "custom_phone" -> "CustomPhone"
-    "google"       -> "Google"
-    "nothing"      -> "Nothing"
-    "lineageos"    -> "LineageOS"
-    else           -> "Default"
+    "default"            -> "Default"
+    "phone"              -> "Phone"
+    "custom_phone"       -> "CustomPhone"
+    "radium_green_phone" -> "RadiumGreenPhone"
+    "google"             -> "Google"
+    "nothing"            -> "Nothing"
+    "lineageos"          -> "LineageOS"
+    else                 -> "Default"
 }
 
 private fun plainIconAliasName(iconKey: String): String = when (iconKey) {
-    "default"      -> "MainActivityDefaultIcon"
-    "phone"        -> "MainActivityPhoneIcon"
-    "custom_phone" -> "MainActivityCustomPhoneIcon"
-    "google"       -> "MainActivityGoogleDialerIcon"
-    "nothing"      -> "MainActivityNothingIcon"
-    "lineageos"    -> "MainActivityLineageOSIcon"
-    else           -> "MainActivityDefaultIcon"
+    "default"            -> "MainActivityDefaultIcon"
+    "phone"              -> "MainActivityPhoneIcon"
+    "custom_phone"       -> "MainActivityCustomPhoneIcon"
+    "radium_green_phone" -> "MainActivityRadiumGreenPhoneIcon"
+    "google"             -> "MainActivityGoogleDialerIcon"
+    "nothing"            -> "MainActivityNothingIcon"
+    "lineageos"          -> "MainActivityLineageOSIcon"
+    else                 -> "MainActivityDefaultIcon"
 }
 
 private fun nameSuffix(nameKey: String): String? = when (nameKey) {
@@ -102,8 +105,8 @@ internal fun aliasNameFor(iconKey: String, nameKey: String): String {
     return "MainActivityName$nSuffix${iconSuffix(iconKey)}"
 }
 
-private val ALL_ICON_KEYS = listOf("default", "phone", "custom_phone", "google", "nothing", "lineageos")
-private val ALL_NAME_KEYS = listOf("default", "name_call", "name_dial", "name_truephone", "name_phonedialer", "name_phone", "name_dialer")
+private val ALL_ICON_KEYS = listOf("default", "phone", "custom_phone", "radium_green_phone", "google", "nothing", "lineageos")
+private val ALL_NAME_KEYS = listOf("default", "name_phone", "name_dialer", "name_call", "name_dial", "name_truephone", "name_phonedialer")
 
 private fun allLauncherAliasNames(): List<String> =
     ALL_ICON_KEYS.flatMap { icon -> ALL_NAME_KEYS.map { name -> aliasNameFor(icon, name) } }.distinct()

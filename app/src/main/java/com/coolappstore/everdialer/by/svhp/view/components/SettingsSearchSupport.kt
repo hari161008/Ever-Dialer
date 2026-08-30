@@ -285,6 +285,7 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
 
     // ── Interface screen ──────────────────────────────────────────────────────
     GlobalSettingsSearchEntry("Dynamic Colors", "Match app colors to your wallpaper (Material You)", "dynamic_colors", Icons.Outlined.Palette, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "dynamic_colors")) },
+    GlobalSettingsSearchEntry("Saturated Colors", "Apply rich saturated colors behind containers", "saturated_colors", Icons.Outlined.Palette, GsColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "saturated_colors")) },
     GlobalSettingsSearchEntry("Material Liquid You Glass", "Liquid glass visual effects", "liquid_glass_toggle", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "liquid_glass_toggle")) },
     GlobalSettingsSearchEntry("Elements to have liquid glass effect", "Choose where liquid glass effects apply", "liquid_glass_elements_link", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "liquid_glass_elements_link")) },
     GlobalSettingsSearchEntry("Material Blur Effects", "Blur effects across the interface", "blur_effects_toggle", Icons.Outlined.Palette, GsColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "blur_effects_toggle")) },
@@ -307,6 +308,7 @@ fun buildGlobalSettingsSearchEntries(): List<GlobalSettingsSearchEntry> = listOf
     GlobalSettingsSearchEntry("Open Dialpad by Default", "Launch straight into the dialpad", "open_dialpad_default", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "open_dialpad_default")) },
     GlobalSettingsSearchEntry("Show favourites in list", "Display favourites in a vertical list instead of grid", "favorites_in_list", Icons.Outlined.Palette, GsColorPink) { it.navigate(InterfaceScreenDestination(highlightKey = "favorites_in_list")) },
     GlobalSettingsSearchEntry("Show First Letter in Avatar", "Fallback avatar shows a contact's initial", "avatar_first_letter", Icons.Outlined.Palette, GsColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_first_letter")) },
+    GlobalSettingsSearchEntry("Solid Icons", "Use solid background behind icons without colors", "solid_icons", Icons.Outlined.Palette, GsColorBluGrey) { it.navigate(InterfaceScreenDestination(highlightKey = "solid_icons")) },
     GlobalSettingsSearchEntry("Use Colorful Avatars", "Give fallback avatars varied colors", "colorful_avatars", Icons.Outlined.Palette, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "colorful_avatars")) },
     GlobalSettingsSearchEntry("Show Picture in Avatar", "Show a contact's photo in their avatar", "avatar_picture", Icons.Outlined.Palette, GsColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_picture")) },
     GlobalSettingsSearchEntry("App Icon", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, GsColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
