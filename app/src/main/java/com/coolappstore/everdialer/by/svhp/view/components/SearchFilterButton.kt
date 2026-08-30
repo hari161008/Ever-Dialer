@@ -25,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import org.koin.compose.koinInject
@@ -68,21 +70,33 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
     var expanded by remember { mutableStateOf(false) }
     val settingsVer by prefs.settingsChanged.collectAsState()
     val state = remember(settingsVer) { prefs.getSearchFilterState() }
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedDark = saturatedColors && isDark
+
+    val buttonBg = when {
+        isSaturatedDark -> MaterialTheme.colorScheme.primary
+        !state.isDefault -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val buttonFg = when {
+        isSaturatedDark -> Color(0xFF1C1B1F)
+        !state.isDefault -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Box(modifier = modifier) {
         Surface(
             onClick = { expanded = true },
             modifier = Modifier.size(size),
             shape = CircleShape,
-            color = if (!state.isDefault) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerHigh
+            color = buttonBg
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.FilterList,
                     contentDescription = "Filter search results",
-                    tint = if (!state.isDefault) MaterialTheme.colorScheme.onPrimaryContainer
-                           else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = buttonFg
                 )
             }
         }

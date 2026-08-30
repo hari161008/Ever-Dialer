@@ -404,40 +404,101 @@ fun RivoStatCard(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+
+    val isSaturatedDark = saturatedColors && isDark
+    val actualContainerColor = if (isSaturatedDark) {
+        if (containerColor == Color.Transparent) Color.Transparent else MaterialTheme.colorScheme.primary
+    } else {
+        containerColor
+    }
+
+    val valueTextColor = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurface
+    val labelTextColor = if (isSaturatedDark) Color(0xFF1C1B1F).copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val adjustedTint = adjustIconColorForTheme(iconTint, isDark)
+
+    val (iconBgColor, iconContentColor) = when {
+        solidIcons -> {
+            // Solid icons enabled: no individual colors (no blue/red/green/orange) - uniform monochrome solid badge
+            if (isSaturatedDark) {
+                Color(0xFF1C1B1F) to MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.primary to if (isDark) Color(0xFF1C1B1F) else Color.White
+            }
+        }
+        else -> {
+            // Solid icons is OFF (including when saturated colors is on): icons have their respective colors
+            val bgAlpha = if (isDark) 0.22f else 0.14f
+            adjustedTint.copy(alpha = bgAlpha) to adjustedTint
+        }
+    }
+
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = containerColor,
+        color = actualContainerColor,
         modifier = modifier
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
         ) {
-            // Colored icon background
+            // Icon placed in the top right corner, larger size
+            val badgeShape = if (circleIcons) CircleShape else RoundedCornerShape(11.dp)
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = iconTint.copy(alpha = 0.15f),
-                modifier = Modifier.size(32.dp)
+                shape = badgeShape,
+                color = if (isSaturatedDark && !solidIcons) Color(0xFF1C1B1F) else iconBgColor,
+                modifier = Modifier
+                    .size(36.dp)
+                    .align(Alignment.TopEnd)
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = if (isSaturatedDark && !solidIcons) {
+                        Modifier
+                            .fillMaxSize()
+                            .background(adjustedTint.copy(alpha = 0.22f))
+                    } else {
+                        Modifier.fillMaxSize()
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        icon, null,
-                        tint = iconTint,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isSaturatedDark && !solidIcons) adjustedTint else iconContentColor,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            // Value & Label on bottom left
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(top = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = valueTextColor,
+                    maxLines = 1
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = labelTextColor,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -485,6 +546,7 @@ fun RivoIconBox(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
 
     val (bgColor, fgColor) = if (solidIcons) {
@@ -499,7 +561,7 @@ fun RivoIconBox(
 
     Surface(
         modifier = modifier.size(44.dp).scale(iconScale).alpha(iconAlpha),
-        shape = RoundedCornerShape(14.dp),
+        shape = if (circleIcons) CircleShape else RoundedCornerShape(14.dp),
         color = bgColor,
         shadowElevation = 0.dp
     ) {
@@ -507,7 +569,7 @@ fun RivoIconBox(
             Icon(
                 icon, null,
                 tint = fgColor,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -1040,11 +1102,18 @@ fun RivoDropdownMenuItem(
         ) {
             if (icon != null || iconBitmap != null) {
                 val solidIcons = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+                val circleIcons = remember(settingsVer2) { prefs2.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
                 val solidMode = solidIcons || (liquidGlass2 && lgDropdown)
                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
 
                 val (iconBgColor, iconTintColor) = when {
-                    solidMode && isDestructive -> Color(0xFFD32F2F) to Color.White
+                    solidMode && isDestructive -> {
+                        if (isDark) {
+                            Color(0xFFE57373) to Color(0xFF1C1B1F)
+                        } else {
+                            Color(0xFFD32F2F) to Color.White
+                        }
+                    }
                     solidMode -> {
                         val primary = MaterialTheme.colorScheme.primary
                         val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
@@ -1061,23 +1130,23 @@ fun RivoDropdownMenuItem(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = if (circleIcons) CircleShape else RoundedCornerShape(11.dp),
                     color = if (iconBitmap != null) Color.Transparent else iconBgColor,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (iconBitmap != null) {
                             androidx.compose.foundation.Image(
                                 bitmap = iconBitmap,
                                 contentDescription = null,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(30.dp)
                             )
                         } else if (icon != null) {
                             Icon(
                                 imageVector        = icon,
                                 contentDescription = null,
                                 tint               = iconTintColor,
-                                modifier           = Modifier.size(18.dp)
+                                modifier           = Modifier.size(22.dp)
                             )
                         }
                     }

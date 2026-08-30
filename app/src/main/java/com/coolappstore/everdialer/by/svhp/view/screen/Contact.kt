@@ -43,6 +43,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -169,6 +170,10 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false) }
             val blurEffects = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, false) }
+            val saturatedColors = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+            val fabBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+            val fabFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgContactsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             val useBlur = blurEffects && blurContactsFab && !useLiquidGlass
@@ -195,8 +200,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 ) {
                     FloatingActionButton(
                         onClick = fabOnClick,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.0f),
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = fabBg.copy(alpha = 0.0f),
+                        contentColor = fabFg,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(
                         defaultElevation = 6.dp,
@@ -210,10 +215,10 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 FloatingActionButton(
                     onClick = fabOnClick,
                     containerColor = if (useBlur)
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
+                        fabBg.copy(alpha = 0.75f)
                     else
-                        MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fabBg,
+                    contentColor = fabFg,
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(
                         defaultElevation = 6.dp,
@@ -360,6 +365,11 @@ fun ContactContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                val saturatedColors = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                val activePillBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                val activePillFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
                 // ── Contacts count + account switcher pill ─────────────
                 Surface(
                     onClick = { showAccountSheet = true },
@@ -367,7 +377,7 @@ fun ContactContent(
                     color = if (selectedAccountKey != null)
                         MaterialTheme.colorScheme.secondaryContainer
                     else
-                        MaterialTheme.colorScheme.primaryContainer
+                        activePillBg
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -381,7 +391,7 @@ fun ContactContent(
                                 color = if (selectedAccountKey != null)
                                     MaterialTheme.colorScheme.onSecondaryContainer
                                 else
-                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                    activePillFg
                             )
                         } else {
                             Icon(
@@ -391,7 +401,7 @@ fun ContactContent(
                                 tint = if (selectedAccountKey != null)
                                     MaterialTheme.colorScheme.onSecondaryContainer
                                 else
-                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                    activePillFg
                             )
                         }
                         Text(
@@ -401,7 +411,7 @@ fun ContactContent(
                             color = if (selectedAccountKey != null)
                                 MaterialTheme.colorScheme.onSecondaryContainer
                             else
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                activePillFg
                         )
                         Icon(
                             Icons.Default.ArrowDropDown,
@@ -410,7 +420,7 @@ fun ContactContent(
                             tint = if (selectedAccountKey != null)
                                 MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                             else
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                activePillFg.copy(alpha = 0.7f)
                         )
                     }
                 }

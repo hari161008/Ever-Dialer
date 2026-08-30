@@ -149,6 +149,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
         const val KEY_SOLID_ICONS           = "solid_icons"
+        const val KEY_CIRCLE_ICONS          = "circle_icons"
         const val KEY_SHOW_FIRST_LETTER     = "show_first_letter"
         const val KEY_COLORFUL_AVATARS      = "colorful_avatars"
         const val KEY_SHOW_PICTURE          = "show_picture"

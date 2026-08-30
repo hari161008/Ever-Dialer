@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -39,6 +41,14 @@ import org.koin.compose.koinInject
 fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedDark = saturatedColors && isDark
+
+    val searchBarBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    val searchBarFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurfaceVariant
+
     val searchSource = remember { MutableInteractionSource() }
     val searchPressed by searchSource.collectIsPressedAsState()
     val searchScale by animateFloatAsState(
@@ -55,7 +65,7 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
         },
         modifier = modifier.height(52.dp).scale(searchScale),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = searchBarBg,
         interactionSource = searchSource
     ) {
         Row(
@@ -66,12 +76,12 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = searchBarFg
             )
             Text(
                 text = "Search in Ever Dialer",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = searchBarFg,
                 modifier = Modifier.weight(1f)
             )
         }

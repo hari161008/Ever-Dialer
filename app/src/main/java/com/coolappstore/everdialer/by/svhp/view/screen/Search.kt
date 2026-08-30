@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
@@ -286,6 +287,14 @@ fun ContactSearchContent(
             contactNoteResults.size + recordingNoteResults.size + settingResults.size
     val hasAnyResults = totalResults > 0
 
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedDark = saturatedColors && isDark
+
+    val searchBarBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    val searchBarFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurface
+    val searchBarPlaceholder = if (isSaturatedDark) Color(0xFF1C1B1F).copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Search bar + filter button
         Row(
@@ -296,27 +305,30 @@ fun ContactSearchContent(
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = searchBarBg,
                 shadowElevation = 0.dp
             ) {
                 TextField(
                     value = queryFieldValue,
                     onValueChange = { queryFieldValue = it },
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                    placeholder = { Text("Search contacts or numbers") },
+                    placeholder = { Text("Search contacts or numbers", color = searchBarPlaceholder) },
                     leadingIcon = {
                         IconButton(onClick = { navigator.navigateUp() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = searchBarFg)
                         }
                     },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { queryFieldValue = TextFieldValue("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = searchBarFg)
                             }
                         }
                     },
                     colors = TextFieldDefaults.colors(
+                        focusedTextColor = searchBarFg,
+                        unfocusedTextColor = searchBarFg,
+                        cursorColor = searchBarFg,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,

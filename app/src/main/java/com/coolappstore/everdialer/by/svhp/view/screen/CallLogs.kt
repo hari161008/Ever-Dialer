@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -142,6 +143,12 @@ fun CallLogFullScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize().alpha(screenAlpha).scale(screenScale)) {
             Column(modifier = Modifier.fillMaxSize()) {
+                val settingsVersion by prefs.settingsChanged.collectAsState()
+                val saturatedColors = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                val activeChipBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                val activeChipFg = if (saturatedColors && isDark) androidx.compose.ui.graphics.Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -155,9 +162,10 @@ fun CallLogFullScreen(
                             onClick = { viewModel.setFilter(filter) },
                             label = { Text(filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }) },
                             shape = RoundedCornerShape(50.dp),
+                            border = null,
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                selectedContainerColor = activeChipBg,
+                                selectedLabelColor = activeChipFg
                             )
                         )
                     }

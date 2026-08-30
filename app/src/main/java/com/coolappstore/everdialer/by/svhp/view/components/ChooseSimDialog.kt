@@ -14,7 +14,9 @@ import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,6 +87,9 @@ private fun RivoChoiceRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val prefs = org.koin.compose.koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
@@ -96,7 +101,7 @@ private fun RivoChoiceRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = if (circleIcons) CircleShape else RoundedCornerShape(14.dp),
                 color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest,
                 modifier = Modifier.size(44.dp)
             ) {
@@ -105,7 +110,7 @@ private fun RivoChoiceRow(
                         icon,
                         contentDescription = null,
                         tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

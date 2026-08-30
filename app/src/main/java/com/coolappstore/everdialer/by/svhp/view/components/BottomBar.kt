@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -436,6 +437,13 @@ private fun RowScope.AnimatedNavBarItem(
         label         = "${label}IndicatorAlpha"
     )
 
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val activeNavBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+    val activeNavFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
     CompositionLocalProvider(LocalRippleConfiguration provides null) {
         NavigationBarItem(
             icon = {
@@ -443,7 +451,7 @@ private fun RowScope.AnimatedNavBarItem(
                     modifier = Modifier
                         .scale(scale)
                         .clip(RoundedCornerShape(50.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = indicatorAlpha))
+                        .background(activeNavBg.copy(alpha = indicatorAlpha))
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Crossfade(
@@ -464,7 +472,7 @@ private fun RowScope.AnimatedNavBarItem(
             selected        = selected,
             interactionSource = interactionSource,
             colors          = NavigationBarItemDefaults.colors(
-                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                selectedIconColor = activeNavFg,
                 indicatorColor    = Color.Transparent
             ),
             onClick = onClick
@@ -484,6 +492,13 @@ private fun PillNavItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val activeNavBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+    val activeNavFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -493,7 +508,7 @@ private fun PillNavItem(
         label         = "${label}BgAlpha"
     )
     val iconTint by animateColorAsState(
-        targetValue   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        targetValue   = if (selected) activeNavFg
                         else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
@@ -518,7 +533,7 @@ private fun PillNavItem(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(50.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = bgAlpha))
+            .background(activeNavBg.copy(alpha = bgAlpha))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
@@ -573,7 +588,7 @@ private fun PillNavItem(
                     Text(
                         text  = label,
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = activeNavFg,
                         maxLines = 1,
                         softWrap = false
                     )

@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -341,6 +342,10 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false) }
             val blurEffects = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false) }
+            val saturatedColors = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
+            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+            val fabBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+            val fabFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             val useBlur = blurEffects && blurRecentsFab && !useLiquidGlass
@@ -363,8 +368,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 ) {
                     FloatingActionButton(
                         onClick = { showDialpad = true },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.0f),
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = fabBg.copy(alpha = 0.0f),
+                        contentColor = fabFg,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(
                         defaultElevation = 6.dp,
@@ -378,10 +383,10 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 FloatingActionButton(
                     onClick = { showDialpad = true },
                     containerColor = if (useBlur)
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
+                        fabBg.copy(alpha = 0.75f)
                     else
-                        MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fabBg,
+                    contentColor = fabFg,
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(
                         defaultElevation = 6.dp,
@@ -670,6 +675,11 @@ fun CallLogFullContent(
                     }
 
                     // ── Filter pills ──────────────────────────────────────────────
+                    val saturatedColors = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
+                    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                    val activeChipBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                    val activeChipFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -678,13 +688,13 @@ fun CallLogFullContent(
                         items(CallLogFilter.entries) { filter ->
                             val isSelected = selectedFilter == filter
                             val containerColor by animateColorAsState(
-                                targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                targetValue = if (isSelected) activeChipBg
                                               else MaterialTheme.colorScheme.surfaceContainerLow,
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                                 label = "chipColor"
                             )
                             val labelColor by animateColorAsState(
-                                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                targetValue = if (isSelected) activeChipFg
                                               else MaterialTheme.colorScheme.onSurface,
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                                 label = "chipLabelColor"
@@ -707,6 +717,7 @@ fun CallLogFullContent(
                                     )
                                 },
                                 shape = RoundedCornerShape(50.dp),
+                                border = null,
                                 modifier = Modifier.scale(scale),
                                 colors = FilterChipDefaults.filterChipColors(
                                     containerColor = containerColor,
@@ -798,6 +809,11 @@ fun CallLogFullContent(
                                 }
                             }
                             item(key = "filter_pills", contentType = "filterPills") {
+                                val saturatedColors = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SATURATED_COLORS, false) }
+                                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                                val activeChipBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                                val activeChipFg = if (saturatedColors && isDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+
                                 LazyRow(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -806,13 +822,13 @@ fun CallLogFullContent(
                                     items(CallLogFilter.entries) { filter ->
                                         val isSelected = selectedFilter == filter
                                         val containerColor by animateColorAsState(
-                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                            targetValue = if (isSelected) activeChipBg
                                                           else MaterialTheme.colorScheme.surfaceContainerLow,
                                             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                                             label = "chipColor"
                                         )
                                         val labelColor by animateColorAsState(
-                                            targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            targetValue = if (isSelected) activeChipFg
                                                           else MaterialTheme.colorScheme.onSurface,
                                             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                                             label = "chipLabelColor"
@@ -835,6 +851,7 @@ fun CallLogFullContent(
                                                 )
                                             },
                                             shape = RoundedCornerShape(50.dp),
+                                            border = null,
                                             modifier = Modifier.scale(scale),
                                             colors = FilterChipDefaults.filterChipColors(
                                                 containerColor = containerColor,
@@ -958,12 +975,18 @@ private fun AnimatedStatCard(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     onClick: () -> Unit = {}
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val saturatedColors = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val actualBg = if (saturatedColors && isDark) MaterialTheme.colorScheme.primary else containerColor
+
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(delayMs); visible = true }
     val cardAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "statAlpha")
     val cardOffset by animateDpAsState(if (visible) 0.dp else 16.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "statOffset")
     Box(modifier = Modifier.alpha(cardAlpha).offset(y = cardOffset)) {
-        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = containerColor, modifier = modifier) {
+        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = actualBg, modifier = modifier) {
             RivoStatCard(label = label, value = value, icon = icon, iconTint = iconTint, containerColor = Color.Transparent, modifier = Modifier.fillMaxWidth())
         }
     }

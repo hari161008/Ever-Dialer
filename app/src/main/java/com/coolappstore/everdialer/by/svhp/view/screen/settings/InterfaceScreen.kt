@@ -122,6 +122,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showFloatingColorPicker by remember { mutableStateOf(false) }
     var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
+    var circleIcons         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false)) }
     var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
@@ -998,6 +999,19 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     checked = solidIcons,
                                     modifier = Modifier.settingsSearchHighlight("solid_icons", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = { solidIcons = it; prefs.setBoolean(PreferenceManager.KEY_SOLID_ICONS, it) }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Circle Icons",
+                                    supporting = "Use circle shapes for icons across the app",
+                                    leadingIcon = Icons.Outlined.Lens,
+                                    iconContainerColor = Color(0xFF00BCD4),
+                                    checked = circleIcons,
+                                    modifier = Modifier.settingsSearchHighlight("circle_icons", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { circleIcons = it; prefs.setBoolean(PreferenceManager.KEY_CIRCLE_ICONS, it) }
                                 )
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),

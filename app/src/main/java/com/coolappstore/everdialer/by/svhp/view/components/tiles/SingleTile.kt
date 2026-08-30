@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -62,6 +63,8 @@ fun SingleTile(
     val context = LocalContext.current
     val haptic  = LocalHapticFeedback.current
     val prefs   = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     var showMenu              by remember { mutableStateOf(false) }
     // Sync with external isMenuOpen
     LaunchedEffect(isMenuOpen) { if (isMenuOpen) showMenu = true }
@@ -162,7 +165,7 @@ fun SingleTile(
                             )
                         else Modifier
                     ),
-                shape              = RoundedCornerShape(14.dp)
+                shape              = if (circleIcons) CircleShape else RoundedCornerShape(14.dp)
             )
 
             Column(
