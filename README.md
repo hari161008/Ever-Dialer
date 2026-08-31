@@ -87,6 +87,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 ---
 
 # Features of Ever Dialer .✦ ݁˖
+<br><br>
 
 ### 1. 📞 Core Telephony & Call Management
   1. 📞 **Make & Receive Phone Calls** – Full-featured, reliable default phone dialer and call manager for Android.
