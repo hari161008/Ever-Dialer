@@ -426,14 +426,15 @@ fun RivoStatCard(
         else -> containerColor
     }
 
-    val valueTextColor = if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    val labelTextColor = if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
+    val valueTextColor = if (isSaturatedSolidBrightDark) Color.Black else if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val labelTextColor = if (isSaturatedSolidBrightDark) Color.Black.copy(alpha = 0.78f) else if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     val (iconBgColor, iconContentColor) = when {
         solidIcons -> {
             if (isSaturatedActive) {
                 if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
-                    if (isDark) MaterialTheme.colorScheme.onPrimary to Color.Black
+                    if (isDark) Color.Black to MaterialTheme.colorScheme.primary
                     else {
                         val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
                         MaterialTheme.colorScheme.onPrimary to (if (isPrimaryBright) MaterialTheme.colorScheme.primary else Color(0xFF1C1B1F))
@@ -446,7 +447,7 @@ fun RivoStatCard(
                 val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
                 primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
             } else {
-                val container = MaterialTheme.colorScheme.primaryContainer
+                val container = if (!isDark && isSaturatedActive) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.30f) else MaterialTheme.colorScheme.primaryContainer
                 val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
                 container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
             }
@@ -572,7 +573,7 @@ fun RivoIconBox(
                 primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
             }
         } else {
-            val container = MaterialTheme.colorScheme.primaryContainer
+            val container = if (!isDark && isSaturatedActive) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.30f) else MaterialTheme.colorScheme.primaryContainer
             val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
             container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
         }
@@ -813,6 +814,7 @@ fun RivoSwitchListItem(
 ) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -874,12 +876,16 @@ fun RivoSwitchListItem(
             }
 
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+            val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+            val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+            val solidStyle = remember(settingsVersion, isDark) { prefs.getSolidIconsStyle(isDark) }
+            val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
             val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
+                    checkedThumbColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
                     checkedTrackColor = MaterialTheme.colorScheme.primary,
                     checkedBorderColor = Color.Transparent,
                     uncheckedThumbColor = if (isDark) Color(0xFFB0B0B5) else Color(0xFF6B7280),
@@ -905,6 +911,7 @@ fun RivoCheckboxListItem(
 ) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -965,11 +972,18 @@ fun RivoCheckboxListItem(
                 }
             }
 
+            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+            val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+            val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+            val solidStyle = remember(settingsVersion, isDark) { prefs.getSolidIconsStyle(isDark) }
+            val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
+            val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Checkbox(
                 checked = checked,
                 onCheckedChange = { onCheckedChange(it) },
                 colors = CheckboxDefaults.colors(
                     checkedColor = MaterialTheme.colorScheme.primary,
+                    checkmarkColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
                     uncheckedColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -1235,7 +1249,7 @@ fun RivoDropdownMenuItem(
                                 primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
                             }
                         } else {
-                            val container = MaterialTheme.colorScheme.primaryContainer
+                            val container = if (!isDark && isSaturatedActive) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.30f) else MaterialTheme.colorScheme.primaryContainer
                             val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
                             container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
                         }

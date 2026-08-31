@@ -677,8 +677,11 @@ fun CallLogFullContent(
                     // ── Filter pills ──────────────────────────────────────────────
                     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
                     val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                    val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+                    val solidStyle = remember(settingsVersion, isDark) { prefs.getSolidIconsStyle(isDark) }
+                    val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
                     val activeChipBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                    val activeChipFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                    val activeChipFg = if (isSaturatedSolidBrightDark) Color.Black else if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -811,8 +814,11 @@ fun CallLogFullContent(
                             item(key = "filter_pills", contentType = "filterPills") {
                                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
                                 val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                                val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+                                val solidStyle = remember(settingsVersion, isDark) { prefs.getSolidIconsStyle(isDark) }
+                                val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
                                 val activeChipBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                                val activeChipFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                                val activeChipFg = if (isSaturatedSolidBrightDark) Color.Black else if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
                                 LazyRow(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

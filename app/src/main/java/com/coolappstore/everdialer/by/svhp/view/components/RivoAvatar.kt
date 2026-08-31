@@ -73,7 +73,7 @@ fun RivoAvatar(
             primaryColor to (if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White)
         }
     } else {
-        val container = MaterialTheme.colorScheme.primaryContainer
+        val container = if (!isDark && isSaturatedActive) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.30f) else MaterialTheme.colorScheme.primaryContainer
         val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
         container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
     }

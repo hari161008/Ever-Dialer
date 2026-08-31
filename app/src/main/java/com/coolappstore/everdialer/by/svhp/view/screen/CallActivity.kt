@@ -478,7 +478,8 @@ private fun CallAvatar(
     controlBtnColor: Color,
     avatarSize: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    overlayContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
     val isCircle = config.pfpShape != "square"
     val avatarShape = if (isCircle) CircleShape else RoundedCornerShape(if (config.pfpSize >= 0.95f) 0.dp else 14.dp)
@@ -577,6 +578,10 @@ private fun CallAvatar(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+        }
+
+        if (overlayContent != null) {
+            overlayContent()
         }
     }
 }
@@ -1774,6 +1779,7 @@ fun ExpressiveCallScreen(
                             MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium)
                         val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
 
+                        val isSquareLarge = currentBgConfig.pfpShape == "square" && pfpFraction >= 0.85f
                         val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp)
                         if (shouldShowAvatar) {
                             CallAvatar(
@@ -1784,59 +1790,112 @@ fun ExpressiveCallScreen(
                                 hasCustomBg = hasCustomBg,
                                 controlBtnColor = controlBtnColor,
                                 avatarSize = callAvatarSize,
-                                iconSize = callAvatarIconSize
-                            )
-
-                            Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
-                        }
-
-                        // Fixed height box so layout never shifts when name loads
-                        Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = contactName.ifEmpty { "" },
-                                style = callNameStyle.copy(shadow = textShadow),
-                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        // Show the number this specific call is on — resolved once for this
-                        // call session, so it's always the single correct number even when
-                        // the matched contact has multiple saved numbers. Hidden if it would
-                        // just duplicate the name shown above (e.g. unknown callers), or if disabled in settings.
-                        if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
-                            Text(
-                                text = phoneNumber,
-                                style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
-                                    fontWeight = FontWeight.Bold,
-                                    shadow = textShadow
-                                ),
-                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
-                            if (showSimBadge && simSlot in 0..1) {
-                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
-                            }
-                            Text(
-                                text = when {
-                                    isOnHold -> "On Hold"
-                                    callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                    callState == Call.STATE_DIALING -> "Calling"
-                                    callState == Call.STATE_RINGING -> "Incoming"
-                                    callState == Call.STATE_CONNECTING -> "Calling"
-                                    callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
-                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                                iconSize = callAvatarIconSize,
+                                overlayContent = if (isSquareLarge) {{
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(start = 24.dp, top = callAvatarSize * 0.18f, end = 24.dp),
+                                        horizontalAlignment = Alignment.Start,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = contactName.ifEmpty { "" },
+                                            style = callNameStyle.copy(shadow = textShadow),
+                                            color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
+                                            Text(
+                                                text = phoneNumber,
+                                                style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    shadow = textShadow
+                                                ),
+                                                color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                            if (showSimBadge && simSlot in 0..1) {
+                                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
+                                            }
+                                            Text(
+                                                text = when {
+                                                    isOnHold -> "On Hold"
+                                                    callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                                    callState == Call.STATE_DIALING -> "Calling"
+                                                    callState == Call.STATE_RINGING -> "Incoming"
+                                                    callState == Call.STATE_CONNECTING -> "Calling"
+                                                    callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
+                                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                                                    }
+                                                    else -> "Connecting..."
+                                                },
+                                                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                                                style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
+                                            )
+                                        }
                                     }
-                                    else -> "Connecting..."
-                                },
-                                color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
+                                }} else null
                             )
+
+                            if (!isSquareLarge) {
+                                Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
+                            }
+                        }
+
+                        if (!isSquareLarge || !shouldShowAvatar) {
+                            // Fixed height box so layout never shifts when name loads
+                            Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = contactName.ifEmpty { "" },
+                                    style = callNameStyle.copy(shadow = textShadow),
+                                    color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // Show the number this specific call is on — resolved once for this
+                            // call session, so it's always the single correct number even when
+                            // the matched contact has multiple saved numbers. Hidden if it would
+                            // just duplicate the name shown above (e.g. unknown callers), or if disabled in settings.
+                            if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
+                                Text(
+                                    text = phoneNumber,
+                                    style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
+                                        fontWeight = FontWeight.Bold,
+                                        shadow = textShadow
+                                    ),
+                                    color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+                                if (showSimBadge && simSlot in 0..1) {
+                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
+                                }
+                                Text(
+                                    text = when {
+                                        isOnHold -> "On Hold"
+                                        callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
+                                        callState == Call.STATE_DIALING -> "Calling"
+                                        callState == Call.STATE_RINGING -> "Incoming"
+                                        callState == Call.STATE_CONNECTING -> "Calling"
+                                        callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
+                                            if (isIncomingMode) "Declined" else "Hanging up..."
+                                        }
+                                        else -> "Connecting..."
+                                    },
+                                    color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
+                                    style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
+                                )
+                            }
                         }
 
                         if (hasHeldCall) {

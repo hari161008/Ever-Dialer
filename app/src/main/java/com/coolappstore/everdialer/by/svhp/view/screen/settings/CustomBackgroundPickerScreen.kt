@@ -596,55 +596,118 @@ fun CustomBackgroundPickerScreen(
                                                             modifier = Modifier.size(previewIconSize)
                                                         )
                                                     }
+
+                                                    val isSquareLarge = (!isPfpCircle) && pfpSize >= 0.85f
+                                                    if (isSquareLarge) {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .align(Alignment.TopStart)
+                                                                .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
+                                                            horizontalAlignment = Alignment.Start,
+                                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                                        ) {
+                                                            Text(
+                                                                "Jane Doe",
+                                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    shadow = textShadow,
+                                                                    fontSize = 15.sp
+                                                                ),
+                                                                color = effectiveTextColor,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            if (showPhoneNumber) {
+                                                                Text(
+                                                                    "+1 (555) 234-5678",
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        shadow = textShadow,
+                                                                        fontSize = 10.sp
+                                                                    ),
+                                                                    color = effectiveTextColor,
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                                modifier = Modifier.padding(top = 2.dp)
+                                                            ) {
+                                                                if (isDualSim) {
+                                                                    Surface(
+                                                                        shape = RoundedCornerShape(3.dp),
+                                                                        color = Color(0xFF1E88E5),
+                                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                                    ) {
+                                                                        Box(contentAlignment = Alignment.Center) {
+                                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                                        }
+                                                                    }
+                                                                }
+                                                                Text(
+                                                                    "Incoming",
+                                                                    color = effectiveSubtleColor,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                Spacer(Modifier.height(8.dp))
+                                                if (!((!isPfpCircle) && pfpSize >= 0.85f)) {
+                                                    Spacer(Modifier.height(8.dp))
+                                                }
                                             }
 
-                                            Text(
-                                                "Jane Doe",
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow,
-                                                    fontSize = 15.sp
-                                                ),
-                                                color = effectiveTextColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            if (showPhoneNumber) {
+                                            val isSquareLarge = showContactPfp && (!isPfpCircle) && pfpSize >= 0.85f
+                                            if (!isSquareLarge) {
                                                 Text(
-                                                    "+1 (555) 234-5678",
-                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                    "Jane Doe",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
                                                         fontWeight = FontWeight.Bold,
                                                         shadow = textShadow,
-                                                        fontSize = 10.sp
+                                                        fontSize = 15.sp
                                                     ),
                                                     color = effectiveTextColor,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
-                                            }
-                                            Spacer(Modifier.height(4.dp))
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                if (isDualSim) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(3.dp),
-                                                        color = Color(0xFF1E88E5),
-                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
-                                                    ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                if (showPhoneNumber) {
+                                                    Text(
+                                                        "+1 (555) 234-5678",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            shadow = textShadow,
+                                                            fontSize = 10.sp
+                                                        ),
+                                                        color = effectiveTextColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(4.dp))
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    if (isDualSim) {
+                                                        Surface(
+                                                            shape = RoundedCornerShape(3.dp),
+                                                            color = Color(0xFF1E88E5),
+                                                            modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                            }
                                                         }
                                                     }
+                                                    Text(
+                                                        "Incoming",
+                                                        color = effectiveSubtleColor,
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                    )
                                                 }
-                                                Text(
-                                                    "Incoming",
-                                                    color = effectiveSubtleColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
-                                                )
                                             }
                                         }
 
@@ -773,55 +836,118 @@ fun CustomBackgroundPickerScreen(
                                                             modifier = Modifier.size(previewIconSize)
                                                         )
                                                     }
+
+                                                    val isSquareLarge = (!isPfpCircle) && pfpSize >= 0.85f
+                                                    if (isSquareLarge) {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .align(Alignment.TopStart)
+                                                                .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
+                                                            horizontalAlignment = Alignment.Start,
+                                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                                        ) {
+                                                            Text(
+                                                                "Jane Doe",
+                                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    shadow = textShadow,
+                                                                    fontSize = 15.sp
+                                                                ),
+                                                                color = effectiveTextColor,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            if (showPhoneNumber) {
+                                                                Text(
+                                                                    "+1 (555) 234-5678",
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        shadow = textShadow,
+                                                                        fontSize = 10.sp
+                                                                    ),
+                                                                    color = effectiveTextColor,
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                                modifier = Modifier.padding(top = 2.dp)
+                                                            ) {
+                                                                if (isDualSim) {
+                                                                    Surface(
+                                                                        shape = RoundedCornerShape(3.dp),
+                                                                        color = Color(0xFF1E88E5),
+                                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                                    ) {
+                                                                        Box(contentAlignment = Alignment.Center) {
+                                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                                        }
+                                                                    }
+                                                                }
+                                                                Text(
+                                                                    "00:45",
+                                                                    color = effectiveSubtleColor,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                Spacer(Modifier.height(6.dp))
+                                                if (!((!isPfpCircle) && pfpSize >= 0.85f)) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                }
                                             }
 
-                                            Text(
-                                                "Jane Doe",
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow,
-                                                    fontSize = 15.sp
-                                                ),
-                                                color = effectiveTextColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            if (showPhoneNumber) {
+                                            val isSquareLarge = showContactPfp && (!isPfpCircle) && pfpSize >= 0.85f
+                                            if (!isSquareLarge) {
                                                 Text(
-                                                    "+1 (555) 234-5678",
-                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                    "Jane Doe",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
                                                         fontWeight = FontWeight.Bold,
                                                         shadow = textShadow,
-                                                        fontSize = 10.sp
+                                                        fontSize = 15.sp
                                                     ),
                                                     color = effectiveTextColor,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
-                                            }
-                                            Spacer(Modifier.height(3.dp))
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                if (isDualSim) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(3.dp),
-                                                        color = Color(0xFF1E88E5),
-                                                        modifier = Modifier.size(width = 12.dp, height = 14.dp)
-                                                    ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                if (showPhoneNumber) {
+                                                    Text(
+                                                        "+1 (555) 234-5678",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            shadow = textShadow,
+                                                            fontSize = 10.sp
+                                                        ),
+                                                        color = effectiveTextColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(3.dp))
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    if (isDualSim) {
+                                                        Surface(
+                                                            shape = RoundedCornerShape(3.dp),
+                                                            color = Color(0xFF1E88E5),
+                                                            modifier = Modifier.size(width = 12.dp, height = 14.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                            }
                                                         }
                                                     }
+                                                    Text(
+                                                        "00:45",
+                                                        color = effectiveSubtleColor,
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                    )
                                                 }
-                                                Text(
-                                                    "00:45",
-                                                    color = effectiveSubtleColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
-                                                )
                                             }
                                         }
 

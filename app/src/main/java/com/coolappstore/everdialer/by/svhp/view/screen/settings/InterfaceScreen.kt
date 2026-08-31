@@ -918,7 +918,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             OutlinedButton(
                                                 onClick = { showFloatingColorPicker = true },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(12.dp)
+                                                shape = RoundedCornerShape(50.dp)
                                             ) {
                                                 Icon(
                                                     Icons.Outlined.Colorize,
@@ -1956,7 +1956,6 @@ private fun FloatingColorPickerDialog(
             Column(
                 modifier = Modifier
                     .padding(20.dp)
-                    .verticalScroll(rememberScrollState())
             ) {
                 // Header
                 Row(
@@ -2010,6 +2009,7 @@ private fun FloatingColorPickerDialog(
                                     value = (1f - offset.y / size.height).coerceIn(0f, 1f)
                                 },
                                 onDrag = { change, _ ->
+                                    change.consume()
                                     sat = (change.position.x / size.width).coerceIn(0f, 1f)
                                     value = (1f - change.position.y / size.height).coerceIn(0f, 1f)
                                 }
@@ -2086,6 +2086,7 @@ private fun FloatingColorPickerDialog(
                                     hue = (offset.x / size.width * 360f).coerceIn(0f, 360f)
                                 },
                                 onDrag = { change, _ ->
+                                    change.consume()
                                     hue = (change.position.x / size.width * 360f).coerceIn(0f, 360f)
                                 }
                             )
