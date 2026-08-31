@@ -451,8 +451,125 @@ private data class CallBackgroundConfig(
     val customFontColorInt: Int = android.graphics.Color.WHITE,
     val showContactPfp: Boolean = true,
     val showPhoneNumber: Boolean = true,
-    val elementsTheme: String = "auto"
+    val elementsTheme: String = "auto",
+    val pfpType: String = "none",
+    val pfpPath: String = "",
+    val pfpZoom: Float = 1f,
+    val pfpPanX: Float = 0f,
+    val pfpPanY: Float = 0f,
+    val pfpDim: Float = 0f,
+    val pfpBlur: Float = 0f,
+    val pfpVideoSpeed: Float = 1.0f,
+    val pfpFile: java.io.File? = null,
+    val hasCustomPfp: Boolean = false,
+    val pfpOverrideExisting: Boolean = false,
+    val pfpShowForNoPfp: Boolean = true
 )
+
+@Composable
+private fun CallAvatar(
+    photoUri: String?,
+    contactName: String,
+    phoneNumber: String,
+    config: CallBackgroundConfig,
+    hasCustomBg: Boolean,
+    controlBtnColor: Color,
+    avatarSize: androidx.compose.ui.unit.Dp,
+    iconSize: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
+        val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+        val base = com.coolappstore.everdialer.by.svhp.view.components.avatarColors[
+            kotlin.math.abs(key.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size
+        ]
+        base to Color.White
+    }
+
+    val hasRealPfp = !photoUri.isNullOrEmpty()
+    val shouldUseCustomPfp = if (hasRealPfp) {
+        config.pfpOverrideExisting && config.hasCustomPfp && config.pfpFile != null
+    } else {
+        config.pfpShowForNoPfp && config.hasCustomPfp && config.pfpFile != null
+    }
+
+    Box(
+        modifier = modifier
+            .size(avatarSize)
+            .clip(CircleShape)
+            .then(
+                if (hasCustomBg) Modifier.background(controlBtnColor)
+                else Modifier.background(
+                    Brush.radialGradient(
+                        listOf(
+                            callerAvatarBg,
+                            callerAvatarBg.copy(alpha = 0.85f)
+                        )
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        // Base layer / default face vector icon
+        Icon(
+            imageVector = Icons.Default.Person,
+            contentDescription = null,
+            modifier = Modifier.align(Alignment.Center).size(iconSize),
+            tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
+        )
+
+        if (shouldUseCustomPfp && config.pfpFile != null) {
+            if (config.pfpType == "video") {
+                com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
+                    videoFile = config.pfpFile,
+                    videoSpeed = config.pfpVideoSpeed,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = config.pfpZoom
+                            scaleY = config.pfpZoom
+                            translationX = config.pfpPanX * 0.35f
+                            translationY = config.pfpPanY * 0.35f
+                        }
+                        .then(if (config.pfpBlur > 0f) Modifier.blur(config.pfpBlur.dp) else Modifier)
+                )
+            } else {
+                AsyncImage(
+                    model = config.pfpFile,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = config.pfpZoom
+                            scaleY = config.pfpZoom
+                            translationX = config.pfpPanX * 0.35f
+                            translationY = config.pfpPanY * 0.35f
+                        }
+                        .then(if (config.pfpBlur > 0f) Modifier.blur(config.pfpBlur.dp) else Modifier)
+                )
+            }
+            if (config.pfpDim > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = config.pfpDim))
+                )
+            }
+        } else if (hasRealPfp) {
+            AsyncImage(
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(photoUri)
+                    .crossfade(300)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
 
 @Composable
 private fun CallBackgroundLayer(
@@ -964,8 +1081,33 @@ fun ExpressiveCallScreen(
         val defaultElementsTheme = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto" else "auto"
         val elementsTheme = prefs?.getString("${prefix}_elements_theme", defaultElementsTheme) ?: defaultElementsTheme
 
+        val defaultPfpType = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_TYPE, "none") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_TYPE, "none")
+        val defaultPfpPath = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "")
+        val defaultPfpZoom = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_ZOOM, 1f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_ZOOM, 1f)
+        val defaultPfpPanX = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_X, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_X, 0f)
+        val defaultPfpPanY = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_Y, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_Y, 0f)
+        val defaultPfpDim = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_DIM, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_DIM, 0f)
+        val defaultPfpBlur = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_BLUR, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_BLUR, 0f)
+        val defaultPfpVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
+        val defaultPfpOverride = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, false) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, false)
+        val defaultPfpShowForNoPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
+
+        val pfpType = prefs?.getString("${prefix}_custom_pfp_type", defaultPfpType ?: "none") ?: (defaultPfpType ?: "none")
+        val pfpPath = prefs?.getString("${prefix}_custom_pfp_path", defaultPfpPath ?: "") ?: (defaultPfpPath ?: "")
+        val pfpZoom = prefs?.getFloat("${prefix}_custom_pfp_zoom", defaultPfpZoom ?: 1f) ?: (defaultPfpZoom ?: 1f)
+        val pfpPanX = prefs?.getFloat("${prefix}_custom_pfp_pan_x", defaultPfpPanX ?: 0f) ?: (defaultPfpPanX ?: 0f)
+        val pfpPanY = prefs?.getFloat("${prefix}_custom_pfp_pan_y", defaultPfpPanY ?: 0f) ?: (defaultPfpPanY ?: 0f)
+        val pfpDim = prefs?.getFloat("${prefix}_custom_pfp_dim", defaultPfpDim ?: 0f) ?: (defaultPfpDim ?: 0f)
+        val pfpBlur = prefs?.getFloat("${prefix}_custom_pfp_blur", defaultPfpBlur ?: 0f) ?: (defaultPfpBlur ?: 0f)
+        val pfpVideoSpeed = prefs?.getFloat("${prefix}_custom_pfp_video_speed", defaultPfpVideoSpeed ?: 1.0f) ?: (defaultPfpVideoSpeed ?: 1.0f)
+        val pfpOverrideExisting = prefs?.getBoolean("${prefix}_custom_pfp_override_existing", defaultPfpOverride ?: false) ?: (defaultPfpOverride ?: false)
+        val pfpShowForNoPfp = prefs?.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", defaultPfpShowForNoPfp ?: true) ?: (defaultPfpShowForNoPfp ?: true)
+
         val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
         val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+        val pfpFile = if (pfpPath.isNotEmpty()) java.io.File(pfpPath) else null
+        val hasCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && pfpFile != null && pfpFile.exists()
 
         return CallBackgroundConfig(
             bgType = bgType,
@@ -982,7 +1124,19 @@ fun ExpressiveCallScreen(
             customFontColorInt = customFontColorInt,
             showContactPfp = showContactPfp,
             showPhoneNumber = showPhoneNumber,
-            elementsTheme = elementsTheme
+            elementsTheme = elementsTheme,
+            pfpType = pfpType,
+            pfpPath = pfpPath,
+            pfpZoom = pfpZoom,
+            pfpPanX = pfpPanX,
+            pfpPanY = pfpPanY,
+            pfpDim = pfpDim,
+            pfpBlur = pfpBlur,
+            pfpVideoSpeed = pfpVideoSpeed,
+            pfpFile = pfpFile,
+            hasCustomPfp = hasCustomPfp,
+            pfpOverrideExisting = pfpOverrideExisting,
+            pfpShowForNoPfp = pfpShowForNoPfp
         )
     }
 
@@ -1360,37 +1514,16 @@ fun ExpressiveCallScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             if (showContactPfp) {
-                                val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
-                                    val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
-                                    val base = com.coolappstore.everdialer.by.svhp.view.components.avatarColors[
-                                        kotlin.math.abs(key.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size
-                                    ]
-                                    base to Color.White
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(100.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (hasCustomBg) controlBtnColor
-                                            else callerAvatarBg
-                                        )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.align(Alignment.Center).size(52.dp),
-                                        tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
-                                    )
-                                    if (!photoUri.isNullOrEmpty()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(photoUri).crossfade(300).build(),
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
+                                CallAvatar(
+                                    photoUri = photoUri,
+                                    contactName = contactName,
+                                    phoneNumber = phoneNumber,
+                                    config = currentBgConfig,
+                                    hasCustomBg = hasCustomBg,
+                                    controlBtnColor = controlBtnColor,
+                                    avatarSize = 100.dp,
+                                    iconSize = 52.dp
+                                )
                                 Spacer(modifier = Modifier.height(20.dp))
                             }
                             Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
@@ -1594,48 +1727,16 @@ fun ExpressiveCallScreen(
                         val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
 
                         if (showContactPfp) {
-                            val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
-                                val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
-                                val base = com.coolappstore.everdialer.by.svhp.view.components.avatarColors[
-                                    kotlin.math.abs(key.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size
-                                ]
-                                base to Color.White
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(callAvatarSize)
-                                    .clip(CircleShape)
-                                    .then(
-                                        if (hasCustomBg) Modifier.background(controlBtnColor)
-                                        else Modifier.background(
-                                            Brush.radialGradient(
-                                                listOf(
-                                                    callerAvatarBg,
-                                                    callerAvatarBg.copy(alpha = 0.85f)
-                                                )
-                                            )
-                                        )
-                                    )
-                            ) {
-                                // Always render Icon as base layer so layout never shifts
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.align(Alignment.Center).size(callAvatarIconSize),
-                                    tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
-                                )
-                                if (!photoUri.isNullOrEmpty()) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(photoUri)
-                                            .crossfade(300)
-                                            .build(),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
+                            CallAvatar(
+                                photoUri = photoUri,
+                                contactName = contactName,
+                                phoneNumber = phoneNumber,
+                                config = currentBgConfig,
+                                hasCustomBg = hasCustomBg,
+                                controlBtnColor = controlBtnColor,
+                                avatarSize = callAvatarSize,
+                                iconSize = callAvatarIconSize
+                            )
 
                             Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
                         }

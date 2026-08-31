@@ -535,6 +535,9 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 fun CustomBackgroundOptionsPopup(
     target: CustomBackgroundTarget,
     currentType: String,
+    dialogTitle: String? = null,
+    dialogSubtitle: String? = null,
+    noneSubtitle: String? = null,
     onDismiss: () -> Unit,
     onSelectNone: () -> Unit,
     onOpenEditor: (file: File, isVideo: Boolean, bgType: String) -> Unit
@@ -670,12 +673,12 @@ fun CustomBackgroundOptionsPopup(
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Choose Custom Background",
+                                dialogTitle ?: "Choose Custom Background",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "${target.title} Screen",
+                                dialogSubtitle ?: "${target.title} Screen",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -690,7 +693,7 @@ fun CustomBackgroundOptionsPopup(
                         iconTint = MaterialTheme.colorScheme.primary,
                         iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "None",
-                        subtitle = "Default caller background",
+                        subtitle = noneSubtitle ?: "Default caller background",
                         isSelected = currentType == "none" || currentType.isEmpty(),
                         onClick = {
                             onSelectNone()
@@ -862,6 +865,7 @@ fun CustomBackgroundEditorDialog(
     isVideo: Boolean,
     bgType: String,
     prefixOverride: String? = null,
+    isPfpEditor: Boolean = false,
     initialZoom: Float = 1.0f,
     initialPanX: Float = 0f,
     initialPanY: Float = 0f,
@@ -903,21 +907,34 @@ fun CustomBackgroundEditorDialog(
                 val bgDir = File(context.filesDir, "backgrounds").apply { mkdirs() }
                 val ext = if (isVideo) "mp4" else "png"
                 val p = prefixOverride ?: target.prefix
-                val destFile = File(bgDir, "custom_bg_${p}.$ext")
+                val destFile = File(bgDir, if (isPfpEditor) "custom_pfp_${p}.$ext" else "custom_bg_${p}.$ext")
                 mediaFile.copyTo(destFile, overwrite = true)
 
                 // Delete temporary picked file from cacheDir
                 BackgroundMediaManager.cleanupFileIfInCache(context, mediaFile)
 
-                prefs.setString("${p}_bg_type", bgType)
-                prefs.setString("${p}_bg_path", destFile.absolutePath)
-                prefs.setFloat("${p}_bg_zoom", zoom)
-                prefs.setFloat("${p}_bg_pan_x", panX)
-                prefs.setFloat("${p}_bg_pan_y", panY)
-                prefs.setFloat("${p}_bg_dim", dimValue)
-                prefs.setFloat("${p}_bg_blur", blurValue)
-                if (isVideo) {
-                    prefs.setFloat("${p}_bg_video_speed", videoSpeed)
+                if (isPfpEditor) {
+                    prefs.setString("${p}_custom_pfp_type", bgType)
+                    prefs.setString("${p}_custom_pfp_path", destFile.absolutePath)
+                    prefs.setFloat("${p}_custom_pfp_zoom", zoom)
+                    prefs.setFloat("${p}_custom_pfp_pan_x", panX)
+                    prefs.setFloat("${p}_custom_pfp_pan_y", panY)
+                    prefs.setFloat("${p}_custom_pfp_dim", dimValue)
+                    prefs.setFloat("${p}_custom_pfp_blur", blurValue)
+                    if (isVideo) {
+                        prefs.setFloat("${p}_custom_pfp_video_speed", videoSpeed)
+                    }
+                } else {
+                    prefs.setString("${p}_bg_type", bgType)
+                    prefs.setString("${p}_bg_path", destFile.absolutePath)
+                    prefs.setFloat("${p}_bg_zoom", zoom)
+                    prefs.setFloat("${p}_bg_pan_x", panX)
+                    prefs.setFloat("${p}_bg_pan_y", panY)
+                    prefs.setFloat("${p}_bg_dim", dimValue)
+                    prefs.setFloat("${p}_bg_blur", blurValue)
+                    if (isVideo) {
+                        prefs.setFloat("${p}_bg_video_speed", videoSpeed)
+                    }
                 }
 
                 // Prune any unreferenced backgrounds
@@ -925,13 +942,13 @@ fun CustomBackgroundEditorDialog(
 
                 withContext(Dispatchers.Main) {
                     isSaving = false
-                    Toast.makeText(context, "Background saved successfully", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (isPfpEditor) "Contact PFP saved successfully" else "Background saved successfully", Toast.LENGTH_SHORT).show()
                     onSaveSuccess()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     isSaving = false
-                    Toast.makeText(context, "Failed to save background: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -1002,6 +1019,16 @@ fun CustomBackgroundEditorDialog(
                             .background(Color.Black.copy(alpha = dimValue))
                     )
                 }
+
+                // Avatar circular frame overlay for PFP editor
+                if (isPfpEditor) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(240.dp)
+                            .border(2.5.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                    )
+                }
             }
 
             // Top overlay bar with M3 Expressive floating glass pill
@@ -1027,13 +1054,13 @@ fun CustomBackgroundEditorDialog(
                     ) {
                         Column {
                             Text(
-                                "Background Editor",
+                                if (isPfpEditor) "Contact PFP Editor" else "Background Editor",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "Pinch or drag to position & scale",
+                                if (isPfpEditor) "Pinch or drag within avatar frame" else "Pinch or drag to position & scale",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

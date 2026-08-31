@@ -1003,12 +1003,14 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         // ── Incoming Call UI screen ───────────────────────────────────────────
         SettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
         SettingsSearchEntry("Show Mute button", "Show a button to silence ringtone during incoming calls", "incoming_show_mute_button", Icons.Outlined.VolumeUp, ColorAmber) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_mute_button")) },
+        SettingsSearchEntry("Contact PFP Customisation (Incoming)", "Customize avatar photo for incoming calls", "incoming_contact_pfp_customisation", Icons.Outlined.Contacts, ColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_contact_pfp_customisation")) },
         SettingsSearchEntry("Show Contact PFP", "Display caller's avatar photo over incoming call screen", "incoming_show_contact_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_contact_pfp")) },
         SettingsSearchEntry("Show Phone Number", "Display caller's phone number on incoming call screen", "incoming_show_phone_number", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_phone_number")) },
         SettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, ColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
 
         // ── Ongoing Call UI screen ────────────────────────────────────────────
         SettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, ColorBlue) { it.navigate(CallerUIScreenDestination()) },
+        SettingsSearchEntry("Contact PFP Customisation (Ongoing)", "Customize avatar photo for ongoing in-call screen", "ongoing_contact_pfp_customisation", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_contact_pfp_customisation")) },
         SettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
         SettingsSearchEntry("Show Phone Number in Ongoing Call", "Display phone number on ongoing call screen", "ongoing_show_phone_number", Icons.Outlined.Call, ColorGreen) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_phone_number")) },
 

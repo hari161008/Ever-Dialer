@@ -243,6 +243,19 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
+                            com.coolappstore.everdialer.by.svhp.view.components.RivoListItem(
+                                headline = "Contact PFP Customisation",
+                                supporting = "Customize avatar photo for contacts and unknown numbers",
+                                leadingIcon = Icons.Outlined.AccountBox,
+                                iconContainerColor = Color(0xFF00BCD4),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("ongoing_contact_pfp_customisation", highlightedKey) { highlightedKey = null },
+                                onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.ContactPfpCustomizationScreenDestination(isIncoming = false)) }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
                             RivoSwitchListItem(
                                 headline = "Show Contact PFP",
                                 supporting = "Display the contact avatar photo on the ongoing call screen",

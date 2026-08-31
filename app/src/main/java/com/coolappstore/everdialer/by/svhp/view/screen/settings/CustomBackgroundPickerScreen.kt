@@ -118,6 +118,36 @@ fun CustomBackgroundPickerScreen(
     }
     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
 
+    val pfpType = remember(settingsVersion) {
+        prefs.getString("${prefix}_custom_pfp_type", "none") ?: "none"
+    }
+    val pfpPath = remember(settingsVersion) {
+        prefs.getString("${prefix}_custom_pfp_path", "") ?: ""
+    }
+    val pfpZoom = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_zoom", 1f)
+    }
+    val pfpPanX = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f)
+    }
+    val pfpPanY = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f)
+    }
+    val pfpDim = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_dim", 0f)
+    }
+    val pfpBlur = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_blur", 0f)
+    }
+    val pfpVideoSpeed = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f)
+    }
+    val pfpShowForNoPfp = remember(settingsVersion) {
+        prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
+    }
+    val customPfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
+    val hasPreviewCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && customPfpFile != null && customPfpFile.exists() && pfpShowForNoPfp
+
     var elementsThemeMode by remember(settingsVersion) {
         mutableStateOf(
             prefs.getString(
@@ -492,12 +522,52 @@ fun CustomBackgroundPickerScreen(
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    Icon(
-                                                        Icons.Default.Person,
-                                                        contentDescription = null,
-                                                        tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.size(30.dp)
-                                                    )
+                                                    if (hasPreviewCustomPfp && customPfpFile != null) {
+                                                        if (pfpType == "video") {
+                                                            LoopingVideoPlayer(
+                                                                videoFile = customPfpFile,
+                                                                videoSpeed = pfpVideoSpeed,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .graphicsLayer {
+                                                                        scaleX = pfpZoom
+                                                                        scaleY = pfpZoom
+                                                                        translationX = pfpPanX * 0.2f
+                                                                        translationY = pfpPanY * 0.2f
+                                                                    }
+                                                                    .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
+                                                            )
+                                                        } else {
+                                                            AsyncImage(
+                                                                model = customPfpFile,
+                                                                contentDescription = null,
+                                                                contentScale = ContentScale.Crop,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .graphicsLayer {
+                                                                        scaleX = pfpZoom
+                                                                        scaleY = pfpZoom
+                                                                        translationX = pfpPanX * 0.2f
+                                                                        translationY = pfpPanY * 0.2f
+                                                                    }
+                                                                    .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
+                                                            )
+                                                        }
+                                                        if (pfpDim > 0f) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .background(Color.Black.copy(alpha = pfpDim))
+                                                            )
+                                                        }
+                                                    } else {
+                                                        Icon(
+                                                            Icons.Default.Person,
+                                                            contentDescription = null,
+                                                            tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.size(30.dp)
+                                                        )
+                                                    }
                                                 }
                                                 Spacer(Modifier.height(8.dp))
                                             }
@@ -624,12 +694,52 @@ fun CustomBackgroundPickerScreen(
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    Icon(
-                                                        Icons.Default.Person,
-                                                        contentDescription = null,
-                                                        tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.size(28.dp)
-                                                    )
+                                                    if (hasPreviewCustomPfp && customPfpFile != null) {
+                                                        if (pfpType == "video") {
+                                                            LoopingVideoPlayer(
+                                                                videoFile = customPfpFile,
+                                                                videoSpeed = pfpVideoSpeed,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .graphicsLayer {
+                                                                        scaleX = pfpZoom
+                                                                        scaleY = pfpZoom
+                                                                        translationX = pfpPanX * 0.2f
+                                                                        translationY = pfpPanY * 0.2f
+                                                                    }
+                                                                    .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
+                                                            )
+                                                        } else {
+                                                            AsyncImage(
+                                                                model = customPfpFile,
+                                                                contentDescription = null,
+                                                                contentScale = ContentScale.Crop,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .graphicsLayer {
+                                                                        scaleX = pfpZoom
+                                                                        scaleY = pfpZoom
+                                                                        translationX = pfpPanX * 0.2f
+                                                                        translationY = pfpPanY * 0.2f
+                                                                    }
+                                                                    .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
+                                                            )
+                                                        }
+                                                        if (pfpDim > 0f) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .background(Color.Black.copy(alpha = pfpDim))
+                                                            )
+                                                        }
+                                                    } else {
+                                                        Icon(
+                                                            Icons.Default.Person,
+                                                            contentDescription = null,
+                                                            tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.size(28.dp)
+                                                        )
+                                                    }
                                                 }
                                                 Spacer(Modifier.height(6.dp))
                                             }

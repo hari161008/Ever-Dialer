@@ -266,6 +266,8 @@ object BackupManager {
                     key.startsWith("ongoing_font_") ||
                     key.startsWith("incoming_elements_") ||
                     key.startsWith("ongoing_elements_") ||
+                    key.startsWith("incoming_custom_pfp_") ||
+                    key.startsWith("ongoing_custom_pfp_") ||
                     key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
                     key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP
                 ) {

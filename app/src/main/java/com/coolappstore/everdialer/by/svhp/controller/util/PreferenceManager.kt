@@ -426,6 +426,29 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_FONT_COLOR        = "ongoing_font_color"       // Int ARGB
         const val KEY_ONGOING_AUTO_REFRESH_WALLPAPER  = "ongoing_auto_refresh_wallpaper"
 
+        // Custom Contact PFP (Incoming & Ongoing)
+        const val KEY_INCOMING_CUSTOM_PFP_TYPE              = "incoming_custom_pfp_type"         // "none" | "wallpaper" | "picture" | "video"
+        const val KEY_INCOMING_CUSTOM_PFP_PATH              = "incoming_custom_pfp_path"
+        const val KEY_INCOMING_CUSTOM_PFP_ZOOM              = "incoming_custom_pfp_zoom"
+        const val KEY_INCOMING_CUSTOM_PFP_PAN_X             = "incoming_custom_pfp_pan_x"
+        const val KEY_INCOMING_CUSTOM_PFP_PAN_Y             = "incoming_custom_pfp_pan_y"
+        const val KEY_INCOMING_CUSTOM_PFP_DIM               = "incoming_custom_pfp_dim"
+        const val KEY_INCOMING_CUSTOM_PFP_BLUR              = "incoming_custom_pfp_blur"
+        const val KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED       = "incoming_custom_pfp_video_speed"
+        const val KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING = "incoming_custom_pfp_override_existing"
+        const val KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP   = "incoming_custom_pfp_show_for_no_pfp"
+
+        const val KEY_ONGOING_CUSTOM_PFP_TYPE               = "ongoing_custom_pfp_type"          // "none" | "wallpaper" | "picture" | "video"
+        const val KEY_ONGOING_CUSTOM_PFP_PATH               = "ongoing_custom_pfp_path"
+        const val KEY_ONGOING_CUSTOM_PFP_ZOOM               = "ongoing_custom_pfp_zoom"
+        const val KEY_ONGOING_CUSTOM_PFP_PAN_X              = "ongoing_custom_pfp_pan_x"
+        const val KEY_ONGOING_CUSTOM_PFP_PAN_Y              = "ongoing_custom_pfp_pan_y"
+        const val KEY_ONGOING_CUSTOM_PFP_DIM                = "ongoing_custom_pfp_dim"
+        const val KEY_ONGOING_CUSTOM_PFP_BLUR               = "ongoing_custom_pfp_blur"
+        const val KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED        = "ongoing_custom_pfp_video_speed"
+        const val KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING  = "ongoing_custom_pfp_override_existing"
+        const val KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP    = "ongoing_custom_pfp_show_for_no_pfp"
+
         // Volume DND — toggle system DND via volume button sequence using Accessibility
         const val KEY_VOLUME_DND_ENABLED           = "volume_dnd_enabled"
         const val KEY_VOLUME_DND_SEQUENCE          = "volume_dnd_sequence"

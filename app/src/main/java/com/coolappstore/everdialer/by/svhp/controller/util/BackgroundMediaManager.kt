@@ -74,10 +74,16 @@ object BackgroundMediaManager {
             prefs.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "")?.let {
                 if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
             }
+            prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "")?.let {
+                if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
+            }
+            prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "")?.let {
+                if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
+            }
 
             // Per-contact and dynamic keys
             allKeys.forEach { key ->
-                if (key.endsWith("_bg_path")) {
+                if (key.endsWith("_bg_path") || key.endsWith("_custom_pfp_path") || key.endsWith("_pfp_path")) {
                     prefs.getString(key, "")?.let { path ->
                         if (path.isNotBlank()) {
                             try {
