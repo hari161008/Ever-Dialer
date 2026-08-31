@@ -145,7 +145,7 @@ fun CustomBackgroundPickerScreen(
     val pfpShowForNoPfp = remember(settingsVersion) {
         prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
     }
-    val defaultPfpSize = if (isIncoming) 0.5f else 0.65f
+    val defaultPfpSize = 0.5f
     val pfpSize = remember(settingsVersion) {
         prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize).coerceIn(0.1f, 1.0f)
     }
@@ -153,9 +153,9 @@ fun CustomBackgroundPickerScreen(
         prefs.getString("${prefix}_custom_pfp_shape", "circle") ?: "circle"
     }
     val previewAvatarSize = if (pfpSize <= 0.50f) {
-        (54.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
+        (80.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
     } else {
-        54.dp + (185.dp - 54.dp) * ((pfpSize - 0.50f) / 0.50f)
+        80.dp + (185.dp - 80.dp) * ((pfpSize - 0.50f) / 0.50f)
     }
     val previewIconSize = (previewAvatarSize * 0.50f).coerceAtLeast(12.dp)
     val isPfpCircle = pfpShape != "square"
@@ -350,17 +350,25 @@ fun CustomBackgroundPickerScreen(
         else -> appIsDark
     }
 
-    val previewElemBg = if (hasCustomBg) {
-        if (isIncomingElementsDark) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.85f)
-    } else {
-        if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    val isSaturatedActive = remember(settingsVersion, appIsDark) { prefs.isSaturatedForTheme(appIsDark) }
+    val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val solidIconsDarkStyle = remember(settingsVersion, appIsDark) { prefs.getSolidIconsStyle(appIsDark) }
+    val isSaturatedSolidBrightDark = (appIsDark || isIncomingElementsDark) && isSaturatedActive && solidIcons && (solidIconsDarkStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
+
+    val previewElemBg = when {
+        isSaturatedActive -> MaterialTheme.colorScheme.primary
+        hasCustomBg -> if (isIncomingElementsDark) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.85f)
+        isIncomingElementsDark -> Color(0xFF23262D)
+        else -> colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
     }
-    val previewElemFg = if (hasCustomBg) {
-        if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
-    } else {
-        if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
+    val previewElemFg = when {
+        isSaturatedSolidBrightDark -> Color.Black
+        isSaturatedActive -> MaterialTheme.colorScheme.onPrimary
+        hasCustomBg -> if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
+        isIncomingElementsDark -> Color(0xFFE2E2E6)
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
-    val previewHandleBg = if (isIncomingElementsDark && hasCustomBg) Color.White else (if (isIncomingElementsDark) Color(0xFF383A40) else Color.White)
+    val previewHandleBg = if (isSaturatedSolidBrightDark) Color.Black else if (isIncomingElementsDark && hasCustomBg) Color.White else (if (isIncomingElementsDark) Color(0xFF383A40) else Color.White)
 
     val effectiveTextColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -520,7 +528,7 @@ fun CustomBackgroundPickerScreen(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(top = 22.dp, bottom = 14.dp, start = 8.dp, end = 8.dp),
+                                            .padding(top = 22.dp, bottom = 14.dp, start = if (pfpSize >= 0.95f) 0.dp else 8.dp, end = if (pfpSize >= 0.95f) 0.dp else 8.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
@@ -704,7 +712,7 @@ fun CustomBackgroundPickerScreen(
                                         // Top info
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.padding(top = 26.dp, start = 8.dp, end = 8.dp)
+                                            modifier = Modifier.padding(top = 26.dp, start = if (pfpSize >= 0.95f) 0.dp else 8.dp, end = if (pfpSize >= 0.95f) 0.dp else 8.dp)
                                         ) {
                                             if (showContactPfp) {
                                                 Box(

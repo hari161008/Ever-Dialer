@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -165,6 +166,8 @@ fun ContactDetailsScreen(
     // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
     // so the actions shown here always match what's configured for the contact's context menu.
     val settingsVer by prefs.settingsChanged.collectAsState()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
     val contactInfoActionKeys = remember(settingsVer) {
         com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
             prefs,
@@ -576,11 +579,15 @@ fun ContactDetailsScreen(
                                 modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh),
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(onClick = { navigateBack() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
 
@@ -662,8 +669,8 @@ fun ContactDetailsScreen(
                             },
                             modifier = Modifier.weight(1f).height(64.dp),
                             shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize(),
@@ -801,8 +808,8 @@ fun ContactDetailsScreen(
                                         "delete_contact" -> RivoExpressiveButton(
                                             icon = Icons.Default.Delete,
                                             label = "Delete",
-                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                            containerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onErrorContainer,
                                             size = 52.dp,
                                             iconSize = 20.dp,
                                             onClick = { showDeleteConfirm = true }

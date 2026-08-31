@@ -145,6 +145,15 @@ class PreferenceManager(context: Context) {
         }
     }
 
+    fun getSaturationLevel(isDark: Boolean): Float {
+        val defaultLevel = getFloat(KEY_SATURATION_LEVEL, 1.0f)
+        return if (isDark) {
+            getFloat(KEY_SATURATION_LEVEL_DARK, defaultLevel)
+        } else {
+            getFloat(KEY_SATURATION_LEVEL_LIGHT, defaultLevel)
+        }
+    }
+
     companion object {
         /** Parses a raw comma-separated tab-order preference string into an ordered list of
          *  valid tab keys, falling back to [DEFAULT_TAB_ORDER] and appending any tab keys
@@ -219,6 +228,8 @@ class PreferenceManager(context: Context) {
         const val KEY_SATURATED_MODES       = "saturated_modes"
         const val DEFAULT_SATURATED_MODES   = "light,dark,white,black"
         const val KEY_SATURATION_LEVEL      = "saturation_level"
+        const val KEY_SATURATION_LEVEL_LIGHT = "saturation_level_light"
+        const val KEY_SATURATION_LEVEL_DARK  = "saturation_level_dark"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
@@ -450,7 +461,7 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED        = "ongoing_custom_pfp_video_speed"
         const val KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING  = "ongoing_custom_pfp_override_existing"
         const val KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP    = "ongoing_custom_pfp_show_for_no_pfp"
-        const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.65f (65%)
+        const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.5f (50%)
         const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square"
 
         // Volume DND — toggle system DND via volume button sequence using Accessibility

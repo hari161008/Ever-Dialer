@@ -29,7 +29,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import android.content.Context
 import android.content.Intent
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -352,11 +354,36 @@ private fun SelectionBar(
  *  recordings list in place. */
 @Composable
 fun GlobalSearchPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val rivoPrefs = remember { context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE) }
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(rivoPrefs, isDark) {
+        val sat = rivoPrefs.getBoolean("saturated_colors", false)
+        if (!sat) false
+        else {
+            val modes = (rivoPrefs.getString("saturated_modes", "light,dark,white,black") ?: "light,dark,white,black")
+                .split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+            val themeMode = rivoPrefs.getString("theme_mode", "auto") ?: "auto"
+            val effectiveMode = when (themeMode) {
+                "white" -> "white"
+                "black" -> "black"
+                "light" -> "light"
+                "dark" -> "dark"
+                "auto_bw" -> if (isDark) "black" else "white"
+                else -> if (isDark) "dark" else "light"
+            }
+            modes.contains(effectiveMode)
+        }
+    }
+
+    val searchBarBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    val searchBarFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
     Surface(
         onClick = onClick,
         modifier = modifier.height(52.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
+        color = searchBarBg
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -366,12 +393,12 @@ fun GlobalSearchPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
             Icon(
                 imageVector = Icons.Outlined.Search,
                 contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = searchBarFg
             )
             Text(
                 text = "Search in Ever Dialer",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = searchBarFg,
                 modifier = Modifier.weight(1f)
             )
         }

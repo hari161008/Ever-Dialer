@@ -114,7 +114,7 @@ fun ContactPfpCustomizationScreen(
     var showForNoPfp by remember(settingsVersion) {
         mutableStateOf(prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true))
     }
-    val defaultPfpSize = if (isIncoming) 0.5f else 0.65f
+    val defaultPfpSize = 0.5f
     var pfpSize by remember(settingsVersion) {
         mutableFloatStateOf(prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize).coerceIn(0.1f, 1.0f))
     }
@@ -189,17 +189,25 @@ fun ContactPfpCustomizationScreen(
         else -> appIsDark
     }
 
-    val previewElemBg = if (hasCustomBg) {
-        if (isIncomingElementsDark) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.85f)
-    } else {
-        if (isIncomingElementsDark) Color(0xFF23262D) else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    val isSaturatedActive = remember(settingsVersion, appIsDark) { prefs.isSaturatedForTheme(appIsDark) }
+    val solidIcons = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val solidIconsDarkStyle = remember(settingsVersion, appIsDark) { prefs.getSolidIconsStyle(appIsDark) }
+    val isSaturatedSolidBrightDark = (appIsDark || isIncomingElementsDark) && isSaturatedActive && solidIcons && (solidIconsDarkStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
+
+    val previewElemBg = when {
+        isSaturatedActive -> MaterialTheme.colorScheme.primary
+        hasCustomBg -> if (isIncomingElementsDark) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.85f)
+        isIncomingElementsDark -> Color(0xFF23262D)
+        else -> colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
     }
-    val previewElemFg = if (hasCustomBg) {
-        if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
-    } else {
-        if (isIncomingElementsDark) Color(0xFFE2E2E6) else MaterialTheme.colorScheme.onPrimaryContainer
+    val previewElemFg = when {
+        isSaturatedSolidBrightDark -> Color.Black
+        isSaturatedActive -> MaterialTheme.colorScheme.onPrimary
+        hasCustomBg -> if (isIncomingElementsDark) Color.White else Color(0xFF191C20)
+        isIncomingElementsDark -> Color(0xFFE2E2E6)
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
-    val previewHandleBg = if (isIncomingElementsDark && hasCustomBg) Color.White else (if (isIncomingElementsDark) Color(0xFF383A40) else Color.White)
+    val previewHandleBg = if (isSaturatedSolidBrightDark) Color.Black else if (isIncomingElementsDark && hasCustomBg) Color.White else (if (isIncomingElementsDark) Color(0xFF383A40) else Color.White)
 
     val effectiveTextColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -410,11 +418,11 @@ fun ContactPfpCustomizationScreen(
 
                             // Dynamic Avatar sizing & shape calculations
                             val isCircle = pfpShape != "square"
-                            // Base size at 50% = 54.dp, Max size at 100% = 185.dp (full width), Min at 10% = 14.dp
+                            // Base size at 50% = 80.dp (matches old 60%), Max size at 100% = 185.dp (full width), Min at 10% = 14.dp
                             val previewAvatarSize = if (pfpSize <= 0.50f) {
-                                (54.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
+                                (80.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
                             } else {
-                                54.dp + (185.dp - 54.dp) * ((pfpSize - 0.50f) / 0.50f)
+                                80.dp + (185.dp - 80.dp) * ((pfpSize - 0.50f) / 0.50f)
                             }
                             val previewIconSize = (previewAvatarSize * 0.50f).coerceAtLeast(12.dp)
                             val avatarShape = if (isCircle) CircleShape else RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)

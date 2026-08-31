@@ -63,23 +63,19 @@ fun RivoAvatar(
 
     val hasName  = name.trim().isNotEmpty()
     val colorKey = if (hasName) name else "unknown_caller"
-
+    val isSaturatedActive = remember(settingsState, isDark) { prefs.isSaturatedForTheme(isDark) }
     val (solidBgColor, solidContentColor) = if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
         val primaryColor = MaterialTheme.colorScheme.primary
-        if (isDark) {
-            primaryColor to Color(0xFF1C1B1F)
+        val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
+        if (isSaturatedActive && isDark) {
+            primaryColor to Color.Black
         } else {
-            val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
             primaryColor to (if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White)
         }
     } else {
         val container = MaterialTheme.colorScheme.primaryContainer
-        if (isDark) {
-            container to Color.White
-        } else {
-            val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
-            container to (if (isBright) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer)
-        }
+        val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+        container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
     }
 
     val (backgroundColor, contentColor) = when {
@@ -94,6 +90,7 @@ fun RivoAvatar(
             if (solidIcons) solidBgColor to solidContentColor
             else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         }
+        solidIcons -> solidBgColor to solidContentColor
         colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }

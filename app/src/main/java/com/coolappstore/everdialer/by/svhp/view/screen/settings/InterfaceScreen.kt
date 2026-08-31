@@ -122,7 +122,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showFloatingColorPicker by remember { mutableStateOf(false) }
     var saturatedColors     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SATURATED_COLORS, false)) }
     var saturatedModes      by remember { mutableStateOf(prefs.getSaturatedModesSet()) }
-    var saturationLevel     by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SATURATION_LEVEL, 1.0f)) }
+    var saturationLevelLight by remember { mutableFloatStateOf(prefs.getSaturationLevel(false)) }
+    var saturationLevelDark  by remember { mutableFloatStateOf(prefs.getSaturationLevel(true)) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
     var solidIconsLightStyle by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
     var solidIconsDarkStyle  by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_DARK, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
@@ -1070,23 +1071,80 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.LightMode,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Text(
+                                                        "Light Mode Intensity",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
                                                 Text(
-                                                    "Saturation Intensity",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                                Text(
-                                                    "${(saturationLevel * 100).toInt()}%",
+                                                    "${(saturationLevelLight * 100).toInt()}%",
                                                     style = MaterialTheme.typography.labelLarge,
                                                     color = MaterialTheme.colorScheme.primary,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
                                             Slider(
-                                                value = saturationLevel,
+                                                value = saturationLevelLight,
                                                 onValueChange = {
-                                                    saturationLevel = it
-                                                    prefs.setFloat(PreferenceManager.KEY_SATURATION_LEVEL, it)
+                                                    saturationLevelLight = it
+                                                    prefs.setFloat(PreferenceManager.KEY_SATURATION_LEVEL_LIGHT, it)
+                                                },
+                                                valueRange = 0.2f..2.0f,
+                                                steps = 17,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            HorizontalDivider(
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                thickness = 0.5.dp
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.DarkMode,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Text(
+                                                        "Dark Mode Intensity",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                                Text(
+                                                    "${(saturationLevelDark * 100).toInt()}%",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Slider(
+                                                value = saturationLevelDark,
+                                                onValueChange = {
+                                                    saturationLevelDark = it
+                                                    prefs.setFloat(PreferenceManager.KEY_SATURATION_LEVEL_DARK, it)
                                                 },
                                                 valueRange = 0.2f..2.0f,
                                                 steps = 17,
@@ -1122,9 +1180,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
+                                            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                                            val isSaturatedActive = remember(rateReviewToggleSettingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                                            val solidChipColors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                                selectedLabelColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                selectedLeadingIconColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
                                             FilterChip(
                                                 selected = true,
                                                 onClick = { showSolidIconsLightDialog = true },
+                                                colors = solidChipColors,
                                                 label = {
                                                     Text("Light: ${if (solidIconsLightStyle == "bright") "Bright" else "Dim"}")
                                                 },
@@ -1134,26 +1200,27 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                         contentDescription = null,
                                                         modifier = Modifier.size(18.dp)
                                                     )
-                                                },
-                                                shape = RoundedCornerShape(50.dp),
-                                                border = null
-                                            )
-                                            FilterChip(
-                                                selected = true,
-                                                onClick = { showSolidIconsDarkDialog = true },
-                                                label = {
-                                                    Text("Dark: ${if (solidIconsDarkStyle == "bright") "Bright" else "Dim"}")
-                                                },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        Icons.Outlined.DarkMode,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                },
-                                                shape = RoundedCornerShape(50.dp),
-                                                border = null
-                                            )
+                                                 },
+                                                 shape = RoundedCornerShape(50.dp),
+                                                 border = null
+                                             )
+                                             FilterChip(
+                                                 selected = true,
+                                                 onClick = { showSolidIconsDarkDialog = true },
+                                                 colors = solidChipColors,
+                                                 label = {
+                                                     Text("Dark: ${if (solidIconsDarkStyle == "bright") "Bright" else "Dim"}")
+                                                 },
+                                                 leadingIcon = {
+                                                     Icon(
+                                                         Icons.Outlined.DarkMode,
+                                                         contentDescription = null,
+                                                         modifier = Modifier.size(18.dp)
+                                                     )
+                                                 },
+                                                 shape = RoundedCornerShape(50.dp),
+                                                 border = null
+                                             )
                                         }
                                     }
                                 }

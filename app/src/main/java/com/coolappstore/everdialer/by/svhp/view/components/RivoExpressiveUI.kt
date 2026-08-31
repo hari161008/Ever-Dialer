@@ -433,26 +433,22 @@ fun RivoStatCard(
         solidIcons -> {
             if (isSaturatedActive) {
                 if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
-                    MaterialTheme.colorScheme.onPrimary to MaterialTheme.colorScheme.primary
+                    if (isDark) MaterialTheme.colorScheme.onPrimary to Color.Black
+                    else {
+                        val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
+                        MaterialTheme.colorScheme.onPrimary to (if (isPrimaryBright) MaterialTheme.colorScheme.primary else Color(0xFF1C1B1F))
+                    }
                 } else {
                     MaterialTheme.colorScheme.onPrimary to (if (isDark) Color.White else Color(0xFF1C1B1F))
                 }
             } else if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
                 val primary = MaterialTheme.colorScheme.primary
-                if (isDark) {
-                    primary to Color(0xFF1C1B1F)
-                } else {
-                    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
-                    primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
-                }
+                val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
+                primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
             } else {
                 val container = MaterialTheme.colorScheme.primaryContainer
-                if (isDark) {
-                    container to Color.White
-                } else {
-                    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
-                    container to (if (isBright) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer)
-                }
+                val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+                container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
             }
         }
         else -> {
@@ -565,24 +561,20 @@ fun RivoIconBox(
     val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val solidStyle = remember(settingsVer, isDark) { prefs.getSolidIconsStyle(isDark) }
-
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
     val (bgColor, fgColor) = if (solidIcons) {
         if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
             val primary = MaterialTheme.colorScheme.primary
-            if (isDark) {
-                primary to Color(0xFF1C1B1F)
+            if (isSaturatedActive && isDark) {
+                primary to Color.Black
             } else {
                 val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
                 primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
             }
         } else {
             val container = MaterialTheme.colorScheme.primaryContainer
-            if (isDark) {
-                container to Color.White
-            } else {
-                val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
-                container to (if (isBright) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+            val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+            container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
         }
     } else {
         val baseColor = iconContainerColor ?: MaterialTheme.colorScheme.primary
@@ -1223,6 +1215,7 @@ fun RivoDropdownMenuItem(
                 val solidMode = solidIcons || (liquidGlass2 && lgDropdown)
                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
                 val solidStyle = remember(settingsVer2, isDark) { prefs2.getSolidIconsStyle(isDark) }
+                val isSaturatedActive = remember(settingsVer2, isDark) { prefs2.isSaturatedForTheme(isDark) }
 
                 val (iconBgColor, iconTintColor) = when {
                     solidMode && isDestructive -> {
@@ -1235,20 +1228,16 @@ fun RivoDropdownMenuItem(
                     solidMode -> {
                         if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
                             val primary = MaterialTheme.colorScheme.primary
-                            if (isDark) {
-                                primary to Color(0xFF1C1B1F)
+                            if (isSaturatedActive && isDark) {
+                                primary to Color.Black
                             } else {
                                 val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
                                 primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
                             }
                         } else {
                             val container = MaterialTheme.colorScheme.primaryContainer
-                            if (isDark) {
-                                container to Color.White
-                            } else {
-                                val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
-                                container to (if (isBright) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
+                            val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+                            container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                     isDestructive -> {

@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -121,6 +122,8 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
     var showCompareSheet by remember { mutableStateOf(false) }
 
     val settingsVersion by prefs.settingsChanged.collectAsState()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
     var autoUpdateEnabled by remember(settingsVersion) {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true))
     }
@@ -293,7 +296,7 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(32.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                    color = if (isSaturatedActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
                     shadowElevation = 0.dp
                 ) {
                     Column(
@@ -303,10 +306,10 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // ── Top Hero Banner (Dual Pane) ──
-                        ExpressiveUpdateHeroCard(checkState = checkState)
+                        ExpressiveUpdateHeroCard(checkState = checkState, isSaturatedActive = isSaturatedActive)
 
                         // ── Version Stat Cards ──
-                        VersionStatsRow(checkState = checkState)
+                        VersionStatsRow(checkState = checkState, isSaturatedActive = isSaturatedActive)
 
                         // ── Action Buttons ──
                         ExpressiveActionArea(
@@ -339,13 +342,13 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
             // ── Compare Release Notes ─────────────────────────────────
             RivoAnimatedSection(delayMs = 210L) {
                 RivoExpressiveCard(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                    containerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
                 ) {
                     RivoListItem(
                         headline = "Compare Release Notes",
                         supporting = "Compare installed v$APP_VERSION with the latest release",
                         leadingIcon = Icons.Outlined.Difference,
-                        iconContainerColor = MaterialTheme.colorScheme.primary,
+                        iconContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                         trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
                         onClick = { showCompareSheet = true }
                     )
@@ -357,13 +360,13 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     RivoSectionHeader(title = "Options")
                     RivoExpressiveCard(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                        containerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
                     ) {
                         RivoSwitchListItem(
                             headline = "Auto Check For Updates",
                             supporting = "Automatically check for new releases when app launches",
                             leadingIcon = Icons.Default.Autorenew,
-                            iconContainerColor = MaterialTheme.colorScheme.primary,
+                            iconContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                             checked = autoUpdateEnabled,
                             onCheckedChange = { enabled ->
                                 autoUpdateEnabled = enabled
@@ -382,11 +385,12 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
 // ─── Expressive Hero Status Card (Dual Pane Layout) ───────────────────────
 
 @Composable
-private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
-    val containerColor = when (checkState) {
-        is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer
-                              else MaterialTheme.colorScheme.secondaryContainer
-        is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer
+private fun ExpressiveUpdateHeroCard(checkState: CheckState, isSaturatedActive: Boolean = false) {
+    val containerColor = when {
+        isSaturatedActive -> MaterialTheme.colorScheme.primary
+        checkState is CheckState.Done -> if (checkState.isNewer) MaterialTheme.colorScheme.primaryContainer
+                                         else MaterialTheme.colorScheme.secondaryContainer
+        checkState is CheckState.Failed -> MaterialTheme.colorScheme.errorContainer
         else -> MaterialTheme.colorScheme.primaryContainer
     }
 
@@ -414,7 +418,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                HeroStatusIcon(checkState = checkState)
+                HeroStatusIcon(checkState = checkState, isSaturatedActive = isSaturatedActive)
 
                 AnimatedContent(
                     targetState = checkState,
@@ -459,7 +463,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                 Text(
                     text = "EVER DIALER",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp
                 )
@@ -488,12 +492,12 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
                             text = title,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -503,7 +507,7 @@ private fun ExpressiveUpdateHeroCard(checkState: CheckState) {
 }
 
 @Composable
-private fun HeroStatusIcon(checkState: CheckState) {
+private fun HeroStatusIcon(checkState: CheckState, isSaturatedActive: Boolean = false) {
     val infinite = rememberInfiniteTransition(label = "heroIconAnim")
     val spin by infinite.animateFloat(
         initialValue = 0f,
@@ -518,13 +522,18 @@ private fun HeroStatusIcon(checkState: CheckState) {
         label = "heroPulse"
     )
 
-    val (icon, iconBgColor, iconTintColor) = when (checkState) {
-        is CheckState.Checking -> Triple(
+    val (icon, iconBgColor, iconTintColor) = when {
+        isSaturatedActive -> Triple(
+            if (checkState is CheckState.Done && checkState.isNewer) Icons.Default.NewReleases else if (checkState is CheckState.Failed) Icons.Default.CloudOff else if (checkState is CheckState.Done) Icons.Default.Verified else Icons.Default.SystemUpdate,
+            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.20f),
+            MaterialTheme.colorScheme.onPrimary
+        )
+        checkState is CheckState.Checking -> Triple(
             Icons.Default.SystemUpdate,
             MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
             MaterialTheme.colorScheme.primary
         )
-        is CheckState.Done -> if (checkState.isNewer) {
+        checkState is CheckState.Done -> if (checkState.isNewer) {
             Triple(
                 Icons.Default.NewReleases,
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
@@ -537,7 +546,7 @@ private fun HeroStatusIcon(checkState: CheckState) {
                 MaterialTheme.colorScheme.secondary
             )
         }
-        is CheckState.Failed -> Triple(
+        checkState is CheckState.Failed -> Triple(
             Icons.Default.CloudOff,
             MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
             MaterialTheme.colorScheme.error
@@ -611,7 +620,7 @@ private fun ExpressiveStatusChip(
 // ─── Version Stats Row ─────────────────────────────────────────────────────
 
 @Composable
-private fun VersionStatsRow(checkState: CheckState) {
+private fun VersionStatsRow(checkState: CheckState, isSaturatedActive: Boolean = false) {
     val latestVersionText = when (checkState) {
         is CheckState.Done -> checkState.latest?.tagName?.let { "v$it" } ?: "v$APP_VERSION"
         is CheckState.Checking -> "Checking…"
@@ -630,8 +639,9 @@ private fun VersionStatsRow(checkState: CheckState) {
             value = "v$APP_VERSION",
             icon = Icons.Outlined.PhoneAndroid,
             modifier = Modifier.weight(1f),
-            iconTint = MaterialTheme.colorScheme.primary,
-            containerBgColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+            iconTint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+            containerBgColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+            isSaturatedActive = isSaturatedActive
         )
 
         ExpressiveStatCard(
@@ -639,10 +649,11 @@ private fun VersionStatsRow(checkState: CheckState) {
             value = latestVersionText,
             icon = if (isNewer) Icons.Outlined.CloudDownload else Icons.Outlined.CheckCircle,
             modifier = Modifier.weight(1f),
-            iconTint = if (isNewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+            iconTint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else (if (isNewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary),
             highlighted = isNewer,
-            containerBgColor = if (isNewer) MaterialTheme.colorScheme.primaryContainer
-                              else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+            containerBgColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else (if (isNewer) MaterialTheme.colorScheme.primaryContainer
+                              else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)),
+            isSaturatedActive = isSaturatedActive
         )
     }
 }
@@ -655,7 +666,8 @@ private fun ExpressiveStatCard(
     modifier: Modifier = Modifier,
     iconTint: Color = MaterialTheme.colorScheme.primary,
     highlighted: Boolean = false,
-    containerBgColor: Color = MaterialTheme.colorScheme.surfaceContainer
+    containerBgColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    isSaturatedActive: Boolean = false
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -669,7 +681,7 @@ private fun ExpressiveStatCard(
         ) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = iconTint.copy(alpha = 0.16f),
+                color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.20f) else iconTint.copy(alpha = 0.16f),
                 modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -687,14 +699,14 @@ private fun ExpressiveStatCard(
                     text = value,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
             }

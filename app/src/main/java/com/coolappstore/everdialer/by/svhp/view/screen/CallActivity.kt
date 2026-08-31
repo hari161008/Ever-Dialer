@@ -1101,7 +1101,7 @@ fun ExpressiveCallScreen(
         val defaultPfpVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
         val defaultPfpOverride = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, false) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, false)
         val defaultPfpShowForNoPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
-        val defaultPfpSize = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.65f)
+        val defaultPfpSize = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)
         val defaultPfpShape = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
 
         val pfpType = prefs?.getString("${prefix}_custom_pfp_type", defaultPfpType ?: "none") ?: (defaultPfpType ?: "none")
@@ -1176,8 +1176,22 @@ fun ExpressiveCallScreen(
         "dark" -> true
         else -> isDark
     }
-    val incomingElemBgColor = if (isIncomingElementsDark) MaterialTheme.colorScheme.surfaceContainerHigh else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
-    val incomingElemFgColor = if (isIncomingElementsDark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
+    val isSaturatedActive = remember(settingsVersion, isDark) { prefs?.isSaturatedForTheme(isDark) ?: false }
+    val solidIcons = remember(settingsVersion) { prefs?.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) ?: false }
+    val solidIconsDarkStyle = remember(settingsVersion, isDark) { prefs?.getSolidIconsStyle(isDark) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM }
+    val isSaturatedSolidBrightDark = (isDark || isIncomingElementsDark) && isSaturatedActive && solidIcons && (solidIconsDarkStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
+
+    val incomingElemBgColor = when {
+        isSaturatedActive -> MaterialTheme.colorScheme.primary
+        isIncomingElementsDark -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f)
+    }
+    val incomingElemFgColor = when {
+        isSaturatedSolidBrightDark -> Color.Black
+        isSaturatedActive -> MaterialTheme.colorScheme.onPrimary
+        isIncomingElementsDark -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
+    }
 
     val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
         else if (hasCustomBg) Color.White
@@ -1532,8 +1546,8 @@ fun ExpressiveCallScreen(
                             val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp)
                             if (shouldShowAvatar) {
                                 val lsPfpFraction = currentBgConfig.pfpSize.coerceIn(0.1f, 1.0f)
-                                val lsBaseAvatarSize = 100.dp
-                                val lsMaxAvatarSize = 240.dp
+                                val lsBaseAvatarSize = 150.dp
+                                val lsMaxAvatarSize = 280.dp
                                 val lsAvatarSize = if (lsPfpFraction <= 0.50f) {
                                     (lsBaseAvatarSize * (lsPfpFraction / 0.50f)).coerceAtLeast(24.dp)
                                 } else {
@@ -1709,7 +1723,8 @@ fun ExpressiveCallScreen(
                                 labelColor = incomingElemFgColor,
                                 bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
-                                isDark = isIncomingElementsDark
+                                isDark = isIncomingElementsDark,
+                                handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
                             )
                         }
                     }
@@ -1746,7 +1761,7 @@ fun ExpressiveCallScreen(
                     ) {
                         val pfpFraction = currentBgConfig.pfpSize.coerceIn(0.1f, 1.0f)
                         val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
-                        val baseAvatarSize = if (isIncomingRinging) 110.dp else 100.dp
+                        val baseAvatarSize = if (isIncomingRinging) 165.dp else 155.dp
                         val callAvatarSize = if (pfpFraction <= 0.50f) {
                             (baseAvatarSize * (pfpFraction / 0.50f)).coerceAtLeast(24.dp)
                         } else {
@@ -1948,7 +1963,8 @@ fun ExpressiveCallScreen(
                                 labelColor = incomingElemFgColor,
                                 bgColor = incomingElemBgColor,
                                 isPocketBlocked = isPocketBlocked,
-                                isDark = isIncomingElementsDark
+                                isDark = isIncomingElementsDark,
+                                handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
                             )
                         }
                     }
@@ -2651,12 +2667,13 @@ fun NewSwipeToAnswer(
     labelColor: Color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f),
     bgColor: Color = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer, 0.55f),
     isPocketBlocked: () -> Boolean = { false },
-    isDark: Boolean = isSystemInDarkTheme()
+    isDark: Boolean = isSystemInDarkTheme(),
+    handleColor: Color? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     val density = LocalDensity.current
-    val handleColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surface
+    val resolvedHandleColor = handleColor ?: (if (isDark) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surface)
     val handleFg = MaterialTheme.colorScheme.onSurface
 
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
@@ -2850,7 +2867,7 @@ fun NewSwipeToAnswer(
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(handleColor)
+                    .background(resolvedHandleColor)
                     .alpha(handleAlpha)
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
