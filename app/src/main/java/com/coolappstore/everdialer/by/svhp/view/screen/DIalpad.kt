@@ -1479,6 +1479,11 @@ fun DialPadContent(
                         onClick = {
                             if (number.isNotEmpty()) {
                                 initiateCall(number)
+                            } else {
+                                val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                if (latestCall != null) {
+                                    replaceNumber(latestCall.number)
+                                }
                             }
                         },
                         onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,

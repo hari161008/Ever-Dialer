@@ -440,9 +440,9 @@ private fun RowScope.AnimatedNavBarItem(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
-    val activeNavBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-    val activeNavFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val activeNavBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+    val activeNavFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
     CompositionLocalProvider(LocalRippleConfiguration provides null) {
         NavigationBarItem(
@@ -495,9 +495,9 @@ private fun PillNavItem(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
-    val activeNavBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-    val activeNavFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val activeNavBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+    val activeNavFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

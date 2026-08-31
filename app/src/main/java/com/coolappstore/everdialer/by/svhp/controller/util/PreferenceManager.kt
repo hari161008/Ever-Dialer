@@ -437,6 +437,8 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED       = "incoming_custom_pfp_video_speed"
         const val KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING = "incoming_custom_pfp_override_existing"
         const val KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP   = "incoming_custom_pfp_show_for_no_pfp"
+        const val KEY_INCOMING_CUSTOM_PFP_SIZE              = "incoming_custom_pfp_size"         // Float 0.1f..1.0f, default 0.5f (50%)
+        const val KEY_INCOMING_CUSTOM_PFP_SHAPE             = "incoming_custom_pfp_shape"        // "circle" | "square"
 
         const val KEY_ONGOING_CUSTOM_PFP_TYPE               = "ongoing_custom_pfp_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_CUSTOM_PFP_PATH               = "ongoing_custom_pfp_path"
@@ -448,6 +450,8 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED        = "ongoing_custom_pfp_video_speed"
         const val KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING  = "ongoing_custom_pfp_override_existing"
         const val KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP    = "ongoing_custom_pfp_show_for_no_pfp"
+        const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.65f (65%)
+        const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square"
 
         // Volume DND — toggle system DND via volume button sequence using Accessibility
         const val KEY_VOLUME_DND_ENABLED           = "volume_dnd_enabled"

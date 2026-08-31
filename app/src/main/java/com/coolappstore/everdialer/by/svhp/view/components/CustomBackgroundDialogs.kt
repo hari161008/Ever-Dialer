@@ -72,17 +72,20 @@ fun LoopingVideoPlayer(
     videoFile: File,
     modifier: Modifier = Modifier,
     isMuted: Boolean = true,
-    videoSpeed: Float = 1.0f
+    videoSpeed: Float = 1.0f,
+    isCircular: Boolean = false
 ) {
     AndroidView(
         factory = { ctx ->
             SeamlessLoopingVideoView(ctx).apply {
+                this.isCircular = isCircular
                 this.isMuted = isMuted
                 this.videoSpeed = videoSpeed
                 setVideoFile(videoFile)
             }
         },
         update = { view ->
+            view.isCircular = isCircular
             view.isMuted = isMuted
             view.videoSpeed = videoSpeed
             view.setVideoFile(videoFile)
@@ -122,6 +125,22 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         }
     }
 
+    var isCircular: Boolean = false
+        set(value) {
+            field = value
+            if (value) {
+                outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
+                clipToOutline = true
+            } else {
+                outlineProvider = null
+                clipToOutline = false
+            }
+        }
+
     var isMuted: Boolean = true
         set(value) {
             field = value
@@ -140,6 +159,8 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         }
 
     init {
+        textureViewA.isOpaque = false
+        textureViewB.isOpaque = false
         addView(textureViewA, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(textureViewB, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         textureViewA.alpha = 1f
@@ -241,13 +262,23 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         }
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w > 0 && h > 0) {
+            playerA?.let { if (isPreparedA) applyCenterCrop(textureViewA, it, w, h) }
+            playerB?.let { if (isPreparedB) applyCenterCrop(textureViewB, it, w, h) }
+        }
+    }
+
     private fun applyCenterCrop(texture: TextureView, player: MediaPlayer, viewW: Int, viewH: Int) {
-        if (viewW <= 0 || viewH <= 0) return
+        val actualW = if (viewW > 0) viewW else (if (texture.width > 0) texture.width else width)
+        val actualH = if (viewH > 0) viewH else (if (texture.height > 0) texture.height else height)
+        if (actualW <= 0 || actualH <= 0) return
         val vW = try { player.videoWidth } catch (_: Exception) { 0 }
         val vH = try { player.videoHeight } catch (_: Exception) { 0 }
         if (vW <= 0 || vH <= 0) return
 
-        val viewRatio = viewW.toFloat() / viewH
+        val viewRatio = actualW.toFloat() / actualH
         val videoRatio = vW.toFloat() / vH
         var scaleX = 1f
         var scaleY = 1f
@@ -257,7 +288,7 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             scaleY = viewRatio / videoRatio
         }
         val matrix = Matrix().apply {
-            setScale(scaleX, scaleY, viewW / 2f, viewH / 2f)
+            setScale(scaleX, scaleY, actualW / 2f, actualH / 2f)
         }
         texture.setTransform(matrix)
     }

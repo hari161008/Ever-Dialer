@@ -343,9 +343,9 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val blurEffects = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-            val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
-            val fabBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-            val fabFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+            val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+            val fabBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+            val fabFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
             val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
             val useBlur = blurEffects && blurRecentsFab && !useLiquidGlass
@@ -676,9 +676,9 @@ fun CallLogFullContent(
 
                     // ── Filter pills ──────────────────────────────────────────────
                     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                    val isSaturatedDark = remember(settingsVersion, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
-                    val activeChipBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                    val activeChipFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+                    val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                    val activeChipBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                    val activeChipFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -810,9 +810,9 @@ fun CallLogFullContent(
                             }
                             item(key = "filter_pills", contentType = "filterPills") {
                                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                                val isSaturatedDark = remember(settingsVersion, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
-                                val activeChipBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                                val activeChipFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onPrimaryContainer
+                                val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                                val activeChipBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                                val activeChipFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
                                 LazyRow(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

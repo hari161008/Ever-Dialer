@@ -71,15 +71,16 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
     val settingsVer by prefs.settingsChanged.collectAsState()
     val state = remember(settingsVer) { prefs.getSearchFilterState() }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
 
     val buttonBg = when {
-        isSaturatedDark -> MaterialTheme.colorScheme.primary
+        isSaturatedActive && !state.isDefault -> MaterialTheme.colorScheme.primary
+        isSaturatedActive -> MaterialTheme.colorScheme.primary
         !state.isDefault -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val buttonFg = when {
-        isSaturatedDark -> Color(0xFF1C1B1F)
+        isSaturatedActive -> MaterialTheme.colorScheme.onPrimary
         !state.isDefault -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }

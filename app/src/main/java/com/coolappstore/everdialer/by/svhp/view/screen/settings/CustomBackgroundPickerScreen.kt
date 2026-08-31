@@ -145,6 +145,21 @@ fun CustomBackgroundPickerScreen(
     val pfpShowForNoPfp = remember(settingsVersion) {
         prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
     }
+    val defaultPfpSize = if (isIncoming) 0.5f else 0.65f
+    val pfpSize = remember(settingsVersion) {
+        prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize).coerceIn(0.1f, 1.0f)
+    }
+    val pfpShape = remember(settingsVersion) {
+        prefs.getString("${prefix}_custom_pfp_shape", "circle") ?: "circle"
+    }
+    val previewAvatarSize = if (pfpSize <= 0.50f) {
+        (54.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
+    } else {
+        54.dp + (185.dp - 54.dp) * ((pfpSize - 0.50f) / 0.50f)
+    }
+    val previewIconSize = (previewAvatarSize * 0.50f).coerceAtLeast(12.dp)
+    val isPfpCircle = pfpShape != "square"
+    val pfpAvatarShape = if (isPfpCircle) CircleShape else RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)
     val customPfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
     val hasPreviewCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && customPfpFile != null && customPfpFile.exists() && pfpShowForNoPfp
 
@@ -517,8 +532,8 @@ fun CustomBackgroundPickerScreen(
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(54.dp)
-                                                        .clip(CircleShape)
+                                                        .size(previewAvatarSize)
+                                                        .clip(pfpAvatarShape)
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -527,6 +542,7 @@ fun CustomBackgroundPickerScreen(
                                                             LoopingVideoPlayer(
                                                                 videoFile = customPfpFile,
                                                                 videoSpeed = pfpVideoSpeed,
+                                                                isCircular = isPfpCircle,
                                                                 modifier = Modifier
                                                                     .fillMaxSize()
                                                                     .graphicsLayer {
@@ -534,6 +550,8 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
+                                                                        clip = true
+                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -549,6 +567,8 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
+                                                                        clip = true
+                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -565,7 +585,7 @@ fun CustomBackgroundPickerScreen(
                                                             Icons.Default.Person,
                                                             contentDescription = null,
                                                             tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            modifier = Modifier.size(30.dp)
+                                                            modifier = Modifier.size(previewIconSize)
                                                         )
                                                     }
                                                 }
@@ -689,8 +709,8 @@ fun CustomBackgroundPickerScreen(
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(52.dp)
-                                                        .clip(CircleShape)
+                                                        .size(previewAvatarSize)
+                                                        .clip(pfpAvatarShape)
                                                         .background(if (hasCustomBg) Color.Black.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -699,6 +719,7 @@ fun CustomBackgroundPickerScreen(
                                                             LoopingVideoPlayer(
                                                                 videoFile = customPfpFile,
                                                                 videoSpeed = pfpVideoSpeed,
+                                                                isCircular = isPfpCircle,
                                                                 modifier = Modifier
                                                                     .fillMaxSize()
                                                                     .graphicsLayer {
@@ -706,6 +727,8 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
+                                                                        clip = true
+                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -721,6 +744,8 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
+                                                                        clip = true
+                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -737,7 +762,7 @@ fun CustomBackgroundPickerScreen(
                                                             Icons.Default.Person,
                                                             contentDescription = null,
                                                             tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            modifier = Modifier.size(28.dp)
+                                                            modifier = Modifier.size(previewIconSize)
                                                         )
                                                     }
                                                 }

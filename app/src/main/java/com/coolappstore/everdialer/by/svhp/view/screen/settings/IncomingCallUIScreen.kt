@@ -47,6 +47,9 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
     var showContactPfp by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true))
     }
+    var showForNoPfp by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true))
+    }
     var showPhoneNumber by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true))
     }
@@ -178,6 +181,22 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                                 prefs.setBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, it)
                             },
                             modifier = Modifier.settingsSearchHighlight("incoming_show_contact_pfp", highlightedKey) { highlightedKey = null }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        com.coolappstore.everdialer.by.svhp.view.components.RivoCheckboxListItem(
+                            headline = "Show PFP for non-contacts or non-PFP contacts",
+                            supporting = "Display custom contact PFP or default avatar for callers without a contact photo",
+                            leadingIcon = Icons.Outlined.Face,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            checked = showForNoPfp,
+                            onCheckedChange = {
+                                showForNoPfp = it
+                                prefs.setBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, it)
+                            },
+                            modifier = Modifier.settingsSearchHighlight("incoming_custom_pfp_show_for_no_pfp", highlightedKey) { highlightedKey = null }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),

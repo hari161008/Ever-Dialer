@@ -409,7 +409,7 @@ fun RivoStatCard(
     val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
     val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
     val solidStyle = remember(settingsVer, isDark) { prefs.getSolidIconsStyle(isDark) }
 
     val adjustedTint = adjustIconColorForTheme(iconTint, isDark)
@@ -419,23 +419,23 @@ fun RivoStatCard(
             if (containerColor == Color.Transparent) Color.Transparent
             else adjustedTint.copy(alpha = if (isDark) 0.18f else 0.12f)
         }
-        isSaturatedDark -> {
+        isSaturatedActive -> {
             if (containerColor == Color.Transparent) Color.Transparent
             else MaterialTheme.colorScheme.primary
         }
         else -> containerColor
     }
 
-    val valueTextColor = if (solidIcons && isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurface
-    val labelTextColor = if (solidIcons && isSaturatedDark) Color(0xFF1C1B1F).copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val valueTextColor = if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val labelTextColor = if (solidIcons && isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     val (iconBgColor, iconContentColor) = when {
         solidIcons -> {
-            if (isSaturatedDark) {
+            if (isSaturatedActive) {
                 if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
-                    Color(0xFF1C1B1F) to MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.onPrimary to MaterialTheme.colorScheme.primary
                 } else {
-                    Color(0xFF1C1B1F) to Color.White
+                    MaterialTheme.colorScheme.onPrimary to (if (isDark) Color.White else Color(0xFF1C1B1F))
                 }
             } else if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
                 val primary = MaterialTheme.colorScheme.primary

@@ -288,11 +288,11 @@ fun ContactSearchContent(
     val hasAnyResults = totalResults > 0
 
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
 
-    val searchBarBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-    val searchBarFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurface
-    val searchBarPlaceholder = if (isSaturatedDark) Color(0xFF1C1B1F).copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val searchBarBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    val searchBarFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val searchBarPlaceholder = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Search bar + filter button

@@ -43,10 +43,10 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val isSaturatedDark = remember(settingsVer, isDark) { isDark && prefs.isSaturatedForTheme(isDark) }
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
 
-    val searchBarBg = if (isSaturatedDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-    val searchBarFg = if (isSaturatedDark) Color(0xFF1C1B1F) else MaterialTheme.colorScheme.onSurfaceVariant
+    val searchBarBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    val searchBarFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
 
     val searchSource = remember { MutableInteractionSource() }
     val searchPressed by searchSource.collectIsPressedAsState()
@@ -176,12 +176,19 @@ fun SettingsBackIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val containerBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest
+    val contentFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+
     FilledIconButton(
         onClick = onClick,
         modifier = modifier,
         colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            contentColor = MaterialTheme.colorScheme.onSurface
+            containerColor = containerBg,
+            contentColor = contentFg
         )
     ) {
         Icon(
