@@ -87,9 +87,8 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 ---
 
 # Features of Ever Dialer .✦ ݁˖
-<br><br>
 
-### 1. 📞 Core Telephony & Call Management
+### 1. 📞 Core Telephony & Call Management <br><br>
   1. 📞 **Make & Receive Phone Calls** – Full-featured, reliable default phone dialer and call manager for Android.
   2. 📱 **Multi-SIM Support & Selection** – Dual-SIM support with per-call SIM selection dialog and default SIM preferences.
   3. 📇 **Per-Contact SIM Binding** – Automatically remembers and uses the preferred SIM card for specific contacts.
@@ -105,7 +104,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 2. 🔢 Smart T9 Dialpad & Dialing Experience
+### 2. 🔢 Smart T9 Dialpad & Dialing Experience <br><br>
   13. 🔍 **Predictive T9 Search** – Instant contact matching by name, initials, or phone number as you type on the dialpad.
   14. 🧠 **Dialpad Memory** – Automatically preserves the last typed or dialed digits when reopening the dialpad.
   15. ⚡ **One-Tap Speed Dial** – Assign favorite contacts to long-press keys (1–9) for instant speed dialing.
@@ -118,7 +117,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 3. 🎛️ Call Controls & Active In-Call Capabilities
+### 3. 🎛️ Call Controls & Active In-Call Capabilities <br><br>
   22. 🎛️ **Expressive In-Call Controller** – Modern Material 3 action bar for mute, speaker, bluetooth, dialpad, hold, add call, and call notes.
   23. 🖐️ **Draggable Freeform Button Placement** – Freely drag and reposition every call button anywhere on the screen with persistent coordinates.
   24. 👁️ **Call Button Visibility Controls** – Individually show or hide any of the 10 in-call action buttons to streamline the caller screen.
@@ -132,7 +131,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 4. 🎨 Caller UI & Ongoing Call Screen Customization
+### 4. 🎨 Caller UI & Ongoing Call Screen Customization <br><br>
   32. 🖼️ **Custom Wallpaper Backgrounds** – Set custom photos, downloaded wallpapers, or live looping MP4/MKV video backgrounds for ongoing calls.
   33. 📱 **Device Wallpaper Extraction** – Automatically pull and apply your active home/lock screen wallpaper into the call screen with auto-refresh.
   34. ✂️ **Background Media Editor** – Built-in pan, zoom, blur (0–25dp), dim/darken (0–100%), and video playback speed controls (0.25x–2.0x).
@@ -147,7 +146,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 5. 📲 Incoming Call UI & Full-Screen Alerts
+### 5. 📲 Incoming Call UI & Full-Screen Alerts <br><br>
   43. 🌄 **Custom Incoming Call Backgrounds** – Personalize incoming call alerts with custom wallpapers, gallery pictures, or looping videos.
   44. ↔️ **Swipe to Answer Pill** – Ergonomic horizontal swipe-to-answer and swipe-to-decline slider with haptic confirmation.
   45. 🔕 **Incoming Quick Mute Button** – One-tap mute button on the incoming call screen to silence the ringer without rejecting the call.
@@ -159,7 +158,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 6. 🎙️ Advanced Call Recording (Ever Call Recorder Integration)
+### 6. 🎙️ Advanced Call Recording (Ever Call Recorder Integration) <br><br>
   51. 🎙️ **Rootless Internal Call Recording** – Record crystal-clear two-way call audio without root using Shizuku shell service integration.
   52. 🤫 **Zero Call Announcements** – Clean, private call recording with no "This call is now being recorded" voice warnings.
   53. ⚙️ **Scrcpy Audio Engine Architecture** – High-fidelity internal audio capture powered by background scrcpy-server audio tunneling.
@@ -177,7 +176,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 7. 👥 Contacts Management & Organization
+### 7. 👥 Contacts Management & Organization <br><br>
   65. 👥 **Complete Contact CRUD** – Create, view, edit, and delete device and Google account contacts with real-time sync.
   66. 📝 **Rich Contact Details Fields** – Store multiple phone numbers, email addresses, postal addresses, websites, nicknames, and organizations.
   67. ⭐ **Favorites & Speed Dial Pinning** – Star and pin VIP contacts into the dedicated Favorites grid for instant access.
@@ -194,7 +193,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 8. 💬 Social App Direct Integration & Quick Actions
+### 8. 💬 Social App Direct Integration & Quick Actions <br><br>
   78. 💬 **Direct WhatsApp Chat Launcher** – Open a WhatsApp chat with any contact or dialed number without needing to save them first.
   79. 📞 **Direct WhatsApp Voice & Video Calling** – Initiate WhatsApp voice or video calls directly from contact cards and dialpad menus.
   80. ✈️ **Direct Telegram Chat & Calling** – Launch Telegram chats and direct voice/video calls through installed Telegram clients and forks.
@@ -205,7 +204,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 9. 🕒 Call Logs & History Management
+### 9. 🕒 Call Logs & History Management <br><br>
   85. 📜 **Comprehensive Call History** – Chronological logs for incoming, outgoing, missed, rejected, and blocked calls.
   86. ⏱️ **Detailed Call Analytics & Timestamps** – Exact call duration, start time, end time, SIM card used, and call type breakdown.
   87. 👥 **Grouped Call History by Contact** – Automatically aggregates repeated calls with the same contact into clean, expandable rows.
@@ -216,7 +215,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 10. 📝 Notes & Floating Quick Notes Window
+### 10. 📝 Notes & Floating Quick Notes Window <br><br>
   92. 📒 **Per-Contact Notebook** – Create, edit, and keep persistent notes attached to specific contact profiles and phone numbers.
   93. 💬 **In-Call Floating Quick Notes Bubble** – Floating draggable overlay bubble appears during calls to take notes without leaving the call.
   94. 💾 **Auto-Save & Screen-Safe Dismiss** – Tap outside or press Save & Close to automatically sync notes to the contact's record.
@@ -227,7 +226,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 11. 🔒 Privacy, Biometrics & Contacts Hider
+### 11. 🔒 Privacy, Biometrics & Contacts Hider <br><br>
   99. 🔒 **Contacts Hider with Dialpad Secret Code** – Hide private contacts from contact lists and call logs; access them only by typing a secret code in the dialpad.
   100. 🕶️ **Hidden Caller Identity in Incoming Calls** – Option to mask hidden contacts' names on incoming call screens and notifications (shows number only).
   101. 🕵️ **Stealth Settings Menu** – Option to hide the "Contacts Hider" menu item itself from Settings once a passcode is set.
@@ -238,7 +237,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 12. 🎭 Fake Call Scheduler
+### 12. 🎭 Fake Call Scheduler <br><br>
   106. 🎭 **Realistic Scheduled Incoming Calls** – Schedule simulated incoming phone calls with custom contact names, phone numbers, and avatars.
   107. ⏲️ **Clock Time & Relative Countdown Timers** – Trigger fake calls at a specific clock time or after a relative countdown (e.g., 30s, 2m, 10m).
   108. 🗓️ **Repeatable Day Schedules** – Set fake calls to automatically repeat on chosen days of the week.
@@ -248,7 +247,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 13. ✋ Smart Gestures & Hardware Button Controls
+### 13. ✋ Smart Gestures & Hardware Button Controls <br><br>
   112. 👂 **Raise to Answer** – Automatically answer incoming calls simply by raising the phone to your ear using proximity and motion sensors.
   113. 📐 **Slant Angle & Orientation Tracking** – Intelligent accelerometer inclination angle detection to prevent false positives.
   114. 🔄 **Answer at Any Angle Mode** – Detection mode allowing calls to be answered even when lying down or holding the phone tilted.
@@ -261,7 +260,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 14. 📡 4G / 5G Network Switcher & Automation
+### 14. 📡 4G / 5G Network Switcher & Automation <br><br>
   121. 📶 **Dedicated Network Mode Switcher** – Force *5G Only (NR Only)*, *4G/LTE Only*, *5G/4G Auto*, or legacy network bands.
   122. 🎛️ **Quick Settings Network Tile** – One-tap Quick Settings tile service to cycle network modes directly from the notification shade.
   123. ⚙️ **Multiple Execution Engines** – Supports network switching via *Shizuku*, *Root*, or *Accessibility Service* without requiring manual hidden menus.
@@ -271,7 +270,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 15. 🎨 Material You, Dynamic Theming & Colors
+### 15. 🎨 Material You, Dynamic Theming & Colors <br><br>
   127. 💎 **Material 3 Expressive UI** – Built from the ground up with Jetpack Compose following Google's latest Material Design 3 guidelines.
   128. 🌈 **Dynamic Monet Palette Theming** – Automatically extracts and applies harmonious color palettes derived from your system wallpaper.
   129. 🌓 **Six Appearance Theme Modes** – Choose from *Auto (System)*, *Light*, *Dark*, *Pure White*, *AMOLED Black*, and *Auto Black/White*.
@@ -285,7 +284,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 16. 💧 Liquid Glass & Blur Visual Effects
+### 16. 💧 Liquid Glass & Blur Visual Effects <br><br>
   137. 💧 **Material Liquid You Glass Engine** – Translucent frosted-glass visual treatment across cards, sheets, and system dialogs.
   138. 🧊 **Granular Liquid Glass Elements** – Individually toggle glass effects for:
       - *Bottom Navigation Bar*
@@ -299,7 +298,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 17. 📳 Haptics, Audio & Precision Feedback
+### 17. 📳 Haptics, Audio & Precision Feedback <br><br>
   142. 📳 **Precision Haptic Feedback** – Tactile vibrations for dialpad keypresses, button clicks, swipes, and call connections.
   143. 🎚️ **Three-Level Haptic Strength Slider** – Customize haptic feedback intensity (*Light*, *Medium*, *Strong*) to match your device's vibration motor.
   144. 👆 **Instant Haptic Preview** – Test vibration patterns and strengths directly inside Settings before saving.
@@ -308,7 +307,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 18. 🧭 Navigation & Tab Personalization
+### 18. 🧭 Navigation & Tab Personalization <br><br>
   147. 💊 **Pill-Style Bottom Navigation Bar** – Sleek floating pill navigation bar with active tab indicators and smooth transitions.
   148. 🏠 **Customizable Default Startup Tab** – Choose whether the app launches into *Recents*, *Contacts*, *Favorites*, or *Dialpad*.
   149. ☎️ **Direct Dialpad on Launch** – Option to automatically open the dialpad keypad immediately upon launching the app.
@@ -320,7 +319,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 19. 💾 Backup, Restore & Data Portability
+### 19. 💾 Backup, Restore & Data Portability <br><br>
   155. 💾 **One-Click Configuration Backup** – Export all app preferences, caller UI designs, button positions, and settings into a `.everdialer` archive.
   156. ♻️ **Seamless Backup Restoration** – Restore full app configuration, themes, and caller cards on new devices in seconds.
   157. 📄 **JSON Human-Readable Export** – Clean, portable JSON format allowing easy manual inspection and backup archiving.
@@ -328,7 +327,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ---
 
-### 20. 🚀 System Integration, Updates & Community
+### 20. 🚀 System Integration, Updates & Community <br><br>
   159. 🔍 **Built-in Settings Search Engine** – Instant search bar across all settings with real-time highlighting and deep navigation.
   160. 🔄 **In-App GitHub Update Checker** – Automatically checks for new GitHub releases with changelog display and direct APK download.
   161. 📦 **Seamless APK Installation** – Download and update Ever Dialer directly from within the app without external app stores.
@@ -337,7 +336,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
   164. 🔓 **Open Source & Privacy Focused** – Completely open-source codebase with zero trackers, zero telemetry, and zero ads.
   165. 📢 **Telegram Support Community Integration** – Direct links to Everlasting support channels and updates.
 
-# For those who are wondering how Rate and Review work
+# For those who are wondering how Rate and Review work 
 
 1. Create a Google form (with sign in required - to prevent multiple reviews and easily editable)
 2. Link the Google form with sheets (Name it as Original form)
