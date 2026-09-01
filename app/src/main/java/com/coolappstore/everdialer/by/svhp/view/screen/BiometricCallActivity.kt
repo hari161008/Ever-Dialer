@@ -49,13 +49,13 @@ class BiometricCallActivity : FragmentActivity() {
         val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
 
         // Verify we should actually gate this specific call
-        val callPhoneNumber = CallService.currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+        val callPhoneNumber = CallService.incomingCallSession.value?.call?.details?.handle?.schemeSpecificPart
+            ?: CallService.currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
         if (!prefs.shouldGateCallWithBiometric(callPhoneNumber) || biometricType.isEmpty()) {
             // Lock scope excludes this number — perform action directly
-            val call = CallService.currentCallSession.value?.call
             when (action) {
                 "ANSWER" -> {
-                    try { call?.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                    CallService.answerCall()
                     if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
                         startActivity(Intent(this, CallActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -63,7 +63,7 @@ class BiometricCallActivity : FragmentActivity() {
                         })
                     }
                 }
-                "DECLINE" -> try { call?.disconnect() } catch (_: Exception) {}
+                "DECLINE" -> CallService.declineCall()
             }
             finish()
             return
@@ -78,10 +78,9 @@ class BiometricCallActivity : FragmentActivity() {
                     expectedPin      = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
                     expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
                     onSuccess = {
-                        val call = CallService.currentCallSession.value?.call
                         when (action) {
                             "ANSWER" -> {
-                                try { call?.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                CallService.answerCall()
                                 if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
                                     startActivity(Intent(activity, CallActivity::class.java).apply {
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -89,7 +88,7 @@ class BiometricCallActivity : FragmentActivity() {
                                     })
                                 }
                             }
-                            "DECLINE" -> try { call?.disconnect() } catch (_: Exception) {}
+                            "DECLINE" -> CallService.declineCall()
                         }
                         finish()
                     },

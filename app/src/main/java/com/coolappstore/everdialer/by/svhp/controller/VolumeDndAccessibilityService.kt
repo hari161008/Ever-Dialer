@@ -174,7 +174,8 @@ class VolumeDndAccessibilityService : AccessibilityService() {
             return false
         }
 
-        val activeCall = CallService.currentCallSession.value?.call
+        val activeCall = CallService.incomingCallSession.value?.call
+            ?: CallService.currentCallSession.value?.call
             ?: CallService.heldCallSession.value?.call
 
         if (activeCall == null || activeCall.state == Call.STATE_DISCONNECTED || activeCall.state == Call.STATE_DISCONNECTING) {

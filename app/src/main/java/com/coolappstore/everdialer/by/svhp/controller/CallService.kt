@@ -274,6 +274,9 @@ class CallService : InCallService() {
         private val _heldCallSession = MutableStateFlow<CallSession?>(null)
         val heldCallSession = _heldCallSession.asStateFlow()
 
+        private val _incomingCallSession = MutableStateFlow<CallSession?>(null)
+        val incomingCallSession = _incomingCallSession.asStateFlow()
+
         private val _audioState = MutableStateFlow<CallAudioState?>(null)
         val audioState = _audioState.asStateFlow()
 
@@ -281,14 +284,15 @@ class CallService : InCallService() {
 
         @Volatile private var isMerging = false
 
-        // Set to true when "Add to call" is triggered so CallService knows to
-        // auto-merge the second call once it becomes active, or restore call 1
-        // if it is rejected/disconnected before being answered.
-        @Volatile var isAddingToCall = false
-
         fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
         fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
+
         fun answerCall() {
+            val incoming = _incomingCallSession.value?.call
+            if (incoming != null) {
+                answerCallHoldingCurrent()
+                return
+            }
             val call = _currentCallSession.value?.call
                 ?: _heldCallSession.value?.call
                 ?: instance?.calls?.find { it.state == Call.STATE_RINGING }
@@ -305,7 +309,17 @@ class CallService : InCallService() {
                 }
             } catch (_: Exception) {}
         }
+
         fun declineCall() {
+            val incoming = _incomingCallSession.value?.call
+            if (incoming != null) {
+                try {
+                    incoming.disconnect()
+                } catch (_: Exception) {}
+                _incomingCallSession.value = null
+                _currentCallSession.value?.call?.let { instance?.updateNotification(it) }
+                return
+            }
             val call = _currentCallSession.value?.call
                 ?: _heldCallSession.value?.call
                 ?: instance?.calls?.firstOrNull()
@@ -314,9 +328,84 @@ class CallService : InCallService() {
             } catch (_: Exception) {}
         }
 
+        fun answerCallHoldingCurrent() {
+            val incoming = _incomingCallSession.value?.call ?: return
+            val current = _currentCallSession.value?.call
+            val service = instance ?: return
+            try {
+                if (current != null && current.state != Call.STATE_HOLDING) {
+                    current.hold()
+                    current.unregisterCallback(service.callCallback)
+                    current.registerCallback(service.heldCallCallback)
+                    _heldCallSession.value = CallSession(current, Call.STATE_HOLDING)
+                }
+            } catch (_: Exception) {}
+
+            try {
+                incoming.unregisterCallback(service.incomingCallCallback)
+                incoming.registerCallback(service.callCallback)
+                incoming.answer(VideoProfile.STATE_AUDIO_ONLY)
+                _currentCallSession.value = CallSession(incoming, Call.STATE_ACTIVE)
+                _incomingCallSession.value = null
+            } catch (_: Exception) {}
+
+            try {
+                service.updateNotification(incoming)
+                val showUi = PreferenceManager(service).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+                if (showUi) {
+                    service.launchCallActivity(answeredFromNotification = true)
+                }
+            } catch (_: Exception) {}
+        }
+
+        fun answerCallEndingCurrent() {
+            val incoming = _incomingCallSession.value?.call ?: return
+            val current = _currentCallSession.value?.call
+            val service = instance ?: return
+            try {
+                current?.disconnect()
+            } catch (_: Exception) {}
+
+            try {
+                incoming.unregisterCallback(service.incomingCallCallback)
+                incoming.registerCallback(service.callCallback)
+                incoming.answer(VideoProfile.STATE_AUDIO_ONLY)
+                _currentCallSession.value = CallSession(incoming, Call.STATE_ACTIVE)
+                _incomingCallSession.value = null
+            } catch (_: Exception) {}
+
+            try {
+                service.updateNotification(incoming)
+                val showUi = PreferenceManager(service).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+                if (showUi) {
+                    service.launchCallActivity(answeredFromNotification = true)
+                }
+            } catch (_: Exception) {}
+        }
+
+        fun swapCalls() {
+            val active = _currentCallSession.value?.call ?: return
+            val held = _heldCallSession.value?.call ?: return
+            val service = instance ?: return
+            try {
+                active.hold()
+                active.unregisterCallback(service.callCallback)
+                active.registerCallback(service.heldCallCallback)
+
+                held.unhold()
+                held.unregisterCallback(service.heldCallCallback)
+                held.registerCallback(service.callCallback)
+
+                _currentCallSession.value = CallSession(held, Call.STATE_ACTIVE)
+                _heldCallSession.value = CallSession(active, Call.STATE_HOLDING)
+                service.updateNotification(held)
+            } catch (_: Exception) {}
+        }
+
         fun mergeCalls() {
             val primary = _currentCallSession.value?.call ?: return
             val secondary = _heldCallSession.value?.call ?: return
+            if (secondary.state != Call.STATE_HOLDING && secondary.state != Call.STATE_ACTIVE) return
             isMerging = true
             var mergeSucceeded = false
             try {
@@ -340,11 +429,12 @@ class CallService : InCallService() {
             }, 4000)
         }
 
-        fun hasHeldCall(): Boolean = _heldCallSession.value != null
+        fun hasHeldCall(): Boolean = _heldCallSession.value != null && _heldCallSession.value?.state == Call.STATE_HOLDING
+        fun hasIncomingCall(): Boolean = _incomingCallSession.value != null && _incomingCallSession.value?.state == Call.STATE_RINGING
     }
 
     // Callback for the primary (active/dialing) call
-    private val callCallback = object : Call.Callback() {
+    private val callCallback: Call.Callback = object : Call.Callback() {
         override fun onDetailsChanged(call: Call, details: Call.Details) {
             super.onDetailsChanged(call, details)
             // The call's handle/caller info can arrive or change AFTER onCallAdded (e.g. some
@@ -386,49 +476,6 @@ class CallService : InCallService() {
 
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
 
-            // "Add to call" flow — watch the outgoing 3rd-party call
-            if (isAddingToCall && _currentCallSession.value?.call == call) {
-                when (state) {
-                    Call.STATE_ACTIVE -> {
-                        // 3rd person answered — update current state and auto-merge
-                        isAddingToCall = false
-                        callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
-                        _currentCallSession.value = CallSession(call, state)
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            mergeCalls()
-                        }, 1200)
-                        return
-                    }
-                    Call.STATE_DISCONNECTING -> {
-                        // 3rd party call ending, wait for DISCONNECTED
-                        _currentCallSession.value = CallSession(call, state)
-                        return
-                    }
-                    Call.STATE_DISCONNECTED -> {
-                        // 3rd person rejected/was cancelled/hung up → restore held call (call 1/2)
-                        isAddingToCall = false
-                        val held = _heldCallSession.value
-                        if (held != null) {
-                            _heldCallSession.value = null
-                            _currentCallSession.value = CallSession(held.call, held.call.state)
-                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                try { held.call.unhold() } catch (_: Exception) {}
-                            }, 300)
-                        } else {
-                            _currentCallSession.value = null
-                            removeForeground()
-                            cancelNotification()
-                        }
-                        return
-                    }
-                    else -> {
-                        // DIALING / CONNECTING — update state and keep waiting
-                        _currentCallSession.value = CallSession(call, state)
-                        return
-                    }
-                }
-            }
-
             // Normal state update
             when {
                 _currentCallSession.value?.call == call -> _currentCallSession.value = CallSession(call, state)
@@ -454,8 +501,18 @@ class CallService : InCallService() {
                 )
                 if (_currentCallSession.value?.call == call) {
                     _currentCallSession.value = null
-                    _heldCallSession.value?.let { held ->
+                    val incoming = _incomingCallSession.value
+                    val held = _heldCallSession.value
+                    if (incoming != null) {
+                        _incomingCallSession.value = null
+                        incoming.call.unregisterCallback(incomingCallCallback)
+                        incoming.call.registerCallback(callCallback)
+                        _currentCallSession.value = CallSession(incoming.call, incoming.call.state)
+                        updateNotification(incoming.call)
+                    } else if (held != null) {
                         _heldCallSession.value = null
+                        held.call.unregisterCallback(heldCallCallback)
+                        held.call.registerCallback(callCallback)
                         _currentCallSession.value = CallSession(held.call, held.call.state)
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                             try { held.call.unhold() } catch (_: Exception) {}
@@ -471,7 +528,7 @@ class CallService : InCallService() {
         }
     }
 
-    private val heldCallCallback = object : Call.Callback() {
+    private val heldCallCallback: Call.Callback = object : Call.Callback() {
         override fun onDetailsChanged(call: Call, details: Call.Details) {
             super.onDetailsChanged(call, details)
             if (_heldCallSession.value?.call == call) {
@@ -499,39 +556,54 @@ class CallService : InCallService() {
         }
     }
 
+    private val incomingCallCallback: Call.Callback = object : Call.Callback() {
+        override fun onDetailsChanged(call: Call, details: Call.Details) {
+            super.onDetailsChanged(call, details)
+            if (_incomingCallSession.value?.call == call) {
+                _incomingCallSession.value = CallSession(call, call.state)
+                updateNotification(call)
+            }
+        }
+
+        override fun onStateChanged(call: Call, state: Int) {
+            super.onStateChanged(call, state)
+            RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
+            if (state == Call.STATE_RINGING) {
+                callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
+                _incomingCallSession.value = CallSession(call, state)
+                updateNotification(call)
+            } else if (state == Call.STATE_ACTIVE) {
+                callAnsweredSet.add(call)
+                callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
+                _incomingCallSession.value = null
+                _currentCallSession.value = CallSession(call, state)
+                updateNotification(call)
+            } else if (state == Call.STATE_DISCONNECTED) {
+                recordMissedCallDurationIfNeeded(call)
+                _incomingCallSession.value = null
+                _currentCallSession.value?.call?.let { updateNotification(it) }
+            }
+        }
+    }
+
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         RaiseToAnswerManager.stop(this)
         recordMissedCallDurationIfNeeded(call)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
+        call.unregisterCallback(incomingCallCallback)
         callConnectTimes.remove(call)
+
+        if (_incomingCallSession.value?.call == call) {
+            _incomingCallSession.value = null
+            _currentCallSession.value?.call?.let { updateNotification(it) }
+            return
+        }
 
         if (isMerging) {
             if (_currentCallSession.value?.call == call) _currentCallSession.value = null
             if (_heldCallSession.value?.call == call)   _heldCallSession.value   = null
-            return
-        }
-
-        // If isAddingToCall was set, the DISCONNECTED branch in onStateChanged
-        // already promoted the held call. Guard against double-promotion by
-        // checking whether currentCallSession still points to this call.
-        if (isAddingToCall && _currentCallSession.value?.call == call) {
-            // onStateChanged DISCONNECTED branch didn't fire (race) — handle here
-            isAddingToCall = false
-            val held = _heldCallSession.value
-            if (held != null) {
-                _heldCallSession.value = null
-                _currentCallSession.value = CallSession(held.call, held.call.state)
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    try { held.call.unhold() } catch (_: Exception) {}
-                }, 300)
-            } else {
-                _currentCallSession.value = null
-                instance = null
-                removeForeground()
-                cancelNotification()
-            }
             return
         }
 
@@ -540,6 +612,8 @@ class CallService : InCallService() {
             _currentCallSession.value = null
             _heldCallSession.value?.let { held ->
                 _heldCallSession.value = null
+                held.call.unregisterCallback(heldCallCallback)
+                held.call.registerCallback(callCallback)
                 _currentCallSession.value = CallSession(held.call, held.call.state)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     try { held.call.unhold() } catch (_: Exception) {}
@@ -663,27 +737,24 @@ class CallService : InCallService() {
             if (call.state != Call.STATE_RINGING) {
                 // Second outgoing call (from "Add to call" or user-initiated)
                 val prev = _currentCallSession.value
-                if (prev != null) {
-                    // If isAddingToCall, the original call was already held by CallActivity
-                    if (!isAddingToCall) {
-                        try { if (prev.call.state != Call.STATE_HOLDING) prev.call.hold() } catch (_: Exception) {}
-                    }
+                if (prev != null && prev.call != call) {
+                    try { if (prev.call.state != Call.STATE_HOLDING) prev.call.hold() } catch (_: Exception) {}
                     prev.call.unregisterCallback(callCallback)
                     prev.call.registerCallback(heldCallCallback)
                     _heldCallSession.value = CallSession(prev.call, Call.STATE_HOLDING)
                 }
                 call.registerCallback(callCallback)
                 _currentCallSession.value = CallSession(call, call.state)
+                updateNotification(call)
+                launchCallActivity()
             } else {
-                // Incoming second call
-                call.registerCallback(heldCallCallback)
-                _heldCallSession.value = CallSession(call, call.state)
-            }
-            updateNotification(call)
-            if (call.state != Call.STATE_RINGING) {
-                launchCallActivity()
-            } else if (prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false)) {
-                launchCallActivity()
+                // Incoming second call (Call Waiting)
+                call.registerCallback(incomingCallCallback)
+                _incomingCallSession.value = CallSession(call, call.state)
+                updateNotification(call)
+                if (prefs.getBoolean(PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS, false)) {
+                    launchCallActivity()
+                }
             }
             return
         }
@@ -708,8 +779,9 @@ class CallService : InCallService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "ANSWER_CALL"  -> {
-                val phoneNumber = _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
-                if (prefs.shouldGateCallWithBiometric(phoneNumber)) {
+                val ringingNumber = _incomingCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                    ?: _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                if (prefs.shouldGateCallWithBiometric(ringingNumber)) {
                     launchBiometricCallActivity("ANSWER")
                 } else {
                     answerCall()
@@ -719,8 +791,9 @@ class CallService : InCallService() {
                 }
             }
             "DECLINE_CALL" -> {
-                val phoneNumber = _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
-                if (prefs.shouldGateCallWithBiometric(phoneNumber)) {
+                val ringingNumber = _incomingCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                    ?: _currentCallSession.value?.call?.details?.handle?.schemeSpecificPart
+                if (prefs.shouldGateCallWithBiometric(ringingNumber)) {
                     launchBiometricCallActivity("DECLINE")
                 } else {
                     declineCall()

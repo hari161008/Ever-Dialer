@@ -33,7 +33,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.PhoneCallback
+import androidx.compose.material.icons.automirrored.filled.PhoneForwarded
 import androidx.compose.material.icons.filled.*
+import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.coolappstore.everdialer.by.svhp.controller.CallService
+import com.coolappstore.everdialer.by.svhp.controller.CallSession
 import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
@@ -185,6 +189,7 @@ class CallActivity : FragmentActivity() {
             Rivo4Theme {
                 val session by CallService.currentCallSession.collectAsState()
                 val heldSession by CallService.heldCallSession.collectAsState()
+                val incomingSession by CallService.incomingCallSession.collectAsState()
                 val audioState by CallService.audioState.collectAsState()
                 val settingsVersion by prefs.settingsChanged.collectAsState()
 
@@ -225,6 +230,12 @@ class CallActivity : FragmentActivity() {
                     val heldNumber = heldCall?.details?.handle?.schemeSpecificPart ?: ""
                     var heldContactName by remember(heldNumber) { mutableStateOf(heldNumber.ifEmpty { "Unknown" }) }
 
+                    val incomingCall = incomingSession?.call
+                    val incomingNumber = incomingCall?.details?.handle?.schemeSpecificPart ?: ""
+                    val incomingSimSlot = remember(incomingCall) { getSimSlotForAccountHandle(this@CallActivity, incomingCall?.details?.accountHandle) }
+                    var incomingContactName by remember(incomingNumber) { mutableStateOf(incomingNumber.ifEmpty { "Unknown" }) }
+                    var incomingPhotoUri by remember(incomingNumber) { mutableStateOf<String?>(null) }
+
                     LaunchedEffect(number) {
                         if (number.isNotEmpty()) {
                             val contact = contactsRepo.getContactByNumber(number)
@@ -257,6 +268,19 @@ class CallActivity : FragmentActivity() {
                         }
                     }
 
+                    LaunchedEffect(incomingNumber) {
+                        if (incomingNumber.isNotEmpty()) {
+                            val c = contactsRepo.getContactByNumber(incomingNumber)
+                            if (c != null) {
+                                val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
+                                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+                                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+                                incomingContactName = if (hideNames && c.id in hiddenIds) incomingNumber else c.name
+                                incomingPhotoUri = if (hideNames && c.id in hiddenIds) null else c.photoUri
+                            }
+                        }
+                    }
+
                     val answeredFromNotification = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
                     ExpressiveCallScreen(
                         call = call,
@@ -266,8 +290,13 @@ class CallActivity : FragmentActivity() {
                         phoneNumber = number,
                         photoUri = photoUri,
                         audioState = audioState,
-                        hasHeldCall = heldSession != null && heldSession?.state != Call.STATE_DISCONNECTED && heldSession?.state != Call.STATE_DISCONNECTING,
+                        hasHeldCall = heldSession != null && heldSession?.state == Call.STATE_HOLDING,
                         heldCallName = heldContactName,
+                        incomingCallSession = incomingSession,
+                        incomingContactName = incomingContactName,
+                        incomingPhoneNumber = incomingNumber,
+                        incomingPhotoUri = incomingPhotoUri,
+                        incomingSimSlot = incomingSimSlot,
                         contactsRepo = contactsRepo,
                         callLogRepo = callLogRepo,
                         prefs = prefs,
@@ -696,6 +725,11 @@ fun ExpressiveCallScreen(
     audioState: CallAudioState?,
     hasHeldCall: Boolean = false,
     heldCallName: String = "",
+    incomingCallSession: CallSession? = null,
+    incomingContactName: String = "",
+    incomingPhoneNumber: String = "",
+    incomingPhotoUri: String? = null,
+    incomingSimSlot: Int = -1,
     contactsRepo: IContactsRepository? = null,
     callLogRepo: ICallLogRepository? = null,
     prefs: PreferenceManager? = null,
@@ -763,7 +797,7 @@ fun ExpressiveCallScreen(
     // When answered from notification, skip the incoming screen by treating
     // a brief STATE_RINGING flash as already-active for UI purposes
     val effectiveCallState = if (skipIncomingScreen && callState == Call.STATE_RINGING) Call.STATE_ACTIVE else callState
-    var isOnHold by remember { mutableStateOf(false) }
+    val isOnHold = callState == Call.STATE_HOLDING
     // Manual state for the optional "Record" Feature Button — toggles the bundled call
     // recorder's foreground service on/off for this call. Purely a manual trigger; the
     // recorder's own auto-record setting (Settings → Call Recording) is unaffected.
@@ -841,27 +875,14 @@ fun ExpressiveCallScreen(
     var showDialpad by remember { mutableStateOf(false) }
     var dtmfInput by remember { mutableStateOf("") }
 
-    // Track isAddingToCall from service so Merge button only shows when 3rd party answered
-    var isAddingToCallState by remember { mutableStateOf(CallService.isAddingToCall) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            isAddingToCallState = CallService.isAddingToCall
-            kotlinx.coroutines.delay(200)
-        }
-    }
+    // Merge is only available when a held call exists AND current call is active
+    val canShowMerge = hasHeldCall && callState == Call.STATE_ACTIVE
 
-    // Merge is only available when held call exists AND we are NOT still dialing the 3rd party
-    val canShowMerge = hasHeldCall && !isAddingToCallState
-
-    // Auto-dismiss merge confirm dialog if the held call disappears (3rd person hung up)
+    // Auto-dismiss merge confirm dialog if the held call disappears (held party hung up)
     LaunchedEffect(hasHeldCall) {
         if (!hasHeldCall) {
             showMergeConfirm = false
             showAddPersonSheet = false
-            isAddingToCallState = false
-            if (callState == Call.STATE_ACTIVE) {
-                isOnHold = false
-            }
         }
     }
 
@@ -974,8 +995,6 @@ fun ExpressiveCallScreen(
             wasRinging = true
         }
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
-        // If call returns to active from holding (e.g. held call restored), sync isOnHold
-        if (callState == Call.STATE_ACTIVE && isOnHold) isOnHold = false
         if (callState == Call.STATE_ACTIVE && wasRinging) {
             val showOngoingUI = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) ?: true
             if (!showOngoingUI) {
@@ -1226,12 +1245,15 @@ fun ExpressiveCallScreen(
         when (id) {
             CallButtonPrefs.ID_HOLD -> AnimatedCallButton(
                 icon = if (isOnHold) Icons.Default.PlayArrow else Icons.Default.Pause,
-                label = "Hold", isActive = isOnHold,
+                label = if (isOnHold) "Unhold" else "Hold", isActive = isOnHold,
                 btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
                 fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
             ) {
-                isOnHold = !isOnHold
-                if (isOnHold) call.hold() else call.unhold()
+                if (callState == Call.STATE_HOLDING) {
+                    try { call.unhold() } catch (_: Exception) {}
+                } else {
+                    try { call.hold() } catch (_: Exception) {}
+                }
             }
             CallButtonPrefs.ID_ADD -> if (canShowMerge) {
                 AnimatedCallButton(
@@ -1385,56 +1407,26 @@ fun ExpressiveCallScreen(
             onPersonSelected = { number ->
                 showAddPersonSheet = false
                 scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    // Signal CallService FIRST so it knows the next outgoing call is an "add to call"
-                    CallService.isAddingToCall = true
-                    // Hold the current call and reflect that in UI.
-                    var holdSucceeded = false
                     try {
                         call.hold()
-                        isOnHold = true
-                        holdSucceeded = true
                     } catch (e: Exception) {
                         android.util.Log.e("EverDialerCall", "Add call: hold() on current call threw", e)
                     }
-                    if (!holdSucceeded) {
-                        CallService.isAddingToCall = false
-                        isOnHold = false
-                        android.widget.Toast.makeText(context, "Couldn't hold the current call, so the second call wasn't placed", android.widget.Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-                    // The old code used a blind delay(300) here and assumed the current call had
-                    // actually reached STATE_HOLDING by then. On slower networks/modems that
-                    // transition can take noticeably longer than 300ms, and placing a second
-                    // outgoing call before the first one is confirmed HELD is a common reason
-                    // Telecom silently drops the second call — it never even reaches the
-                    // radio/telephony layer, so nothing appears to happen. Actively wait for the
-                    // confirmed state instead of guessing a fixed delay, with a bounded timeout so
-                    // this can't hang forever if hold silently never completes.
                     var actuallyHeld = call.state == Call.STATE_HOLDING
                     if (!actuallyHeld) {
                         val waitStart = System.currentTimeMillis()
-                        while (System.currentTimeMillis() - waitStart < 3000) {
+                        while (System.currentTimeMillis() - waitStart < 2000) {
                             delay(100)
                             if (call.state == Call.STATE_HOLDING) { actuallyHeld = true; break }
-                            // If the call disconnected or moved to a terminal state while we were
-                            // waiting for hold, stop waiting — there's nothing left to add to.
                             if (call.state == Call.STATE_DISCONNECTED || call.state == Call.STATE_DISCONNECTING) break
                         }
                     }
-                    if (!actuallyHeld) {
-                        android.util.Log.w("EverDialerCall", "Add call: current call never reached STATE_HOLDING (state=${call.state}), aborting second call")
-                        CallService.isAddingToCall = false
-                        isOnHold = call.state == Call.STATE_HOLDING
-                        android.widget.Toast.makeText(context, "Couldn't add the call — the current call didn't hold in time", android.widget.Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
                     try {
-                        android.util.Log.d("EverDialerCall", "Add call: placing second call to $number")
-                        makeCall(context, number)
+                        val accountHandle = call.details?.accountHandle
+                        android.util.Log.d("EverDialerCall", "Add call: placing second call to $number with account=$accountHandle")
+                        makeCall(context, number, accountHandle)
                     } catch (e: Exception) {
                         android.util.Log.e("EverDialerCall", "Add call: makeCall() for second party threw", e)
-                        CallService.isAddingToCall = false
-                        isOnHold = false
                         try { call.unhold() } catch (_: Exception) {}
                         android.widget.Toast.makeText(context, "Couldn't place the second call", android.widget.Toast.LENGTH_SHORT).show()
                     }
@@ -1606,12 +1598,10 @@ fun ExpressiveCallScreen(
                             }
                             if (hasHeldCall) {
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
-                                    Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
-                                        Text(text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50))
-                                    }
-                                }
+                                MaterialYouHeldCallBadge(
+                                    heldCallName = heldCallName,
+                                    onClick = { CallService.swapCalls() }
+                                )
                             }
                         }
                         if (!isIncomingMode) {
@@ -1900,24 +1890,11 @@ fun ExpressiveCallScreen(
 
                         if (hasHeldCall) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                                modifier = Modifier.padding(horizontal = 32.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.CallMerge, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
-                                    Text(
-                                        text = if (heldCallName.isBlank()) "1 call on hold" else "$heldCallName on hold",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-                            }
+                            MaterialYouHeldCallBadge(
+                                heldCallName = heldCallName,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                                onClick = { CallService.swapCalls() }
+                            )
                         }
                     }
 
@@ -2238,6 +2215,20 @@ fun ExpressiveCallScreen(
                     }
                 }
             }
+        }
+
+        // ── Call Waiting Overlay ──────────────────────────────────────────────
+        if (incomingCallSession != null && incomingCallSession.state == Call.STATE_RINGING) {
+            CallWaitingCard(
+                incomingContactName = incomingContactName,
+                incomingPhoneNumber = incomingPhoneNumber,
+                incomingPhotoUri = incomingPhotoUri,
+                incomingSimSlot = incomingSimSlot,
+                showSimBadge = showSimBadge,
+                onDecline = { CallService.declineCall() },
+                onHoldAndAnswer = { CallService.answerCallHoldingCurrent() },
+                onEndAndAnswer = { CallService.answerCallEndingCurrent() }
+            )
         }
     }
 
@@ -3197,6 +3188,311 @@ private fun FloatingCallNoteBox(
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                     cursorColor = MaterialTheme.colorScheme.primary
                 )
+            )
+        }
+    }
+}
+
+@Composable
+private fun MaterialYouCallActionButton(
+    icon: ImageVector,
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "m3BtnScale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = contentColor)
+            ) { onClick() }
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+    ) {
+        Surface(
+            shape = shape,
+            color = containerColor,
+            tonalElevation = 6.dp,
+            shadowElevation = if (isPressed) 1.dp else 4.dp,
+            modifier = Modifier.size(width = 64.dp, height = 64.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = contentColor,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun CallWaitingCard(
+    incomingContactName: String,
+    incomingPhoneNumber: String,
+    incomingPhotoUri: String?,
+    incomingSimSlot: Int,
+    showSimBadge: Boolean,
+    onDecline: () -> Unit,
+    onHoldAndAnswer: () -> Unit,
+    onEndAndAnswer: () -> Unit
+) {
+    val context = LocalContext.current
+    val infiniteTransition = rememberInfiniteTransition(label = "callWaitingPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.60f))
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight()
+                .clip(RoundedCornerShape(36.dp)),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 10.dp,
+            shadowElevation = 16.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header chip with Dynamic Colors & Material You shape
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.padding(bottom = 18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    scaleX = pulseScale
+                                    scaleY = pulseScale
+                                }
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.PhoneCallback,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Incoming Call Waiting",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                // Avatar with Material You subtle container border
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        RivoAvatar(
+                            name = incomingContactName,
+                            photoUri = incomingPhotoUri,
+                            modifier = Modifier.size(80.dp)
+                        )
+                    }
+                }
+
+                // Contact Name
+                Text(
+                    text = incomingContactName.ifEmpty { "Unknown Caller" },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                if (incomingPhoneNumber.isNotBlank() && incomingPhoneNumber != incomingContactName) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = incomingPhoneNumber,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (showSimBadge && incomingSimSlot in 0..1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SimSlotBadge(
+                        slot = incomingSimSlot,
+                        modifier = Modifier.size(width = 22.dp, height = 25.dp),
+                        shape = RoundedCornerShape(percent = 28)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // Action buttons: 3 options with Material You dynamic color scheme & expressive squircle shapes
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Decline (Error / Red)
+                    MaterialYouCallActionButton(
+                        icon = Icons.Default.CallEnd,
+                        label = "Decline",
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                        shape = RoundedCornerShape(24.dp),
+                        onClick = {
+                            performAppHaptic(context, "light")
+                            onDecline()
+                        }
+                    )
+
+                    // 2. End & Answer (Tertiary Container / Dynamic Accent)
+                    MaterialYouCallActionButton(
+                        icon = Icons.AutoMirrored.Filled.PhoneForwarded,
+                        label = "End & Answer",
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        shape = RoundedCornerShape(24.dp),
+                        onClick = {
+                            performAppHaptic(context, "light")
+                            onEndAndAnswer()
+                        }
+                    )
+
+                    // 3. Hold & Answer (Primary / Dynamic Green / Hero)
+                    MaterialYouCallActionButton(
+                        icon = Icons.Default.Call,
+                        label = "Hold & Answer",
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = RoundedCornerShape(24.dp),
+                        onClick = {
+                            performAppHaptic(context, "light")
+                            onHoldAndAnswer()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MaterialYouHeldCallBadge(
+    heldCallName: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "swapBadgeScale"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        tonalElevation = 4.dp,
+        shadowElevation = if (isPressed) 1.dp else 4.dp,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            ) {
+                performAppHaptic(context, "light")
+                onClick()
+            }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.SwapCalls,
+                        contentDescription = "Swap Calls",
+                        tint = MaterialTheme.colorScheme.onSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Text(
+                text = if (heldCallName.isBlank()) "1 call on hold • Tap to swap" else "$heldCallName on hold • Tap to swap",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
