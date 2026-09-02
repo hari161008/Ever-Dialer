@@ -43,6 +43,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
+import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
@@ -464,7 +469,13 @@ fun ContactListItem(
         val contactNumberBlocked = remember(settingsVer, hasNumber, contact.phoneNumbers) {
             hasNumber && BlockedNumbersManager.isBlocked(prefs, contact.phoneNumbers.firstOrNull())
         }
-        val contactContextMenuKeys = remember(settingsVer, hasNumber, fakeCallInContextMenu, contact.isFavorite) {
+        val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+        val hasTelegram = remember(context) { isTelegramInstalled(context) }
+        val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
+        val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
+        val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
+
+        val contactContextMenuKeys = remember(settingsVer, hasNumber, fakeCallInContextMenu, contact.isFavorite, hasAnySocialApp) {
             com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                 prefs,
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
@@ -474,7 +485,7 @@ fun ContactListItem(
                     "copy_number" -> hasNumber
                     "block_contact" -> hasNumber
                     "fake_call" -> fakeCallInContextMenu
-                    "call_chat_via" -> hasNumber
+                    "call_chat_via" -> hasNumber && hasAnySocialApp
                     else -> true
                 }
             }

@@ -46,42 +46,51 @@ fun ContactEditScreen(
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
     
-    val existingContact = remember(contactId, allContacts) {
-        if (contactId != null && contactId != "0" && contactId != "null") {
-            allContacts.find { it.id == contactId }
-        } else null
-    }
+    var resolvedContact by remember { mutableStateOf<Contact?>(null) }
+    var isInitialized by remember { mutableStateOf(false) }
 
-    var name by remember(existingContact) { mutableStateOf(existingContact?.name ?: initialName ?: "") }
-    var photoUri by remember(existingContact) { mutableStateOf<String?>(existingContact?.photoUri) }
-    
-    val phoneNumbers = remember(existingContact) { 
+    var name by remember { mutableStateOf(initialName ?: "") }
+    var photoUri by remember { mutableStateOf<String?>(null) }
+    val phoneNumbers = remember { 
         mutableStateListOf<String>().apply { 
-            if (existingContact != null && existingContact.phoneNumbers.isNotEmpty()) {
-                addAll(existingContact.phoneNumbers)
-            } else if (!initialPhone.isNullOrBlank()) {
-                add(initialPhone)
-            }
-            if (isEmpty()) add("") 
+            if (!initialPhone.isNullOrBlank()) add(initialPhone) else add("") 
         } 
     }
-    
-    val emails = remember(existingContact) { 
-        mutableStateListOf<String>().apply { 
-            if (existingContact != null && existingContact.emails.isNotEmpty()) {
-                addAll(existingContact.emails)
+    val emails = remember { mutableStateListOf<String>().apply { add("") } }
+    val addresses = remember { mutableStateListOf<String>().apply { add("") } }
+
+    LaunchedEffect(contactId, allContacts) {
+        if (contactId != null && contactId != "0" && contactId != "null" && !isInitialized) {
+            val contact = allContacts.find { it.id == contactId } 
+                ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { contactsVM.getContactById(contactId) }
+            if (contact != null) {
+                resolvedContact = contact
+                name = contact.name
+                photoUri = contact.photoUri
+                
+                phoneNumbers.clear()
+                if (contact.phoneNumbers.isNotEmpty()) {
+                    phoneNumbers.addAll(contact.phoneNumbers)
+                } else {
+                    phoneNumbers.add("")
+                }
+
+                emails.clear()
+                if (contact.emails.isNotEmpty()) {
+                    emails.addAll(contact.emails)
+                } else {
+                    emails.add("")
+                }
+
+                addresses.clear()
+                if (contact.addresses.isNotEmpty()) {
+                    addresses.addAll(contact.addresses)
+                } else {
+                    addresses.add("")
+                }
+                isInitialized = true
             }
-            if (isEmpty()) add("")
-        } 
-    }
-    
-    val addresses = remember(existingContact) { 
-        mutableStateListOf<String>().apply { 
-            if (existingContact != null && existingContact.addresses.isNotEmpty()) {
-                addAll(existingContact.addresses)
-            }
-            if (isEmpty()) add("")
-        } 
+        }
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(

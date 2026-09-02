@@ -11,6 +11,8 @@ import android.os.Build
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -49,6 +51,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.focus.onFocusChanged
@@ -1020,7 +1023,8 @@ fun DialPadContent(
                             containerColor = Color(0xFF34A853),
                             contentColor = Color.White,
                             modifier = Modifier.width(96.dp).height(64.dp),
-                            isLarge = true
+                            isLarge = true,
+                            isCallButton = true
                         )
                         BackspaceActionButton(
                             number = number,
@@ -1495,7 +1499,8 @@ fun DialPadContent(
                         isLarge = true,
                         liquidGlassBackdrop = lgBackdrop,
                         liquidGlassEnabled = lgDialpadEnabled,
-                        blurEnabled = blurDialpadEnabled
+                        blurEnabled = blurDialpadEnabled,
+                        isCallButton = true
                     )
 
                     BackspaceActionButton(
@@ -1531,31 +1536,72 @@ fun DialerActionExpressive(
     liquidGlassBackdrop: com.coolappstore.everdialer.by.svhp.liquidglass.Backdrop? = null,
     liquidGlassEnabled: Boolean = false,
     blurEnabled: Boolean = false,
+    isCallButton: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val coroutineScope = rememberCoroutineScope()
+    var isTapPulse by remember { mutableStateOf(false) }
+    var tapJob by remember { mutableStateOf<Job?>(null) }
+    val isVisuallyPressed = isPressed || isTapPulse
+
     val prefs = koinInject<PreferenceManager>()
     val haptic = LocalHapticFeedback.current
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val settingsState by prefs.settingsChanged.collectAsState()
+    val isSaturatedActive = remember(settingsState, isDark) { prefs.isSaturatedForTheme(isDark) }
+
+    val triggerTapPulse = {
+        tapJob?.cancel()
+        tapJob = coroutineScope.launch {
+            isTapPulse = true
+            delay(150L)
+            isTapPulse = false
+        }
+    }
+
     val wrappedOnClick: () -> Unit = {
+        triggerTapPulse()
         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
         onClick()
     }
     val wrappedOnLongClick: (() -> Unit)? = if (onLongClick != null) ({
+        triggerTapPulse()
         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
         onLongClick()
     }) else null
+
     val cornerRadius by animateDpAsState(
-        targetValue = if (isPressed) (if (isLarge) 18.dp else 14.dp) else (if (isLarge) 28.dp else 24.dp),
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow), label = "ButtonShape"
+        targetValue = if (isVisuallyPressed) (if (isLarge) 14.dp else 10.dp) else (if (isLarge) 28.dp else 24.dp),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy), label = "ButtonShape"
     )
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow), label = "ButtonScale"
+        targetValue = if (isVisuallyPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy), label = "ButtonScale"
     )
+
+    val restingBgColor = when {
+        isCallButton -> if (isSaturatedActive) MaterialTheme.colorScheme.primary else Color(0xFF34A853)
+        isSaturatedActive -> androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.35f)
+        else -> MaterialTheme.colorScheme.primaryContainer
+    }
+    val targetBgColor = if (isVisuallyPressed) MaterialTheme.colorScheme.primary else restingBgColor
+    val animatedBgColor by animateColorAsState(targetBgColor, spring(stiffness = Spring.StiffnessMedium), "ActionBtnBgColor")
+
+    val restingContentColor = when {
+        isCallButton -> Color.White
+        isSaturatedActive -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
+    val pressedContentColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+    val targetContentColor = if (isVisuallyPressed) pressedContentColor else restingContentColor
+    val animatedContentColor by animateColorAsState(targetContentColor, spring(stiffness = Spring.StiffnessMedium), "ActionBtnContentColor")
+
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val buttonShape = RoundedCornerShape(cornerRadius)
     val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -1584,8 +1630,8 @@ fun DialerActionExpressive(
         ) {
             Surface(
                 shape = buttonShape,
-                color = containerColor.copy(alpha = 0.5f),
-                contentColor = contentColor,
+                color = animatedBgColor.copy(alpha = 0.5f),
+                contentColor = animatedContentColor,
                 modifier = Modifier.matchParentSize()
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1609,8 +1655,8 @@ fun DialerActionExpressive(
                     indication = null
                 ),
             shape = buttonShape,
-            color = containerColor.copy(alpha = 0.72f),
-            contentColor = contentColor
+            color = animatedBgColor.copy(alpha = 0.72f),
+            contentColor = animatedContentColor
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
@@ -1622,8 +1668,8 @@ fun DialerActionExpressive(
                 .scale(scale)
                 .combinedClickable(onClick = wrappedOnClick, onLongClick = wrappedOnLongClick, interactionSource = interactionSource, indication = null),
             shape = buttonShape,
-            color = containerColor,
-            contentColor = contentColor
+            color = animatedBgColor,
+            contentColor = animatedContentColor
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
@@ -1634,21 +1680,84 @@ fun DialerActionExpressive(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: Context, onClick: (String) -> Unit, onLongClick: (() -> Unit)? = null, compact: Boolean = false, overrideWidth: Dp? = null, overrideHeight: Dp? = null, scaleFactor: Float = 1f) {
+fun DialPadKey(
+    number: String,
+    letters: String,
+    soundPool: SoundPool,
+    context: Context,
+    onClick: (String) -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    compact: Boolean = false,
+    overrideWidth: Dp? = null,
+    overrideHeight: Dp? = null,
+    scaleFactor: Float = 1f
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val coroutineScope = rememberCoroutineScope()
+    var isTapPulse by remember { mutableStateOf(false) }
+    var tapJob by remember { mutableStateOf<Job?>(null) }
+    val isVisuallyPressed = isPressed || isTapPulse
+
     val prefs = koinInject<PreferenceManager>()
     val haptic = LocalHapticFeedback.current
-    val cornerRadius by animateDpAsState(if (isPressed) 14.dp else 28.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "ButtonShapeAnimation")
-    val scale by animateFloatAsState(if (isPressed) 0.90f else 1f, spring(stiffness = Spring.StiffnessMediumLow), label = "DialKeyScale")
-    val bgColor by animateColorAsState(
-        if (isPressed) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-        spring(stiffness = Spring.StiffnessMedium), "DialKeyColor"
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val settingsState by prefs.settingsChanged.collectAsState()
+    val isSaturatedActive = remember(settingsState, isDark) { prefs.isSaturatedForTheme(isDark) }
+
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isVisuallyPressed) 10.dp else (if (compact) 24.dp else 28.dp),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "ButtonShapeAnimation"
     )
+    val scale by animateFloatAsState(
+        targetValue = if (isVisuallyPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "DialKeyScale"
+    )
+
+    val restingBgColor = if (isSaturatedActive) {
+        androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.35f)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+
+    val targetBgColor = if (isVisuallyPressed) MaterialTheme.colorScheme.primary else restingBgColor
+    val bgColor by animateColorAsState(targetBgColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyColor")
+
+    val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
+    val pressedTextColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
+
+    val restingMainTextColor = if (isSaturatedActive) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val targetMainTextColor = if (isVisuallyPressed) pressedTextColor else restingMainTextColor
+    val mainTextColor by animateColorAsState(targetMainTextColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyTextColor")
+
+    val restingSubTextColor = if (isSaturatedActive) {
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.80f)
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+    }
+    val targetSubTextColor = if (isVisuallyPressed) pressedTextColor.copy(alpha = 0.85f) else restingSubTextColor
+    val subTextColor by animateColorAsState(targetSubTextColor, spring(stiffness = Spring.StiffnessMedium), "DialKeySubTextColor")
+
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
     val mainFontSize = (if (compact) 18f else 22f) * scaleFactor.coerceIn(0.6f, 1.4f)
     val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f))
+
+    val triggerTapPulse = {
+        tapJob?.cancel()
+        tapJob = coroutineScope.launch {
+            isTapPulse = true
+            delay(150L)
+            isTapPulse = false
+        }
+    }
+
     Surface(
         modifier = Modifier
             .size(width = keyWidth, height = keyHeight)
@@ -1657,11 +1766,13 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = {
+                    triggerTapPulse()
                     if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
                     onClick(number)
                 },
                 onLongClick = if (onLongClick != null) ({
+                    triggerTapPulse()
                     if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onLongClick()
                 }) else null
@@ -1670,9 +1781,9 @@ fun DialPadKey(number: String, letters: String, soundPool: SoundPool, context: C
         color = bgColor
     ) {
         Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
-            Text(text = number, style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp), fontWeight = FontWeight.Medium)
+            Text(text = number, style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp), color = mainTextColor, fontWeight = FontWeight.Medium)
             if (letters.isNotBlank()) {
-                Text(text = letters, style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+                Text(text = letters, style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp), color = subTextColor, letterSpacing = 1.sp)
             }
         }
     }

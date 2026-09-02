@@ -65,6 +65,7 @@ class PreferenceManager(context: Context) {
     fun getLong(key: String, defaultValue: Long)       = prefs.getLong(key, defaultValue)
     fun setLong(key: String, value: Long)              { prefs.edit().putLong(key, value).apply(); _settingsChanged.value += 1 }
     fun remove(key: String)                            { prefs.edit().remove(key).apply(); _settingsChanged.value += 1 }
+    fun contains(key: String): Boolean                 = prefs.contains(key)
     fun getAllKeys(): Set<String>                      = prefs.all.keys
 
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
@@ -189,6 +190,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"
         const val KEY_AMOLED_MODE           = "amoled_mode"
         const val KEY_SOLID_ICONS           = "solid_icons"
+        const val KEY_SOLID_ICONS_DYNAMIC   = "solid_icons_dynamic"
         const val KEY_SOLID_ICONS_LIGHT     = "solid_icons_light"
         const val KEY_SOLID_ICONS_DARK      = "solid_icons_dark"
         const val SOLID_ICONS_STYLE_BRIGHT  = "bright"

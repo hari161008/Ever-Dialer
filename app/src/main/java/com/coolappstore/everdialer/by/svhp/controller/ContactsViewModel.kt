@@ -172,6 +172,8 @@ class ContactsViewModel(
         }
     }
 
+    fun getContactById(contactId: String): Contact? = contactsRepo.getContactById(contactId)
+
     fun deleteContact(contactId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             contactsRepo.deleteContact(contactId)

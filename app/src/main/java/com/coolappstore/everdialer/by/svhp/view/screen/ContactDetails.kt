@@ -36,6 +36,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactPfpCustomizationScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -63,6 +65,11 @@ import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithSimPreference
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithContactSimPreference
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
+import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
@@ -162,6 +169,12 @@ fun ContactDetailsScreen(
     // has 2+ numbers); null once a number has been picked (or there was only one to begin with).
     var pendingSocialApp by remember { mutableStateOf<String?>(null) }
     var socialSelectedNumber by remember { mutableStateOf<String?>(null) }
+
+    val whatsAppInstalled = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+    val telegramInstalled = remember(context) { isTelegramInstalled(context) }
+    val meetInstalled = remember(context) { isGoogleMeetInstalled(context) }
+    val truecallerInstalled = remember(context) { isTruecallerInstalled(context) }
+    val hasAnySocialApp = whatsAppInstalled || telegramInstalled || meetInstalled || truecallerInstalled
 
     // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
     // so the actions shown here always match what's configured for the contact's context menu.
@@ -620,8 +633,7 @@ fun ContactDetailsScreen(
                                         )
                                     }
                                     IconButton(onClick = {
-                                        val intent = Intent(Intent.ACTION_EDIT).apply { data = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contact.id.toLong()) }
-                                        context.startActivity(intent)
+                                        navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
                                     }) { Icon(Icons.Default.Edit, "Edit") }
                                 } else if (phoneNumber != null && phoneNumber != "Unknown") {
                                     IconButton(onClick = { showBlockConfirm = true }) {
@@ -632,8 +644,7 @@ fun ContactDetailsScreen(
                                         )
                                     }
                                     IconButton(onClick = {
-                                        val intent = Intent(Intent.ACTION_INSERT).apply { type = ContactsContract.RawContacts.CONTENT_TYPE; putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber) }
-                                        context.startActivity(intent)
+                                        navigator.navigate(ContactEditScreenDestination(initialPhone = phoneNumber))
                                     }) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                                 }
                             }
@@ -885,38 +896,41 @@ fun ContactDetailsScreen(
                     }
                 }
 
-                // Social — contact through WhatsApp / Telegram / Meet / Truecaller. Only actually redirects into the
-                // app when it's installed on the device; otherwise lets the user know instead of
-                // silently doing nothing or bouncing out to a browser. The button icons are the
-                // real installed apps' own launcher icons rather than generic glyphs.
-                item {
-                    val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
-                    val telegramIcon = remember(context) { getTelegramIcon(context) }
-                    val meetIcon = remember(context) { getGoogleMeetIcon(context) }
-                    val truecallerIcon = remember(context) { getTruecallerIcon(context) }
-                    RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                chooseSocialApp("whatsapp")
-                            })
-                            // Telegram has many third-party clients/forks, so rather than forcing
-                            // one specific app this opens Android's own chooser sheet listing
-                            // every installed app that can handle it, letting the user pick theirs.
-                            // The icon shown is pulled from whichever installed app actually
-                            // registers to handle tg:// links.
-                            RivoExpressiveButton(icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                chooseSocialApp("telegram")
-                            })
-                            RivoExpressiveButton(icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                chooseSocialApp("googlemeet")
-                            })
-                            RivoExpressiveButton(icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                chooseSocialApp("truecaller")
-                            })
+                // Social — contact through WhatsApp / Telegram / Meet / Truecaller. Only displayed when at least
+                // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
+                if (hasAnySocialApp) {
+                    item {
+                        val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
+                        val telegramIcon = remember(context) { getTelegramIcon(context) }
+                        val meetIcon = remember(context) { getGoogleMeetIcon(context) }
+                        val truecallerIcon = remember(context) { getTruecallerIcon(context) }
+                        RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                if (whatsAppInstalled) {
+                                    RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                        chooseSocialApp("whatsapp")
+                                    })
+                                }
+                                if (telegramInstalled) {
+                                    RivoExpressiveButton(icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                        chooseSocialApp("telegram")
+                                    })
+                                }
+                                if (meetInstalled) {
+                                    RivoExpressiveButton(icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                        chooseSocialApp("googlemeet")
+                                    })
+                                }
+                                if (truecallerInstalled) {
+                                    RivoExpressiveButton(icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                        chooseSocialApp("truecaller")
+                                    })
+                                }
+                            }
                         }
                     }
                 }
@@ -1032,6 +1046,67 @@ fun ContactDetailsScreen(
                             onClick = {
                                 navigator.navigate(
                                     CustomBackgroundPickerScreenDestination(
+                                        isIncoming = false,
+                                        contactKey = contactSimKey.toString(),
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // Advanced PFP — per-contact override for incoming and ongoing call custom contact PFP
+                item {
+                    val incomingContactPfpType = remember(settingsVer, contactSimKey) {
+                        prefs.getString("contact_${contactSimKey}_incoming_custom_pfp_type", null)
+                    }
+                    val ongoingContactPfpType = remember(settingsVer, contactSimKey) {
+                        prefs.getString("contact_${contactSimKey}_ongoing_custom_pfp_type", null)
+                    }
+                    val incomingPfpSupporting = when (incomingContactPfpType) {
+                        "wallpaper" -> "Device Wallpaper (Customized)"
+                        "picture" -> "Custom Picture"
+                        "video" -> "Custom Video"
+                        "none" -> "None (Default Face Icon)"
+                        else -> "According to Settings (Default)"
+                    }
+                    val ongoingPfpSupporting = when (ongoingContactPfpType) {
+                        "wallpaper" -> "Device Wallpaper (Customized)"
+                        "picture" -> "Custom Picture"
+                        "video" -> "Custom Video"
+                        "none" -> "None (Default Face Icon)"
+                        else -> "According to Settings (Default)"
+                    }
+
+                    RivoExpressiveCard(title = "Advanced PFP", icon = Icons.Default.AccountCircle) {
+                        RivoListItem(
+                            headline = "Incoming Call PFP",
+                            supporting = incomingPfpSupporting,
+                            leadingIcon = Icons.Default.CallReceived,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = {
+                                navigator.navigate(
+                                    ContactPfpCustomizationScreenDestination(
+                                        isIncoming = true,
+                                        contactKey = contactSimKey.toString(),
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        RivoListItem(
+                            headline = "Ongoing Call PFP",
+                            supporting = ongoingPfpSupporting,
+                            leadingIcon = Icons.Default.PhoneInTalk,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = {
+                                navigator.navigate(
+                                    ContactPfpCustomizationScreenDestination(
                                         isIncoming = false,
                                         contactKey = contactSimKey.toString(),
                                         contactDisplayName = contact?.name ?: displayName

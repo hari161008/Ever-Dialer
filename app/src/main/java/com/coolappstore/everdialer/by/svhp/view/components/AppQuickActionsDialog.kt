@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -162,50 +164,52 @@ fun CallChatViaOverlay(
         val hasTelegram = remember(context) { isTelegramInstalled(context) }
         val hasGoogleMeet = remember(context, showGoogleMeet) { showGoogleMeet && isGoogleMeetInstalled(context) }
         val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
-        RivoDropdownMenu(expanded = showPicker, onDismissRequest = onPickerDismiss) {
-            if (hasWhatsApp) {
-                RivoDropdownMenuItem(
-                    text = "WhatsApp",
-                    iconBitmap = remember(context) { getWhatsAppIcon(context) },
-                    onClick = { onPickerDismiss(); chooseApp("whatsapp") }
-                )
+        val hasAnyApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller || (showFakeCall && onFakeCall != null)
+
+        if (hasAnyApp) {
+            RivoDropdownMenu(expanded = showPicker, onDismissRequest = onPickerDismiss) {
+                if (hasWhatsApp) {
+                    RivoDropdownMenuItem(
+                        text = "WhatsApp",
+                        iconBitmap = remember(context) { getWhatsAppIcon(context) },
+                        onClick = { onPickerDismiss(); chooseApp("whatsapp") }
+                    )
+                }
+                if (hasTelegram) {
+                    RivoDropdownMenuItem(
+                        text = "Telegram",
+                        iconBitmap = remember(context) { getTelegramIcon(context) },
+                        onClick = { onPickerDismiss(); chooseApp("telegram") }
+                    )
+                }
+                if (hasGoogleMeet) {
+                    RivoDropdownMenuItem(
+                        text = "Google Meet",
+                        icon = Icons.Default.VideoCall,
+                        iconBitmap = remember(context) { getGoogleMeetIcon(context) },
+                        onClick = { onPickerDismiss(); chooseApp("googlemeet") }
+                    )
+                }
+                if (hasTruecaller) {
+                    RivoDropdownMenuItem(
+                        text = "Truecaller",
+                        icon = Icons.Default.Search,
+                        iconBitmap = remember(context) { getTruecallerIcon(context) },
+                        onClick = { onPickerDismiss(); chooseApp("truecaller") }
+                    )
+                }
+                if (showFakeCall && onFakeCall != null) {
+                    RivoDropdownMenuItem(
+                        text = "Fake Call",
+                        icon = Icons.Outlined.PhoneCallback,
+                        onClick = { onPickerDismiss(); onFakeCall() }
+                    )
+                }
             }
-            if (hasTelegram) {
-                RivoDropdownMenuItem(
-                    text = "Telegram",
-                    iconBitmap = remember(context) { getTelegramIcon(context) },
-                    onClick = { onPickerDismiss(); chooseApp("telegram") }
-                )
-            }
-            if (hasGoogleMeet) {
-                RivoDropdownMenuItem(
-                    text = "Google Meet",
-                    icon = Icons.Default.VideoCall,
-                    iconBitmap = remember(context) { getGoogleMeetIcon(context) },
-                    onClick = { onPickerDismiss(); chooseApp("googlemeet") }
-                )
-            }
-            if (hasTruecaller) {
-                RivoDropdownMenuItem(
-                    text = "Truecaller",
-                    icon = Icons.Default.Search,
-                    iconBitmap = remember(context) { getTruecallerIcon(context) },
-                    onClick = { onPickerDismiss(); chooseApp("truecaller") }
-                )
-            }
-            if (showFakeCall && onFakeCall != null) {
-                RivoDropdownMenuItem(
-                    text = "Fake Call",
-                    icon = Icons.Outlined.PhoneCallback,
-                    onClick = { onPickerDismiss(); onFakeCall() }
-                )
-            }
-            if (!hasWhatsApp && !hasTelegram && !hasGoogleMeet && !hasTruecaller && !(showFakeCall && onFakeCall != null)) {
-                RivoDropdownMenuItem(
-                    text = "No apps installed",
-                    icon = Icons.Default.Info,
-                    onClick = onPickerDismiss
-                )
+        } else {
+            LaunchedEffect(showPicker) {
+                onPickerDismiss()
+                Toast.makeText(context, "No messaging or social apps installed", Toast.LENGTH_SHORT).show()
             }
         }
     }

@@ -36,6 +36,11 @@ import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
+import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
@@ -263,6 +268,11 @@ fun CallLogTile(
                 }
             }
         }
+        val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+        val hasTelegram = remember(context) { isTelegramInstalled(context) }
+        val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
+        val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
+        val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
 
         RivoDropdownMenu(
             expanded          = showMenu,
@@ -291,27 +301,35 @@ fun CallLogTile(
                         iconTint = Color(0xFF4CAF50),
                         onClick  = { showMenu = false; onButtonClick(log) }
                     )
-                    "call_chat_via" -> RivoDropdownMenuItem(
-                        text     = "Call/Chat Via",
-                        icon     = Icons.AutoMirrored.Filled.Chat,
-                        iconTint = Color(0xFF00BFA5),
-                        onClick  = {
-                            showMenu = false
-                            showCallChatViaPicker = true
+                    "call_chat_via" -> {
+                        if (hasAnySocialApp) {
+                            RivoDropdownMenuItem(
+                                text     = "Call/Chat Via",
+                                icon     = Icons.AutoMirrored.Filled.Chat,
+                                iconTint = Color(0xFF00BFA5),
+                                onClick  = {
+                                    showMenu = false
+                                    showCallChatViaPicker = true
+                                }
+                            )
                         }
-                    )
-                    "search_truecaller" -> RivoDropdownMenuItem(
-                        text     = "Search Truecaller",
-                        icon     = Icons.Default.Search,
-                        iconTint = Color(0xFF0084FF),
-                        onClick  = {
-                            showMenu = false
-                            val isLaunched: Boolean = com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller(context, log.number)
-                            if (!isLaunched) {
-                                Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
-                            }
+                    }
+                    "search_truecaller" -> {
+                        if (hasTruecaller) {
+                            RivoDropdownMenuItem(
+                                text     = "Search Truecaller",
+                                icon     = Icons.Default.Search,
+                                iconTint = Color(0xFF0084FF),
+                                onClick  = {
+                                    showMenu = false
+                                    val isLaunched: Boolean = com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller(context, log.number)
+                                    if (!isLaunched) {
+                                        Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
                         }
-                    )
+                    }
                     "copy_number" -> RivoDropdownMenuItem(
                         text     = "Copy number",
                         icon     = Icons.Default.ContentCopy,

@@ -325,11 +325,33 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         } catch (_: Exception) {}
     }
 
+    private fun loadPhotoBytes(uriString: String?): ByteArray? {
+        if (uriString.isNullOrBlank()) return null
+        return try {
+            val uri = Uri.parse(uriString)
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                val bitmap = android.graphics.BitmapFactory.decodeStream(stream) ?: return null
+                val maxDim = 720
+                val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
+                    val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                    val targetW = if (ratio >= 1f) maxDim else (maxDim * ratio).toInt()
+                    val targetH = if (ratio >= 1f) (maxDim / ratio).toInt() else maxDim
+                    android.graphics.Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+                } else bitmap
+                val baos = java.io.ByteArrayOutputStream()
+                scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
+                baos.toByteArray()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error reading photo bytes", e)
+            null
+        }
+    }
+
     override fun saveContact(contact: Contact, accountType: String?, accountName: String?) {
         val ops = ArrayList<ContentProviderOperation>()
         
         if (contact.id.isEmpty() || contact.id == "0") {
-            
             val rawContactIndex = ops.size
             ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
                 .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, accountType)
@@ -351,9 +373,6 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     .build())
             }
 
-            // Bug fix: brand-new contacts previously only ever got their name + phone numbers
-            // written — any email or address typed on the "new contact" screen was silently
-            // dropped since there were no insert ops for those mimetypes here at all.
             contact.emails.filter { it.isNotBlank() }.forEach { email ->
                 ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                     .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
@@ -362,6 +381,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     .withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_HOME)
                     .build())
             }
+
             contact.addresses.filter { it.isNotBlank() }.forEach { address ->
                 ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                     .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
@@ -370,42 +390,59 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     .withValue(ContactsContract.CommonDataKinds.StructuredPostal.TYPE, ContactsContract.CommonDataKinds.StructuredPostal.TYPE_HOME)
                     .build())
             }
+
+            val photoBytes = loadPhotoBytes(contact.photoUri)
+            if (photoBytes != null) {
+                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
+                    .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.Photo.PHOTO, photoBytes)
+                    .build())
+            }
         } else {
-
-            ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-                .withSelection("${ContactsContract.Data.CONTACT_ID}=? AND ${ContactsContract.Data.MIMETYPE}=?", 
-                    arrayOf(contact.id, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE))
-                .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.name)
-                .build())
-
-            // Bug fix: editing an existing contact previously only ever updated the display
-            // name — phone numbers, emails, and addresses typed into the edit screen were
-            // silently discarded because there was no code here to write them back at all.
-            // That's why saving an email/address (or editing/removing a number) appeared to
-            // do nothing. Since the app doesn't track a per-row Data._ID for each individual
-            // phone/email/address (the Contact model only holds plain string lists), the
-            // simplest correct approach is: replace-in-place — delete every existing row of
-            // each mimetype for this aggregate contact, then re-insert the current list of
-            // values against one of its raw contacts. Deleting by CONTACT_ID removes rows
-            // across *all* raw contacts merged into this aggregate (e.g. Google + SIM), while
-            // the new rows are (re)inserted into a single raw contact — Android's aggregation
-            // still surfaces them correctly on the merged Contact afterwards.
-            val targetRawContactId = getRawContactIdsForContact(contact.id).firstOrNull()
-
-            ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
-                .withSelection("${ContactsContract.Data.CONTACT_ID}=? AND ${ContactsContract.Data.MIMETYPE}=?",
-                    arrayOf(contact.id, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE))
-                .build())
-            ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
-                .withSelection("${ContactsContract.Data.CONTACT_ID}=? AND ${ContactsContract.Data.MIMETYPE}=?",
-                    arrayOf(contact.id, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE))
-                .build())
-            ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
-                .withSelection("${ContactsContract.Data.CONTACT_ID}=? AND ${ContactsContract.Data.MIMETYPE}=?",
-                    arrayOf(contact.id, ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE))
-                .build())
+            val rawContactIds = getRawContactIdsForContact(contact.id)
+            val targetRawContactId = rawContactIds.firstOrNull() ?: contact.id.toLongOrNull()
 
             if (targetRawContactId != null) {
+                val rawIdStrings = if (rawContactIds.isNotEmpty()) rawContactIds.map { it.toString() } else listOf(targetRawContactId.toString())
+
+                // Delete existing Name, Phone, Email, Address rows for all associated raw contacts
+                // using RAW_CONTACT_ID instead of CONTACT_ID (which is invalid in Data table queries)
+                rawIdStrings.forEach { rawId ->
+                    ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                            arrayOf(rawId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                        )
+                        .build())
+                    ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                            arrayOf(rawId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                        )
+                        .build())
+                    ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                            arrayOf(rawId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                        )
+                        .build())
+                    ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                            arrayOf(rawId, ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE)
+                        )
+                        .build())
+                }
+
+                // Insert updated StructuredName
+                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawContactId)
+                    .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.name)
+                    .build())
+
+                // Insert updated Phone numbers
                 contact.phoneNumbers.filter { it.isNotBlank() }.forEach { number ->
                     ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawContactId)
@@ -414,6 +451,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                         .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
                         .build())
                 }
+
+                // Insert updated Emails
                 contact.emails.filter { it.isNotBlank() }.forEach { email ->
                     ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawContactId)
@@ -422,6 +461,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                         .withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_HOME)
                         .build())
                 }
+
+                // Insert updated Addresses
                 contact.addresses.filter { it.isNotBlank() }.forEach { address ->
                     ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawContactId)
@@ -430,13 +471,42 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                         .withValue(ContactsContract.CommonDataKinds.StructuredPostal.TYPE, ContactsContract.CommonDataKinds.StructuredPostal.TYPE_HOME)
                         .build())
                 }
+
+                // Handle Photo update/deletion
+                if (contact.photoUri == null) {
+                    rawIdStrings.forEach { rawId ->
+                        ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                            .withSelection(
+                                "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                                arrayOf(rawId, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE)
+                            )
+                            .build())
+                    }
+                } else if (!contact.photoUri.startsWith("content://com.android.contacts")) {
+                    val photoBytes = loadPhotoBytes(contact.photoUri)
+                    if (photoBytes != null) {
+                        rawIdStrings.forEach { rawId ->
+                            ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                                .withSelection(
+                                    "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                                    arrayOf(rawId, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE)
+                                )
+                                .build())
+                        }
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawContactId)
+                            .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE)
+                            .withValue(ContactsContract.CommonDataKinds.Photo.PHOTO, photoBytes)
+                            .build())
+                    }
+                }
             }
         }
 
         try {
             contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("ContactsRepo", "Error saving contact", e)
         }
     }
 

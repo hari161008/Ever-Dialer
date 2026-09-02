@@ -23,16 +23,14 @@ const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
 const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
 const val TRUECALLER_PACKAGE = "com.truecaller"
 
-fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
-    packages.any { pkg ->
-        try {
-            context.packageManager.getPackageInfo(pkg, 0)
-            true
-        } catch (_: Exception) { false }
-    }
+fun isPackageInstalled(context: Context, pkg: String): Boolean =
+    try {
+        val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
+        appInfo.enabled
+    } catch (_: Exception) { false }
 
-private fun isPackageInstalled(context: Context, pkg: String): Boolean =
-    try { context.packageManager.getPackageInfo(pkg, 0); true } catch (_: Exception) { false }
+fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
+    packages.any { pkg -> isPackageInstalled(context, pkg) }
 
 fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): ImageBitmap {
     val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
@@ -65,6 +63,7 @@ fun getTelegramIcon(context: Context): ImageBitmap? {
     } catch (_: Exception) { emptyList() }
         .mapNotNull { it.activityInfo?.packageName }
         .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
+        .filter { isPackageInstalled(context, it) }
         .distinct()
 
     val chosenPackage = handlers.firstOrNull { it == OFFICIAL_TELEGRAM_PACKAGE } ?: handlers.firstOrNull() ?: return null
@@ -80,6 +79,7 @@ fun isTelegramInstalled(context: Context): Boolean {
     } catch (_: Exception) { emptyList() }
         .mapNotNull { it.activityInfo?.packageName }
         .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
+        .filter { isPackageInstalled(context, it) }
     return handlers.isNotEmpty()
 }
 
@@ -88,8 +88,8 @@ fun isGoogleMeetInstalled(context: Context): Boolean = isPackageInstalled(contex
 
 /** Loads Google Meet's real launcher icon if it's installed. */
 fun getGoogleMeetIcon(context: Context): ImageBitmap? {
+    if (!isGoogleMeetInstalled(context)) return null
     return try {
-        context.packageManager.getPackageInfo(GOOGLE_MEET_PACKAGE, 0)
         drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
     } catch (_: Exception) { null }
 }
@@ -99,8 +99,8 @@ fun isTruecallerInstalled(context: Context): Boolean = isPackageInstalled(contex
 
 /** Loads Truecaller's real launcher icon if it's installed. */
 fun getTruecallerIcon(context: Context): ImageBitmap? {
+    if (!isTruecallerInstalled(context)) return null
     return try {
-        context.packageManager.getPackageInfo(TRUECALLER_PACKAGE, 0)
         drawableToImageBitmap(context.packageManager.getApplicationIcon(TRUECALLER_PACKAGE))
     } catch (_: Exception) { null }
 }

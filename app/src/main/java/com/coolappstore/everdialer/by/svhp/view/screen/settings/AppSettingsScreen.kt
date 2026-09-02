@@ -54,7 +54,7 @@ fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("App Settings", fontWeight = FontWeight.Bold) },
+                title = { Text("Interesting Settings !", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
                 }

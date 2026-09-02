@@ -1068,9 +1068,13 @@ fun ExpressiveCallScreen(
 
             var foundPrefix: String? = null
             for (cand in candidates) {
-                val prefKey = "contact_${cand}_${targetPrefix}_bg_type"
-                val type = prefs.getString(prefKey, null)
-                if (!type.isNullOrEmpty() && type != "none") {
+                val bgKey = "contact_${cand}_${targetPrefix}_bg_type"
+                val pfpKey = "contact_${cand}_${targetPrefix}_custom_pfp_type"
+                val bgType = prefs.getString(bgKey, null)
+                val pfpType = prefs.getString(pfpKey, null)
+                val hasBgOverride = !bgType.isNullOrEmpty() && bgType != "none"
+                val hasPfpOverride = !pfpType.isNullOrEmpty() && pfpType != "none"
+                if (hasBgOverride || hasPfpOverride || prefs.contains(bgKey) || prefs.contains(pfpKey)) {
                     foundPrefix = "contact_${cand}_$targetPrefix"
                     break
                 }

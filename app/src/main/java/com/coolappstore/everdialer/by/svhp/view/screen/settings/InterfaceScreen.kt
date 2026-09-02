@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import com.coolappstore.everdialer.by.svhp.view.components.RivoCheckboxListItem
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -125,6 +126,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var saturationLevelLight by remember { mutableFloatStateOf(prefs.getSaturationLevel(false)) }
     var saturationLevelDark  by remember { mutableFloatStateOf(prefs.getSaturationLevel(true)) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
+    var solidIconsDynamic   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false)) }
     var solidIconsLightStyle by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
     var solidIconsDarkStyle  by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_DARK, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
     var showSolidIconsLightDialog by remember { mutableStateOf(false) }
@@ -1159,7 +1161,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 )
                                 RivoSwitchListItem(
                                     headline = "Solid Icons",
-                                    supporting = "Use solid background behind icons without colors",
+                                    supporting = "Use solid colorful backgrounds behind icons",
                                     leadingIcon = Icons.Outlined.Category,
                                     iconContainerColor = Color(0xFF009688),
                                     checked = solidIcons,
@@ -1176,51 +1178,68 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             .fillMaxWidth()
                                             .padding(horizontal = 16.dp, vertical = 6.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        RivoCheckboxListItem(
+                                            headline = "Dynamic Colored Icons",
+                                            supporting = "Tint all solid icon backgrounds with dynamic primary/theme colors",
+                                            checked = solidIconsDynamic,
+                                            onCheckedChange = { isChecked ->
+                                                solidIconsDynamic = isChecked
+                                                prefs.setBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, isChecked)
+                                            }
+                                        )
+                                        AnimatedVisibility(
+                                            visible = solidIconsDynamic,
+                                            enter = expandVertically() + fadeIn(),
+                                            exit = shrinkVertically() + fadeOut()
                                         ) {
-                                            val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-                                            val isSaturatedActive = remember(rateReviewToggleSettingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
-                                            val solidChipColors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                                                selectedLabelColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                selectedLeadingIconColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                            FilterChip(
-                                                selected = true,
-                                                onClick = { showSolidIconsLightDialog = true },
-                                                colors = solidChipColors,
-                                                label = {
-                                                    Text("Light: ${if (solidIconsLightStyle == "bright") "Bright" else "Dim"}")
-                                                },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        Icons.Outlined.LightMode,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                 },
-                                                 shape = RoundedCornerShape(50.dp),
-                                                 border = null
-                                             )
-                                             FilterChip(
-                                                 selected = true,
-                                                 onClick = { showSolidIconsDarkDialog = true },
-                                                 colors = solidChipColors,
-                                                 label = {
-                                                     Text("Dark: ${if (solidIconsDarkStyle == "bright") "Bright" else "Dim"}")
-                                                 },
-                                                 leadingIcon = {
-                                                     Icon(
-                                                         Icons.Outlined.DarkMode,
-                                                         contentDescription = null,
-                                                         modifier = Modifier.size(18.dp)
-                                                     )
-                                                 },
-                                                 shape = RoundedCornerShape(50.dp),
-                                                 border = null
-                                             )
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                                                val isSaturatedActive = remember(rateReviewToggleSettingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                                                val solidChipColors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                                    selectedLabelColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    selectedLeadingIconColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                FilterChip(
+                                                    selected = true,
+                                                    onClick = { showSolidIconsLightDialog = true },
+                                                    colors = solidChipColors,
+                                                    label = {
+                                                        Text("Light: ${if (solidIconsLightStyle == "bright") "Bright" else "Dim"}")
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                             Icons.Outlined.LightMode,
+                                                             contentDescription = null,
+                                                             modifier = Modifier.size(18.dp)
+                                                        )
+                                                    },
+                                                    shape = RoundedCornerShape(50.dp),
+                                                    border = null
+                                                )
+                                                FilterChip(
+                                                    selected = true,
+                                                    onClick = { showSolidIconsDarkDialog = true },
+                                                    colors = solidChipColors,
+                                                    label = {
+                                                        Text("Dark: ${if (solidIconsDarkStyle == "bright") "Bright" else "Dim"}")
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                             Icons.Outlined.DarkMode,
+                                                             contentDescription = null,
+                                                             modifier = Modifier.size(18.dp)
+                                                        )
+                                                    },
+                                                    shape = RoundedCornerShape(50.dp),
+                                                    border = null
+                                                )
+                                            }
                                         }
                                     }
                                 }

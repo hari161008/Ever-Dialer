@@ -58,6 +58,7 @@ fun RivoAvatar(
     val showFirstLetter = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true) }
     val colorfulAvatars = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true) }
     val solidIcons      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val solidIconsDynamic = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val solidStyle = remember(settingsState, isDark) { prefs.getSolidIconsStyle(isDark) }
 
@@ -80,17 +81,33 @@ fun RivoAvatar(
 
     val (backgroundColor, contentColor) = when {
         iconContainerColor != null -> {
-            if (solidIcons) solidBgColor to solidContentColor
-            else {
+            if (solidIcons) {
+                if (solidIconsDynamic) solidBgColor to solidContentColor
+                else {
+                    val adjusted = adjustIconColorForTheme(iconContainerColor, isDark)
+                    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(adjusted.toArgb()) > 0.45
+                    adjusted to (if (isBright) Color(0xFF1C1B1F) else Color.White)
+                }
+            } else {
                 val adjusted = adjustIconColorForTheme(iconContainerColor, isDark)
                 adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
             }
         }
         icon != null -> {
-            if (solidIcons) solidBgColor to solidContentColor
-            else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+            if (solidIcons) {
+                if (solidIconsDynamic) solidBgColor to solidContentColor
+                else {
+                    val fallbackCol = avatarColors[abs(colorKey.hashCode()) % avatarColors.size]
+                    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(fallbackCol.toArgb()) > 0.45
+                    fallbackCol to (if (isBright) Color(0xFF1C1B1F) else Color.White)
+                }
+            } else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         }
-        solidIcons -> solidBgColor to solidContentColor
+        solidIcons -> {
+            if (solidIconsDynamic) solidBgColor to solidContentColor
+            else if (colorfulAvatars) avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
+            else solidBgColor to solidContentColor
+        }
         colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }

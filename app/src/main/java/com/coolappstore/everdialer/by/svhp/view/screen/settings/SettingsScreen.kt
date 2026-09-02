@@ -895,7 +895,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, ColorPurple),
         SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app", "scroll_haptics", Icons.Outlined.SwipeVertical, ColorIndigo),
         SettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password", "authentication", Icons.Default.Fingerprint, Color(0xFF6750A4)),
-        SettingsSearchEntry("App Settings", "Call settings, network switcher, and notes", "app_settings", Icons.Outlined.Tune, ColorTeal),
+        SettingsSearchEntry("Interesting Settings !", "Call settings, network switcher, and notes", "app_settings", Icons.Outlined.Tune, ColorTeal),
         SettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code", "contacts_hider", Icons.Outlined.Lock, Color(0xFF5E35B1)),
         SettingsSearchEntry("Fake Call", "Schedule fake incoming calls without calling the real person", "fake_call", Icons.Outlined.PhoneCallback, ColorRed),
         SettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
@@ -1517,7 +1517,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline = "App Settings",
+                                headline = "Interesting Settings !",
                                 supporting = "Call settings, network switcher, and notes",
                                 leadingIcon = Icons.Outlined.Tune,
                                 iconContainerColor = ColorTeal,
@@ -1810,7 +1810,7 @@ private fun CreateBackupDialog(
                     CardDivider()
                     RivoSwitchListItem(
                         headline = "Backup calling cards",
-                        supporting = "Saved contact notes and calling cards",
+                        supporting = "Saved contact notes, calling cards, and contact PFP customization",
                         leadingIcon = Icons.Outlined.ContactPhone,
                         iconContainerColor = Color(0xFF2196F3),
                         checked = backupCallingCards,

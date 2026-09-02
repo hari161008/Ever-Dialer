@@ -128,7 +128,12 @@ object BackupManager {
                     // Check any referenced files in SharedPreferences that might reside elsewhere
                     val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
                     rivoPrefs.all.forEach { (key, value) ->
-                        if (key.endsWith("_bg_path") && value is String && value.isNotBlank()) {
+                        val isMediaKey = key.endsWith("_bg_path") ||
+                                key.endsWith("_custom_pfp_path") ||
+                                key.endsWith("_pfp_path") ||
+                                key == PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH ||
+                                key == PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH
+                        if (isMediaKey && value is String && value.isNotBlank()) {
                             val f = File(value)
                             if (f.exists() && f.isFile && !backedUpFiles.contains(f.name)) {
                                 zip.putNextEntry(ZipEntry("backgrounds/${f.name}"))
@@ -268,8 +273,12 @@ object BackupManager {
                     key.startsWith("ongoing_elements_") ||
                     key.startsWith("incoming_custom_pfp_") ||
                     key.startsWith("ongoing_custom_pfp_") ||
+                    key.startsWith("incoming_auto_refresh_wallpaper") ||
+                    key.startsWith("ongoing_auto_refresh_wallpaper") ||
                     key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
-                    key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP
+                    key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP ||
+                    key == PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER ||
+                    key == PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER
                 ) {
                     result[key] = value
                 }
@@ -369,8 +378,13 @@ object BackupManager {
                             }
                             is Double -> editor.putFloat(key, value.toFloat())
                             is String -> {
-                                // Remap background path to current device backgrounds dir if applicable
-                                val finalStr = if (key.endsWith("_bg_path") && value.isNotBlank()) {
+                                // Remap background / custom PFP path to current device backgrounds dir if applicable
+                                val isMediaKey = key.endsWith("_bg_path") ||
+                                        key.endsWith("_custom_pfp_path") ||
+                                        key.endsWith("_pfp_path") ||
+                                        key == PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH ||
+                                        key == PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH
+                                val finalStr = if (isMediaKey && value.isNotBlank()) {
                                     val fileName = File(value).name
                                     val localFile = File(bgDir, fileName)
                                     if (localFile.exists()) localFile.absolutePath else value
@@ -395,8 +409,8 @@ object BackupManager {
     }
 
     /**
-     * Fixes any background file paths in SharedPreferences after a restore.
-     * Ensures all background paths point to existing files in the current device's backgrounds directory.
+     * Fixes any background and custom PFP file paths in SharedPreferences after a restore.
+     * Ensures all background and PFP paths point to existing files in the current device's backgrounds directory.
      */
     private fun fixBackgroundPathsAfterRestore(context: Context) {
         try {
@@ -406,7 +420,12 @@ object BackupManager {
             var modified = false
 
             prefs.all.forEach { (key, value) ->
-                if (key.endsWith("_bg_path") && value is String && value.isNotBlank()) {
+                val isMediaKey = key.endsWith("_bg_path") ||
+                        key.endsWith("_custom_pfp_path") ||
+                        key.endsWith("_pfp_path") ||
+                        key == PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH ||
+                        key == PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH
+                if (isMediaKey && value is String && value.isNotBlank()) {
                     val file = File(value)
                     if (!file.exists()) {
                         val fileName = file.name
@@ -419,7 +438,7 @@ object BackupManager {
                 }
             }
 
-            // Also check if any background type is configured but its path is empty or pointing to a missing file
+            // Also check if any background or custom PFP type is configured but its path is empty or pointing to a missing file
             val allKeys = prefs.all.keys.toList()
             allKeys.forEach { key ->
                 if (key.endsWith("_bg_type")) {
@@ -431,10 +450,42 @@ object BackupManager {
                         val file = if (currentPath.isNotBlank()) File(currentPath) else null
                         if (file == null || !file.exists()) {
                             val candidatePng = File(bgDir, "custom_bg_${prefix}.png")
+                            val candidateJpg = File(bgDir, "custom_bg_${prefix}.jpg")
                             val candidateMp4 = File(bgDir, "custom_bg_${prefix}.mp4")
                             when {
                                 candidatePng.exists() -> {
                                     editor.putString(pathKey, candidatePng.absolutePath)
+                                    modified = true
+                                }
+                                candidateJpg.exists() -> {
+                                    editor.putString(pathKey, candidateJpg.absolutePath)
+                                    modified = true
+                                }
+                                candidateMp4.exists() -> {
+                                    editor.putString(pathKey, candidateMp4.absolutePath)
+                                    modified = true
+                                }
+                            }
+                        }
+                    }
+                } else if (key.endsWith("_custom_pfp_type")) {
+                    val prefix = key.removeSuffix("_custom_pfp_type")
+                    val type = prefs.getString(key, "none") ?: "none"
+                    if (type == "wallpaper" || type == "picture" || type == "video") {
+                        val pathKey = "${prefix}_custom_pfp_path"
+                        val currentPath = prefs.getString(pathKey, "") ?: ""
+                        val file = if (currentPath.isNotBlank()) File(currentPath) else null
+                        if (file == null || !file.exists()) {
+                            val candidatePng = File(bgDir, "custom_pfp_${prefix}.png")
+                            val candidateJpg = File(bgDir, "custom_pfp_${prefix}.jpg")
+                            val candidateMp4 = File(bgDir, "custom_pfp_${prefix}.mp4")
+                            when {
+                                candidatePng.exists() -> {
+                                    editor.putString(pathKey, candidatePng.absolutePath)
+                                    modified = true
+                                }
+                                candidateJpg.exists() -> {
+                                    editor.putString(pathKey, candidateJpg.absolutePath)
                                     modified = true
                                 }
                                 candidateMp4.exists() -> {
