@@ -491,7 +491,8 @@ private data class CallBackgroundConfig(
     val pfpVideoSpeed: Float = 1.0f,
     val pfpFile: java.io.File? = null,
     val hasCustomPfp: Boolean = false,
-    val pfpOverrideExisting: Boolean = false,
+    val pfpOverrideExisting: Boolean = true,
+    val pfpExceptPfp: Boolean = true,
     val pfpShowForNoPfp: Boolean = true,
     val pfpSize: Float = 0.5f,
     val pfpShape: String = "circle"
@@ -523,8 +524,11 @@ private fun CallAvatar(
     }
 
     val hasRealPfp = !photoUri.isNullOrEmpty()
-    val shouldUseCustomPfp = if (hasRealPfp) {
-        config.pfpOverrideExisting && config.hasCustomPfp && config.pfpFile != null
+    val isContactSpecific = config.pfpPath.contains("contact_")
+    val shouldUseCustomMedia = if (isContactSpecific) {
+        config.hasCustomPfp && config.pfpFile != null
+    } else if (hasRealPfp) {
+        config.pfpOverrideExisting && !config.pfpExceptPfp && config.hasCustomPfp && config.pfpFile != null
     } else {
         config.pfpShowForNoPfp && config.hasCustomPfp && config.pfpFile != null
     }
@@ -546,15 +550,7 @@ private fun CallAvatar(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Base layer / default face vector icon
-        Icon(
-            imageVector = Icons.Default.Person,
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.Center).size(iconSize),
-            tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
-        )
-
-        if (shouldUseCustomPfp && config.pfpFile != null) {
+        if (shouldUseCustomMedia && config.pfpFile != null) {
             if (config.pfpType == "video") {
                 com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
                     videoFile = config.pfpFile,
@@ -584,8 +580,6 @@ private fun CallAvatar(
                             scaleY = config.pfpZoom
                             translationX = config.pfpPanX * 0.35f
                             translationY = config.pfpPanY * 0.35f
-                            clip = true
-                            shape = avatarShape
                         }
                         .then(if (config.pfpBlur > 0f) Modifier.blur(config.pfpBlur.dp) else Modifier)
                 )
@@ -604,8 +598,31 @@ private fun CallAvatar(
                     .crossfade(300)
                     .build(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = if (config.pfpOverrideExisting) config.pfpZoom else 1f
+                        scaleY = if (config.pfpOverrideExisting) config.pfpZoom else 1f
+                        translationX = if (config.pfpOverrideExisting) config.pfpPanX * 0.35f else 0f
+                        translationY = if (config.pfpOverrideExisting) config.pfpPanY * 0.35f else 0f
+                    }
+                    .then(if (config.pfpOverrideExisting && config.pfpBlur > 0f) Modifier.blur(config.pfpBlur.dp) else Modifier),
                 contentScale = ContentScale.Crop
+            )
+            if (config.pfpOverrideExisting && config.pfpDim > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = config.pfpDim))
+                )
+            }
+        } else {
+            // Default face vector icon when neither custom PFP nor contact photo exists
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.Center).size(iconSize),
+                tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
             )
         }
 
@@ -1074,7 +1091,7 @@ fun ExpressiveCallScreen(
                 val pfpType = prefs.getString(pfpKey, null)
                 val hasBgOverride = !bgType.isNullOrEmpty() && bgType != "none"
                 val hasPfpOverride = !pfpType.isNullOrEmpty() && pfpType != "none"
-                if (hasBgOverride || hasPfpOverride || prefs.contains(bgKey) || prefs.contains(pfpKey)) {
+                if (hasBgOverride || hasPfpOverride) {
                     foundPrefix = "contact_${cand}_$targetPrefix"
                     break
                 }
@@ -1127,23 +1144,29 @@ fun ExpressiveCallScreen(
         val defaultPfpDim = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_DIM, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_DIM, 0f)
         val defaultPfpBlur = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_BLUR, 0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_BLUR, 0f)
         val defaultPfpVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
-        val defaultPfpOverride = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, false) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, false)
+        val defaultPfpOverride = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, true) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, true)
+        val defaultPfpExceptPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_EXCEPT_PFP, false) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_EXCEPT_PFP, false)
         val defaultPfpShowForNoPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
         val defaultPfpSize = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)
         val defaultPfpShape = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
 
-        val pfpType = prefs?.getString("${prefix}_custom_pfp_type", defaultPfpType ?: "none") ?: (defaultPfpType ?: "none")
-        val pfpPath = prefs?.getString("${prefix}_custom_pfp_path", defaultPfpPath ?: "") ?: (defaultPfpPath ?: "")
-        val pfpZoom = prefs?.getFloat("${prefix}_custom_pfp_zoom", defaultPfpZoom ?: 1f) ?: (defaultPfpZoom ?: 1f)
-        val pfpPanX = prefs?.getFloat("${prefix}_custom_pfp_pan_x", defaultPfpPanX ?: 0f) ?: (defaultPfpPanX ?: 0f)
-        val pfpPanY = prefs?.getFloat("${prefix}_custom_pfp_pan_y", defaultPfpPanY ?: 0f) ?: (defaultPfpPanY ?: 0f)
-        val pfpDim = prefs?.getFloat("${prefix}_custom_pfp_dim", defaultPfpDim ?: 0f) ?: (defaultPfpDim ?: 0f)
-        val pfpBlur = prefs?.getFloat("${prefix}_custom_pfp_blur", defaultPfpBlur ?: 0f) ?: (defaultPfpBlur ?: 0f)
-        val pfpVideoSpeed = prefs?.getFloat("${prefix}_custom_pfp_video_speed", defaultPfpVideoSpeed ?: 1.0f) ?: (defaultPfpVideoSpeed ?: 1.0f)
-        val pfpOverrideExisting = prefs?.getBoolean("${prefix}_custom_pfp_override_existing", defaultPfpOverride ?: false) ?: (defaultPfpOverride ?: false)
-        val pfpShowForNoPfp = prefs?.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", defaultPfpShowForNoPfp ?: true) ?: (defaultPfpShowForNoPfp ?: true)
-        val pfpSize = prefs?.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) ?: (defaultPfpSize ?: 0.5f)
-        val pfpShape = prefs?.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle")
+        val isContactSpecific = prefix.startsWith("contact_")
+        val contactSpecificPfpType = if (isContactSpecific) prefs?.getString("${prefix}_custom_pfp_type", null) else null
+        val hasPerContactPfpConfigured = !contactSpecificPfpType.isNullOrEmpty() && contactSpecificPfpType != "none"
+
+        val pfpType = if (hasPerContactPfpConfigured) contactSpecificPfpType!! else (defaultPfpType ?: "none")
+        val pfpPath = if (hasPerContactPfpConfigured) prefs?.getString("${prefix}_custom_pfp_path", "") ?: "" else (defaultPfpPath ?: "")
+        val pfpZoom = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_zoom", 1f) ?: 1f else (defaultPfpZoom ?: 1f)
+        val pfpPanX = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_pan_x", 0f) ?: 0f else (defaultPfpPanX ?: 0f)
+        val pfpPanY = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_pan_y", 0f) ?: 0f else (defaultPfpPanY ?: 0f)
+        val pfpDim = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_dim", 0f) ?: 0f else (defaultPfpDim ?: 0f)
+        val pfpBlur = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_blur", 0f) ?: 0f else (defaultPfpBlur ?: 0f)
+        val pfpVideoSpeed = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_video_speed", 1.0f) ?: 1.0f else (defaultPfpVideoSpeed ?: 1.0f)
+        val pfpOverrideExisting = if (hasPerContactPfpConfigured) prefs?.getBoolean("${prefix}_custom_pfp_override_existing", true) ?: true else (defaultPfpOverride ?: true)
+        val pfpExceptPfp = if (hasPerContactPfpConfigured) false else (defaultPfpExceptPfp ?: false)
+        val pfpShowForNoPfp = if (hasPerContactPfpConfigured) prefs?.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true) ?: true else (defaultPfpShowForNoPfp ?: true)
+        val pfpSize = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) ?: (defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)
+        val pfpShape = if (hasPerContactPfpConfigured) prefs?.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")
 
         val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
         val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
@@ -1178,6 +1201,7 @@ fun ExpressiveCallScreen(
             pfpFile = pfpFile,
             hasCustomPfp = hasCustomPfp,
             pfpOverrideExisting = pfpOverrideExisting,
+            pfpExceptPfp = pfpExceptPfp,
             pfpShowForNoPfp = pfpShowForNoPfp,
             pfpSize = pfpSize,
             pfpShape = pfpShape
@@ -1544,7 +1568,7 @@ fun ExpressiveCallScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp)
+                            val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp || currentBgConfig.hasCustomPfp)
                             if (shouldShowAvatar) {
                                 val lsPfpFraction = currentBgConfig.pfpSize.coerceIn(0.1f, 1.0f)
                                 val lsBaseAvatarSize = 150.dp
@@ -1773,8 +1797,9 @@ fun ExpressiveCallScreen(
                             MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium)
                         val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
 
-                        val isSquareLarge = currentBgConfig.pfpShape == "square" && pfpFraction >= 0.85f
-                        val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp)
+                        val isPfpLarge = pfpFraction >= 0.85f
+                        val isCircleShape = currentBgConfig.pfpShape != "square"
+                        val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp || currentBgConfig.hasCustomPfp)
                         if (shouldShowAvatar) {
                             CallAvatar(
                                 photoUri = photoUri,
@@ -1785,12 +1810,16 @@ fun ExpressiveCallScreen(
                                 controlBtnColor = controlBtnColor,
                                 avatarSize = callAvatarSize,
                                 iconSize = callAvatarIconSize,
-                                overlayContent = if (isSquareLarge) {{
+                                overlayContent = if (isPfpLarge) {{
                                     Column(
                                         modifier = Modifier
-                                            .align(Alignment.TopStart)
-                                            .padding(start = 24.dp, top = callAvatarSize * 0.18f, end = 24.dp),
-                                        horizontalAlignment = Alignment.Start,
+                                            .align(if (isCircleShape) Alignment.Center else Alignment.TopStart)
+                                            .padding(
+                                                start = if (isCircleShape) 28.dp else 24.dp,
+                                                top = if (isCircleShape) 0.dp else callAvatarSize * 0.18f,
+                                                end = if (isCircleShape) 28.dp else 24.dp
+                                            ),
+                                        horizontalAlignment = if (isCircleShape) Alignment.CenterHorizontally else Alignment.Start,
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Text(
@@ -1798,7 +1827,8 @@ fun ExpressiveCallScreen(
                                             style = callNameStyle.copy(shadow = textShadow),
                                             color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = if (isCircleShape) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                         )
                                         if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
                                             Text(
@@ -1809,12 +1839,18 @@ fun ExpressiveCallScreen(
                                                 ),
                                                 color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                textAlign = if (isCircleShape) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                             )
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = if (isCircleShape) Arrangement.Center else Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
                                             if (showSimBadge && simSlot in 0..1) {
                                                 SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
+                                                if (isCircleShape) Spacer(Modifier.width(6.dp))
                                             }
                                             Text(
                                                 text = when {
@@ -1836,12 +1872,12 @@ fun ExpressiveCallScreen(
                                 }} else null
                             )
 
-                            if (!isSquareLarge) {
+                            if (!isPfpLarge) {
                                 Spacer(modifier = Modifier.height(if (isIncomingRinging) 28.dp else 20.dp))
                             }
                         }
 
-                        if (!isSquareLarge || !shouldShowAvatar) {
+                        if (!isPfpLarge || !shouldShowAvatar) {
                             // Fixed height box so layout never shifts when name loads
                             Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
                                 Text(

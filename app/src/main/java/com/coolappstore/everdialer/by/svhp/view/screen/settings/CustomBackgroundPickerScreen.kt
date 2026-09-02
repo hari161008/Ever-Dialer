@@ -118,39 +118,58 @@ fun CustomBackgroundPickerScreen(
     }
     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
 
+    val defaultPfpType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_TYPE, "none") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_TYPE, "none")
+    val defaultPfpPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "")
+    val defaultPfpZoom = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_ZOOM, 1f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_ZOOM, 1f)
+    val defaultPfpPanX = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_X, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_X, 0f)
+    val defaultPfpPanY = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_Y, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_Y, 0f)
+    val defaultPfpDim = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_DIM, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_DIM, 0f)
+    val defaultPfpBlur = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_BLUR, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_BLUR, 0f)
+    val defaultPfpVideoSpeed = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
+    val defaultPfpOverride = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, true)
+    val defaultPfpShowForNoPfp = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
+    val defaultPfpSize = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)
+    val defaultPfpShape = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
+
+    val isContactSpecific = !contactKey.isNullOrEmpty()
+    val contactSpecificPfpType = if (isContactSpecific) prefs.getString("${prefix}_custom_pfp_type", null) else null
+    val hasPerContactPfpConfigured = !contactSpecificPfpType.isNullOrEmpty() && contactSpecificPfpType != "none"
+
     val pfpType = remember(settingsVersion) {
-        prefs.getString("${prefix}_custom_pfp_type", "none") ?: "none"
+        if (hasPerContactPfpConfigured) contactSpecificPfpType!! else (defaultPfpType ?: "none")
     }
     val pfpPath = remember(settingsVersion) {
-        prefs.getString("${prefix}_custom_pfp_path", "") ?: ""
+        if (hasPerContactPfpConfigured) prefs.getString("${prefix}_custom_pfp_path", "") ?: "" else (defaultPfpPath ?: "")
     }
     val pfpZoom = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_zoom", 1f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_zoom", 1f) else (defaultPfpZoom ?: 1f)
     }
     val pfpPanX = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f) else (defaultPfpPanX ?: 0f)
     }
     val pfpPanY = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f) else (defaultPfpPanY ?: 0f)
     }
     val pfpDim = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_dim", 0f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_dim", 0f) else (defaultPfpDim ?: 0f)
     }
     val pfpBlur = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_blur", 0f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_blur", 0f) else (defaultPfpBlur ?: 0f)
     }
     val pfpVideoSpeed = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f)
+        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f) else (defaultPfpVideoSpeed ?: 1.0f)
+    }
+    val pfpOverrideExisting = remember(settingsVersion) {
+        if (hasPerContactPfpConfigured) prefs.getBoolean("${prefix}_custom_pfp_override_existing", true) else (defaultPfpOverride ?: true)
     }
     val pfpShowForNoPfp = remember(settingsVersion) {
-        prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
+        if (hasPerContactPfpConfigured) prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true) else (defaultPfpShowForNoPfp ?: true)
     }
-    val defaultPfpSize = 0.5f
     val pfpSize = remember(settingsVersion) {
-        prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize).coerceIn(0.1f, 1.0f)
+        (if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)).coerceIn(0.1f, 1.0f)
     }
     val pfpShape = remember(settingsVersion) {
-        prefs.getString("${prefix}_custom_pfp_shape", "circle") ?: "circle"
+        (if (hasPerContactPfpConfigured) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")) ?: "circle"
     }
     val previewAvatarSize = if (pfpSize <= 0.50f) {
         (80.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
@@ -161,7 +180,7 @@ fun CustomBackgroundPickerScreen(
     val isPfpCircle = pfpShape != "square"
     val pfpAvatarShape = if (isPfpCircle) CircleShape else RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)
     val customPfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
-    val hasPreviewCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && customPfpFile != null && customPfpFile.exists() && pfpShowForNoPfp
+    val hasPreviewCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && customPfpFile != null && customPfpFile.exists() && (pfpShowForNoPfp || pfpOverrideExisting)
 
     var elementsThemeMode by remember(settingsVersion) {
         mutableStateOf(
@@ -537,6 +556,7 @@ fun CustomBackgroundPickerScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier.padding(top = 6.dp)
                                         ) {
+                                            val isPfpLarge = showContactPfp && pfpSize >= 0.85f
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
@@ -558,8 +578,6 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
-                                                                        clip = true
-                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -597,13 +615,13 @@ fun CustomBackgroundPickerScreen(
                                                         )
                                                     }
 
-                                                    val isSquareLarge = (!isPfpCircle) && pfpSize >= 0.85f
-                                                    if (isSquareLarge) {
+                                                    val isPfpLarge = pfpSize >= 0.85f
+                                                    if (isPfpLarge) {
                                                         Column(
                                                             modifier = Modifier
-                                                                .align(Alignment.TopStart)
-                                                                .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
-                                                            horizontalAlignment = Alignment.Start,
+                                                                .align(if (isPfpCircle) Alignment.Center else Alignment.TopStart)
+                                                                .padding(start = if (isPfpCircle) 16.dp else 12.dp, top = if (isPfpCircle) 0.dp else previewAvatarSize * 0.18f, end = if (isPfpCircle) 16.dp else 12.dp),
+                                                            horizontalAlignment = if (isPfpCircle) Alignment.CenterHorizontally else Alignment.Start,
                                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                                         ) {
                                                             Text(
@@ -615,7 +633,8 @@ fun CustomBackgroundPickerScreen(
                                                                 ),
                                                                 color = effectiveTextColor,
                                                                 maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                textAlign = if (isPfpCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                             )
                                                             if (showPhoneNumber) {
                                                                 Text(
@@ -627,12 +646,13 @@ fun CustomBackgroundPickerScreen(
                                                                     ),
                                                                     color = effectiveTextColor,
                                                                     maxLines = 1,
-                                                                    overflow = TextOverflow.Ellipsis
+                                                                    overflow = TextOverflow.Ellipsis,
+                                                                    textAlign = if (isPfpCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                                 )
                                                             }
                                                             Row(
                                                                 verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                                horizontalArrangement = if (isPfpCircle) Arrangement.Center else Arrangement.spacedBy(4.dp),
                                                                 modifier = Modifier.padding(top = 2.dp)
                                                             ) {
                                                                 if (isDualSim) {
@@ -645,6 +665,7 @@ fun CustomBackgroundPickerScreen(
                                                                             Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
                                                                         }
                                                                     }
+                                                                    if (isPfpCircle) Spacer(Modifier.width(4.dp))
                                                                 }
                                                                 Text(
                                                                     "Incoming",
@@ -655,13 +676,12 @@ fun CustomBackgroundPickerScreen(
                                                         }
                                                     }
                                                 }
-                                                if (!((!isPfpCircle) && pfpSize >= 0.85f)) {
+                                                if (!isPfpLarge) {
                                                     Spacer(Modifier.height(8.dp))
                                                 }
                                             }
 
-                                            val isSquareLarge = showContactPfp && (!isPfpCircle) && pfpSize >= 0.85f
-                                            if (!isSquareLarge) {
+                                            if (!isPfpLarge) {
                                                 Text(
                                                     "Jane Doe",
                                                     style = MaterialTheme.typography.titleMedium.copy(
@@ -777,6 +797,7 @@ fun CustomBackgroundPickerScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier.padding(top = 26.dp, start = if (pfpSize >= 0.95f) 0.dp else 8.dp, end = if (pfpSize >= 0.95f) 0.dp else 8.dp)
                                         ) {
+                                            val isPfpLarge = showContactPfp && pfpSize >= 0.85f
                                             if (showContactPfp) {
                                                 Box(
                                                     modifier = Modifier
@@ -798,8 +819,6 @@ fun CustomBackgroundPickerScreen(
                                                                         scaleY = pfpZoom
                                                                         translationX = pfpPanX * 0.2f
                                                                         translationY = pfpPanY * 0.2f
-                                                                        clip = true
-                                                                        shape = pfpAvatarShape
                                                                     }
                                                                     .then(if (pfpBlur > 0f) Modifier.blur(pfpBlur.dp) else Modifier)
                                                             )
@@ -837,13 +856,13 @@ fun CustomBackgroundPickerScreen(
                                                         )
                                                     }
 
-                                                    val isSquareLarge = (!isPfpCircle) && pfpSize >= 0.85f
-                                                    if (isSquareLarge) {
+                                                    val isPfpLarge = pfpSize >= 0.85f
+                                                    if (isPfpLarge) {
                                                         Column(
                                                             modifier = Modifier
-                                                                .align(Alignment.TopStart)
-                                                                .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
-                                                            horizontalAlignment = Alignment.Start,
+                                                                .align(if (isPfpCircle) Alignment.Center else Alignment.TopStart)
+                                                                .padding(start = if (isPfpCircle) 16.dp else 12.dp, top = if (isPfpCircle) 0.dp else previewAvatarSize * 0.18f, end = if (isPfpCircle) 16.dp else 12.dp),
+                                                            horizontalAlignment = if (isPfpCircle) Alignment.CenterHorizontally else Alignment.Start,
                                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                                         ) {
                                                             Text(
@@ -855,7 +874,8 @@ fun CustomBackgroundPickerScreen(
                                                                 ),
                                                                 color = effectiveTextColor,
                                                                 maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                textAlign = if (isPfpCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                             )
                                                             if (showPhoneNumber) {
                                                                 Text(
@@ -867,12 +887,13 @@ fun CustomBackgroundPickerScreen(
                                                                     ),
                                                                     color = effectiveTextColor,
                                                                     maxLines = 1,
-                                                                    overflow = TextOverflow.Ellipsis
+                                                                    overflow = TextOverflow.Ellipsis,
+                                                                    textAlign = if (isPfpCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                                 )
                                                             }
                                                             Row(
                                                                 verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                                horizontalArrangement = if (isPfpCircle) Arrangement.Center else Arrangement.spacedBy(4.dp),
                                                                 modifier = Modifier.padding(top = 2.dp)
                                                             ) {
                                                                 if (isDualSim) {
@@ -885,6 +906,7 @@ fun CustomBackgroundPickerScreen(
                                                                             Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
                                                                         }
                                                                     }
+                                                                    if (isPfpCircle) Spacer(Modifier.width(4.dp))
                                                                 }
                                                                 Text(
                                                                     "00:45",
@@ -895,13 +917,12 @@ fun CustomBackgroundPickerScreen(
                                                         }
                                                     }
                                                 }
-                                                if (!((!isPfpCircle) && pfpSize >= 0.85f)) {
+                                                if (!isPfpLarge) {
                                                     Spacer(Modifier.height(6.dp))
                                                 }
                                             }
 
-                                            val isSquareLarge = showContactPfp && (!isPfpCircle) && pfpSize >= 0.85f
-                                            if (!isSquareLarge) {
+                                            if (!isPfpLarge) {
                                                 Text(
                                                     "Jane Doe",
                                                     style = MaterialTheme.typography.titleMedium.copy(
@@ -1620,7 +1641,7 @@ private fun MiniOngoingButton(
  * Interactive 2D HSV Color Picker with touch spectrum canvas and pointer
  */
 @Composable
-private fun InteractiveColorPicker(
+internal fun InteractiveColorPicker(
     initialColor: Color,
     onColorChanged: (Color) -> Unit
 ) {

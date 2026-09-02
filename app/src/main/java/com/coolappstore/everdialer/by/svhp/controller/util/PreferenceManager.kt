@@ -67,6 +67,7 @@ class PreferenceManager(context: Context) {
     fun remove(key: String)                            { prefs.edit().remove(key).apply(); _settingsChanged.value += 1 }
     fun contains(key: String): Boolean                 = prefs.contains(key)
     fun getAllKeys(): Set<String>                      = prefs.all.keys
+    fun notifyChanged()                                { _settingsChanged.value += 1 }
 
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
     fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
@@ -449,6 +450,7 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_CUSTOM_PFP_BLUR              = "incoming_custom_pfp_blur"
         const val KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED       = "incoming_custom_pfp_video_speed"
         const val KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING = "incoming_custom_pfp_override_existing"
+        const val KEY_INCOMING_CUSTOM_PFP_EXCEPT_PFP        = "incoming_custom_pfp_except_pfp"
         const val KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP   = "incoming_custom_pfp_show_for_no_pfp"
         const val KEY_INCOMING_CUSTOM_PFP_SIZE              = "incoming_custom_pfp_size"         // Float 0.1f..1.0f, default 0.5f (50%)
         const val KEY_INCOMING_CUSTOM_PFP_SHAPE             = "incoming_custom_pfp_shape"        // "circle" | "square"
@@ -462,6 +464,7 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_CUSTOM_PFP_BLUR               = "ongoing_custom_pfp_blur"
         const val KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED        = "ongoing_custom_pfp_video_speed"
         const val KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING  = "ongoing_custom_pfp_override_existing"
+        const val KEY_ONGOING_CUSTOM_PFP_EXCEPT_PFP         = "ongoing_custom_pfp_except_pfp"
         const val KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP    = "ongoing_custom_pfp_show_for_no_pfp"
         const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.5f (50%)
         const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square"

@@ -472,16 +472,16 @@ fun RivoStatCard(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(12.dp)
         ) {
-            // Icon placed in the top right corner, larger size
+            // Icon placed in the top right corner
             val badgeShape = if (circleIcons) CircleShape else RoundedCornerShape(11.dp)
             Surface(
                 shape = badgeShape,
                 color = iconBgColor,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .align(Alignment.TopEnd)
             ) {
                 Box(
@@ -491,31 +491,37 @@ fun RivoStatCard(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconContentColor,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            // Value & Label on bottom left
+            // Value & Label on bottom left with dynamic text scaling
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(top = 24.dp),
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                val valueStyle = when {
+                    value.length > 7 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    value.length > 5 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    else -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                }
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = valueStyle,
                     color = valueTextColor,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium,
                     color = labelTextColor,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
         }

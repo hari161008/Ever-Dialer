@@ -254,6 +254,10 @@ object BackupManager {
                 com.coolappstore.evercallrecorder.by.svhp.services.call.CallRecordingComponentGuard.sync(context)
             } catch (_: Throwable) {}
 
+            try {
+                org.koin.java.KoinJavaComponent.getKoin().getOrNull<PreferenceManager>()?.notifyChanged()
+            } catch (_: Throwable) {}
+
             restoredAny
         } catch (_: Exception) {
             false

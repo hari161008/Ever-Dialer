@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -108,8 +109,13 @@ fun ContactPfpCustomizationScreen(
         mutableFloatStateOf(prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f))
     }
 
+    val isContactSpecific = !contactKey.isNullOrEmpty()
+
     var overrideExisting by remember(settingsVersion) {
-        mutableStateOf(prefs.getBoolean("${prefix}_custom_pfp_override_existing", false))
+        mutableStateOf(prefs.getBoolean("${prefix}_custom_pfp_override_existing", true))
+    }
+    var exceptPfp by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean("${prefix}_custom_pfp_except_pfp", false))
     }
     var showForNoPfp by remember(settingsVersion) {
         mutableStateOf(prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true))
@@ -137,29 +143,48 @@ fun ContactPfpCustomizationScreen(
     }
 
     // Call background configs for authentic preview backdrop
-    val bgType = remember(settingsVersion) { prefs.getString("${prefix}_bg_type", "none") ?: "none" }
-    val bgPath = remember(settingsVersion) { prefs.getString("${prefix}_bg_path", "") ?: "" }
-    val bgZoom = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_zoom", 1f) }
-    val bgPanX = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_pan_x", 0f) }
-    val bgPanY = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_pan_y", 0f) }
-    val bgDim = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_dim", 0f) }
-    val bgBlur = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_blur", 0f) }
-    val bgVideoSpeed = remember(settingsVersion) { prefs.getFloat("${prefix}_bg_video_speed", 1.0f) }
+    val defaultBgType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") else prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none")
+    val defaultBgPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") else prefs.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "")
+    val defaultBgZoom = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f)
+    val defaultBgPanX = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f)
+    val defaultBgPanY = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f)
+    val defaultBgDim = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f)
+    val defaultBgBlur = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f)
+    val defaultBgVideoSpeed = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_VIDEO_SPEED, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_VIDEO_SPEED, 1.0f)
+
+    val contactSpecificBgType = if (isContactSpecific) prefs.getString("${prefix}_bg_type", null) else null
+    val hasPerContactBg = !contactSpecificBgType.isNullOrEmpty() && contactSpecificBgType != "none"
+
+    val bgType = remember(settingsVersion) { if (hasPerContactBg) contactSpecificBgType!! else (defaultBgType ?: "none") }
+    val bgPath = remember(settingsVersion) { if (hasPerContactBg) prefs.getString("${prefix}_bg_path", "") ?: "" else (defaultBgPath ?: "") }
+    val bgZoom = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_zoom", 1f) else (defaultBgZoom ?: 1f) }
+    val bgPanX = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_pan_x", 0f) else (defaultBgPanX ?: 0f) }
+    val bgPanY = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_pan_y", 0f) else (defaultBgPanY ?: 0f) }
+    val bgDim = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_dim", 0f) else (defaultBgDim ?: 0f) }
+    val bgBlur = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_blur", 0f) else (defaultBgBlur ?: 0f) }
+    val bgVideoSpeed = remember(settingsVersion) { if (hasPerContactBg) prefs.getFloat("${prefix}_bg_video_speed", 1.0f) else (defaultBgVideoSpeed ?: 1.0f) }
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
 
-    val fontColorMode = remember(settingsVersion) {
-        prefs.getString(
-            "${prefix}_font_color_mode",
-            if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
-            else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
-        ) ?: "default"
+    val fontColorKeyMode = if (!contactKey.isNullOrEmpty()) "${prefix}_font_color_mode" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE)
+    val fontColorKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_color" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR)
+
+    var fontColorMode by remember(settingsVersion) {
+        mutableStateOf(
+            prefs.getString(
+                "${prefix}_font_color_mode",
+                if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
+                else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
+            ) ?: "default"
+        )
     }
-    val customFontColorInt = remember(settingsVersion) {
-        prefs.getInt(
-            "${prefix}_font_color",
-            if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE)
-            else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+    var customFontColorInt by remember(settingsVersion) {
+        mutableIntStateOf(
+            prefs.getInt(
+                "${prefix}_font_color",
+                if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE)
+                else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+            )
         )
     }
     val elementsThemeMode = remember(settingsVersion) {
@@ -501,13 +526,13 @@ fun ContactPfpCustomizationScreen(
                                                 )
                                             }
 
-                                            val isSquareLarge = (!isCircle) && pfpSize >= 0.85f
-                                            if (isSquareLarge) {
+                                            val isPfpLarge = pfpSize >= 0.85f
+                                            if (isPfpLarge) {
                                                 Column(
                                                     modifier = Modifier
-                                                        .align(Alignment.TopStart)
-                                                        .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
-                                                    horizontalAlignment = Alignment.Start,
+                                                        .align(if (isCircle) Alignment.Center else Alignment.TopStart)
+                                                        .padding(start = if (isCircle) 16.dp else 12.dp, top = if (isCircle) 0.dp else previewAvatarSize * 0.18f, end = if (isCircle) 16.dp else 12.dp),
+                                                    horizontalAlignment = if (isCircle) Alignment.CenterHorizontally else Alignment.Start,
                                                     verticalArrangement = Arrangement.spacedBy(2.dp)
                                                 ) {
                                                     Text(
@@ -519,7 +544,8 @@ fun ContactPfpCustomizationScreen(
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        textAlign = if (isCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                     )
                                                     Text(
                                                         "+1 (555) 234-5678",
@@ -530,11 +556,12 @@ fun ContactPfpCustomizationScreen(
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        textAlign = if (isCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                     )
                                                     Row(
                                                         verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        horizontalArrangement = if (isCircle) Arrangement.Center else Arrangement.spacedBy(4.dp),
                                                         modifier = Modifier.padding(top = 2.dp)
                                                     ) {
                                                         if (isDualSim) {
@@ -547,6 +574,7 @@ fun ContactPfpCustomizationScreen(
                                                                     Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
                                                                 }
                                                             }
+                                                            if (isCircle) Spacer(Modifier.width(4.dp))
                                                         }
                                                         Text(
                                                             "Incoming",
@@ -558,8 +586,8 @@ fun ContactPfpCustomizationScreen(
                                             }
                                         }
 
-                                        val isSquareLarge = (!isCircle) && pfpSize >= 0.85f
-                                        if (!isSquareLarge) {
+                                        val isPfpLarge = pfpSize >= 0.85f
+                                        if (!isPfpLarge) {
                                             Spacer(Modifier.height(8.dp))
 
                                             Text(
@@ -734,13 +762,13 @@ fun ContactPfpCustomizationScreen(
                                                 )
                                             }
 
-                                            val isSquareLarge = (!isCircle) && pfpSize >= 0.85f
-                                            if (isSquareLarge) {
+                                            val isPfpLarge = pfpSize >= 0.85f
+                                            if (isPfpLarge) {
                                                 Column(
                                                     modifier = Modifier
-                                                        .align(Alignment.TopStart)
-                                                        .padding(start = 12.dp, top = previewAvatarSize * 0.18f, end = 12.dp),
-                                                    horizontalAlignment = Alignment.Start,
+                                                        .align(if (isCircle) Alignment.Center else Alignment.TopStart)
+                                                        .padding(start = if (isCircle) 16.dp else 12.dp, top = if (isCircle) 0.dp else previewAvatarSize * 0.18f, end = if (isCircle) 16.dp else 12.dp),
+                                                    horizontalAlignment = if (isCircle) Alignment.CenterHorizontally else Alignment.Start,
                                                     verticalArrangement = Arrangement.spacedBy(2.dp)
                                                 ) {
                                                     Text(
@@ -752,7 +780,8 @@ fun ContactPfpCustomizationScreen(
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        textAlign = if (isCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                     )
                                                     Text(
                                                         "+1 (555) 234-5678",
@@ -763,11 +792,12 @@ fun ContactPfpCustomizationScreen(
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        textAlign = if (isCircle) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                                     )
                                                     Row(
                                                         verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        horizontalArrangement = if (isCircle) Arrangement.Center else Arrangement.spacedBy(4.dp),
                                                         modifier = Modifier.padding(top = 2.dp)
                                                     ) {
                                                         if (isDualSim) {
@@ -780,6 +810,7 @@ fun ContactPfpCustomizationScreen(
                                                                     Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
                                                                 }
                                                             }
+                                                            if (isCircle) Spacer(Modifier.width(4.dp))
                                                         }
                                                         Text(
                                                             "00:45",
@@ -791,8 +822,8 @@ fun ContactPfpCustomizationScreen(
                                             }
                                         }
 
-                                        val isSquareLarge = (!isCircle) && pfpSize >= 0.85f
-                                        if (!isSquareLarge) {
+                                        val isPfpLarge = pfpSize >= 0.85f
+                                        if (!isPfpLarge) {
                                             Spacer(Modifier.height(6.dp))
 
                                             Text(
@@ -957,6 +988,130 @@ fun ContactPfpCustomizationScreen(
                 }
             }
 
+            // ── Caller Info Font Color ─────────────────────────────
+            RivoAnimatedSection(delayMs = 20L) {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.FormatColorText,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "Caller Info Font Color",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    RivoExpressiveCard {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // 2 Options: Default vs Custom
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Default Option
+                                Surface(
+                                    onClick = {
+                                        fontColorMode = "default"
+                                        prefs.setString(fontColorKeyMode, "default")
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (fontColorMode == "default") MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = if (fontColorMode == "default") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            "Default (Adaptive)",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (fontColorMode == "default") FontWeight.Bold else FontWeight.Medium,
+                                            color = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+
+                                // Custom Option
+                                Surface(
+                                    onClick = {
+                                        fontColorMode = "custom"
+                                        prefs.setString(fontColorKeyMode, "custom")
+                                        prefs.setInt(fontColorKey, customFontColorInt)
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = if (fontColorMode == "custom") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(customFontColorInt),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                                            modifier = Modifier.size(16.dp)
+                                        ) {}
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            "Custom Color",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (fontColorMode == "custom") FontWeight.Bold else FontWeight.Medium,
+                                            color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Interactive Color Picker (Visible when "custom" selected)
+                            AnimatedVisibility(
+                                visible = fontColorMode == "custom",
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                    InteractiveColorPicker(
+                                        initialColor = Color(customFontColorInt),
+                                        onColorChanged = { newColor ->
+                                            val argb = newColor.toArgb()
+                                            customFontColorInt = argb
+                                            prefs.setString(fontColorKeyMode, "custom")
+                                            prefs.setInt(fontColorKey, argb)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ── Contact PFP Container & Options ──────────────────────────────
             RivoAnimatedSection(delayMs = 25L) {
                 Column {
@@ -979,43 +1134,73 @@ fun ContactPfpCustomizationScreen(
                             onClick = { showOptionsPopup = true }
                         )
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+                        if (!isContactSpecific) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
 
-                        // Checkbox 1: Override if contact has a PFP (default: unchecked)
-                        RivoCheckboxListItem(
-                            headline = "Override if the contact has a PFP",
-                            supporting = "Show custom contact PFP even when the contact has their own photo",
-                            leadingIcon = Icons.Outlined.AccountCircle,
-                            iconContainerColor = Color(0xFF9C27B0),
-                            checked = overrideExisting,
-                            onCheckedChange = {
-                                overrideExisting = it
-                                prefs.setBoolean("${prefix}_custom_pfp_override_existing", it)
-                            },
-                            modifier = Modifier.settingsSearchHighlight("contact_pfp_override_existing", highlightedKey) { highlightedKey = null }
-                        )
+                            // Checkbox 1: Override if contact has a PFP (default: checked)
+                            RivoCheckboxListItem(
+                                headline = "Override if the contact has a PFP",
+                                supporting = "Show custom contact PFP or apply custom styles even when the contact has their own photo",
+                                leadingIcon = Icons.Outlined.AccountCircle,
+                                iconContainerColor = Color(0xFF9C27B0),
+                                checked = overrideExisting,
+                                onCheckedChange = {
+                                    overrideExisting = it
+                                    prefs.setBoolean("${prefix}_custom_pfp_override_existing", it)
+                                },
+                                modifier = Modifier.settingsSearchHighlight("contact_pfp_override_existing", highlightedKey) { highlightedKey = null }
+                            )
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+                            // Indented Sub-Checkbox: All configurations Except the custom pfp (default: checked)
+                            AnimatedVisibility(
+                                visible = overrideExisting,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 32.dp, end = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                    )
+                                    RivoCheckboxListItem(
+                                        headline = "All configurations Except the custom pfp",
+                                        supporting = "Apply size, shape, zoom, blur, and font styling to the contact's original photo without replacing it",
+                                        leadingIcon = Icons.Outlined.AutoAwesome,
+                                        iconContainerColor = Color(0xFF009688),
+                                        checked = exceptPfp,
+                                        onCheckedChange = {
+                                            exceptPfp = it
+                                            prefs.setBoolean("${prefix}_custom_pfp_except_pfp", it)
+                                        },
+                                        modifier = Modifier
+                                            .padding(start = 24.dp)
+                                            .settingsSearchHighlight("contact_pfp_except_pfp", highlightedKey) { highlightedKey = null }
+                                    )
+                                }
+                            }
 
-                        // Checkbox 2: If contact/number has no PFP then show custom contact PFP (default: checked)
-                        RivoCheckboxListItem(
-                            headline = "If the number or contact has no PFP then show the custom contact PFP",
-                            supporting = "Apply custom contact PFP for callers and numbers without a profile photo",
-                            leadingIcon = Icons.Outlined.Face,
-                            iconContainerColor = Color(0xFF4CAF50),
-                            checked = showForNoPfp,
-                            onCheckedChange = {
-                                showForNoPfp = it
-                                prefs.setBoolean("${prefix}_custom_pfp_show_for_no_pfp", it)
-                            },
-                            modifier = Modifier.settingsSearchHighlight("contact_pfp_show_for_no_pfp", highlightedKey) { highlightedKey = null }
-                        )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+
+                            // Checkbox 2: If contact/number has no PFP then show custom contact PFP (default: checked)
+                            RivoCheckboxListItem(
+                                headline = "If the number or contact has no PFP then show the custom contact PFP",
+                                supporting = "Apply custom contact PFP for callers and numbers without a profile photo",
+                                leadingIcon = Icons.Outlined.Face,
+                                iconContainerColor = Color(0xFF4CAF50),
+                                checked = showForNoPfp,
+                                onCheckedChange = {
+                                    showForNoPfp = it
+                                    prefs.setBoolean("${prefix}_custom_pfp_show_for_no_pfp", it)
+                                },
+                                modifier = Modifier.settingsSearchHighlight("contact_pfp_show_for_no_pfp", highlightedKey) { highlightedKey = null }
+                            )
+                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
