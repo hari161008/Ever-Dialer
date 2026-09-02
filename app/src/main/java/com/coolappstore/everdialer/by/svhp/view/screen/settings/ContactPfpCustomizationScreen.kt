@@ -168,6 +168,8 @@ fun ContactPfpCustomizationScreen(
 
     val fontColorKeyMode = if (!contactKey.isNullOrEmpty()) "${prefix}_font_color_mode" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE)
     val fontColorKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_color" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR)
+    val fontShadowKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_shadow" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SHADOW else PreferenceManager.KEY_ONGOING_FONT_SHADOW)
+    val fontSizeScaleKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_size_scale" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE else PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE)
 
     var fontColorMode by remember(settingsVersion) {
         mutableStateOf(
@@ -184,6 +186,24 @@ fun ContactPfpCustomizationScreen(
                 "${prefix}_font_color",
                 if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE)
                 else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+            )
+        )
+    }
+    var fontShadow by remember(settingsVersion) {
+        mutableStateOf(
+            prefs.getBoolean(
+                "${prefix}_font_shadow",
+                if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, true)
+                else prefs.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, true)
+            )
+        )
+    }
+    var fontSizeScale by remember(settingsVersion) {
+        mutableFloatStateOf(
+            prefs.getFloat(
+                "${prefix}_font_size_scale",
+                if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE, 1.0f)
+                else prefs.getFloat(PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE, 1.0f)
             )
         )
     }
@@ -240,7 +260,7 @@ fun ContactPfpCustomizationScreen(
     val effectiveSubtleColor = if (fontColorMode == "custom") Color(customFontColorInt).copy(alpha = 0.85f)
         else if (hasCustomBg) Color.White.copy(alpha = 0.85f)
         else MaterialTheme.colorScheme.onSurfaceVariant
-    val textShadow = if (hasCustomBg || fontColorMode == "custom") Shadow(
+    val textShadow = if (fontShadow) Shadow(
         color = Color.Black.copy(alpha = 0.80f),
         blurRadius = 8f,
         offset = Offset(0f, 2f)
@@ -540,7 +560,7 @@ fun ContactPfpCustomizationScreen(
                                                         style = MaterialTheme.typography.titleMedium.copy(
                                                             fontWeight = FontWeight.Bold,
                                                             shadow = textShadow,
-                                                            fontSize = 15.sp
+                                                            fontSize = (15 * fontSizeScale).sp
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
@@ -552,7 +572,7 @@ fun ContactPfpCustomizationScreen(
                                                         style = MaterialTheme.typography.labelSmall.copy(
                                                             fontWeight = FontWeight.Bold,
                                                             shadow = textShadow,
-                                                            fontSize = 10.sp
+                                                            fontSize = (10 * fontSizeScale).sp
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
@@ -571,7 +591,7 @@ fun ContactPfpCustomizationScreen(
                                                                 modifier = Modifier.size(width = 12.dp, height = 14.dp)
                                                             ) {
                                                                 Box(contentAlignment = Alignment.Center) {
-                                                                    Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                                    Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = (8 * fontSizeScale).sp, fontWeight = FontWeight.Bold))
                                                                 }
                                                             }
                                                             if (isCircle) Spacer(Modifier.width(4.dp))
@@ -579,7 +599,7 @@ fun ContactPfpCustomizationScreen(
                                                         Text(
                                                             "Incoming",
                                                             color = effectiveSubtleColor,
-                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = (10 * fontSizeScale).sp, shadow = textShadow)
                                                         )
                                                     }
                                                 }
@@ -595,7 +615,7 @@ fun ContactPfpCustomizationScreen(
                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     shadow = textShadow,
-                                                    fontSize = 15.sp
+                                                    fontSize = (15 * fontSizeScale).sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -606,7 +626,7 @@ fun ContactPfpCustomizationScreen(
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     shadow = textShadow,
-                                                    fontSize = 10.sp
+                                                    fontSize = (10 * fontSizeScale).sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -624,14 +644,14 @@ fun ContactPfpCustomizationScreen(
                                                         modifier = Modifier.size(width = 12.dp, height = 14.dp)
                                                     ) {
                                                         Box(contentAlignment = Alignment.Center) {
-                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = (8 * fontSizeScale).sp, fontWeight = FontWeight.Bold))
                                                         }
                                                     }
                                                 }
                                                 Text(
                                                     "Incoming",
                                                     color = effectiveSubtleColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = (10 * fontSizeScale).sp, shadow = textShadow)
                                                 )
                                             }
                                         }
@@ -776,7 +796,7 @@ fun ContactPfpCustomizationScreen(
                                                         style = MaterialTheme.typography.titleMedium.copy(
                                                             fontWeight = FontWeight.Bold,
                                                             shadow = textShadow,
-                                                            fontSize = 15.sp
+                                                            fontSize = (15 * fontSizeScale).sp
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
@@ -788,7 +808,7 @@ fun ContactPfpCustomizationScreen(
                                                         style = MaterialTheme.typography.labelSmall.copy(
                                                             fontWeight = FontWeight.Bold,
                                                             shadow = textShadow,
-                                                            fontSize = 10.sp
+                                                            fontSize = (10 * fontSizeScale).sp
                                                         ),
                                                         color = effectiveTextColor,
                                                         maxLines = 1,
@@ -807,7 +827,7 @@ fun ContactPfpCustomizationScreen(
                                                                 modifier = Modifier.size(width = 12.dp, height = 14.dp)
                                                             ) {
                                                                 Box(contentAlignment = Alignment.Center) {
-                                                                    Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                                    Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = (8 * fontSizeScale).sp, fontWeight = FontWeight.Bold))
                                                                 }
                                                             }
                                                             if (isCircle) Spacer(Modifier.width(4.dp))
@@ -815,7 +835,7 @@ fun ContactPfpCustomizationScreen(
                                                         Text(
                                                             "00:45",
                                                             color = effectiveSubtleColor,
-                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = (10 * fontSizeScale).sp, shadow = textShadow)
                                                         )
                                                     }
                                                 }
@@ -831,7 +851,7 @@ fun ContactPfpCustomizationScreen(
                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     shadow = textShadow,
-                                                    fontSize = 15.sp
+                                                    fontSize = (15 * fontSizeScale).sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -842,7 +862,7 @@ fun ContactPfpCustomizationScreen(
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     shadow = textShadow,
-                                                    fontSize = 10.sp
+                                                    fontSize = (10 * fontSizeScale).sp
                                                 ),
                                                 color = effectiveTextColor,
                                                 maxLines = 1,
@@ -860,14 +880,14 @@ fun ContactPfpCustomizationScreen(
                                                         modifier = Modifier.size(width = 12.dp, height = 14.dp)
                                                     ) {
                                                         Box(contentAlignment = Alignment.Center) {
-                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold))
+                                                            Text("1", color = Color.White, style = MaterialTheme.typography.labelSmall.copy(fontSize = (8 * fontSizeScale).sp, fontWeight = FontWeight.Bold))
                                                         }
                                                     }
                                                 }
                                                 Text(
                                                     "00:45",
                                                     color = effectiveSubtleColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = textShadow)
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = (10 * fontSizeScale).sp, shadow = textShadow)
                                                 )
                                             }
                                         }
@@ -1106,6 +1126,108 @@ fun ContactPfpCustomizationScreen(
                                         }
                                     )
                                 }
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                            // Font Shadow Checkbox
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        fontShadow = !fontShadow
+                                        prefs.setBoolean(fontShadowKey, fontShadow)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Layers,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column {
+                                        Text(
+                                            "Text Shadow",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "Add shadow behind caller text for better readability",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Checkbox(
+                                    checked = fontShadow,
+                                    onCheckedChange = { isChecked ->
+                                        fontShadow = isChecked
+                                        prefs.setBoolean(fontShadowKey, isChecked)
+                                    }
+                                )
+                            }
+
+                            // Font Size Scale Slider
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.FormatSize,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            "Text Size",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                    ) {
+                                        Text(
+                                            "${(fontSizeScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                Slider(
+                                    value = fontSizeScale,
+                                    onValueChange = { newScale ->
+                                        fontSizeScale = newScale
+                                        prefs.setFloat(fontSizeScaleKey, newScale)
+                                    },
+                                    valueRange = 0.70f..1.50f,
+                                    steps = 15,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }

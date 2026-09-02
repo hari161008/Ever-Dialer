@@ -478,6 +478,8 @@ private data class CallBackgroundConfig(
     val hasCustomBg: Boolean = false,
     val fontColorMode: String = "default",
     val customFontColorInt: Int = android.graphics.Color.WHITE,
+    val fontShadow: Boolean = true,
+    val fontSizeScale: Float = 1.0f,
     val showContactPfp: Boolean = true,
     val showPhoneNumber: Boolean = true,
     val elementsTheme: String = "auto",
@@ -1118,6 +1120,8 @@ fun ExpressiveCallScreen(
         val defaultVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_VIDEO_SPEED, 1.0f)
         val defaultFontMode = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") else prefs?.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default")
         val defaultFontColor = if (isForIncoming) prefs?.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) else prefs?.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+        val defaultFontShadow = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, true) ?: true else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, true) ?: true
+        val defaultFontSizeScale = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE, 1.0f) ?: 1.0f else prefs?.getFloat(PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE, 1.0f) ?: 1.0f
 
         val bgType = prefs?.getString("${prefix}_bg_type", defaultType ?: "none") ?: (defaultType ?: "none")
         val bgPath = prefs?.getString("${prefix}_bg_path", defaultPath ?: "") ?: (defaultPath ?: "")
@@ -1129,6 +1133,8 @@ fun ExpressiveCallScreen(
         val bgVideoSpeed = prefs?.getFloat("${prefix}_bg_video_speed", defaultVideoSpeed ?: 1.0f) ?: (defaultVideoSpeed ?: 1.0f)
         val fontColorMode = prefs?.getString("${prefix}_font_color_mode", defaultFontMode ?: "default") ?: (defaultFontMode ?: "default")
         val customFontColorInt = prefs?.getInt("${prefix}_font_color", defaultFontColor ?: android.graphics.Color.WHITE) ?: (defaultFontColor ?: android.graphics.Color.WHITE)
+        val fontShadow = prefs?.getBoolean("${prefix}_font_shadow", defaultFontShadow) ?: defaultFontShadow
+        val fontSizeScale = prefs?.getFloat("${prefix}_font_size_scale", defaultFontSizeScale) ?: defaultFontSizeScale
         val showContactPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true) ?: true
                              else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP, true) ?: true
         val showPhoneNumber = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true) ?: true
@@ -1187,6 +1193,8 @@ fun ExpressiveCallScreen(
             hasCustomBg = hasCustomBg,
             fontColorMode = fontColorMode,
             customFontColorInt = customFontColorInt,
+            fontShadow = fontShadow,
+            fontSizeScale = fontSizeScale,
             showContactPfp = showContactPfp,
             showPhoneNumber = showPhoneNumber,
             elementsTheme = elementsTheme,
@@ -1251,7 +1259,7 @@ fun ExpressiveCallScreen(
     val effectiveSubtleColor = if (fontColorMode == "custom") Color(customFontColorInt).copy(alpha = 0.85f)
         else if (hasCustomBg) Color.White.copy(alpha = 0.85f)
         else MaterialTheme.colorScheme.onSurfaceVariant
-    val textShadow = if (hasCustomBg || fontColorMode == "custom") androidx.compose.ui.graphics.Shadow(
+    val textShadow = if (currentBgConfig.fontShadow) androidx.compose.ui.graphics.Shadow(
         color = Color.Black.copy(alpha = 0.80f),
         blurRadius = 8f,
         offset = androidx.compose.ui.geometry.Offset(0f, 2f)
@@ -1591,13 +1599,14 @@ fun ExpressiveCallScreen(
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))
                             }
-                            Box(modifier = Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth().height(44.dp * currentBgConfig.fontSizeScale.coerceAtLeast(0.85f)), contentAlignment = Alignment.Center) {
+                                val lsBaseNameStyle = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    shadow = textShadow
+                                )
                                 Text(
                                     text = contactName.ifEmpty { "" },
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontWeight = FontWeight.Medium,
-                                        shadow = textShadow
-                                    ),
+                                    style = lsBaseNameStyle.copy(fontSize = lsBaseNameStyle.fontSize * currentBgConfig.fontSizeScale),
                                     color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
@@ -1608,6 +1617,7 @@ fun ExpressiveCallScreen(
                                 if (showSimBadge && simSlot in 0..1) {
                                     SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp), shape = RoundedCornerShape(percent = 25))
                                 }
+                                val lsBaseStatusStyle = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
                                 Text(
                                     text = when {
                                         isOnHold -> "On Hold"
@@ -1621,7 +1631,7 @@ fun ExpressiveCallScreen(
                                         else -> "Connecting..."
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                    style = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
+                                    style = lsBaseStatusStyle.copy(fontSize = lsBaseStatusStyle.fontSize * currentBgConfig.fontSizeScale)
                                 )
                             }
                             if (hasHeldCall) {
@@ -1791,11 +1801,25 @@ fun ExpressiveCallScreen(
                             baseAvatarSize + (screenWidthDp - baseAvatarSize) * ((pfpFraction - 0.50f) / 0.50f)
                         }
                         val callAvatarIconSize = (callAvatarSize * 0.48f).coerceAtLeast(16.dp)
-                        val callNameStyle = if (isIncomingRinging)
+                        val baseCallNameStyle = if (isIncomingRinging)
                             MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold)
                         else
                             MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium)
-                        val callNameBoxHeight = if (isIncomingRinging) 64.dp else 50.dp
+                        val callNameStyle = baseCallNameStyle.copy(fontSize = baseCallNameStyle.fontSize * currentBgConfig.fontSizeScale)
+                        val callNameBoxHeight = (if (isIncomingRinging) 64.dp else 50.dp) * currentBgConfig.fontSizeScale.coerceAtLeast(0.85f)
+
+                        val basePhoneStyle = if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
+                        val phoneStyle = basePhoneStyle.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = basePhoneStyle.fontSize * currentBgConfig.fontSizeScale,
+                            shadow = textShadow
+                        )
+
+                        val baseStatusStyle = if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge
+                        val statusStyle = baseStatusStyle.copy(
+                            fontSize = baseStatusStyle.fontSize * currentBgConfig.fontSizeScale,
+                            shadow = textShadow
+                        )
 
                         val isPfpLarge = pfpFraction >= 0.85f
                         val isCircleShape = currentBgConfig.pfpShape != "square"
@@ -1833,10 +1857,7 @@ fun ExpressiveCallScreen(
                                         if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
                                             Text(
                                                 text = phoneNumber,
-                                                style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    shadow = textShadow
-                                                ),
+                                                style = phoneStyle,
                                                 color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
@@ -1865,7 +1886,7 @@ fun ExpressiveCallScreen(
                                                     else -> "Connecting..."
                                                 },
                                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                                style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
+                                                style = statusStyle
                                             )
                                         }
                                     }
@@ -1896,10 +1917,7 @@ fun ExpressiveCallScreen(
                             if (showPhoneNumber && phoneNumber.isNotBlank() && phoneNumber != contactName) {
                                 Text(
                                     text = phoneNumber,
-                                    style = (if (isIncomingRinging) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium).copy(
-                                        fontWeight = FontWeight.Bold,
-                                        shadow = textShadow
-                                    ),
+                                    style = phoneStyle,
                                     color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1923,7 +1941,7 @@ fun ExpressiveCallScreen(
                                         else -> "Connecting..."
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
-                                    style = (if (isIncomingRinging) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(shadow = textShadow)
+                                    style = statusStyle
                                 )
                             }
                         }
