@@ -87,29 +87,37 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val accel = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-        var peakCount = 0
-        var lastPeakTime = 0L
+        var reversalCount = 0
+        var lastDirection = 0
+        var lastDirectionChangeTime = 0L
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
                 val ax = event.values[0]
-                val ay = event.values[1]
-                val az = event.values[2]
-                val gForce = sqrt((ax * ax + ay * ay + az * az).toDouble()).toFloat() / SensorManager.GRAVITY_EARTH
-
                 val threshold = RainModeManager.calculateThresholdG(shakeIntensity)
+                val thresholdAccelX = threshold * SensorManager.GRAVITY_EARTH
                 val now = System.currentTimeMillis()
 
-                if (gForce > threshold) {
-                    if (now - lastPeakTime > 650L) {
-                        peakCount = 1
-                        lastPeakTime = now
-                    } else if (now - lastPeakTime > 140L) {
-                        peakCount++
-                        lastPeakTime = now
-                        if (peakCount >= 2) {
-                            peakCount = 0
+                val currentDirection = when {
+                    ax > thresholdAccelX -> 1   // Right
+                    ax < -thresholdAccelX -> -1 // Left
+                    else -> 0
+                }
+
+                if (currentDirection != 0) {
+                    if (now - lastDirectionChangeTime > 600L) {
+                        reversalCount = 1
+                        lastDirection = currentDirection
+                        lastDirectionChangeTime = now
+                    } else if (currentDirection != lastDirection && (now - lastDirectionChangeTime) > 70L) {
+                        reversalCount++
+                        lastDirection = currentDirection
+                        lastDirectionChangeTime = now
+
+                        if (reversalCount >= 3) {
+                            reversalCount = 0
+                            lastDirection = 0
                             lastLiveShakeTime = now
                             isShakingActive = true
                             VolumeDndAccessibilityService.performVibration(context, longArrayOf(0, 70))
@@ -200,7 +208,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "When water or rain makes your touch screen unresponsive, shake your device to answer an incoming call or decline/end a call. During incoming calls, gestures are automatically ignored if the proximity sensor is covered.",
+                                "When water or rain makes your touch screen unresponsive, shake your device side-to-side (left-right chop-chop) to answer an incoming call or decline/end a call. During incoming calls, gestures are automatically ignored if the proximity sensor is covered.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -362,7 +370,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                                     .background(if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.outline)
                                             )
                                             Text(
-                                                text = if (isShakingActive) "Shake Detected!" else "Live test: Shake your device now to test threshold",
+                                                text = if (isShakingActive) "Chop-Chop Shake Detected!" else "Live test: Shake side-to-side (left-right) to test threshold",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = if (isShakingActive) FontWeight.Bold else FontWeight.Normal,
                                                 color = if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant

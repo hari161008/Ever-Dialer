@@ -26,13 +26,13 @@ object RainModeManager {
 
     /**
      * Converts a 0.0f..1.0f intensity setting into an acceleration g-force threshold.
-     * 0.0f = Firm shake required (~4.0g)
-     * 0.5f = Moderate shake required (~2.8g)
-     * 1.0f = Gentle shake required (~1.6g)
+     * 0.0f = Firm shake required (~2.4g)
+     * 0.5f = Moderate shake required (~1.75g)
+     * 1.0f = Gentle/Light shake required (~1.1g)
      */
     fun calculateThresholdG(intensity: Float): Float {
         val clamped = intensity.coerceIn(0f, 1f)
-        return 4.0f - (clamped * 2.4f)
+        return 2.4f - (clamped * 1.3f)
     }
 
     /** True if this device has an accelerometer sensor. */
