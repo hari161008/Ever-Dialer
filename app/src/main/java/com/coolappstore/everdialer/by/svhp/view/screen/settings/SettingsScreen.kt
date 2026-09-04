@@ -921,12 +921,13 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         SettingsSearchEntry("Floating Ongoing Call", "Draggable floating bubble during calls", "floating_ongoing_call", Icons.Outlined.Sensors, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "floating_ongoing_call")) },
         SettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, ColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
         SettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_speaker")) },
-        SettingsSearchEntry("Rain Mode", "Answer/decline calls with simultaneous 3-second volume button hold", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
+        SettingsSearchEntry("Rain Mode", "Answer/decline calls by shaking your device", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
         SettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_redial")) },
 
         // ── Rain Mode screen ─────────────────────────────────────────────────
-        SettingsSearchEntry("Enable Rain Mode", "Answer or decline calls using hardware volume buttons", "enable_rain_mode", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination(highlightKey = "enable_rain_mode")) },
-        SettingsSearchEntry("Rain Mode Vibration Feedback", "Vibrate when call is answered or declined via Rain Mode", "rain_mode_vibrate", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RainModeScreenDestination(highlightKey = "rain_mode_vibrate")) },
+        SettingsSearchEntry("Enable Rain Mode", "Answer or decline calls by shaking device", "enable_rain_mode", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination(highlightKey = "enable_rain_mode")) },
+        SettingsSearchEntry("Rain Mode Shake Sensitivity", "Adjust shake intensity threshold for Rain Mode", "rain_mode_intensity", Icons.Outlined.Tune, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
+        SettingsSearchEntry("Rain Mode Vibration Feedback", "Vibrate when call is answered or declined via shake gesture", "rain_mode_vibrate", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RainModeScreenDestination(highlightKey = "rain_mode_vibrate")) },
 
         // ── Raise to Answer screen ───────────────────────────────────────────
         SettingsSearchEntry("Enable Raise to Answer", "Answer calls by raising the phone to your ear", "enable_raise_to_answer", Icons.Outlined.Vibration, ColorTeal) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "enable_raise_to_answer")) },

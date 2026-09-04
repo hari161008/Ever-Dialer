@@ -643,11 +643,10 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
-                            val isRainModeAccessibilityGranted = remember { VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context) }
                             var rainModeEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)) }
                             RivoListItem(
                                 headline   = "Rain Mode",
-                                supporting = if (rainModeEnabled && isRainModeAccessibilityGranted) "On" else if (rainModeEnabled && !isRainModeAccessibilityGranted) "Permission required" else "Off",
+                                supporting = if (rainModeEnabled) "On (Shake to answer/reject)" else "Off",
                                 leadingIcon = Icons.Outlined.WaterDrop,
                                 iconContainerColor = Color(0xFF0288D1),
                                 trailingIcon = Icons.Default.ChevronRight,

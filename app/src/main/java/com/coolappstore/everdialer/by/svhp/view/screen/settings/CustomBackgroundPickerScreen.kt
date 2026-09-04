@@ -223,8 +223,8 @@ fun CustomBackgroundPickerScreen(
         mutableStateOf(
             prefs.getBoolean(
                 "${prefix}_font_shadow",
-                if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, true)
-                else prefs.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, true)
+                if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, false)
+                else prefs.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, false)
             )
         )
     }

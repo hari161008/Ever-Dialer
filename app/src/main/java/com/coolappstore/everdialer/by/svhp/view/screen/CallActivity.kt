@@ -330,66 +330,7 @@ class CallActivity : FragmentActivity() {
         (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
     }
 
-    // Rain mode tracking
-    private val rainSequenceBuffer = StringBuilder()
-    private var rainLastPressTimestamp = 0L
-
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            val isRainMode = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
-            if (isRainMode && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
-                val timeoutMs = prefs.getInt(
-                    PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS,
-                    PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS
-                ).toLong().coerceIn(500L, 5000L)
-
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - rainLastPressTimestamp > timeoutMs) {
-                    rainSequenceBuffer.clear()
-                }
-                rainLastPressTimestamp = currentTime
-
-                val targetSequence = (prefs.getString(
-                    PreferenceManager.KEY_RAIN_MODE_SEQUENCE,
-                    PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE
-                ) ?: PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE)
-                    .uppercase()
-                    .filter { it == 'U' || it == 'D' }
-
-                if (targetSequence.isNotEmpty()) {
-                    rainSequenceBuffer.append(inputChar)
-                    if (targetSequence.startsWith(rainSequenceBuffer.toString())) {
-                        if (rainSequenceBuffer.toString() == targetSequence) {
-                            rainSequenceBuffer.clear()
-                            val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
-                            val session = CallService.currentCallSession.value ?: CallService.heldCallSession.value
-                            val call = session?.call
-                            val isRinging = call?.state == Call.STATE_RINGING
-                            if (isRinging) {
-                                CallService.answerCall()
-                                if (vibrateFeedback) {
-                                    com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this, longArrayOf(0, 120, 80, 120))
-                                }
-                            } else {
-                                CallService.declineCall()
-                                if (vibrateFeedback) {
-                                    com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService.performVibration(this, longArrayOf(0, 180, 80, 180))
-                                }
-                            }
-                        }
-                        return true
-                    } else {
-                        rainSequenceBuffer.clear()
-                        if (targetSequence.startsWith(inputChar.toString())) {
-                            rainSequenceBuffer.append(inputChar)
-                            return true
-                        }
-                    }
-                }
-            }
-        }
         return super.dispatchKeyEvent(event)
     }
 
@@ -1120,7 +1061,7 @@ fun ExpressiveCallScreen(
         val defaultVideoSpeed = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_BG_VIDEO_SPEED, 1.0f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_BG_VIDEO_SPEED, 1.0f)
         val defaultFontMode = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") else prefs?.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default")
         val defaultFontColor = if (isForIncoming) prefs?.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) else prefs?.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
-        val defaultFontShadow = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, true) ?: true else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, true) ?: true
+        val defaultFontShadow = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, false) ?: false else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, false) ?: false
         val defaultFontSizeScale = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE, 1.0f) ?: 1.0f else prefs?.getFloat(PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE, 1.0f) ?: 1.0f
 
         val bgType = prefs?.getString("${prefix}_bg_type", defaultType ?: "none") ?: (defaultType ?: "none")

@@ -359,8 +359,13 @@ class PreferenceManager(context: Context) {
         const val KEY_RAIN_MODE_VIBRATE            = "rain_mode_vibrate"
         const val KEY_RAIN_MODE_SEQUENCE           = "rain_mode_sequence"
         const val KEY_RAIN_MODE_TIMEOUT_MS         = "rain_mode_timeout_ms"
+        const val KEY_RAIN_MODE_SHAKE_INTENSITY     = "rain_mode_shake_intensity"      // Float, 0f..1f (default 0.5f)
+        const val KEY_RAIN_MODE_INCOMING_ACTION    = "rain_mode_incoming_action"     // "answer" | "decline"
+        const val KEY_RAIN_MODE_END_ACTIVE_CALL    = "rain_mode_end_active_call"     // Boolean, default true
         const val DEFAULT_RAIN_MODE_SEQUENCE       = "UDUD"
         const val DEFAULT_RAIN_MODE_TIMEOUT_MS     = 2000
+        const val DEFAULT_RAIN_MODE_SHAKE_INTENSITY = 0.5f
+        const val DEFAULT_RAIN_MODE_INCOMING_ACTION = "answer"
         // Auto Redial
         const val KEY_AUTO_REDIAL_ENABLED      = "auto_redial_enabled"
         // Updates — version tag of the APK currently sitting in Downloads (if any)
@@ -423,7 +428,7 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_SHOW_PHONE_NUMBER = "incoming_show_phone_number"
         const val KEY_INCOMING_FONT_COLOR_MODE  = "incoming_font_color_mode" // "default" | "custom"
         const val KEY_INCOMING_FONT_COLOR       = "incoming_font_color"      // Int ARGB
-        const val KEY_INCOMING_FONT_SHADOW      = "incoming_font_shadow"     // Boolean, default true
+        const val KEY_INCOMING_FONT_SHADOW      = "incoming_font_shadow"     // Boolean, default false
         const val KEY_INCOMING_FONT_SIZE_SCALE  = "incoming_font_size_scale" // Float, default 1.0f (0.7f..1.5f)
         const val KEY_INCOMING_ELEMENTS_THEME   = "incoming_elements_theme"  // "auto" | "light" | "dark"
         const val KEY_INCOMING_AUTO_REFRESH_WALLPAPER = "incoming_auto_refresh_wallpaper"
@@ -440,7 +445,7 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_SHOW_PHONE_NUMBER = "ongoing_show_phone_number"
         const val KEY_ONGOING_FONT_COLOR_MODE   = "ongoing_font_color_mode"  // "default" | "custom"
         const val KEY_ONGOING_FONT_COLOR        = "ongoing_font_color"       // Int ARGB
-        const val KEY_ONGOING_FONT_SHADOW       = "ongoing_font_shadow"      // Boolean, default true
+        const val KEY_ONGOING_FONT_SHADOW       = "ongoing_font_shadow"      // Boolean, default false
         const val KEY_ONGOING_FONT_SIZE_SCALE   = "ongoing_font_size_scale"  // Float, default 1.0f (0.7f..1.5f)
         const val KEY_ONGOING_AUTO_REFRESH_WALLPAPER  = "ongoing_auto_refresh_wallpaper"
 

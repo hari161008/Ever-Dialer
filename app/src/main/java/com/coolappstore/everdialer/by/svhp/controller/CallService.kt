@@ -210,6 +210,7 @@ class CallService : InCallService() {
     override fun onDestroy() {
         super.onDestroy()
         teardownProximityScreenOff()
+        RainModeManager.stop(this)
     }
 
     /**
@@ -475,6 +476,7 @@ class CallService : InCallService() {
             )
 
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
+            RainModeManager.onCallStateChanged(this@CallService, call)
 
             // Normal state update
             when {
@@ -540,6 +542,7 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
+            RainModeManager.onCallStateChanged(this@CallService, call)
             if (state == Call.STATE_RINGING) {
                 callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
             } else if (state == Call.STATE_ACTIVE) {
@@ -568,6 +571,7 @@ class CallService : InCallService() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
             RaiseToAnswerManager.onCallStateChanged(this@CallService, call)
+            RainModeManager.onCallStateChanged(this@CallService, call)
             if (state == Call.STATE_RINGING) {
                 callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
                 _incomingCallSession.value = CallSession(call, state)
@@ -589,6 +593,7 @@ class CallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         RaiseToAnswerManager.stop(this)
+        RainModeManager.onCallStateChanged(this, call)
         recordMissedCallDurationIfNeeded(call)
         call.unregisterCallback(callCallback)
         call.unregisterCallback(heldCallCallback)
@@ -722,6 +727,9 @@ class CallService : InCallService() {
         if (call.state == Call.STATE_RINGING) {
             callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
             RaiseToAnswerManager.onCallStateChanged(this, call)
+            RainModeManager.onCallStateChanged(this, call)
+        } else {
+            RainModeManager.onCallStateChanged(this, call)
         }
 
         if (isMerging) {

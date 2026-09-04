@@ -951,6 +951,16 @@
                 android:value="raise_to_answer_sensor_monitoring" />
         </service>
 
+        <!-- Rain Mode: foreground sensor-listening service for shake gesture detection -->
+        <service
+            android:name=".controller.RainModeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="rain_mode_shake_sensor_monitoring" />
+        </service>
+
         <!-- Fake Call: self-managed ConnectionService that places real Telecom calls -->
         <service
             android:name=".controller.FakeCallConnectionService"

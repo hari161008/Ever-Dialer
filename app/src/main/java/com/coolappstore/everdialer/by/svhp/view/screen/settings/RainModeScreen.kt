@@ -1,11 +1,20 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,17 +24,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.coolappstore.everdialer.by.svhp.controller.RainModeManager
 import com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -36,25 +49,93 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
-    var isAccessibilityGranted by remember {
-        mutableStateOf(VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context))
-    }
-
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                isAccessibilityGranted = VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    val hasAccelerometer = remember { RainModeManager.hasRequiredSensors(context) }
 
     var enabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)) }
     var vibrateFeedback by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)) }
-    var timeoutMs by remember { mutableIntStateOf(prefs.getInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS)) }
-    var showDurationDialog by remember { mutableStateOf(false) }
+    var shakeIntensity by remember {
+        mutableFloatStateOf(
+            prefs.getFloat(
+                PreferenceManager.KEY_RAIN_MODE_SHAKE_INTENSITY,
+                PreferenceManager.DEFAULT_RAIN_MODE_SHAKE_INTENSITY
+            )
+        )
+    }
+    var incomingAction by remember {
+        mutableStateOf(
+            prefs.getString(
+                PreferenceManager.KEY_RAIN_MODE_INCOMING_ACTION,
+                PreferenceManager.DEFAULT_RAIN_MODE_INCOMING_ACTION
+            ) ?: PreferenceManager.DEFAULT_RAIN_MODE_INCOMING_ACTION
+        )
+    }
+    var endActiveCall by remember {
+        mutableStateOf(
+            prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_END_ACTIVE_CALL, true)
+        )
+    }
+
+    var showActionDialog by remember { mutableStateOf(false) }
+
+    // Live Shake Test State
+    var lastLiveShakeTime by remember { mutableLongStateOf(0L) }
+    var isShakingActive by remember { mutableStateOf(false) }
+
+    // Sensor listener for live interactive test in settings screen
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, shakeIntensity) {
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accel = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        var peakCount = 0
+        var lastPeakTime = 0L
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+                val ax = event.values[0]
+                val ay = event.values[1]
+                val az = event.values[2]
+                val gForce = sqrt((ax * ax + ay * ay + az * az).toDouble()).toFloat() / SensorManager.GRAVITY_EARTH
+
+                val threshold = RainModeManager.calculateThresholdG(shakeIntensity)
+                val now = System.currentTimeMillis()
+
+                if (gForce > threshold) {
+                    if (now - lastPeakTime > 650L) {
+                        peakCount = 1
+                        lastPeakTime = now
+                    } else if (now - lastPeakTime > 140L) {
+                        peakCount++
+                        lastPeakTime = now
+                        if (peakCount >= 2) {
+                            peakCount = 0
+                            lastLiveShakeTime = now
+                            isShakingActive = true
+                            VolumeDndAccessibilityService.performVibration(context, longArrayOf(0, 70))
+                        }
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+
+        if (accel != null) {
+            sm.registerListener(listener, accel, SensorManager.SENSOR_DELAY_GAME)
+        }
+
+        onDispose {
+            sm?.unregisterListener(listener)
+        }
+    }
+
+    // Auto-clear live shake highlight after 1.5 seconds
+    LaunchedEffect(lastLiveShakeTime) {
+        if (lastLiveShakeTime > 0L) {
+            delay(1500L)
+            isShakingActive = false
+        }
+    }
 
     var visible by remember { mutableStateOf(false) }
     val screenAlpha by animateFloatAsState(
@@ -112,14 +193,14 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Volume Key Sequence Control",
+                                "Shake Gesture Control",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "When water or rain makes your touch screen unresponsive, press the volume buttons in sequence (Volume Up, Down, Up, Down) within ${timeoutMs / 1000}s between presses to answer an incoming call or decline/end an active call.",
+                                "When water or rain makes your touch screen unresponsive, shake your device to answer an incoming call or decline/end a call. During incoming calls, gestures are automatically ignored if the proximity sensor is covered.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -128,8 +209,8 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             }
 
-            // ── Accessibility Permission Warning (if needed) ────────────
-            if (!isAccessibilityGranted) {
+            // ── Sensor Warning (if accelerometer is missing) ────────────
+            if (!hasAccelerometer) {
                 RivoAnimatedSection(delayMs = 40L) {
                     RivoExpressiveCard {
                         Column(
@@ -142,24 +223,17 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             ) {
                                 Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error)
                                 Text(
-                                    "Accessibility Service Required",
+                                    "Accelerometer Sensor Missing",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error
                                 )
                             }
                             Text(
-                                "Rain Mode requires accessibility service permissions to detect hardware volume button sequence presses.",
+                                "Rain Mode requires an accelerometer hardware sensor to detect shake gestures, but none was detected on this device.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Button(
-                                onClick = { VolumeDndAccessibilityService.openAccessibilitySettings(context) },
-                                shape = RoundedCornerShape(100),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("Grant Permission in Settings")
-                            }
                         }
                     }
                 }
@@ -172,7 +246,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoExpressiveCard {
                         RivoSwitchListItem(
                             headline = "Enable Rain Mode",
-                            supporting = "Answer ringing calls or decline/end active calls by pressing Volume Up, Down, Up, Down (UDUD)",
+                            supporting = "Shake your phone to answer ringing calls or decline/end active calls",
                             leadingIcon = Icons.Outlined.WaterDrop,
                             iconContainerColor = Color(0xFF0288D1),
                             checked = enabled,
@@ -189,38 +263,156 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             // ── Behavior & Feedback Options ─────────────────────────────
             AnimatedVisibility(visible = enabled) {
                 RivoAnimatedSection(delayMs = 120L) {
-                    Column {
-                        RainModeSectionLabel("Sequence & Feedback")
-                        RivoExpressiveCard {
-                            RivoListItem(
-                                headline = "Required Button Sequence",
-                                supporting = "Volume Up → Down → Up → Down (UDUD)",
-                                leadingIcon = Icons.Outlined.Pin,
-                                iconContainerColor = Color(0xFF009688),
-                                onClick = {}
-                            )
-                            CardDivider()
-                            RivoSwitchListItem(
-                                headline = "Vibration Feedback",
-                                supporting = "Vibrate when a call is answered or hung up via volume sequence",
-                                leadingIcon = Icons.Outlined.Vibration,
-                                iconContainerColor = Color(0xFF9C27B0),
-                                checked = vibrateFeedback,
-                                modifier = Modifier.settingsSearchHighlight("rain_mode_vibrate", highlightedKey) { highlightedKey = null },
-                                onCheckedChange = {
-                                    vibrateFeedback = it
-                                    prefs.setBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, it)
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+
+                        // ── Shake Intensity Adjustment ──────────────────────
+                        Column {
+                            RainModeSectionLabel("Shake Sensitivity")
+                            RivoExpressiveCard {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "Shake Intensity",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            val percent = (shakeIntensity * 100).toInt()
+                                            val threshold = RainModeManager.calculateThresholdG(shakeIntensity)
+                                            val thresholdFormatted = String.format(java.util.Locale.US, "%.1f", threshold)
+                                            val sensitivityLabel = when {
+                                                shakeIntensity < 0.34f -> "Firm shake ($percent% • ~${thresholdFormatted}g)"
+                                                shakeIntensity < 0.67f -> "Moderate shake ($percent% • ~${thresholdFormatted}g)"
+                                                else -> "Gentle shake ($percent% • ~${thresholdFormatted}g)"
+                                            }
+                                            Text(
+                                                text = sensitivityLabel,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = {
+                                                shakeIntensity = PreferenceManager.DEFAULT_RAIN_MODE_SHAKE_INTENSITY
+                                                prefs.setFloat(
+                                                    PreferenceManager.KEY_RAIN_MODE_SHAKE_INTENSITY,
+                                                    shakeIntensity
+                                                )
+                                            }
+                                        ) {
+                                            Text("Reset")
+                                        }
+                                    }
+
+                                    Slider(
+                                        value = shakeIntensity,
+                                        onValueChange = { shakeIntensity = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(
+                                                PreferenceManager.KEY_RAIN_MODE_SHAKE_INTENSITY,
+                                                shakeIntensity
+                                            )
+                                        },
+                                        valueRange = 0f..1f
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Firm (Strong)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Gentle (Light)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+
+                                    // Live Interactive Test Card
+                                    val testBgColor by animateColorAsState(
+                                        targetValue = if (isShakingActive) Color(0xFF2ECC71).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                                        label = "liveTestBg"
+                                    )
+                                    val testBorderColor by animateColorAsState(
+                                        targetValue = if (isShakingActive) Color(0xFF2ECC71) else Color.Transparent,
+                                        label = "liveTestBorder"
+                                    )
+
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = testBgColor,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .border(1.dp, testBorderColor, RoundedCornerShape(14.dp))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.outline)
+                                            )
+                                            Text(
+                                                text = if (isShakingActive) "Shake Detected!" else "Live test: Shake your device now to test threshold",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isShakingActive) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
-                            )
-                            CardDivider()
-                            RivoListItem(
-                                headline = "Sequence Timeout Delay",
-                                supporting = "${timeoutMs / 1000} second${if (timeoutMs != 1000) "s" else ""} maximum delay between button presses",
-                                leadingIcon = Icons.Outlined.Timer,
-                                iconContainerColor = Color(0xFFFFB300),
-                                modifier = Modifier.settingsSearchHighlight("rain_mode_timeout", highlightedKey) { highlightedKey = null },
-                                onClick = { showDurationDialog = true }
-                            )
+                            }
+                        }
+
+                        // ── Call Actions & Feedback ─────────────────────────
+                        Column {
+                            RainModeSectionLabel("Call Actions & Feedback")
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "Incoming Call Action",
+                                    supporting = if (incomingAction == "decline") "Decline incoming call on shake" else "Answer incoming call on shake",
+                                    leadingIcon = if (incomingAction == "decline") Icons.Outlined.CallEnd else Icons.Outlined.Call,
+                                    iconContainerColor = if (incomingAction == "decline") Color(0xFFE53935) else Color(0xFF43A047),
+                                    trailingIcon = Icons.Outlined.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("rain_mode_action", highlightedKey) { highlightedKey = null },
+                                    onClick = { showActionDialog = true }
+                                )
+                                CardDivider()
+                                RivoSwitchListItem(
+                                    headline = "Shake to End Active Call",
+                                    supporting = "Shake your device while in an active call to hang up",
+                                    leadingIcon = Icons.Outlined.PhonePaused,
+                                    iconContainerColor = Color(0xFFE65100),
+                                    checked = endActiveCall,
+                                    modifier = Modifier.settingsSearchHighlight("rain_mode_end_active", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        endActiveCall = it
+                                        prefs.setBoolean(PreferenceManager.KEY_RAIN_MODE_END_ACTIVE_CALL, it)
+                                    }
+                                )
+                                CardDivider()
+                                RivoSwitchListItem(
+                                    headline = "Vibration Feedback",
+                                    supporting = "Vibrate when a call is answered or hung up via shake gesture",
+                                    leadingIcon = Icons.Outlined.Vibration,
+                                    iconContainerColor = Color(0xFF9C27B0),
+                                    checked = vibrateFeedback,
+                                    modifier = Modifier.settingsSearchHighlight("rain_mode_vibrate", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        vibrateFeedback = it
+                                        prefs.setBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, it)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -230,26 +422,20 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         }
     }
 
-    if (showDurationDialog) {
-        val durationOptions = listOf(
-            1000 to "1 sec",
-            2000 to "2 sec (Default)",
-            3000 to "3 sec",
-            4000 to "4 sec"
-        )
+    if (showActionDialog) {
         AlertDialog(
-            onDismissRequest = { showDurationDialog = false },
+            onDismissRequest = { showActionDialog = false },
             shape = RoundedCornerShape(28.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             icon = {
                 Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
+                    shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            Icons.Outlined.Timer,
+                            Icons.Outlined.Call,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(28.dp)
@@ -259,24 +445,28 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             },
             title = {
                 Text(
-                    text = "Sequence Timeout",
+                    text = "Incoming Call Action",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    durationOptions.forEach { (ms, label) ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val actions = listOf(
+                        "answer" to "Answer Call (Default)",
+                        "decline" to "Decline Call"
+                    )
+                    actions.forEach { (key, label) ->
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = if (timeoutMs == ms) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
+                            color = if (incomingAction == key) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    timeoutMs = ms
-                                    prefs.setInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, ms)
-                                    showDurationDialog = false
+                                    incomingAction = key
+                                    prefs.setString(PreferenceManager.KEY_RAIN_MODE_INCOMING_ACTION, key)
+                                    showActionDialog = false
                                 }
                         ) {
                             Row(
@@ -285,18 +475,18 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 RadioButton(
-                                    selected = timeoutMs == ms,
+                                    selected = incomingAction == key,
                                     onClick = {
-                                        timeoutMs = ms
-                                        prefs.setInt(PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS, ms)
-                                        showDurationDialog = false
+                                        incomingAction = key
+                                        prefs.setString(PreferenceManager.KEY_RAIN_MODE_INCOMING_ACTION, key)
+                                        showActionDialog = false
                                     }
                                 )
                                 Text(
                                     text = label,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (timeoutMs == ms) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (timeoutMs == ms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    fontWeight = if (incomingAction == key) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (incomingAction == key) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -305,7 +495,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showDurationDialog = false }) {
+                TextButton(onClick = { showActionDialog = false }) {
                     Text("Cancel")
                 }
             }

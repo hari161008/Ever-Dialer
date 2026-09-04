@@ -65,7 +65,7 @@ class VolumeDndAccessibilityService : AccessibilityService() {
                     )
                     setPlaybackState(
                         PlaybackState.Builder()
-                            .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
+                            .setState(PlaybackState.STATE_NONE, 0, 1.0f)
                             .setActions(
                                 PlaybackState.ACTION_PLAY_PAUSE or
                                         PlaybackState.ACTION_SKIP_TO_NEXT or
@@ -141,11 +141,7 @@ class VolumeDndAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         sequenceBuffer.clear()
-        rainSequenceBuffer.clear()
     }
-
-    private val rainSequenceBuffer = StringBuilder()
-    private var rainLastPressTimestamp = 0L
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event == null) return super.onKeyEvent(event)
@@ -154,82 +150,13 @@ class VolumeDndAccessibilityService : AccessibilityService() {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 val inputChar = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) 'U' else 'D'
-
-                val rainHandled = handleRainModeKeyInput(inputChar)
-                if (rainHandled) return true
-
-                val dndHandled = handleKeyInput(inputChar)
-                if (dndHandled) return true
+                handleKeyInput(inputChar)
             }
         }
 
+        // Always delegate to super (returns false) so volume key events are never consumed
+        // and the system volume slider appears and changes volume normally.
         return super.onKeyEvent(event)
-    }
-
-    private fun handleRainModeKeyInput(inputChar: Char): Boolean {
-        val prefs = PreferenceManager(this)
-        val isEnabled = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_ENABLED, false)
-        if (!isEnabled) {
-            rainSequenceBuffer.clear()
-            return false
-        }
-
-        val activeCall = CallService.incomingCallSession.value?.call
-            ?: CallService.currentCallSession.value?.call
-            ?: CallService.heldCallSession.value?.call
-
-        if (activeCall == null || activeCall.state == Call.STATE_DISCONNECTED || activeCall.state == Call.STATE_DISCONNECTING) {
-            rainSequenceBuffer.clear()
-            return false
-        }
-
-        val timeoutMs = prefs.getInt(
-            PreferenceManager.KEY_RAIN_MODE_TIMEOUT_MS,
-            PreferenceManager.DEFAULT_RAIN_MODE_TIMEOUT_MS
-        ).toLong().coerceIn(500L, 5000L)
-
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - rainLastPressTimestamp > timeoutMs) {
-            rainSequenceBuffer.clear()
-        }
-        rainLastPressTimestamp = currentTime
-
-        val targetSequence = (prefs.getString(
-            PreferenceManager.KEY_RAIN_MODE_SEQUENCE,
-            PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE
-        ) ?: PreferenceManager.DEFAULT_RAIN_MODE_SEQUENCE)
-            .uppercase()
-            .filter { it == 'U' || it == 'D' }
-
-        if (targetSequence.isEmpty()) return false
-
-        rainSequenceBuffer.append(inputChar)
-
-        if (targetSequence.startsWith(rainSequenceBuffer.toString())) {
-            if (rainSequenceBuffer.toString() == targetSequence) {
-                rainSequenceBuffer.clear()
-                val vibrateFeedback = prefs.getBoolean(PreferenceManager.KEY_RAIN_MODE_VIBRATE, true)
-                if (activeCall.state == Call.STATE_RINGING) {
-                    CallService.answerCall()
-                    if (vibrateFeedback) {
-                        performVibration(this, longArrayOf(0, 120, 80, 120))
-                    }
-                } else {
-                    CallService.declineCall()
-                    if (vibrateFeedback) {
-                        performVibration(this, longArrayOf(0, 180, 80, 180))
-                    }
-                }
-            }
-            return true
-        } else {
-            rainSequenceBuffer.clear()
-            if (targetSequence.startsWith(inputChar.toString())) {
-                rainSequenceBuffer.append(inputChar)
-                return true
-            }
-        }
-        return false
     }
 
     private fun handleKeyInput(inputChar: Char): Boolean {
@@ -300,7 +227,7 @@ class VolumeDndAccessibilityService : AccessibilityService() {
             }
         }
 
-        return true
+        return false
     }
 
     companion object {
