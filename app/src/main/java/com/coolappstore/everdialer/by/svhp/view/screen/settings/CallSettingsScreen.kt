@@ -336,6 +336,15 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var missedCallPopupEnabled by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false))
     }
+    var quickReply1 by remember {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1)
+    }
+    var quickReply2 by remember {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2)
+    }
+    var quickReply3 by remember {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3)
+    }
     var showOverlayPermissionDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
@@ -739,28 +748,77 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 }
                             )
                             if (missedCallPopupEnabled && canDrawOverlays) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(start = 56.dp, end = 16.dp, bottom = 10.dp),
-                                    horizontalArrangement = Arrangement.End
+                                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    FilledTonalButton(
-                                        onClick = {
-                                            com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupService.start(
-                                                context = context,
-                                                number = "+1 234 567 8900",
-                                                name = "Amma",
-                                                callDate = System.currentTimeMillis() - 240000L,
-                                                ringDurationSec = 2L
-                                            )
+                                    Text(
+                                        text = "Custom Quick Responses",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Customize the 3 quick reply messages shown in the missed call popup",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    OutlinedTextField(
+                                        value = quickReply1,
+                                        onValueChange = {
+                                            quickReply1 = it
+                                            prefs.setString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, it)
                                         },
-                                        shape = RoundedCornerShape(14.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                        label = { Text("Response 1") },
+                                        placeholder = { Text(PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1) },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = quickReply2,
+                                        onValueChange = {
+                                            quickReply2 = it
+                                            prefs.setString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, it)
+                                        },
+                                        label = { Text("Response 2") },
+                                        placeholder = { Text(PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2) },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = quickReply3,
+                                        onValueChange = {
+                                            quickReply3 = it
+                                            prefs.setString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, it)
+                                        },
+                                        label = { Text("Response 3") },
+                                        placeholder = { Text(PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
                                     ) {
-                                        Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Preview Popup", fontSize = 12.sp)
+                                        FilledTonalButton(
+                                            onClick = {
+                                                com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupService.previewLastMissedCall(context)
+                                            },
+                                            shape = RoundedCornerShape(14.dp),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Preview Popup", fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }

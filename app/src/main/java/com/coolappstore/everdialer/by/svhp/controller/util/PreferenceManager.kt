@@ -491,6 +491,13 @@ class PreferenceManager(context: Context) {
 
         // Missed Call Popup (display over other apps)
         const val KEY_MISSED_CALL_POPUP_ENABLED    = "missed_call_popup_enabled"
+        const val KEY_MISSED_CALL_QUICK_REPLY_1    = "missed_call_quick_reply_1"
+        const val KEY_MISSED_CALL_QUICK_REPLY_2    = "missed_call_quick_reply_2"
+        const val KEY_MISSED_CALL_QUICK_REPLY_3    = "missed_call_quick_reply_3"
+
+        const val DEFAULT_MISSED_CALL_REPLY_1      = "Call me back?"
+        const val DEFAULT_MISSED_CALL_REPLY_2      = "Sorry I'm busy"
+        const val DEFAULT_MISSED_CALL_REPLY_3      = "I'll call you later"
     }
 }
 

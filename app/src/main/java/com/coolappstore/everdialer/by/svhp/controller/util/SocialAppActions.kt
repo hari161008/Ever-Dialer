@@ -141,27 +141,41 @@ private fun toInternationalNumber(context: Context, phoneNumber: String): String
     return digitsOnly
 }
 
-/** Opens a WhatsApp chat with [phoneNumber]. Returns false (does nothing) if WhatsApp isn't installed. */
-fun openWhatsAppChat(context: Context, phoneNumber: String): Boolean {
+/** Opens a WhatsApp chat with [phoneNumber]. If [message] is provided, pre-fills the message. Returns false if WhatsApp isn't installed. */
+fun openWhatsAppChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
     if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
     val clean = toInternationalNumber(context, phoneNumber)
     if (clean.isEmpty()) return false
+    val uriStr = if (!message.isNullOrBlank()) {
+        "https://wa.me/$clean?text=${Uri.encode(message)}"
+    } else {
+        "https://wa.me/$clean"
+    }
     return try {
         context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$clean")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
         true
     } catch (_: Exception) { false }
 }
 
-/** Opens a Telegram chat with [phoneNumber] via Android's own app chooser, so the user can pick
- *  whichever Telegram client/fork they have installed rather than the request being forced into
- *  one specific app. Returns false (does nothing) if no Telegram-capable app is installed. */
-fun openTelegramChat(context: Context, phoneNumber: String): Boolean {
+/** Opens a Telegram chat with [phoneNumber] via Android's own app chooser. If [message] is provided, pre-fills the message. Returns false if no Telegram-capable app is installed. */
+fun openTelegramChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
     val clean = phoneNumber.filter { it.isDigit() || it == '+' }
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=$clean"))
+    val uriStr = if (!message.isNullOrBlank()) {
+        "tg://msg?text=${Uri.encode(message)}"
+    } else {
+        "tg://resolve?phone=$clean"
+    }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr))
     val handlers = try { context.packageManager.queryIntentActivities(intent, 0) } catch (_: Exception) { emptyList() }
-    if (handlers.isEmpty()) return false
+    if (handlers.isEmpty()) {
+        val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=$clean"))
+        return try {
+            context.startActivity(Intent.createChooser(fallbackIntent, "Open with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
     return try {
         context.startActivity(Intent.createChooser(intent, "Open with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
