@@ -41,6 +41,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManage
 import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonPrefs
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.*
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -60,7 +62,7 @@ private fun colorLerp(start: Color, stop: Color, fraction: Float): Color {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun ContactPfpCustomizationScreen(
     navigator: DestinationsNavigator,
@@ -310,9 +312,10 @@ fun ContactPfpCustomizationScreen(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
                 title = {
                     Column {
                         Text("Contact PFP Customisation", fontWeight = FontWeight.Bold)
@@ -324,9 +327,7 @@ fun ContactPfpCustomizationScreen(
                         )
                     }
                 },
-                navigationIcon = {
-                    SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                },
+                onBackClick = { navigator.navigateUp() },
                 actions = {
                     if (hasCustomPfp) {
                         IconButton(

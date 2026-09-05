@@ -33,6 +33,8 @@ import com.coolappstore.everdialer.by.svhp.controller.RainModeManager
 import com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.*
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -41,7 +43,7 @@ import org.koin.compose.koinInject
 import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
@@ -129,13 +131,12 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Rain Mode", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Rain Mode",
+                onBackClick = { navigator.navigateUp() }
             )
         }
     ) { padding ->

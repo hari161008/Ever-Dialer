@@ -40,6 +40,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
@@ -89,7 +91,7 @@ private fun Modifier.immediateDrag(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
@@ -166,13 +168,12 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Ongoing Call UI", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Ongoing Call UI",
+                onBackClick = { navigator.navigateUp() }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface

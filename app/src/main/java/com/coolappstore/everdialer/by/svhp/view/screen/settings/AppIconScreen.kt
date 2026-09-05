@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -161,7 +163,7 @@ private fun loadBitmapFromRes(context: android.content.Context, @DrawableRes res
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun AppIconScreen(navigator: DestinationsNavigator) {
     val context = LocalContext.current
@@ -180,13 +182,12 @@ fun AppIconScreen(navigator: DestinationsNavigator) {
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("App Icon") },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "App Icon",
+                onBackClick = { navigator.navigateUp() }
             )
         }
     ) { padding ->

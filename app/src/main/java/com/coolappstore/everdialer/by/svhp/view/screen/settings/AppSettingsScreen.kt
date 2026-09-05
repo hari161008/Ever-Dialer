@@ -25,6 +25,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollToTopButton
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
@@ -35,7 +37,7 @@ import org.koin.compose.koinInject
 private val ColorTeal = Color(0xFF00897B)
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
@@ -51,13 +53,12 @@ fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
     var deleteNotesWithRecording by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DELETE_NOTES_WITH_RECORDING, false)) }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Interesting Settings !", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Interesting Settings !",
+                onBackClick = { navigator.navigateUp() }
             )
         },
         floatingActionButton = {

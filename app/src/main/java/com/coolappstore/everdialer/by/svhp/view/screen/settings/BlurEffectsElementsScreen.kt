@@ -14,6 +14,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -66,25 +68,22 @@ private val BLUR_ELEMENTS = listOf(
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun BlurEffectsElementsScreen(navigator: DestinationsNavigator) {
-    val prefs = koinInject<PreferenceManager>()
+    val prefs: PreferenceManager = koinInject()
 
     val states = remember {
-        BLUR_ELEMENTS.associate { el ->
-            el.key to mutableStateOf(prefs.getBoolean(el.key, false))
-        }
+        BLUR_ELEMENTS.associate { it.key to mutableStateOf(prefs.getBoolean(it.key, true)) }
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Blur Effect Elements") },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Blur Effect Elements",
+                onBackClick = { navigator.navigateUp() }
             )
         }
     ) { padding ->

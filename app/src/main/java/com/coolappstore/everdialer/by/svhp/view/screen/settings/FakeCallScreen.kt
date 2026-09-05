@@ -47,6 +47,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.data.FakeCallEntry
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -60,7 +62,7 @@ private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S")
 private val DAY_VALUES = listOf(1, 2, 3, 4, 5, 6, 7)
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun FakeCallScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
@@ -111,13 +113,12 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Fake Call", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                },
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Fake Call",
+                onBackClick = { navigator.navigateUp() },
                 actions = {
                     Box {
                         IconButton(onClick = { showOverflowMenu = true }) {

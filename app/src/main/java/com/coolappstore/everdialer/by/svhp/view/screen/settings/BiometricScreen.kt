@@ -54,6 +54,8 @@ import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.DialogProperties
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -64,7 +66,7 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs: PreferenceManager = koinInject()
@@ -134,13 +136,12 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Authentication", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = ::navigateBack)
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "Authentication",
+                onBackClick = ::navigateBack
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
@@ -443,14 +444,12 @@ private fun ContactPickerDialog(
             color = MaterialTheme.colorScheme.surface
         ) {
             Scaffold(
-                contentWindowInsets = WindowInsets.statusBars,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     Column {
-                        TopAppBar(
-                            title = { Text("Select Contacts", fontWeight = FontWeight.SemiBold) },
-                            navigationIcon = {
-                                com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = onDismiss)
-                            },
+                        com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                            title = "Select Contacts",
+                            onBackClick = onDismiss,
                             actions = {
                                 TextButton(onClick = ::selectAll) {
                                     Text("Select All", fontWeight = FontWeight.SemiBold)

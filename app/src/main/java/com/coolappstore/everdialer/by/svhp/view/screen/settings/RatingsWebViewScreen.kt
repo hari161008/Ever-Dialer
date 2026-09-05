@@ -31,19 +31,24 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 
 
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+
 private const val RATINGS_URL = "https://hariprabhu.com/Ever-Dialer"
 
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun RatingsWebViewScreen(navigator: DestinationsNavigator) {
     var webViewRef    by remember { mutableStateOf<WebView?>(null) }
     var canGoBack     by remember { mutableStateOf(false) }
     var pageLoaded    by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     // Smooth fade-in once the page finishes loading — eliminates white flash
     val contentAlpha by animateFloatAsState(
@@ -58,7 +63,12 @@ fun RatingsWebViewScreen(navigator: DestinationsNavigator) {
 
     BackHandler(enabled = canGoBack) { webViewRef?.goBack() }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().settingsMotionBlur()) {
+        com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+            title = "Ratings & Feedback",
+            onBackClick = { if (canGoBack) webViewRef?.goBack() else navigator.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter).zIndex(10f)
+        )
 
         // ── WebView ────────────────────────────────────────────────────────
         AndroidView(

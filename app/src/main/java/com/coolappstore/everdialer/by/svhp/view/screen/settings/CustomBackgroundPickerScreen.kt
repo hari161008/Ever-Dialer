@@ -61,8 +61,11 @@ import java.io.File
 import kotlin.math.roundToInt
 import java.io.FileOutputStream
 
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun CustomBackgroundPickerScreen(
     navigator: DestinationsNavigator,
@@ -424,9 +427,10 @@ fun CustomBackgroundPickerScreen(
     ) else null
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
                 title = {
                     Column {
                         Text(
@@ -442,11 +446,7 @@ fun CustomBackgroundPickerScreen(
                         )
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+                onBackClick = { navigator.navigateUp() },
                 actions = {
                     if (hasCustomBg) {
                         IconButton(onClick = {

@@ -18,6 +18,10 @@ import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestin
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.ui.graphics.TransformOrigin
+
 /** Maps a tab-order key (as stored in [PreferenceManager.KEY_TAB_ORDER]) to its nav route. */
 private fun routeForTabKey(key: String): String? = when (key) {
     "favorites"  -> FavoritesScreenDestination.route
@@ -60,8 +64,16 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toTab   = isTabRoute(targetState.destination.route)
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
+        val toSettings = isSettingsRoute(targetState.destination.route)
 
         when {
+            toSettings -> {
+                scaleIn(
+                    animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                    initialScale = 0.88f,
+                    transformOrigin = TransformOrigin.Center
+                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 60, easing = SettingsSmoothEase))
+            }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideInHorizontally(
@@ -84,8 +96,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toTab   = isTabRoute(targetState.destination.route)
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
+        val fromSettings = isSettingsRoute(initialState.destination.route)
+        val toSettings   = isSettingsRoute(targetState.destination.route)
 
         when {
+            fromSettings || toSettings -> {
+                scaleOut(
+                    animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                    targetScale = 1.06f,
+                    transformOrigin = TransformOrigin.Center
+                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 80, easing = SettingsSmoothEase))
+            }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideOutHorizontally(
@@ -114,8 +135,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toTab   = isTabRoute(targetState.destination.route)
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
+        val fromSettings = isSettingsRoute(initialState.destination.route)
+        val toSettings   = isSettingsRoute(targetState.destination.route)
 
         when {
+            fromSettings || toSettings -> {
+                scaleIn(
+                    animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                    initialScale = 1.06f,
+                    transformOrigin = TransformOrigin.Center
+                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 60, easing = SettingsSmoothEase))
+            }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideInHorizontally(
@@ -138,8 +168,16 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toTab   = isTabRoute(targetState.destination.route)
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
+        val fromSettings = isSettingsRoute(initialState.destination.route)
 
         when {
+            fromSettings -> {
+                scaleOut(
+                    animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                    targetScale = 0.88f,
+                    transformOrigin = TransformOrigin.Center
+                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 80, easing = SettingsSmoothEase))
+            }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideOutHorizontally(

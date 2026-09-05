@@ -271,7 +271,7 @@ fun ContactSearchContent(
         }
 
         val sr = globalSettings.filter { entry ->
-            entry.title.contains(q, ignoreCase = true) || entry.subtitle.contains(q, ignoreCase = true)
+            entry.titleLower.contains(qLower) || entry.subtitleLower.contains(qLower)
         }
 
         SearchResults(fc, ncr, cnr, rnr, rr, sr)

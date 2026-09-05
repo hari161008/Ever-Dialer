@@ -58,6 +58,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.graphicsLayer
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawPlainBackdrop
@@ -661,9 +663,16 @@ fun RivoListItem(
         label = "ListItemScale"
     )
 
+    var itemBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
     Surface(
         color = Color.Transparent,
-        modifier = modifier.fillMaxWidth().scale(scale),
+        modifier = modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .onGloballyPositioned { coords ->
+                itemBounds = coords.boundsInRoot()
+            },
         shadowElevation = 0.dp
     ) {
         Row(
@@ -674,6 +683,16 @@ fun RivoListItem(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {
+                        itemBounds?.let { bounds ->
+                            val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
+                            val screenHeight = context.resources.displayMetrics.heightPixels.toFloat()
+                            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordTap(
+                                bounds.center.x,
+                                bounds.center.y,
+                                screenWidth,
+                                screenHeight
+                            )
+                        }
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                             performAppHaptic(
                                 context,

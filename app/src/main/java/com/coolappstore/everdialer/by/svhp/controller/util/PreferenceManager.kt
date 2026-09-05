@@ -309,6 +309,7 @@ class PreferenceManager(context: Context) {
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
         const val KEY_TELEGRAM_SHOWN        = "telegram_shown"
+        const val KEY_MOTION_BLUR_ANIMATION = "motion_blur_animation_enabled"
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"
         const val KEY_POCKET_MODE_PREVENTION = "pocket_mode_prevention"
         const val KEY_DIRECT_CALL_ON_TAP     = "direct_call_on_tap"

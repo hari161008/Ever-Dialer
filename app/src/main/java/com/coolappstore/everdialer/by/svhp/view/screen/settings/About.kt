@@ -54,6 +54,9 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+
 private val ColorBlue     = Color(0xFF2196F3)
 private val ColorGreen    = Color(0xFF4CAF50)
 private val ColorDeepPurp = Color(0xFF7C4DFF)
@@ -62,7 +65,7 @@ private val ColorCyan     = Color(0xFF00BCD4)
 private val ColorTeal     = Color(0xFF009688)
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val context = LocalContext.current
@@ -93,13 +96,12 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("About Ever Dialer", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "About Ever Dialer",
+                onBackClick = { navigator.navigateUp() }
             )
         }
     ) { padding ->

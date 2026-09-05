@@ -37,6 +37,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -64,7 +67,7 @@ private fun downloadFile(context: Context, url: String, userAgent: String?, cont
     }
 }
 
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun MoreAppsWebViewScreen(navigator: DestinationsNavigator) {
     var webViewRef    by remember { mutableStateOf<WebView?>(null) }
@@ -85,7 +88,12 @@ fun MoreAppsWebViewScreen(navigator: DestinationsNavigator) {
 
     BackHandler(enabled = canGoBack) { webViewRef?.goBack() }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().settingsMotionBlur()) {
+        com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+            title = "More Apps",
+            onBackClick = { if (canGoBack) webViewRef?.goBack() else navigator.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter).zIndex(10f)
+        )
 
         // ── WebView ────────────────────────────────────────────────────────
         AndroidView(

@@ -60,6 +60,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -98,16 +100,21 @@ private fun triggerRestartPrompt(
         val result = snackbarHostState.showSnackbar(
             message = "Restart required to apply theme changes fully.",
             actionLabel = "Restart",
-            duration = SnackbarDuration.Short
+            duration = SnackbarDuration.Long
         )
         if (result == SnackbarResult.ActionPerformed) {
-            (context as? Activity)?.recreate()
+            val packageManager = context.packageManager
+            val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+            val componentName = intent?.component
+            val mainIntent = android.content.Intent.makeRestartActivityTask(componentName)
+            context.startActivity(mainIntent)
+            Runtime.getRuntime().exit(0)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
@@ -156,6 +163,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         prefs.getBoolean(PreferenceManager.KEY_RATE_REVIEW_HIDDEN_SECRET, false)
     }
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
+    var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
     var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
     var blurEffects         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false)) }
     var hangupAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)) }
@@ -796,13 +804,12 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.statusBars,
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("User Interface", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    com.coolappstore.everdialer.by.svhp.view.components.SettingsBackIconButton(onClick = { navigator.navigateUp() })
-                }
+            com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
+                title = "User Interface",
+                onBackClick = { navigator.navigateUp() }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1428,6 +1435,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             }
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Motion Blur in Animation",
+                                    supporting = "Apply dynamic motion blur during zoom page transitions",
+                                    leadingIcon = Icons.Outlined.BlurOn,
+                                    iconContainerColor = ColorPurple,
+                                    checked = motionBlurAnimation,
+                                    modifier = Modifier.settingsSearchHighlight("motion_blur_animation", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        motionBlurAnimation = it
+                                        prefs.setBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(
                                     headline = "Scroll Animation",
                                     supporting = "Fade-in animation for list items as you scroll",
