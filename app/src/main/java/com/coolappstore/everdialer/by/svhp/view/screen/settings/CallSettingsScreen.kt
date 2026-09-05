@@ -20,6 +20,10 @@ import android.os.Vibrator
 import android.provider.Settings
 import android.telephony.SubscriptionManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -337,13 +341,16 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false))
     }
     var quickReply1 by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1)
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1) ?: "")
     }
     var quickReply2 by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2)
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2) ?: "")
     }
     var quickReply3 by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3)
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) ?: "")
+    }
+    var customFirst by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_CUSTOM_FIRST, false))
     }
     var showOverlayPermissionDialog by remember { mutableStateOf(false) }
 
@@ -747,7 +754,11 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                     }
                                 }
                             )
-                            if (missedCallPopupEnabled && canDrawOverlays) {
+                            AnimatedVisibility(
+                                visible = missedCallPopupEnabled && canDrawOverlays,
+                                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                                exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+                            ) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -760,7 +771,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
-                                        text = "Customize the 3 quick reply messages shown in the missed call popup",
+                                        text = "Customize the 3 quick reply messages shown in the missed call popup. Leave a box empty to hide that response.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -803,6 +814,39 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                         shape = RoundedCornerShape(16.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                customFirst = !customFirst
+                                                prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_CUSTOM_FIRST, customFirst)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = customFirst,
+                                            onCheckedChange = {
+                                                customFirst = it
+                                                prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_CUSTOM_FIRST, it)
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "Put \"Type custom\" first",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Show the custom message button first in the response list",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),

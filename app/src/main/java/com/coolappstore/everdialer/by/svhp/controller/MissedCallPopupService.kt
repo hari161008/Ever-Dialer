@@ -45,6 +45,10 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
@@ -102,6 +106,7 @@ class MissedCallPopupService : Service() {
         PixelFormat.TRANSLUCENT
     ).apply {
         gravity = Gravity.CENTER
+        softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
@@ -362,6 +367,8 @@ class MissedCallPopupService : Service() {
     ) {
         val context = LocalContext.current
         var visible by remember { mutableStateOf(false) }
+        var isCustomTyping by remember { mutableStateOf(false) }
+        var customMessageText by remember { mutableStateOf("") }
         var selectedMessageForAppChoice by remember { mutableStateOf<String?>(null) }
         var selectedSocialApp by remember { mutableStateOf<String?>(null) }
         var selectedSimAccounts by remember { mutableStateOf<List<PhoneAccountHandle>?>(null) }
@@ -387,6 +394,10 @@ class MissedCallPopupService : Service() {
             }
             if (selectedMessageForAppChoice != null) {
                 selectedMessageForAppChoice = null
+                return true
+            }
+            if (isCustomTyping) {
+                isCustomTyping = false
                 return true
             }
             return false
@@ -420,20 +431,29 @@ class MissedCallPopupService : Service() {
 
         // Load customizable quick replies from PreferenceManager
         val prefs = remember(context) { PreferenceManager(context) }
+        val customFirst = remember(prefs) {
+            prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_CUSTOM_FIRST, false)
+        }
         val reply1 = remember(prefs) {
-            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1)
-                ?.ifBlank { PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1 } ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1
+            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_1, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_1
         }
         val reply2 = remember(prefs) {
-            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2)
-                ?.ifBlank { PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2 } ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2
+            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_2, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_2
         }
         val reply3 = remember(prefs) {
-            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3)
-                ?.ifBlank { PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3 } ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3
+            prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3
         }
-        val quickReplies = remember(reply1, reply2, reply3) {
-            listOf(reply1, reply2, reply3, "Type custom...")
+        val quickReplies = remember(reply1, reply2, reply3, customFirst) {
+            val list = mutableListOf<String>()
+            if (reply1.isNotBlank()) list.add(reply1.trim())
+            if (reply2.isNotBlank()) list.add(reply2.trim())
+            if (reply3.isNotBlank()) list.add(reply3.trim())
+            if (customFirst) {
+                list.add(0, "Type custom...")
+            } else {
+                list.add("Type custom...")
+            }
+            list
         }
 
         // Social apps detection from SocialAppActions
@@ -456,6 +476,8 @@ class MissedCallPopupService : Service() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
                 .background(Color.Black.copy(alpha = animatedDimAlpha))
                 .focusRequester(focusRequester)
                 .focusable()
@@ -589,6 +611,7 @@ class MissedCallPopupService : Service() {
                                             RivoAvatar(
                                                 name = contactName,
                                                 photoUri = null,
+                                                forcePersonIcon = true,
                                                 modifier = Modifier.size(58.dp)
                                             )
                                         }
@@ -796,6 +819,7 @@ class MissedCallPopupService : Service() {
                         val currentCardState = when {
                             selectedSimAccounts != null -> "sim"
                             selectedSocialApp != null -> "social"
+                            isCustomTyping -> "custom_type"
                             selectedMessageForAppChoice != null -> "reply"
                             else -> "main"
                         }
@@ -838,14 +862,14 @@ class MissedCallPopupService : Service() {
                                                         indication = null
                                                     ) {
                                                         performAppHaptic(context, "light")
-                                                        selectedMessageForAppChoice = "Type custom..."
+                                                        isCustomTyping = true
                                                     }
                                                 )
                                             }
 
-                                            val canScrollForward by remember {
+                                            val showScrollIndicator by remember {
                                                 derivedStateOf {
-                                                    replyScrollState.value < replyScrollState.maxValue
+                                                    replyScrollState.value == 0 && replyScrollState.maxValue > 0
                                                 }
                                             }
 
@@ -862,7 +886,11 @@ class MissedCallPopupService : Service() {
                                                         Surface(
                                                             onClick = {
                                                                 performAppHaptic(context, "light")
-                                                                selectedMessageForAppChoice = text
+                                                                if (text == "Type custom...") {
+                                                                    isCustomTyping = true
+                                                                } else {
+                                                                    selectedMessageForAppChoice = text
+                                                                }
                                                             },
                                                             shape = RoundedCornerShape(20.dp),
                                                             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
@@ -881,12 +909,17 @@ class MissedCallPopupService : Service() {
                                                     }
                                                 }
 
-                                                // Single, non-duplicate indicator dot on the right side when scrollable
-                                                if (canScrollForward) {
+                                                // Single indication dot that hides smoothly as soon as scrolling starts
+                                                androidx.compose.animation.AnimatedVisibility(
+                                                    visible = showScrollIndicator,
+                                                    enter = fadeIn(animationSpec = tween(150)),
+                                                    exit = fadeOut(animationSpec = tween(150)),
+                                                    modifier = Modifier
+                                                        .align(Alignment.CenterEnd)
+                                                        .padding(end = 2.dp)
+                                                ) {
                                                     Box(
                                                         modifier = Modifier
-                                                            .align(Alignment.CenterEnd)
-                                                            .padding(end = 2.dp)
                                                             .size(6.dp)
                                                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                                                     )
@@ -986,6 +1019,125 @@ class MissedCallPopupService : Service() {
                                         Spacer(modifier = Modifier.height(4.dp))
                                     }
                                 }
+                                "custom_type" -> {
+                                    val customFocusRequester = remember { FocusRequester() }
+                                    LaunchedEffect(Unit) {
+                                        delay(150)
+                                        try { customFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(
+                                                onClick = {
+                                                    performAppHaptic(context, "light")
+                                                    isCustomTyping = false
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                    contentDescription = "Back",
+                                                    tint = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "Custom Response",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 15.sp
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Reply to ${contactName.ifBlank { phoneNumber }}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        OutlinedTextField(
+                                            value = customMessageText,
+                                            onValueChange = { customMessageText = it },
+                                            placeholder = { Text("Type a message...", fontSize = 14.sp) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .focusRequester(customFocusRequester),
+                                            shape = RoundedCornerShape(16.dp),
+                                            minLines = 2,
+                                            maxLines = 4,
+                                            keyboardOptions = KeyboardOptions(
+                                                capitalization = KeyboardCapitalization.Sentences,
+                                                imeAction = ImeAction.Send
+                                            ),
+                                            keyboardActions = KeyboardActions(
+                                                onSend = {
+                                                    if (customMessageText.isNotBlank()) {
+                                                        performAppHaptic(context, "light")
+                                                        selectedMessageForAppChoice = customMessageText.trim()
+                                                        isCustomTyping = false
+                                                    }
+                                                }
+                                            ),
+                                            trailingIcon = {
+                                                if (customMessageText.isNotEmpty()) {
+                                                    IconButton(
+                                                        onClick = { customMessageText = "" },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Default.Clear,
+                                                            contentDescription = "Clear",
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        )
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    performAppHaptic(context, "light")
+                                                    selectedMessageForAppChoice = customMessageText.trim()
+                                                    isCustomTyping = false
+                                                },
+                                                enabled = customMessageText.isNotBlank(),
+                                                shape = RoundedCornerShape(14.dp),
+                                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Send,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Send", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                    }
+                                }
                                 "reply" -> {
                                     val chosenMsg = selectedMessageForAppChoice
                                     // ── App Chooser View (non-scrollable, all in one place) ──
@@ -1022,7 +1174,7 @@ class MissedCallPopupService : Service() {
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Text(
-                                                    text = if (chosenMsg != "Type custom...") "\"${formatQuickReplyDisplay(chosenMsg.orEmpty())}\"" else "Custom message",
+                                                    text = if (!chosenMsg.isNullOrBlank() && chosenMsg != "Type custom...") "\"${formatQuickReplyDisplay(chosenMsg)}\"" else "Custom message",
                                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                                                     color = MaterialTheme.colorScheme.primary,
                                                     maxLines = 1,

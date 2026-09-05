@@ -494,6 +494,7 @@ class PreferenceManager(context: Context) {
         const val KEY_MISSED_CALL_QUICK_REPLY_1    = "missed_call_quick_reply_1"
         const val KEY_MISSED_CALL_QUICK_REPLY_2    = "missed_call_quick_reply_2"
         const val KEY_MISSED_CALL_QUICK_REPLY_3    = "missed_call_quick_reply_3"
+        const val KEY_MISSED_CALL_CUSTOM_FIRST     = "missed_call_custom_first"
 
         const val DEFAULT_MISSED_CALL_REPLY_1      = "Call me back?"
         const val DEFAULT_MISSED_CALL_REPLY_2      = "Sorry I'm busy"
