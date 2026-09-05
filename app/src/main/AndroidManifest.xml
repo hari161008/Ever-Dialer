@@ -940,6 +940,10 @@
             android:name=".controller.FloatingCallService"
             android:exported="false" />
 
+        <service
+            android:name=".controller.MissedCallPopupService"
+            android:exported="false" />
+
         <!-- Raise to Answer: foreground sensor-listening service, started only while a
              call is ringing and the feature is enabled in Settings → Call Settings. -->
         <service

@@ -784,11 +784,31 @@ class MainActivity : FragmentActivity() {
         val data = intent.data
         val action = intent.action
 
+        if (intent.getBooleanExtra("NAV_TO_RECENTS", false) && action != "com.coolappstore.everdialer.OPEN_CALL_LOGS_DETAIL") {
+            navController.navigate(RecentScreenDestination.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+            }
+            return
+        }
+
         when (action) {
             "com.coolappstore.everdialer.OPEN_RECENTS" -> {
                 navController.navigate(RecentScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
+                }
+            }
+            "com.coolappstore.everdialer.OPEN_CALL_LOGS_DETAIL" -> {
+                val contactId = intent.getStringExtra("contact_id")
+                val phoneNumber = intent.getStringExtra("phone_number")
+                if (!contactId.isNullOrBlank() || !phoneNumber.isNullOrBlank()) {
+                    navController.navigate("call_log_detail_screen?contactId=${contactId ?: "null"}&phoneNumber=${phoneNumber ?: "null"}")
+                } else {
+                    navController.navigate(RecentScreenDestination.route) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                    }
                 }
             }
             Intent.ACTION_VIEW -> {

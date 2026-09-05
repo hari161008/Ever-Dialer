@@ -83,6 +83,26 @@ class CallService : InCallService() {
                 com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.updateProviderDuration(
                     this, number, ringDurationSec
                 )
+
+                // Trigger Missed Call Popup if enabled and permission granted
+                val popupEnabled = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false)
+                if (popupEnabled && android.provider.Settings.canDrawOverlays(this)) {
+                    val contact = try { contactsRepository.getContactByNumber(number) } catch (_: Exception) { null }
+                    val name = contact?.name ?: number
+                    val photo = contact?.photoUri
+                    val contactId = contact?.id
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        MissedCallPopupService.start(
+                            context = this,
+                            number = number,
+                            name = name,
+                            photoUri = photo,
+                            contactId = contactId,
+                            callDate = callDate,
+                            ringDurationSec = ringDurationSec
+                        )
+                    }, 300)
+                }
             }
         }
     }

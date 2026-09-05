@@ -41,6 +41,7 @@ import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.SettingsViewModel
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -283,35 +284,55 @@ fun AppNavigationScreen(openSettingsDirectly: Boolean = false) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val darkTheme = when (preferences.getThemeMode()) {
-        AppPreferences.ThemeMode.LIGHT, AppPreferences.ThemeMode.WHITE -> false
-        AppPreferences.ThemeMode.DARK,  AppPreferences.ThemeMode.BLACK -> true
-        AppPreferences.ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        AppPreferences.ThemeMode.AUTO_WB -> isSystemInDarkTheme()
+    var rivoPrefsTrigger by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        val rivoPrefs = activityContext.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            rivoPrefsTrigger++
+        }
+        rivoPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            rivoPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val systemIsDark = isSystemInDarkTheme()
+
+    val darkTheme = remember(settingsUpdateTrigger, rivoPrefsTrigger, systemIsDark) {
+        when (preferences.getThemeMode()) {
+            AppPreferences.ThemeMode.LIGHT, AppPreferences.ThemeMode.WHITE -> false
+            AppPreferences.ThemeMode.DARK,  AppPreferences.ThemeMode.BLACK -> true
+            AppPreferences.ThemeMode.SYSTEM -> systemIsDark
+            AppPreferences.ThemeMode.AUTO_WB -> systemIsDark
+        }
     }
 
     // Respect the user's dynamic color preference; fall back to accent color when off
-    val isDynamicColor = remember(settingsUpdateTrigger) { preferences.isDynamicColorEnabled() }
-    val accentArgb     = remember(settingsUpdateTrigger) { preferences.getAccentColor() }
+    val isDynamicColor = remember(settingsUpdateTrigger, rivoPrefsTrigger) { preferences.isDynamicColorEnabled() }
+    val accentArgb     = remember(settingsUpdateTrigger, rivoPrefsTrigger) { preferences.getAccentColor() }
 
-    val systemIsDark = isSystemInDarkTheme()
     // Pure white/black override: background is pure white/black, but accent/dynamic still applies
-    val isPureWhite = preferences.getThemeMode() == AppPreferences.ThemeMode.WHITE ||
-                      (preferences.getThemeMode() == AppPreferences.ThemeMode.AUTO_WB && !systemIsDark)
-    val isPureBlack = preferences.getThemeMode() == AppPreferences.ThemeMode.BLACK ||
-                      (preferences.getThemeMode() == AppPreferences.ThemeMode.AUTO_WB && systemIsDark)
+    val isPureWhite = remember(settingsUpdateTrigger, rivoPrefsTrigger, systemIsDark) {
+        preferences.getThemeMode() == AppPreferences.ThemeMode.WHITE ||
+            (preferences.getThemeMode() == AppPreferences.ThemeMode.AUTO_WB && !systemIsDark)
+    }
+    val isPureBlack = remember(settingsUpdateTrigger, rivoPrefsTrigger, systemIsDark) {
+        preferences.getThemeMode() == AppPreferences.ThemeMode.BLACK ||
+            (preferences.getThemeMode() == AppPreferences.ThemeMode.AUTO_WB && systemIsDark)
+    }
     val resolvedAccentArgb: Int? = if (!isDynamicColor) accentArgb else null
     val resolvedDynamicColor = isDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val fontFamily = remember(settingsUpdateTrigger) { preferences.getCustomFontFamily() }
+    val fontFamily = remember(settingsUpdateTrigger, rivoPrefsTrigger) { preferences.getCustomFontFamily() }
 
-    ShizucallrecorderTheme(
-        darkTheme    = darkTheme,
-        dynamicColor = resolvedDynamicColor,
-        accentArgb   = resolvedAccentArgb,
-        isPureWhite  = isPureWhite,
-        isPureBlack  = isPureBlack,
-        fontFamily   = fontFamily
-    ) {
+    key(rivoPrefsTrigger) {
+        ShizucallrecorderTheme(
+            darkTheme    = darkTheme,
+            dynamicColor = resolvedDynamicColor,
+            accentArgb   = resolvedAccentArgb,
+            isPureWhite  = isPureWhite,
+            isPureBlack  = isPureBlack,
+            fontFamily   = fontFamily
+        ) {
         // ── Fix status bar icon colours to match in-app theme ─────────────
         val view = LocalView.current
         if (!view.isInEditMode) {
@@ -475,6 +496,7 @@ fun AppNavigationScreen(openSettingsDirectly: Boolean = false) {
                 }
             }
         }
+    }
     }
 }
 

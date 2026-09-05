@@ -488,6 +488,9 @@ class PreferenceManager(context: Context) {
 
         // Favorites display mode (grid vs list)
         const val KEY_FAVORITES_IN_LIST            = "favorites_in_list"
+
+        // Missed Call Popup (display over other apps)
+        const val KEY_MISSED_CALL_POPUP_ENABLED    = "missed_call_popup_enabled"
     }
 }
 

@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -331,12 +332,18 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var isAccessibilityGranted by remember { mutableStateOf(VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)) }
     var isDndGranted by remember { mutableStateOf(VolumeDndAccessibilityService.isDndAccessGranted(context)) }
+    var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var missedCallPopupEnabled by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false))
+    }
+    var showOverlayPermissionDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 isAccessibilityGranted = VolumeDndAccessibilityService.isAccessibilityServiceEnabled(context)
                 isDndGranted = VolumeDndAccessibilityService.isDndAccessGranted(context)
+                canDrawOverlays = Settings.canDrawOverlays(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -357,6 +364,42 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
         ContactsToDisplayDialog(
             onDismiss = { showContactsToDisplayDialog = false },
             prefs = prefs
+        )
+    }
+
+    if (showOverlayPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showOverlayPermissionDialog = false },
+            icon = { Icon(Icons.AutoMirrored.Filled.CallMissed, null, tint = ColorAmber) },
+            title = { Text("Display Over Other Apps") },
+            text = {
+                Text("To display the missed call popup over other apps when an incoming call is missed, Ever Dialer requires the 'Display over other apps' permission.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showOverlayPermissionDialog = false
+                        prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, true)
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                            try { context.startActivity(intent) } catch (_: Exception) {}
+                        }
+                    }
+                ) {
+                    Text("Grant Permission")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverlayPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
@@ -670,6 +713,57 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                     prefs.setBoolean(PreferenceManager.KEY_AUTO_REDIAL_ENABLED, it)
                                 }
                             )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline   = "Missed Call Popup",
+                                supporting = "Show an interactive popup over other apps with caller info, quick responses, and social apps when a call is missed",
+                                leadingIcon = Icons.AutoMirrored.Filled.CallMissed,
+                                iconContainerColor = ColorAmber,
+                                checked = missedCallPopupEnabled && canDrawOverlays,
+                                modifier = Modifier.settingsSearchHighlight("missed_call_popup", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { enabled ->
+                                    if (enabled) {
+                                        if (!Settings.canDrawOverlays(context)) {
+                                            showOverlayPermissionDialog = true
+                                        } else {
+                                            missedCallPopupEnabled = true
+                                            prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, true)
+                                        }
+                                    } else {
+                                        missedCallPopupEnabled = false
+                                        prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false)
+                                    }
+                                }
+                            )
+                            if (missedCallPopupEnabled && canDrawOverlays) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 56.dp, end = 16.dp, bottom = 10.dp),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupService.start(
+                                                context = context,
+                                                number = "+1 234 567 8900",
+                                                name = "Amma",
+                                                callDate = System.currentTimeMillis() - 240000L,
+                                                ringDurationSec = 2L
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(14.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Preview Popup", fontSize = 12.sp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

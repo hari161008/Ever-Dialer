@@ -336,7 +336,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
   164. 🔓 **Open Source & Privacy Focused** – Completely open-source codebase with zero trackers, zero telemetry, and zero ads.
   165. 📢 **Telegram Support Community Integration** – Direct links to Everlasting support channels and updates.
 
-# For those who are wondering how Rate and Review work 
+# For those who are wondering how Rate and Review workdd
 
 1. Create a Google form (with sign in required - to prevent multiple reviews and easily editable)
 2. Link the Google form with sheets (Name it as Original form)
