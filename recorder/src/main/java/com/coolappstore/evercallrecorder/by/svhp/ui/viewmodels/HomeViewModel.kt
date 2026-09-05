@@ -440,14 +440,44 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     ?: emptyList()
             }
             AppPreferences.StorageMode.SAF_FOLDER -> {
-                val folderUri = preferences.getRecordingFolderUri() ?: return@withContext emptyList()
-                val dir = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
-                if (!dir.exists() || !dir.canRead()) return@withContext emptyList()
-                dir.listFiles()
-                    .filter { it.isFile && it.name != null }
-                    .map { file -> RecordingFileEntry(uri = file.uri, name = file.name!!, length = file.length()) }
+                val folderUri = preferences.getRecordingFolderUri()
+                val safEntries = if (folderUri != null) {
+                    val dir = DocumentFile.fromTreeUri(context, folderUri)
+                    if (dir != null && dir.exists() && dir.canRead()) {
+                        dir.listFiles()
+                            .filter { it.isFile && it.name != null }
+                            .map { file -> RecordingFileEntry(uri = file.uri, name = file.name!!, length = file.length()) }
+                    } else emptyList()
+                } else emptyList()
+
+                val authority = SafHelper.getPrivateStorageAuthority(context)
+                val privateEntries = SafHelper.getPrivateStorageDir(context).listFiles()
+                    ?.filter { it.isFile }
+                    ?.map { file ->
+                        RecordingFileEntry(
+                            uri    = FileProvider.getUriForFile(context, authority, file),
+                            name   = file.name,
+                            length = file.length()
+                        )
+                    }
+                    ?: emptyList()
+
+                val seen = mutableSetOf<String>()
+                (safEntries + privateEntries).filter { seen.add(it.name) }
             }
-            null -> return@withContext emptyList()
+            null -> {
+                val authority = SafHelper.getPrivateStorageAuthority(context)
+                SafHelper.getPrivateStorageDir(context).listFiles()
+                    ?.filter { it.isFile }
+                    ?.map { file ->
+                        RecordingFileEntry(
+                            uri    = FileProvider.getUriForFile(context, authority, file),
+                            name   = file.name,
+                            length = file.length()
+                        )
+                    }
+                    ?: emptyList()
+            }
         }
 
         entries.mapNotNull { entry ->

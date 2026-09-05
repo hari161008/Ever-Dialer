@@ -25,6 +25,8 @@ object BackupManager {
     const val PREFS_RECORDER_DURATION = "recording_duration"
     const val PREFS_NS_MASTER = "network_switch_master_switch"
     const val PREFS_NS_AUTO = "network_switch_automation_flags"
+    const val PREFS_MISSED_CALL_DURATION = "missed_call_durations"
+    const val PREFS_WIDGET = "recent_calls_widget_prefs"
 
     val KNOWN_PREFS = listOf(
         PREFS_RIVO,
@@ -34,7 +36,9 @@ object BackupManager {
         PREFS_RECORDER_SORT,
         PREFS_RECORDER_DURATION,
         PREFS_NS_MASTER,
-        PREFS_NS_AUTO
+        PREFS_NS_AUTO,
+        PREFS_MISSED_CALL_DURATION,
+        PREFS_WIDGET
     )
 
     fun getBackupDir(context: Context): File {
@@ -53,7 +57,9 @@ object BackupManager {
         context: Context,
         outputStream: OutputStream,
         backupSettings: Boolean = true,
-        backupCallingCards: Boolean = true
+        backupCallingCards: Boolean = true,
+        backupNotes: Boolean = true,
+        backupRecordings: Boolean = true
     ): Boolean {
         return try {
             ZipOutputStream(outputStream).use { zip ->
@@ -101,6 +107,16 @@ object BackupManager {
                             }
                         }
                     } catch (_: Exception) {}
+
+                    // 3. Backup custom font if set
+                    try {
+                        val fontFile = File(context.filesDir, "custom_font.ttf")
+                        if (fontFile.exists() && fontFile.isFile && fontFile.length() > 0) {
+                            zip.putNextEntry(ZipEntry("custom_font.ttf"))
+                            FileInputStream(fontFile).use { it.copyTo(zip) }
+                            zip.closeEntry()
+                        }
+                    } catch (_: Exception) {}
                 } else if (backupCallingCards) {
                     // Backup calling cards contact preferences only if settings backup is not selected
                     val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
@@ -113,7 +129,7 @@ object BackupManager {
                     }
                 }
 
-                // 3. Backup Calling Cards Media (Backgrounds: images, videos, wallpapers)
+                // 4. Backup Calling Cards Media (Backgrounds: images, videos, wallpapers)
                 if (backupSettings || backupCallingCards) {
                     val bgDir = getBackgroundsDir(context)
                     bgDir.listFiles()?.forEach { bgFile ->
@@ -145,12 +161,72 @@ object BackupManager {
                     }
                 }
 
-                if (backupCallingCards) {
-                    // 4. Backup notes & calling cards text files
+                // 5. Backup notes (contact notes & general notes)
+                if (backupNotes || backupCallingCards) {
                     val notesDir = NoteManager.getNotesDir(context)
                     notesDir.listFiles()?.filter { it.extension == "txt" }?.forEach { noteFile ->
                         zip.putNextEntry(ZipEntry("notes/${noteFile.name}"))
                         FileInputStream(noteFile).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+
+                // 6. Backup call recordings & their metadata (favourites & notes)
+                if (backupRecordings) {
+                    val backedUpRecordingNames = mutableSetOf<String>()
+                    val recordingsMetaArray = JSONArray()
+
+                    val favPrefs = context.getSharedPreferences(PREFS_RECORDER_FAV, Context.MODE_PRIVATE)
+                    val notesPrefs = context.getSharedPreferences(PREFS_RECORDER_NOTES, Context.MODE_PRIVATE)
+
+                    // Helper to copy recording and record metadata
+                    fun archiveRecording(name: String, openInput: () -> java.io.InputStream, uriString: String?) {
+                        if (!backedUpRecordingNames.add(name)) return
+                        zip.putNextEntry(ZipEntry("recordings/$name"))
+                        openInput().use { it.copyTo(zip) }
+                        zip.closeEntry()
+
+                        val isFav = if (uriString != null) favPrefs.getBoolean(uriString, false) else false
+                        val note = if (uriString != null) notesPrefs.getString(uriString, "") ?: "" else ""
+                        if (isFav || note.isNotBlank()) {
+                            val item = JSONObject()
+                            item.put("fileName", name)
+                            item.put("isFavourite", isFav)
+                            item.put("noteText", note)
+                            recordingsMetaArray.put(item)
+                        }
+                    }
+
+                    // A) App private storage recordings
+                    val privateDir = com.coolappstore.evercallrecorder.by.svhp.system.storage.SafHelper.getPrivateStorageDir(context)
+                    val authority = com.coolappstore.evercallrecorder.by.svhp.system.storage.SafHelper.getPrivateStorageAuthority(context)
+                    privateDir.listFiles()?.filter { it.isFile }?.forEach { file ->
+                        val uriStr = try {
+                            androidx.core.content.FileProvider.getUriForFile(context, authority, file).toString()
+                        } catch (_: Exception) { null }
+                        archiveRecording(file.name, { FileInputStream(file) }, uriStr)
+                    }
+
+                    // B) SAF folder recordings if configured
+                    val appPrefs = com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences(context)
+                    val folderUri = appPrefs.getRecordingFolderUri()
+                    if (folderUri != null) {
+                        try {
+                            val dir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, folderUri)
+                            if (dir != null && dir.exists() && dir.canRead()) {
+                                dir.listFiles().filter { it.isFile && it.name != null }.forEach { docFile ->
+                                    val fileName = docFile.name!!
+                                    val uriStr = docFile.uri.toString()
+                                    archiveRecording(fileName, { context.contentResolver.openInputStream(docFile.uri) ?: throw java.io.FileNotFoundException() }, uriStr)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    // Write recordings_meta.json
+                    if (recordingsMetaArray.length() > 0) {
+                        zip.putNextEntry(ZipEntry("recordings/recordings_meta.json"))
+                        zip.write(recordingsMetaArray.toString().toByteArray(Charsets.UTF_8))
                         zip.closeEntry()
                     }
                 }
@@ -164,13 +240,15 @@ object BackupManager {
     fun createBackup(
         context: Context,
         backupSettings: Boolean = true,
-        backupCallingCards: Boolean = true
+        backupCallingCards: Boolean = true,
+        backupNotes: Boolean = true,
+        backupRecordings: Boolean = true
     ): File? {
         return try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFile = File(getBackupDir(context), "EverDialer_Backup_$timestamp.everdialer")
             val ok = FileOutputStream(backupFile).use { outputStream ->
-                writeBackup(context, outputStream, backupSettings, backupCallingCards)
+                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings)
             }
             if (ok) backupFile else null
         } catch (_: Exception) {
@@ -182,6 +260,10 @@ object BackupManager {
         return try {
             var restoredAny = false
             var restoredRivoFromPrefsDir = false
+            var recordingsRestoredCount = 0
+            var restoredMetaJson: String? = null
+
+            val privateRecDir = com.coolappstore.evercallrecorder.by.svhp.system.storage.SafHelper.getPrivateStorageDir(context)
 
             ZipInputStream(FileInputStream(backupFile)).use { zip ->
                 var entry = zip.nextEntry
@@ -213,6 +295,13 @@ object BackupManager {
                                 restoredAny = true
                             }
                         }
+                        name == "custom_font.ttf" -> {
+                            val fontFile = File(context.filesDir, "custom_font.ttf")
+                            FileOutputStream(fontFile).use { zip.copyTo(it) }
+                            val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
+                            rivoPrefs.edit().putString(PreferenceManager.KEY_CUSTOM_FONT_PATH, fontFile.absolutePath).apply()
+                            restoredAny = true
+                        }
                         name.startsWith("backgrounds/") -> {
                             val fileName = name.removePrefix("backgrounds/")
                             if (fileName.isNotEmpty()) {
@@ -232,10 +321,63 @@ object BackupManager {
                                 restoredAny = true
                             }
                         }
+                        name == "recordings/recordings_meta.json" -> {
+                            restoredMetaJson = zip.readBytes().toString(Charsets.UTF_8)
+                            restoredAny = true
+                        }
+                        name.startsWith("recordings/") -> {
+                            val fileName = name.removePrefix("recordings/")
+                            if (fileName.isNotEmpty() && !fileName.endsWith(".json")) {
+                                val recFile = File(privateRecDir, fileName)
+                                recFile.parentFile?.mkdirs()
+                                FileOutputStream(recFile).use { zip.copyTo(it) }
+                                recordingsRestoredCount++
+                                restoredAny = true
+                            }
+                        }
                     }
                     zip.closeEntry()
                     entry = zip.nextEntry
                 }
+            }
+
+            // If recordings were restored and recorder storage mode was unset, set it to PRIVATE so they show immediately
+            if (recordingsRestoredCount > 0) {
+                val appPrefs = com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences(context)
+                if (appPrefs.getStorageMode() == null) {
+                    appPrefs.setStorageMode(com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences.StorageMode.PRIVATE)
+                }
+            }
+
+            // Restore recordings metadata (favourites and notes) re-keyed to current URIs
+            if (!restoredMetaJson.isNullOrBlank()) {
+                try {
+                    val metaArray = JSONArray(restoredMetaJson)
+                    val favPrefs = context.getSharedPreferences(PREFS_RECORDER_FAV, Context.MODE_PRIVATE)
+                    val notesPrefs = context.getSharedPreferences(PREFS_RECORDER_NOTES, Context.MODE_PRIVATE)
+                    val favEditor = favPrefs.edit()
+                    val notesEditor = notesPrefs.edit()
+
+                    val authority = com.coolappstore.evercallrecorder.by.svhp.system.storage.SafHelper.getPrivateStorageAuthority(context)
+
+                    for (i in 0 until metaArray.length()) {
+                        val item = metaArray.getJSONObject(i)
+                        val fileName = item.optString("fileName", "")
+                        val isFav = item.optBoolean("isFavourite", false)
+                        val note = item.optString("noteText", "")
+
+                        if (fileName.isNotEmpty()) {
+                            val localFile = File(privateRecDir, fileName)
+                            if (localFile.exists()) {
+                                val uri = androidx.core.content.FileProvider.getUriForFile(context, authority, localFile).toString()
+                                if (isFav) favEditor.putBoolean(uri, true)
+                                if (note.isNotEmpty()) notesEditor.putString(uri, note)
+                            }
+                        }
+                    }
+                    favEditor.apply()
+                    notesEditor.apply()
+                } catch (_: Exception) {}
             }
 
             // Fix and validate all background paths after restore so they point to current device directories
@@ -296,14 +438,26 @@ object BackupManager {
         val meta = JSONObject()
         map.forEach { (key, value) ->
             when (value) {
-                is Boolean -> json.put(key, value)
-                is Int -> json.put(key, value)
-                is Long -> json.put(key, value)
+                is Boolean -> {
+                    json.put(key, value)
+                    meta.put(key, "boolean")
+                }
+                is Int -> {
+                    json.put(key, value)
+                    meta.put(key, "int")
+                }
+                is Long -> {
+                    json.put(key, value)
+                    meta.put(key, "long")
+                }
                 is Float -> {
                     json.put(key, value.toDouble())
                     meta.put(key, "float")
                 }
-                is String -> json.put(key, value)
+                is String -> {
+                    json.put(key, value)
+                    meta.put(key, "string")
+                }
                 is Set<*> -> {
                     val arr = JSONArray()
                     value.forEach { item -> if (item != null) arr.put(item.toString()) }
@@ -320,17 +474,29 @@ object BackupManager {
 
     private fun prefsToJson(prefs: SharedPreferences): String {
         val json = JSONObject()
-        val meta = JSONObject() // store type hints for ambiguous types
+        val meta = JSONObject() // store type hints for unambiguous restore
         prefs.all.forEach { (key, value) ->
             when (value) {
-                is Boolean -> json.put(key, value)
-                is Int -> json.put(key, value)
-                is Long -> json.put(key, value)
+                is Boolean -> {
+                    json.put(key, value)
+                    meta.put(key, "boolean")
+                }
+                is Int -> {
+                    json.put(key, value)
+                    meta.put(key, "int")
+                }
+                is Long -> {
+                    json.put(key, value)
+                    meta.put(key, "long")
+                }
                 is Float -> {
                     json.put(key, value.toDouble())
                     meta.put(key, "float")
                 }
-                is String -> json.put(key, value)
+                is String -> {
+                    json.put(key, value)
+                    meta.put(key, "string")
+                }
                 is Set<*> -> {
                     val arr = JSONArray()
                     value.forEach { item -> if (item != null) arr.put(item.toString()) }
@@ -356,10 +522,44 @@ object BackupManager {
 
             val bgDir = getBackgroundsDir(context)
 
+            fun remapString(key: String, strValue: String): String {
+                val isMediaKey = key.endsWith("_bg_path") ||
+                        key.endsWith("_custom_pfp_path") ||
+                        key.endsWith("_pfp_path") ||
+                        key == PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH ||
+                        key == PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH
+                return if (isMediaKey && strValue.isNotBlank()) {
+                    val fileName = File(strValue).name
+                    val localFile = File(bgDir, fileName)
+                    if (localFile.exists()) localFile.absolutePath else strValue
+                } else if (key == PreferenceManager.KEY_CUSTOM_FONT_PATH && strValue.isNotBlank()) {
+                    val fontFile = File(context.filesDir, "custom_font.ttf")
+                    if (fontFile.exists()) fontFile.absolutePath else strValue
+                } else {
+                    strValue
+                }
+            }
+
             jsonObj.keys().forEach { key ->
                 val typeHint = meta.optString(key, "")
-                when {
-                    typeHint == "string_set" -> {
+                when (typeHint) {
+                    "boolean" -> {
+                        editor.putBoolean(key, jsonObj.getBoolean(key))
+                    }
+                    "int" -> {
+                        editor.putInt(key, jsonObj.getInt(key))
+                    }
+                    "long" -> {
+                        editor.putLong(key, jsonObj.getLong(key))
+                    }
+                    "float" -> {
+                        editor.putFloat(key, jsonObj.getDouble(key).toFloat())
+                    }
+                    "string" -> {
+                        val str = jsonObj.optString(key, "")
+                        editor.putString(key, remapString(key, str))
+                    }
+                    "string_set" -> {
                         val arr = jsonObj.optJSONArray(key)
                         if (arr != null) {
                             val set = mutableSetOf<String>()
@@ -369,10 +569,8 @@ object BackupManager {
                             editor.putStringSet(key, set)
                         }
                     }
-                    typeHint == "float" -> {
-                        editor.putFloat(key, jsonObj.getDouble(key).toFloat())
-                    }
                     else -> {
+                        // Fallback for legacy backups without full type hints
                         when (val value = jsonObj.get(key)) {
                             is Boolean -> editor.putBoolean(key, value)
                             is Int -> editor.putInt(key, value)
@@ -382,20 +580,7 @@ object BackupManager {
                             }
                             is Double -> editor.putFloat(key, value.toFloat())
                             is String -> {
-                                // Remap background / custom PFP path to current device backgrounds dir if applicable
-                                val isMediaKey = key.endsWith("_bg_path") ||
-                                        key.endsWith("_custom_pfp_path") ||
-                                        key.endsWith("_pfp_path") ||
-                                        key == PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH ||
-                                        key == PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH
-                                val finalStr = if (isMediaKey && value.isNotBlank()) {
-                                    val fileName = File(value).name
-                                    val localFile = File(bgDir, fileName)
-                                    if (localFile.exists()) localFile.absolutePath else value
-                                } else {
-                                    value
-                                }
-                                editor.putString(key, finalStr)
+                                editor.putString(key, remapString(key, value))
                             }
                             is JSONArray -> {
                                 val set = mutableSetOf<String>()

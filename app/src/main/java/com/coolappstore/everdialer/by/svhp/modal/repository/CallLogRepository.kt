@@ -57,13 +57,15 @@ class CallLogRepository(
     )
 
     private data class RawCall(
+        val id: Long,
         val number: String,
         val digits: String,
         val cachedName: String?,
         val type: Int,
         val date: Long,
         val duration: Long,
-        val simSlot: Int
+        val simSlot: Int,
+        val callIds: List<Long> = if (id > 0) listOf(id) else emptyList()
     )
 
     // The suffix length used to bucket saved numbers for fast lookup. Must match
@@ -158,7 +160,11 @@ class CallLogRepository(
             val canMerge = raw.digits.isNotEmpty() &&
                 lastEntry != null && lastEntry.number == raw.number && isSameCalendarDay(lastEntry.date, raw.date)
             if (canMerge) {
-                callLogs[callLogs.size - 1] = lastEntry!!.copy(types = lastEntry.types + raw.type)
+                callLogs[callLogs.size - 1] = lastEntry!!.copy(
+                    types = lastEntry.types + raw.type,
+                    callIds = lastEntry.callIds + raw.callIds,
+                    dates = lastEntry.dates + raw.date
+                )
             } else {
                 callLogs.add(
                     CallLogEntry(
@@ -171,7 +177,9 @@ class CallLogRepository(
                         contactId = match?.contactId?.toString(),
                         types = listOf(raw.type),
                         isCallerIdName = isCallerIdName,
-                        simSlot = raw.simSlot
+                        simSlot = raw.simSlot,
+                        callIds = raw.callIds,
+                        dates = listOf(raw.date)
                     )
                 )
             }
@@ -185,6 +193,7 @@ class CallLogRepository(
     private fun readRawCallLogRows(): List<RawCall> {
         val rows = mutableListOf<RawCall>()
         val projection = arrayOf(
+            CallLog.Calls._ID,
             CallLog.Calls.NUMBER,
             CallLog.Calls.CACHED_NAME,
             CallLog.Calls.TYPE,
@@ -200,6 +209,7 @@ class CallLogRepository(
             null,
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
+            val idIdx = cursor.getColumnIndex(CallLog.Calls._ID)
             val numberIdx = cursor.getColumnIndex(CallLog.Calls.NUMBER)
             val cachedNameIdx = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME)
             val typeIdx = cursor.getColumnIndex(CallLog.Calls.TYPE)
@@ -208,6 +218,7 @@ class CallLogRepository(
             val phoneAccountIdIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
 
             while (cursor.moveToNext()) {
+                val id = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
                 val number = cursor.getString(numberIdx) ?: "Unknown"
                 val phoneAccountId = if (phoneAccountIdIdx >= 0) cursor.getString(phoneAccountIdIdx) else null
                 val simSlot = if (phoneAccountId.isNullOrBlank()) -1 else
@@ -221,13 +232,15 @@ class CallLogRepository(
 
                 rows.add(
                     RawCall(
+                        id = id,
                         number = number,
                         digits = number.filter { it.isDigit() },
                         cachedName = cursor.getString(cachedNameIdx),
                         type = type,
                         date = date,
                         duration = duration,
-                        simSlot = simSlot
+                        simSlot = simSlot,
+                        callIds = if (id > 0) listOf(id) else emptyList()
                     )
                 )
             }
@@ -255,7 +268,12 @@ class CallLogRepository(
                 prev.type == row.type &&
                 prev.date == row.date &&
                 prev.duration == row.duration
-            if (!isDuplicate) result.add(row)
+            if (isDuplicate) {
+                // Collapse duplicate provider rows, preserving all physical DB IDs
+                result[result.size - 1] = prev.copy(callIds = prev.callIds + row.callIds)
+            } else {
+                result.add(row)
+            }
         }
         return result
     }
@@ -413,5 +431,43 @@ class CallLogRepository(
                 }
             }
         } catch (_: Exception) {}
+    }
+
+    override fun deleteCallLog(entry: CallLogEntry): Boolean {
+        return deleteCallLogs(listOf(entry))
+    }
+
+    override fun deleteCallLogs(entries: Collection<CallLogEntry>): Boolean {
+        if (entries.isEmpty()) return true
+        return try {
+            val allIds = entries.flatMap { it.callIds }.filter { it > 0 }.distinct()
+            if (allIds.isNotEmpty()) {
+                allIds.chunked(500).forEach { chunk ->
+                    val inClause = chunk.joinToString(",")
+                    contentResolver.delete(
+                        CallLog.Calls.CONTENT_URI,
+                        "${CallLog.Calls._ID} IN ($inClause)",
+                        null
+                    )
+                }
+            }
+
+            // Also delete by number and dates as a guarantee / fallback for un-indexed rows
+            for (entry in entries) {
+                val targetDates = (entry.dates + entry.date).distinct()
+                targetDates.chunked(100).forEach { dateChunk ->
+                    val placeholders = dateChunk.map { "?" }.joinToString(",")
+                    val args = (listOf(entry.number) + dateChunk.map { it.toString() }).toTypedArray()
+                    contentResolver.delete(
+                        CallLog.Calls.CONTENT_URI,
+                        "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} IN ($placeholders)",
+                        args
+                    )
+                }
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 }

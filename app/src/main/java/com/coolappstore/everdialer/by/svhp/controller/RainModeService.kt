@@ -45,11 +45,8 @@ class RainModeService : Service(), SensorEventListener {
     private var isProximityNear = false
     private var proximityThreshold = 0f
 
-    // Horizontal "chop-chop" (X-axis) shake tracking
-    private var lastDirectionChangeTimestamp = 0L
-    private var lastDirection = 0 // -1 = Left, +1 = Right
-    private var reversalCount = 0
     private var lastTriggerTimestamp = 0L
+    private var shakeDetector: RainModeManager.ShakePatternDetector? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -71,11 +68,11 @@ class RainModeService : Service(), SensorEventListener {
 
         startAsForeground()
 
-        reversalCount = 0
-        lastDirection = 0
-        lastDirectionChangeTimestamp = 0L
         lastTriggerTimestamp = 0L
         isProximityNear = false
+        shakeDetector = RainModeManager.ShakePatternDetector(shakeIntensity) {
+            handleShakeAction()
+        }
 
         // Register accelerometer
         sensorManager?.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
@@ -141,52 +138,18 @@ class RainModeService : Service(), SensorEventListener {
                 return
             }
 
-            // We specifically detect horizontal side-to-side (X-axis) "chop chop" motion:
-            // e.g. Left -> Right -> Left or Right -> Left -> Right.
-            val ax = event.values[0]
-            val threshold = RainModeManager.calculateThresholdG(shakeIntensity)
-            // Convert threshold g to m/s^2 along X axis (e.g. 1.1g ~ 10.8 m/s^2, 1.75g ~ 17.1 m/s^2, 2.4g ~ 23.5 m/s^2)
-            val thresholdAccelX = threshold * SensorManager.GRAVITY_EARTH
-            val now = System.currentTimeMillis()
-
-            if (now - lastTriggerTimestamp < 1500L) {
+            if (System.currentTimeMillis() - lastTriggerTimestamp < 1500L) {
                 return
             }
 
-            // Check if current X acceleration exceeds the directional threshold
-            val currentDirection = when {
-                ax > thresholdAccelX -> 1   // Moving right / tilted sharply right
-                ax < -thresholdAccelX -> -1 // Moving left / tilted sharply left
-                else -> 0
-            }
-
-            if (currentDirection != 0) {
-                // If it's been too long since the last directional reversal (>600ms), start fresh
-                if (now - lastDirectionChangeTimestamp > 600L) {
-                    reversalCount = 1
-                    lastDirection = currentDirection
-                    lastDirectionChangeTimestamp = now
-                } else if (currentDirection != lastDirection && (now - lastDirectionChangeTimestamp) > 70L) {
-                    // Direction flipped (e.g. Left -> Right or Right -> Left)
-                    reversalCount++
-                    lastDirection = currentDirection
-                    lastDirectionChangeTimestamp = now
-
-                    // 3 directional movements (e.g. Left -> Right -> Left or Right -> Left -> Right)
-                    // constitutes a deliberate "chop chop" shake gesture!
-                    if (reversalCount >= 3) {
-                        reversalCount = 0
-                        lastDirection = 0
-                        lastTriggerTimestamp = now
-                        handleShakeAction()
-                    }
-                }
-            }
+            shakeDetector?.processEvent(event)
         }
     }
 
     private fun handleShakeAction() {
         Log.d(TAG, "Shake gesture detected in RainModeService")
+        lastTriggerTimestamp = System.currentTimeMillis()
+        shakeDetector?.reset()
         val handler = Handler(Looper.getMainLooper())
         handler.post {
             val incoming = CallService.incomingCallSession.value?.call
@@ -236,6 +199,8 @@ class RainModeService : Service(), SensorEventListener {
         sensorManager = null
         accelerometer = null
         proximitySensor = null
+        shakeDetector?.reset()
+        shakeDetector = null
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stopForeground(STOP_FOREGROUND_REMOVE)
         else @Suppress("DEPRECATION") stopForeground(true)

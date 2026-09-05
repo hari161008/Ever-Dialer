@@ -87,42 +87,16 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val accel = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-        var reversalCount = 0
-        var lastDirection = 0
-        var lastDirectionChangeTime = 0L
+        val detector = RainModeManager.ShakePatternDetector(shakeIntensity) {
+            lastLiveShakeTime = System.currentTimeMillis()
+            isShakingActive = true
+            VolumeDndAccessibilityService.performVibration(context, longArrayOf(0, 70))
+        }
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
-                if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-                val ax = event.values[0]
-                val threshold = RainModeManager.calculateThresholdG(shakeIntensity)
-                val thresholdAccelX = threshold * SensorManager.GRAVITY_EARTH
-                val now = System.currentTimeMillis()
-
-                val currentDirection = when {
-                    ax > thresholdAccelX -> 1   // Right
-                    ax < -thresholdAccelX -> -1 // Left
-                    else -> 0
-                }
-
-                if (currentDirection != 0) {
-                    if (now - lastDirectionChangeTime > 600L) {
-                        reversalCount = 1
-                        lastDirection = currentDirection
-                        lastDirectionChangeTime = now
-                    } else if (currentDirection != lastDirection && (now - lastDirectionChangeTime) > 70L) {
-                        reversalCount++
-                        lastDirection = currentDirection
-                        lastDirectionChangeTime = now
-
-                        if (reversalCount >= 3) {
-                            reversalCount = 0
-                            lastDirection = 0
-                            lastLiveShakeTime = now
-                            isShakingActive = true
-                            VolumeDndAccessibilityService.performVibration(context, longArrayOf(0, 70))
-                        }
-                    }
+                if (event != null) {
+                    detector.processEvent(event)
                 }
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -133,6 +107,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         }
 
         onDispose {
+            detector.reset()
             sm?.unregisterListener(listener)
         }
     }
@@ -177,49 +152,9 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
             SettingsSearchEntryPoint(navigator = navigator)
 
-            // ── Information & Overview Card ─────────────────────────────
-            RivoAnimatedSection(delayMs = 0L) {
-                RivoExpressiveCard {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0xFF0288D1).copy(alpha = 0.15f),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Outlined.WaterDrop,
-                                    contentDescription = null,
-                                    tint = Color(0xFF0288D1),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Shake Gesture Control",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "When water or rain makes your touch screen unresponsive, shake your device side-to-side (left-right chop-chop) to answer an incoming call or decline/end a call. During incoming calls, gestures are automatically ignored if the proximity sensor is covered.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
             // ── Sensor Warning (if accelerometer is missing) ────────────
             if (!hasAccelerometer) {
-                RivoAnimatedSection(delayMs = 40L) {
+                RivoAnimatedSection(delayMs = 0L) {
                     RivoExpressiveCard {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -248,7 +183,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             }
 
             // ── Main Toggle ─────────────────────────────────────────────
-            RivoAnimatedSection(delayMs = 80L) {
+            RivoAnimatedSection(delayMs = 0L) {
                 Column {
                     RainModeSectionLabel("Rain Mode")
                     RivoExpressiveCard {
@@ -370,7 +305,7 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                                     .background(if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.outline)
                                             )
                                             Text(
-                                                text = if (isShakingActive) "Chop-Chop Shake Detected!" else "Live test: Shake side-to-side (left-right) to test threshold",
+                                                text = if (isShakingActive) "Shake Gesture Detected!" else "Live test: Shake left-right-left-right to test threshold",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = if (isShakingActive) FontWeight.Bold else FontWeight.Normal,
                                                 color = if (isShakingActive) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant

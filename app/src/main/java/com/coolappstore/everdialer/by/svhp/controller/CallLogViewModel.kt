@@ -158,6 +158,45 @@ class CallLogViewModel(
         fetchLogs(forceRefresh = true)
     }
 
+    fun deleteCallLog(entry: CallLogEntry) {
+        viewModelScope.launch(Dispatchers.IO) {
+            callLogRepo.deleteCallLog(entry)
+            fetchLogs(forceRefresh = true)
+        }
+    }
+
+    fun deleteCallLogs(entries: Collection<CallLogEntry>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            callLogRepo.deleteCallLogs(entries)
+            fetchLogs(forceRefresh = true)
+        }
+    }
+
+    fun deleteCallLogsByKeys(keys: Set<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentLogs = _allCallLogs.value
+            val entriesToDelete = currentLogs.filter { "${it.number}|${it.date}" in keys }
+            if (entriesToDelete.isNotEmpty()) {
+                callLogRepo.deleteCallLogs(entriesToDelete)
+            } else {
+                // Fallback if entries not found in memory
+                keys.forEach { key ->
+                    val parts = key.split("|", limit = 2)
+                    if (parts.size == 2) {
+                        try {
+                            getApplication<Application>().contentResolver.delete(
+                                CallLog.Calls.CONTENT_URI,
+                                "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
+                                arrayOf(parts[0], parts[1])
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+            fetchLogs(forceRefresh = true)
+        }
+    }
+
     private fun fetchLogs(forceRefresh: Boolean = false) {
         if (!forceRefresh && cachedLogs.isNotEmpty()) {
             _allCallLogs.value = cachedLogs
@@ -181,7 +220,8 @@ class CallLogViewModel(
             val changed = result.size != cachedLogs.size ||
                 result.zip(cachedLogs).any { (a, b) ->
                     a.number != b.number || a.date != b.date || a.type != b.type ||
-                        a.name != b.name || a.photoUri != b.photoUri
+                        a.name != b.name || a.photoUri != b.photoUri || a.count != b.count ||
+                        a.callIds != b.callIds
                 }
             cachedLogs = result
             if (changed) {
@@ -220,6 +260,12 @@ class CallLogViewModel(
                 val typesArr = JSONArray()
                 e.types.forEach { typesArr.put(it) }
                 obj.put("types", typesArr)
+                val callIdsArr = JSONArray()
+                e.callIds.forEach { callIdsArr.put(it) }
+                obj.put("callIds", callIdsArr)
+                val datesArr = JSONArray()
+                e.dates.forEach { datesArr.put(it) }
+                obj.put("dates", datesArr)
                 arr.put(obj)
             }
             cacheFile.writeText(arr.toString())
@@ -238,6 +284,16 @@ class CallLogViewModel(
                 if (typesArr != null) {
                     for (j in 0 until typesArr.length()) types.add(typesArr.getInt(j))
                 }
+                val callIdsArr = obj.optJSONArray("callIds")
+                val callIds = mutableListOf<Long>()
+                if (callIdsArr != null) {
+                    for (j in 0 until callIdsArr.length()) callIds.add(callIdsArr.getLong(j))
+                }
+                val datesArr = obj.optJSONArray("dates")
+                val dates = mutableListOf<Long>()
+                if (datesArr != null) {
+                    for (j in 0 until datesArr.length()) dates.add(datesArr.getLong(j))
+                }
                 list.add(
                     CallLogEntry(
                         number = obj.getString("number"),
@@ -249,7 +305,9 @@ class CallLogViewModel(
                         contactId = obj.getString("contactId").ifEmpty { null },
                         types = types,
                         isCallerIdName = obj.optBoolean("isCallerIdName", false),
-                        simSlot = obj.optInt("simSlot", -1)
+                        simSlot = obj.optInt("simSlot", -1),
+                        callIds = callIds,
+                        dates = dates
                     )
                 )
             }

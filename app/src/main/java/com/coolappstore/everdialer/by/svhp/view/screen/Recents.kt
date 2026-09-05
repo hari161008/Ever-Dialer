@@ -542,21 +542,9 @@ fun CallLogFullContent(
                     Button(
                         onClick = {
                             onShowSelectionDeleteConfirmChange(false)
-                            selectedLogs.forEach { key ->
-                                val parts = key.split("|", limit = 2)
-                                if (parts.size == 2) {
-                                    try {
-                                        context.contentResolver.delete(
-                                            android.provider.CallLog.Calls.CONTENT_URI,
-                                            "${android.provider.CallLog.Calls.NUMBER} = ? AND ${android.provider.CallLog.Calls.DATE} = ?",
-                                            arrayOf(parts[0], parts[1])
-                                        )
-                                    } catch (_: Exception) {}
-                                }
-                            }
+                            viewModel.deleteCallLogsByKeys(selectedLogs)
                             onSelectedLogsChange(emptySet())
                             onSelectionModeChange(false)
-                            viewModel.refreshLogs()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) { Text("Delete") }

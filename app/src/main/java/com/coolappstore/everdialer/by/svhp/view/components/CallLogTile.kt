@@ -385,12 +385,27 @@ fun CallLogTile(
                         onClick       = {
                             showMenu = false
                             try {
-                                // Delete only this specific call log entry by its exact timestamp
-                                context.contentResolver.delete(
-                                    CallLog.Calls.CONTENT_URI,
-                                    "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} = ?",
-                                    arrayOf(log.number, log.date.toString())
-                                )
+                                val allIds = log.callIds.filter { it > 0 }.distinct()
+                                if (allIds.isNotEmpty()) {
+                                    allIds.chunked(500).forEach { chunk ->
+                                        val inClause = chunk.joinToString(",")
+                                        context.contentResolver.delete(
+                                            CallLog.Calls.CONTENT_URI,
+                                            "${CallLog.Calls._ID} IN ($inClause)",
+                                            null
+                                        )
+                                    }
+                                }
+                                val targetDates = (log.dates + log.date).distinct()
+                                targetDates.chunked(100).forEach { dateChunk ->
+                                    val placeholders = dateChunk.map { "?" }.joinToString(",")
+                                    val args = (listOf(log.number) + dateChunk.map { it.toString() }).toTypedArray()
+                                    context.contentResolver.delete(
+                                        CallLog.Calls.CONTENT_URI,
+                                        "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} IN ($placeholders)",
+                                        args
+                                    )
+                                }
                                 onDelete?.invoke()
                                 Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) {

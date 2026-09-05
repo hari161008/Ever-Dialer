@@ -168,6 +168,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var showBackupDialog  by remember { mutableStateOf(false) }
     var pendingBackupSettings by remember { mutableStateOf(true) }
     var pendingBackupCallingCards by remember { mutableStateOf(true) }
+    var pendingBackupNotes by remember { mutableStateOf(true) }
+    var pendingBackupRecordings by remember { mutableStateOf(true) }
 
     var visible by remember { mutableStateOf(false) }
     var isClosing by remember { mutableStateOf(false) }
@@ -198,10 +200,18 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri: Uri? ->
         if (uri != null) {
+            backupState = BackupDialogState.Creating
             scope.launch(Dispatchers.IO) {
                 try {
                     val ok = context.contentResolver.openOutputStream(uri)?.use { output ->
-                        BackupManager.writeBackup(context, output, pendingBackupSettings, pendingBackupCallingCards)
+                        BackupManager.writeBackup(
+                            context,
+                            output,
+                            pendingBackupSettings,
+                            pendingBackupCallingCards,
+                            pendingBackupNotes,
+                            pendingBackupRecordings
+                        )
                     } ?: false
                     withContext(Dispatchers.Main) {
                         backupState = if (ok) {
@@ -830,10 +840,17 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     if (showBackupDialog) {
         CreateBackupDialog(
             onDismiss = { showBackupDialog = false },
-            onShare = { backupSettings, backupCallingCards ->
+            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings ->
                 showBackupDialog = false
+                backupState = BackupDialogState.Creating
                 scope.launch(Dispatchers.IO) {
-                    val file = BackupManager.createBackup(context, backupSettings, backupCallingCards)
+                    val file = BackupManager.createBackup(
+                        context,
+                        backupSettings,
+                        backupCallingCards,
+                        backupNotes,
+                        backupRecordings
+                    )
                     withContext(Dispatchers.Main) {
                         if (file != null) {
                             val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -854,10 +871,12 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                 }
             },
-            onSave = { backupSettings, backupCallingCards ->
+            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings ->
                 showBackupDialog = false
                 pendingBackupSettings = backupSettings
                 pendingBackupCallingCards = backupCallingCards
+                pendingBackupNotes = backupNotes
+                pendingBackupRecordings = backupRecordings
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
             }
@@ -865,6 +884,14 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     }
 
     when (val state = backupState) {
+        is BackupDialogState.Creating -> Dialog(onDismissRequest = {}) {
+            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    CircularProgressIndicator()
+                    Text("Creating backup…", style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
         is BackupDialogState.Restoring -> Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1707,6 +1734,7 @@ private data class SettingsSearchEntry(
 
 private sealed class BackupDialogState {
     object Idle : BackupDialogState()
+    object Creating : BackupDialogState()
     object Restoring : BackupDialogState()
     data class BackupSuccess(val path: String) : BackupDialogState()
     object RestoreSuccess : BackupDialogState()
@@ -1746,11 +1774,15 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
 @Composable
 private fun CreateBackupDialog(
     onDismiss: () -> Unit,
-    onShare: (backupSettings: Boolean, backupCallingCards: Boolean) -> Unit,
-    onSave: (backupSettings: Boolean, backupCallingCards: Boolean) -> Unit
+    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean) -> Unit,
+    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean) -> Unit
 ) {
     var backupSettings by remember { mutableStateOf(true) }
     var backupCallingCards by remember { mutableStateOf(true) }
+    var backupNotes by remember { mutableStateOf(true) }
+    var backupRecordings by remember { mutableStateOf(true) }
+
+    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1811,11 +1843,29 @@ private fun CreateBackupDialog(
                     CardDivider()
                     RivoSwitchListItem(
                         headline = "Backup calling cards",
-                        supporting = "Saved contact notes, calling cards, and contact PFP customization",
+                        supporting = "Saved calling cards, contact backgrounds and PFP customization",
                         leadingIcon = Icons.Outlined.ContactPhone,
                         iconContainerColor = Color(0xFF2196F3),
                         checked = backupCallingCards,
                         onCheckedChange = { backupCallingCards = it }
+                    )
+                    CardDivider()
+                    RivoSwitchListItem(
+                        headline = "Backup notes",
+                        supporting = "Contact notes and general standalone notes",
+                        leadingIcon = Icons.Outlined.Notes,
+                        iconContainerColor = Color(0xFF9C27B0),
+                        checked = backupNotes,
+                        onCheckedChange = { backupNotes = it }
+                    )
+                    CardDivider()
+                    RivoSwitchListItem(
+                        headline = "Backup call recordings",
+                        supporting = "Audio recordings, favourites and recording notes",
+                        leadingIcon = Icons.Outlined.Mic,
+                        iconContainerColor = Color(0xFFE53935),
+                        checked = backupRecordings,
+                        onCheckedChange = { backupRecordings = it }
                     )
                 }
 
@@ -1826,8 +1876,8 @@ private fun CreateBackupDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { onShare(backupSettings, backupCallingCards) },
-                        enabled = backupSettings || backupCallingCards,
+                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings) },
+                        enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -1844,8 +1894,8 @@ private fun CreateBackupDialog(
                     }
 
                     Button(
-                        onClick = { onSave(backupSettings, backupCallingCards) },
-                        enabled = backupSettings || backupCallingCards,
+                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings) },
+                        enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
