@@ -176,6 +176,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var pendingBackupNotes by remember { mutableStateOf(true) }
     var pendingBackupRecordings by remember { mutableStateOf(true) }
     var pendingBackupContacts by remember { mutableStateOf(false) }
+    var pendingBackupCallLogs by remember { mutableStateOf(false) }
 
     var showRestoreDialog by remember { mutableStateOf(false) }
     var pendingRestoreFile by remember { mutableStateOf<File?>(null) }
@@ -197,7 +198,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             pendingBackupCallingCards,
                             pendingBackupNotes,
                             pendingBackupRecordings,
-                            pendingBackupContacts
+                            pendingBackupContacts,
+                            pendingBackupCallLogs
                         )
                     } ?: false
                     withContext(Dispatchers.Main) {
@@ -825,7 +827,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     if (showBackupDialog) {
         CreateBackupDialog(
             onDismiss = { showBackupDialog = false },
-            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts ->
+            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs ->
                 showBackupDialog = false
                 backupState = BackupDialogState.Creating
                 scope.launch(Dispatchers.IO) {
@@ -835,7 +837,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         backupCallingCards,
                         backupNotes,
                         backupRecordings,
-                        backupContacts
+                        backupContacts,
+                        backupCallLogs
                     )
                     withContext(Dispatchers.Main) {
                         if (file != null) {
@@ -857,13 +860,14 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                 }
             },
-            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts ->
+            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs ->
                 showBackupDialog = false
                 pendingBackupSettings = backupSettings
                 pendingBackupCallingCards = backupCallingCards
                 pendingBackupNotes = backupNotes
                 pendingBackupRecordings = backupRecordings
                 pendingBackupContacts = backupContacts
+                pendingBackupCallLogs = backupCallLogs
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
             }
@@ -881,7 +885,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 pendingRestoreFile = null
                 pendingRestoreContents = null
             },
-            onRestore = { restoreSettings, restoreCallingCards, restoreNotes, restoreRecordings, restoreContacts ->
+            onRestore = { restoreSettings, restoreCallingCards, restoreNotes, restoreRecordings, restoreContacts, restoreCallLogs ->
                 showRestoreDialog = false
                 backupState = BackupDialogState.Restoring
                 scope.launch(Dispatchers.IO) {
@@ -893,7 +897,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             restoreCallingCards,
                             restoreNotes,
                             restoreRecordings,
-                            restoreContacts
+                            restoreContacts,
+                            restoreCallLogs
                         )
                         restoreFile.delete()
                         withContext(Dispatchers.Main) {
@@ -1814,16 +1819,17 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
 @Composable
 private fun CreateBackupDialog(
     onDismiss: () -> Unit,
-    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean) -> Unit,
-    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean) -> Unit
+    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit,
+    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit
 ) {
     var backupSettings by remember { mutableStateOf(true) }
     var backupCallingCards by remember { mutableStateOf(true) }
     var backupNotes by remember { mutableStateOf(true) }
     var backupRecordings by remember { mutableStateOf(true) }
     var backupContacts by remember { mutableStateOf(false) }
+    var backupCallLogs by remember { mutableStateOf(false) }
 
-    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings || backupContacts
+    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings || backupContacts || backupCallLogs
     val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
     Dialog(
@@ -1925,6 +1931,15 @@ private fun CreateBackupDialog(
                             checked = backupContacts,
                             onCheckedChange = { backupContacts = it }
                         )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Backup call logs",
+                            supporting = "Device call history and logs",
+                            leadingIcon = Icons.Outlined.History,
+                            iconContainerColor = Color(0xFF009688),
+                            checked = backupCallLogs,
+                            onCheckedChange = { backupCallLogs = it }
+                        )
                     }
                 }
 
@@ -1935,7 +1950,7 @@ private fun CreateBackupDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts) },
+                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -1953,7 +1968,7 @@ private fun CreateBackupDialog(
                     }
 
                     Button(
-                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts) },
+                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
@@ -1987,19 +2002,21 @@ private fun CreateBackupDialog(
 private fun RestoreBackupDialog(
     contents: BackupManager.BackupContents,
     onDismiss: () -> Unit,
-    onRestore: (restoreSettings: Boolean, restoreCallingCards: Boolean, restoreNotes: Boolean, restoreRecordings: Boolean, restoreContacts: Boolean) -> Unit
+    onRestore: (restoreSettings: Boolean, restoreCallingCards: Boolean, restoreNotes: Boolean, restoreRecordings: Boolean, restoreContacts: Boolean, restoreCallLogs: Boolean) -> Unit
 ) {
     var restoreSettings by remember { mutableStateOf(contents.hasSettings) }
     var restoreCallingCards by remember { mutableStateOf(contents.hasCallingCards) }
     var restoreNotes by remember { mutableStateOf(contents.hasNotes) }
     var restoreRecordings by remember { mutableStateOf(contents.hasRecordings) }
     var restoreContacts by remember { mutableStateOf(contents.hasContacts) }
+    var restoreCallLogs by remember { mutableStateOf(contents.hasCallLogs) }
 
     val hasAnySelected = (restoreSettings && contents.hasSettings) ||
             (restoreCallingCards && contents.hasCallingCards) ||
             (restoreNotes && contents.hasNotes) ||
             (restoreRecordings && contents.hasRecordings) ||
-            (restoreContacts && contents.hasContacts)
+            (restoreContacts && contents.hasContacts) ||
+            (restoreCallLogs && contents.hasCallLogs)
 
     val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
@@ -2107,6 +2124,16 @@ private fun RestoreBackupDialog(
                             enabled = contents.hasContacts,
                             onCheckedChange = { restoreContacts = it }
                         )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Restore call logs",
+                            supporting = if (contents.hasCallLogs) "Device call history and logs" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.History,
+                            iconContainerColor = Color(0xFF009688),
+                            checked = restoreCallLogs && contents.hasCallLogs,
+                            enabled = contents.hasCallLogs,
+                            onCheckedChange = { restoreCallLogs = it }
+                        )
                     }
                 }
 
@@ -2123,7 +2150,8 @@ private fun RestoreBackupDialog(
                                 restoreCallingCards && contents.hasCallingCards,
                                 restoreNotes && contents.hasNotes,
                                 restoreRecordings && contents.hasRecordings,
-                                restoreContacts && contents.hasContacts
+                                restoreContacts && contents.hasContacts,
+                                restoreCallLogs && contents.hasCallLogs
                             )
                         },
                         enabled = hasAnySelected,

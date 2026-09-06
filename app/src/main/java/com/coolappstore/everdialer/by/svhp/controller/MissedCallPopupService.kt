@@ -54,11 +54,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
+import android.content.res.Configuration
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
@@ -517,6 +520,1213 @@ class MissedCallPopupService : Service() {
                 },
             contentAlignment = Alignment.Center
         ) {
+            val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+            val hasPfp = !photoUri.isNullOrBlank()
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val headerGradient = if (isDark) {
+                listOf(
+                    Color(0xFF684E12),
+                    Color(0xFF423207),
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            } else {
+                listOf(
+                    Color(0xFFFFECC2),
+                    Color(0xFFF6DE98),
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            }
+            val buttonBg = if (isDark) Color(0xFF3B2D0E) else Color(0xFFFFDE8A)
+            val buttonFg = if (isDark) Color(0xFFFFD56B) else Color(0xFF4E3714)
+
+            val replyScrollState = rememberScrollState()
+            val contactSimKey = contactId ?: phoneNumber
+            val contactSimChoice = remember(prefs, contactSimKey) { prefs.getContactSimChoice(contactSimKey) }
+            val globalSimPref = remember(prefs) { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
+
+            fun initiateCall() {
+                performAppHaptic(context, "light")
+                val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                val accounts = if (hasPhoneState && telecomManager != null) {
+                    try {
+                        telecomManager.callCapablePhoneAccounts
+                    } catch (_: Exception) { emptyList() }
+                } else emptyList()
+
+                if (accounts.size <= 1) {
+                    makeCall(context, phoneNumber, accounts.firstOrNull())
+                    triggerDismiss()
+                    return
+                }
+
+                var showPicker = false
+                placeCallWithContactSimPreference(
+                    context = context,
+                    number = phoneNumber,
+                    contactSimChoice = contactSimChoice,
+                    globalSimPref = globalSimPref,
+                    recentSimSlotForContact = null,
+                    onShowSimPicker = {
+                        showPicker = true
+                        selectedSimAccounts = accounts
+                    }
+                )
+                if (!showPicker) {
+                    triggerDismiss()
+                }
+            }
+
+            fun sendViaSms(msg: String?) {
+                performAppHaptic(context, "light")
+                val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$clean")).apply {
+                    if (!msg.isNullOrBlank() && msg != "Type custom...") {
+                        putExtra("sms_body", msg)
+                    }
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try { context.startActivity(intent) } catch (_: Exception) {}
+                triggerDismiss()
+            }
+
+            fun sendViaWhatsApp(msg: String?) {
+                performAppHaptic(context, "light")
+                val messageToSend = if (msg != "Type custom...") msg else null
+                openWhatsAppChat(context, phoneNumber, messageToSend)
+                triggerDismiss()
+            }
+
+            fun sendViaTelegram(msg: String?) {
+                performAppHaptic(context, "light")
+                val messageToSend = if (msg != "Type custom...") msg else null
+                openTelegramChat(context, phoneNumber, messageToSend)
+                triggerDismiss()
+            }
+
+            val currentCardState = when {
+                selectedSimAccounts != null -> "sim"
+                selectedSocialApp != null -> "social"
+                isCustomTyping -> "custom_type"
+                selectedMessageForAppChoice != null -> "reply"
+                else -> "main"
+            }
+
+            @Composable
+            fun CallerHeaderBanner(isLand: Boolean, modifier: Modifier = Modifier) {
+                Box(
+                    modifier = modifier
+                        .clip(
+                            if (isLand) RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
+                            else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                        )
+                ) {
+                    if (hasPfp) {
+                        AsyncImage(
+                            model = photoUri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .blur(14.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color.Black.copy(alpha = 0.52f))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Brush.verticalGradient(headerGradient))
+                        )
+                    }
+
+                    if (isLand) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 18.dp),
+                            verticalArrangement = Arrangement.SpaceBetween,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Top: Avatar + info
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(72.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hasPfp) {
+                                        AsyncImage(
+                                            model = photoUri,
+                                            contentDescription = contactName,
+                                            modifier = Modifier
+                                                .size(68.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        RivoAvatar(
+                                            name = contactName,
+                                            photoUri = null,
+                                            forcePersonIcon = true,
+                                            modifier = Modifier.size(68.dp)
+                                        )
+                                    }
+
+                                    if (isMissedCall) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .size(22.dp),
+                                            shape = CircleShape,
+                                            color = Color(0xFFFFB300),
+                                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+                                            shadowElevation = 2.dp
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.CallMissed,
+                                                contentDescription = null,
+                                                tint = Color(0xFF4A3200),
+                                                modifier = Modifier.padding(3.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = if (isMissedCall) "Missed call $relativeTime, $ringText" else relativeTime,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp
+                                    ),
+                                    color = if (hasPfp || isDark) Color(0xFFFFD56B) else Color(0xFF684900),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(3.dp))
+
+                                Text(
+                                    text = contactName.ifBlank { phoneNumber },
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 21.sp
+                                    ),
+                                    color = if (hasPfp) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                if (contactName.isNotBlank() && phoneNumber.isNotBlank() && contactName != phoneNumber) {
+                                    Text(
+                                        text = "$phoneNumber • $formattedTime",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                        color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else {
+                                    Text(
+                                        text = formattedTime,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                        color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // View call logs button
+                            Surface(
+                                onClick = {
+                                    performAppHaptic(context, "light")
+                                    val intent = Intent(context, MainActivity::class.java).apply {
+                                        action = "com.coolappstore.everdialer.OPEN_RECENTS"
+                                        putExtra("NAV_TO_RECENTS", true)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    }
+                                    try {
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {}
+                                    triggerDismiss()
+                                },
+                                shape = CircleShape,
+                                color = buttonBg,
+                                shadowElevation = 2.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .wrapContentWidth()
+                                        .padding(vertical = 8.dp, horizontal = 18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.History,
+                                        contentDescription = null,
+                                        tint = buttonFg,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(7.dp))
+                                    Text(
+                                        text = "View call logs",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.5.sp,
+                                            letterSpacing = 0.3.sp
+                                        ),
+                                        color = buttonFg
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Portrait header (horizontal row: avatar + text + close button, then view call logs button)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(76.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hasPfp) {
+                                        AsyncImage(
+                                            model = photoUri,
+                                            contentDescription = contactName,
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        RivoAvatar(
+                                            name = contactName,
+                                            photoUri = null,
+                                            forcePersonIcon = true,
+                                            modifier = Modifier.size(72.dp)
+                                        )
+                                    }
+
+                                    if (isMissedCall) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .size(24.dp),
+                                            shape = CircleShape,
+                                            color = Color(0xFFFFB300),
+                                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+                                            shadowElevation = 2.dp
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.CallMissed,
+                                                contentDescription = null,
+                                                tint = Color(0xFF4A3200),
+                                                modifier = Modifier.padding(3.5.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(14.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = if (isMissedCall) "Missed call $relativeTime, $ringText" else relativeTime,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 12.sp
+                                        ),
+                                        color = if (hasPfp || isDark) Color(0xFFFFD56B) else Color(0xFF684900),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Text(
+                                        text = contactName.ifBlank { phoneNumber },
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp
+                                        ),
+                                        color = if (hasPfp) Color.White else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    if (contactName.isNotBlank() && phoneNumber.isNotBlank() && contactName != phoneNumber) {
+                                        Text(
+                                            text = "$phoneNumber • $formattedTime",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    } else {
+                                        Text(
+                                            text = formattedTime,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        performAppHaptic(context, "light")
+                                        triggerDismiss()
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Dismiss popup",
+                                        tint = if (hasPfp) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    onClick = {
+                                        performAppHaptic(context, "light")
+                                        val intent = Intent(context, MainActivity::class.java).apply {
+                                            action = "com.coolappstore.everdialer.OPEN_RECENTS"
+                                            putExtra("NAV_TO_RECENTS", true)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                        }
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                        triggerDismiss()
+                                    },
+                                    shape = CircleShape,
+                                    color = buttonBg,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .wrapContentWidth()
+                                            .padding(vertical = 9.dp, horizontal = 22.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.History,
+                                            contentDescription = null,
+                                            tint = buttonFg,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "View call logs",
+                                            style = MaterialTheme.typography.labelLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.3.sp
+                                            ),
+                                            color = buttonFg
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @Composable
+            fun InteractiveSection(isLand: Boolean, modifier: Modifier = Modifier) {
+                AnimatedContent(
+                    targetState = currentCardState,
+                    transitionSpec = {
+                        if (targetState != "main") {
+                            (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                        } else {
+                            (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
+                        }
+                    },
+                    modifier = modifier,
+                    label = "CardSectionTransition"
+                ) { state ->
+                    when (state) {
+                        "main" -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // ── Respond With Message Section ──
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            horizontal = if (isLand) 16.dp else 16.dp,
+                                            vertical = if (isLand) 8.dp else 10.dp
+                                        )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                start = 4.dp,
+                                                end = 4.dp,
+                                                top = if (isLand) 2.dp else 0.dp,
+                                                bottom = 6.dp
+                                            ),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "RESPOND WITH MESSAGE",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.8.sp,
+                                                fontSize = if (isLand) 12.sp else 11.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) {
+                                                performAppHaptic(context, "light")
+                                                isCustomTyping = true
+                                            }
+                                        )
+
+                                        if (isLand) {
+                                            IconButton(
+                                                onClick = {
+                                                    performAppHaptic(context, "light")
+                                                    triggerDismiss()
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Dismiss popup",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    val showScrollIndicator by remember {
+                                        derivedStateOf {
+                                            replyScrollState.value == 0 && replyScrollState.maxValue > 0
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(replyScrollState),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            quickReplies.forEach { text ->
+                                                Surface(
+                                                    onClick = {
+                                                        performAppHaptic(context, "light")
+                                                        if (text == "Type custom...") {
+                                                            isCustomTyping = true
+                                                        } else {
+                                                            selectedMessageForAppChoice = text
+                                                        }
+                                                    },
+                                                    shape = RoundedCornerShape(20.dp),
+                                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                                ) {
+                                                    Text(
+                                                        text = formatQuickReplyDisplay(text),
+                                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            fontSize = if (isLand) 13.sp else 13.sp
+                                                        ),
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.padding(
+                                                            horizontal = 14.dp,
+                                                            vertical = 8.dp
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Single indication dot that hides smoothly as soon as scrolling starts
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = showScrollIndicator,
+                                            enter = fadeIn(animationSpec = tween(150)),
+                                            exit = fadeOut(animationSpec = tween(150)),
+                                            modifier = Modifier
+                                                .align(Alignment.CenterEnd)
+                                                .padding(end = 2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(
+                                        horizontal = 16.dp,
+                                        vertical = if (isLand) 6.dp else 6.dp
+                                    ),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                )
+
+                                // ── Bottom Action Buttons & Social Container (non-scrollable, all in one place) ──
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            horizontal = 6.dp,
+                                            vertical = if (isLand) 8.dp else 8.dp
+                                        ),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // 1. Call Button (triggers real phone call honoring SIM settings)
+                                    ActionButtonItem(
+                                        iconVector = Icons.Default.Call,
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        label = "CALL",
+                                        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            initiateCall()
+                                        }
+                                    )
+
+                                    // 2. SMS Button
+                                    ActionButtonItem(
+                                        iconVector = Icons.Outlined.Chat,
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        label = "MESSAGE",
+                                        iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        onClick = {
+                                            sendViaSms(null)
+                                        }
+                                    )
+
+                                    // 3. WhatsApp (if installed)
+                                    if (whatsAppInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = whatsAppIcon,
+                                            iconVector = Icons.Default.Chat,
+                                            label = "WhatsApp",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                selectedSocialApp = "whatsapp"
+                                            }
+                                        )
+                                    }
+
+                                    // 4. Telegram (if installed)
+                                    if (telegramInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = telegramIcon,
+                                            iconVector = Icons.Default.Send,
+                                            label = "Telegram",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                selectedSocialApp = "telegram"
+                                            }
+                                        )
+                                    }
+
+                                    // 5. Google Meet (if installed)
+                                    if (meetInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = meetIcon,
+                                            iconVector = Icons.Default.VideoCall,
+                                            label = "Meet",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                selectedSocialApp = "googlemeet"
+                                            }
+                                        )
+                                    }
+
+                                    // 6. Truecaller (if installed)
+                                    if (truecallerInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = truecallerIcon,
+                                            iconVector = Icons.Default.Search,
+                                            label = "Truecaller",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                openTruecaller(context, phoneNumber)
+                                                triggerDismiss()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                        "custom_type" -> {
+                            val customFocusRequester = remember { FocusRequester() }
+                            LaunchedEffect(Unit) {
+                                delay(150)
+                                try { customFocusRequester.requestFocus() } catch (_: Exception) {}
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = if (isLand) 14.dp else 16.dp,
+                                        vertical = if (isLand) 10.dp else 12.dp
+                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            isCustomTyping = false
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Custom Response",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Reply to ${contactName.ifBlank { phoneNumber }}",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isLand) {
+                                        IconButton(
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                triggerDismiss()
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss popup",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(if (isLand) 8.dp else 10.dp))
+
+                                OutlinedTextField(
+                                    value = customMessageText,
+                                    onValueChange = { customMessageText = it },
+                                    placeholder = { Text("Type a message...", fontSize = 14.sp) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(customFocusRequester),
+                                    shape = RoundedCornerShape(16.dp),
+                                    minLines = 2,
+                                    maxLines = 4,
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.Sentences,
+                                        imeAction = ImeAction.Default
+                                    ),
+                                    trailingIcon = {
+                                        if (customMessageText.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = { customMessageText = "" },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Clear,
+                                                    contentDescription = "Clear",
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+
+                                Spacer(modifier = Modifier.height(if (isLand) 10.dp else 12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            selectedMessageForAppChoice = customMessageText.trim()
+                                            isCustomTyping = false
+                                        },
+                                        enabled = customMessageText.isNotBlank(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Send,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Send", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                        "reply" -> {
+                            val chosenMsg = selectedMessageForAppChoice
+                            // ── App Chooser View (non-scrollable, all in one place) ──
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = if (isLand) 14.dp else 16.dp,
+                                        vertical = if (isLand) 10.dp else 12.dp
+                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            selectedMessageForAppChoice = null
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Send response via",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = if (!chosenMsg.isNullOrBlank() && chosenMsg != "Type custom...") "\"${formatQuickReplyDisplay(chosenMsg)}\"" else "Custom message",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isLand) {
+                                        IconButton(
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                triggerDismiss()
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss popup",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(if (isLand) 10.dp else 14.dp))
+
+                                // Available messaging apps from below (non-scrollable)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // 1. Messages (SMS)
+                                    ActionButtonItem(
+                                        iconVector = Icons.Outlined.Chat,
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        label = "Messages",
+                                        iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        onClick = {
+                                            sendViaSms(chosenMsg)
+                                        }
+                                    )
+
+                                    // 2. WhatsApp (if installed)
+                                    if (whatsAppInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = whatsAppIcon,
+                                            iconVector = Icons.Default.Chat,
+                                            label = "WhatsApp",
+                                            onClick = {
+                                                sendViaWhatsApp(chosenMsg)
+                                            }
+                                        )
+                                    }
+
+                                    // 3. Telegram (if installed)
+                                    if (telegramInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = telegramIcon,
+                                            iconVector = Icons.Default.Send,
+                                            label = "Telegram",
+                                            onClick = {
+                                                sendViaTelegram(chosenMsg)
+                                            }
+                                        )
+                                    }
+
+                                    // 4. Truecaller (if installed)
+                                    if (truecallerInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = truecallerIcon,
+                                            iconVector = Icons.Default.Search,
+                                            label = "Truecaller",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                openTruecaller(context, phoneNumber)
+                                                triggerDismiss()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                        "social" -> {
+                            val app = selectedSocialApp
+                            val appLabel = when (app) {
+                                "whatsapp" -> "WhatsApp"
+                                "telegram" -> "Telegram"
+                                else -> "Google Meet"
+                            }
+                            val appIcon = when (app) {
+                                "whatsapp" -> whatsAppIcon
+                                "telegram" -> telegramIcon
+                                else -> meetIcon
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = if (isLand) 14.dp else 16.dp,
+                                        vertical = if (isLand) 10.dp else 12.dp
+                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            selectedSocialApp = null
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    if (appIcon != null) {
+                                        Image(
+                                            bitmap = appIcon,
+                                            contentDescription = appLabel,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = appLabel,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = contactName.ifBlank { phoneNumber },
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isLand) {
+                                        IconButton(
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                triggerDismiss()
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss popup",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(if (isLand) 10.dp else 12.dp))
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (app != "googlemeet") {
+                                        SocialActionOptionRow(
+                                            icon = Icons.AutoMirrored.Filled.Chat,
+                                            title = "Chat",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                if (app == "whatsapp") {
+                                                    openWhatsAppChat(context, phoneNumber)
+                                                } else {
+                                                    openTelegramChat(context, phoneNumber)
+                                                }
+                                                triggerDismiss()
+                                            }
+                                        )
+                                    }
+
+                                    SocialActionOptionRow(
+                                        icon = Icons.Default.Call,
+                                        title = "Voice Call",
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            val started = when (app) {
+                                                "whatsapp" -> startWhatsAppVoiceCall(context, phoneNumber)
+                                                "telegram" -> startTelegramVoiceCall(context, phoneNumber)
+                                                else -> startGoogleMeetVoiceCall(context, phoneNumber)
+                                            }
+                                            if (!started) {
+                                                android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                            triggerDismiss()
+                                        }
+                                    )
+
+                                    SocialActionOptionRow(
+                                        icon = Icons.Default.Videocam,
+                                        title = "Video Call",
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            val started = when (app) {
+                                                "whatsapp" -> startWhatsAppVideoCall(context, phoneNumber)
+                                                "telegram" -> startTelegramVideoCall(context, phoneNumber)
+                                                else -> startGoogleMeetVideoCall(context, phoneNumber)
+                                            }
+                                            if (!started) {
+                                                android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                            triggerDismiss()
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+                        }
+                        "sim" -> {
+                            val accounts = selectedSimAccounts.orEmpty()
+                            val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = if (isLand) 14.dp else 16.dp,
+                                        vertical = if (isLand) 10.dp else 12.dp
+                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            performAppHaptic(context, "light")
+                                            selectedSimAccounts = null
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Select SIM Card",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isLand) {
+                                        IconButton(
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                triggerDismiss()
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss popup",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(if (isLand) 10.dp else 12.dp))
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    accounts.forEachIndexed { index, accountHandle ->
+                                        val info = try { telecomManager?.getPhoneAccount(accountHandle) } catch (_: Exception) { null }
+                                        val simLabel = info?.label?.toString() ?: "SIM ${index + 1}"
+                                        val simDesc = info?.shortDescription?.toString()
+
+                                        Surface(
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                makeCall(context, phoneNumber, accountHandle)
+                                                triggerDismiss()
+                                            },
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(
+                                                        horizontal = 14.dp,
+                                                        vertical = 10.dp
+                                                    ),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    modifier = Modifier.size(36.dp),
+                                                    shape = CircleShape,
+                                                    color = MaterialTheme.colorScheme.primaryContainer
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.SimCard,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = simLabel,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            fontSize = 14.sp
+                                                        ),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    if (!simDesc.isNullOrBlank()) {
+                                                        Text(
+                                                            text = simDesc,
+                                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
             AnimatedVisibility(
                 visible = visible,
                 enter = slideInVertically(
@@ -536,9 +1746,9 @@ class MissedCallPopupService : Service() {
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .widthIn(max = 420.dp)
-                        .padding(vertical = 24.dp)
+                        .fillMaxWidth(if (isLandscape) 0.88f else 0.92f)
+                        .widthIn(max = if (isLandscape) 640.dp else 420.dp)
+                        .padding(vertical = if (isLandscape) 12.dp else 24.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -553,945 +1763,48 @@ class MissedCallPopupService : Service() {
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 6.dp
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // ── Top Header Banner (contact pfp blurred with dim, or gradient if no pfp) ──
-                        val hasPfp = !photoUri.isNullOrBlank()
-                        val isDark = MaterialTheme.colorScheme.surface.let {
-                            androidx.core.graphics.ColorUtils.calculateLuminance(it.hashCode()) < 0.5
-                        }
-                        val headerGradient = if (isDark) {
-                            listOf(
-                                Color(0xFF684E12),
-                                Color(0xFF423207),
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFFFFECC2),
-                                Color(0xFFF6DE98),
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        }
-
-                        Box(
+                    if (isLandscape) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                                .height(IntrinsicSize.Min)
+                                .heightIn(min = 280.dp)
                         ) {
-                            if (hasPfp) {
-                                AsyncImage(
-                                    model = photoUri,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .blur(14.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(Color.Black.copy(alpha = 0.52f))
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(Brush.verticalGradient(headerGradient))
-                                )
-                            }
-
-                            Column(
+                            CallerHeaderBanner(
+                                isLand = true,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(18.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Contact PFP with expressive styling
-                                    Box(
-                                        modifier = Modifier.size(76.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (hasPfp) {
-                                            AsyncImage(
-                                                model = photoUri,
-                                                contentDescription = contactName,
-                                                modifier = Modifier
-                                                    .size(72.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        } else {
-                                            RivoAvatar(
-                                                name = contactName,
-                                                photoUri = null,
-                                                forcePersonIcon = true,
-                                                modifier = Modifier.size(72.dp)
-                                            )
-                                        }
-
-                                        // Gold ring & missed call badge
-                                        if (isMissedCall) {
-                                            Surface(
-                                                modifier = Modifier
-                                                    .align(Alignment.TopStart)
-                                                    .size(24.dp),
-                                                shape = CircleShape,
-                                                color = Color(0xFFFFB300),
-                                                border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
-                                                shadowElevation = 2.dp
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.CallMissed,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF4A3200),
-                                                    modifier = Modifier.padding(3.5.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(14.dp))
-
-                                    // Caller details
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Text(
-                                            text = if (isMissedCall) "Missed call $relativeTime, $ringText" else relativeTime,
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 12.sp
-                                            ),
-                                            color = if (hasPfp || isDark) Color(0xFFFFD56B) else Color(0xFF684900),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-
-                                        Spacer(modifier = Modifier.height(2.dp))
-
-                                        Text(
-                                            text = contactName.ifBlank { phoneNumber },
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 20.sp
-                                            ),
-                                            color = if (hasPfp) Color.White else MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-
-                                        if (contactName.isNotBlank() && phoneNumber.isNotBlank() && contactName != phoneNumber) {
-                                            Text(
-                                                text = "$phoneNumber • $formattedTime",
-                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        } else {
-                                            Text(
-                                                text = formattedTime,
-                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                color = if (hasPfp) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    // Close (X) button
-                                    IconButton(
-                                        onClick = {
-                                            performAppHaptic(context, "light")
-                                            triggerDismiss()
-                                        },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Dismiss popup",
-                                            tint = if (hasPfp) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                // View call logs button (curved pill style, reasonable width, centered)
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val buttonBg = if (hasPfp || isDark) Color(0xFF3B2D0E) else Color(0xFFFFDE8A)
-                                    val buttonFg = if (hasPfp || isDark) Color(0xFFFFD56B) else Color(0xFF4E3714)
-                                    Surface(
-                                        onClick = {
-                                            performAppHaptic(context, "light")
-                                            val intent = Intent(context, MainActivity::class.java).apply {
-                                                action = "com.coolappstore.everdialer.OPEN_RECENTS"
-                                                putExtra("NAV_TO_RECENTS", true)
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                            }
-                                            try {
-                                                context.startActivity(intent)
-                                            } catch (_: Exception) {}
-                                            triggerDismiss()
-                                        },
-                                        shape = CircleShape,
-                                        color = buttonBg,
-                                        shadowElevation = 2.dp
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .wrapContentWidth()
-                                                .padding(vertical = 9.dp, horizontal = 22.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.History,
-                                                contentDescription = null,
-                                                tint = buttonFg,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "View call logs",
-                                                style = MaterialTheme.typography.labelLarge.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    letterSpacing = 0.3.sp
-                                                ),
-                                                color = buttonFg
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        val replyScrollState = rememberScrollState()
-                        val contactSimKey = contactId ?: phoneNumber
-                        val contactSimChoice = remember(prefs, contactSimKey) { prefs.getContactSimChoice(contactSimKey) }
-                        val globalSimPref = remember(prefs) { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
-
-                        fun initiateCall() {
-                            performAppHaptic(context, "light")
-                            val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                            val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-                            val accounts = if (hasPhoneState && telecomManager != null) {
-                                try {
-                                    telecomManager.callCapablePhoneAccounts
-                                } catch (_: Exception) { emptyList() }
-                            } else emptyList()
-
-                            if (accounts.size <= 1) {
-                                makeCall(context, phoneNumber, accounts.firstOrNull())
-                                triggerDismiss()
-                                return
-                            }
-
-                            var showPicker = false
-                            placeCallWithContactSimPreference(
-                                context = context,
-                                number = phoneNumber,
-                                contactSimChoice = contactSimChoice,
-                                globalSimPref = globalSimPref,
-                                recentSimSlotForContact = null,
-                                onShowSimPicker = {
-                                    showPicker = true
-                                    selectedSimAccounts = accounts
-                                }
+                                    .weight(0.95f)
+                                    .fillMaxHeight()
                             )
-                            if (!showPicker) {
-                                triggerDismiss()
+                            VerticalDivider(
+                                modifier = Modifier.fillMaxHeight(),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1.05f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                InteractiveSection(
+                                    isLand = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
-
-                        fun sendViaSms(msg: String?) {
-                            performAppHaptic(context, "light")
-                            val clean = phoneNumber.filter { it.isDigit() || it == '+' }
-                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$clean")).apply {
-                                if (!msg.isNullOrBlank() && msg != "Type custom...") {
-                                    putExtra("sms_body", msg)
-                                }
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            try { context.startActivity(intent) } catch (_: Exception) {}
-                            triggerDismiss()
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CallerHeaderBanner(
+                                isLand = false,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            InteractiveSection(
+                                isLand = false,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-
-                        fun sendViaWhatsApp(msg: String?) {
-                            performAppHaptic(context, "light")
-                            val messageToSend = if (msg != "Type custom...") msg else null
-                            openWhatsAppChat(context, phoneNumber, messageToSend)
-                            triggerDismiss()
-                        }
-
-                        fun sendViaTelegram(msg: String?) {
-                            performAppHaptic(context, "light")
-                            val messageToSend = if (msg != "Type custom...") msg else null
-                            openTelegramChat(context, phoneNumber, messageToSend)
-                            triggerDismiss()
-                        }
-
-                        val currentCardState = when {
-                            selectedSimAccounts != null -> "sim"
-                            selectedSocialApp != null -> "social"
-                            isCustomTyping -> "custom_type"
-                            selectedMessageForAppChoice != null -> "reply"
-                            else -> "main"
-                        }
-
-                        AnimatedContent(
-                            targetState = currentCardState,
-                            transitionSpec = {
-                                if (targetState != "main") {
-                                    (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
-                                } else {
-                                    (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
-                                }
-                            },
-                            label = "CardSectionTransition"
-                        ) { state ->
-                            when (state) {
-                                "main" -> {
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        // ── Respond With Message Section ──
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "RESPOND WITH MESSAGE",
-                                                    style = MaterialTheme.typography.labelSmall.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        letterSpacing = 0.8.sp
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.clickable(
-                                                        interactionSource = remember { MutableInteractionSource() },
-                                                        indication = null
-                                                    ) {
-                                                        performAppHaptic(context, "light")
-                                                        isCustomTyping = true
-                                                    }
-                                                )
-                                            }
-
-                                            val showScrollIndicator by remember {
-                                                derivedStateOf {
-                                                    replyScrollState.value == 0 && replyScrollState.maxValue > 0
-                                                }
-                                            }
-
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .horizontalScroll(replyScrollState),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    quickReplies.forEach { text ->
-                                                        Surface(
-                                                            onClick = {
-                                                                performAppHaptic(context, "light")
-                                                                if (text == "Type custom...") {
-                                                                    isCustomTyping = true
-                                                                } else {
-                                                                    selectedMessageForAppChoice = text
-                                                                }
-                                                            },
-                                                            shape = RoundedCornerShape(20.dp),
-                                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                                        ) {
-                                                            Text(
-                                                                text = formatQuickReplyDisplay(text),
-                                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                                    fontWeight = FontWeight.SemiBold,
-                                                                    fontSize = 13.sp
-                                                                ),
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                // Single indication dot that hides smoothly as soon as scrolling starts
-                                                androidx.compose.animation.AnimatedVisibility(
-                                                    visible = showScrollIndicator,
-                                                    enter = fadeIn(animationSpec = tween(150)),
-                                                    exit = fadeOut(animationSpec = tween(150)),
-                                                    modifier = Modifier
-                                                        .align(Alignment.CenterEnd)
-                                                        .padding(end = 2.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                                        )
-
-                                        // ── Bottom Action Buttons & Social Container (non-scrollable, all in one place) ──
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 4.dp, vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceEvenly,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            // 1. Call Button (triggers real phone call honoring SIM settings)
-                                            ActionButtonItem(
-                                                iconVector = Icons.Default.Call,
-                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                label = "CALL",
-                                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                onClick = {
-                                                    initiateCall()
-                                                }
-                                            )
-
-                                            // 2. SMS Button
-                                            ActionButtonItem(
-                                                iconVector = Icons.Outlined.Chat,
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                label = "MESSAGE",
-                                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                onClick = {
-                                                    sendViaSms(null)
-                                                }
-                                            )
-
-                                            // 3. WhatsApp (if installed)
-                                            if (whatsAppInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = whatsAppIcon,
-                                                    iconVector = Icons.Default.Chat,
-                                                    label = "WhatsApp",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        selectedSocialApp = "whatsapp"
-                                                    }
-                                                )
-                                            }
-
-                                            // 4. Telegram (if installed)
-                                            if (telegramInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = telegramIcon,
-                                                    iconVector = Icons.Default.Send,
-                                                    label = "Telegram",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        selectedSocialApp = "telegram"
-                                                    }
-                                                )
-                                            }
-
-                                            // 5. Google Meet (if installed)
-                                            if (meetInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = meetIcon,
-                                                    iconVector = Icons.Default.VideoCall,
-                                                    label = "Meet",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        selectedSocialApp = "googlemeet"
-                                                    }
-                                                )
-                                            }
-
-                                            // 6. Truecaller (if installed)
-                                            if (truecallerInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = truecallerIcon,
-                                                    iconVector = Icons.Default.Search,
-                                                    label = "Truecaller",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        openTruecaller(context, phoneNumber)
-                                                        triggerDismiss()
-                                                    }
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-                                }
-                                "custom_type" -> {
-                                    val customFocusRequester = remember { FocusRequester() }
-                                    LaunchedEffect(Unit) {
-                                        delay(150)
-                                        try { customFocusRequester.requestFocus() } catch (_: Exception) {}
-                                    }
-
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    isCustomTyping = false
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = "Back",
-                                                    tint = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "Custom Response",
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 15.sp
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = "Reply to ${contactName.ifBlank { phoneNumber }}",
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        OutlinedTextField(
-                                            value = customMessageText,
-                                            onValueChange = { customMessageText = it },
-                                            placeholder = { Text("Type a message...", fontSize = 14.sp) },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .focusRequester(customFocusRequester),
-                                            shape = RoundedCornerShape(16.dp),
-                                            minLines = 2,
-                                            maxLines = 4,
-                                            keyboardOptions = KeyboardOptions(
-                                                capitalization = KeyboardCapitalization.Sentences,
-                                                imeAction = ImeAction.Default
-                                            ),
-                                            trailingIcon = {
-                                                if (customMessageText.isNotEmpty()) {
-                                                    IconButton(
-                                                        onClick = { customMessageText = "" },
-                                                        modifier = Modifier.size(24.dp)
-                                                    ) {
-                                                        Icon(
-                                                            Icons.Default.Clear,
-                                                            contentDescription = "Clear",
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        )
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    selectedMessageForAppChoice = customMessageText.trim()
-                                                    isCustomTyping = false
-                                                },
-                                                enabled = customMessageText.isNotBlank(),
-                                                shape = RoundedCornerShape(14.dp),
-                                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Send,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Send", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-                                }
-                                "reply" -> {
-                                    val chosenMsg = selectedMessageForAppChoice
-                                    // ── App Chooser View (non-scrollable, all in one place) ──
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    selectedMessageForAppChoice = null
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = "Back",
-                                                    tint = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "Send response via",
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 15.sp
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = if (!chosenMsg.isNullOrBlank() && chosenMsg != "Type custom...") "\"${formatQuickReplyDisplay(chosenMsg)}\"" else "Custom message",
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(14.dp))
-
-                                        // Available messaging apps from below (non-scrollable)
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 4.dp, vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.SpaceEvenly,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            // 1. Messages (SMS)
-                                            ActionButtonItem(
-                                                iconVector = Icons.Outlined.Chat,
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                label = "Messages",
-                                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                onClick = {
-                                                    sendViaSms(chosenMsg)
-                                                }
-                                            )
-
-                                            // 2. WhatsApp (if installed)
-                                            if (whatsAppInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = whatsAppIcon,
-                                                    iconVector = Icons.Default.Chat,
-                                                    label = "WhatsApp",
-                                                    onClick = {
-                                                        sendViaWhatsApp(chosenMsg)
-                                                    }
-                                                )
-                                            }
-
-                                            // 3. Telegram (if installed)
-                                            if (telegramInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = telegramIcon,
-                                                    iconVector = Icons.Default.Send,
-                                                    label = "Telegram",
-                                                    onClick = {
-                                                        sendViaTelegram(chosenMsg)
-                                                    }
-                                                )
-                                            }
-
-                                            // 4. Truecaller (if installed)
-                                            if (truecallerInstalled) {
-                                                ActionButtonItem(
-                                                    iconBitmap = truecallerIcon,
-                                                    iconVector = Icons.Default.Search,
-                                                    label = "Truecaller",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        openTruecaller(context, phoneNumber)
-                                                        triggerDismiss()
-                                                    }
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                }
-                                "social" -> {
-                                    val app = selectedSocialApp
-                                    val appLabel = when (app) {
-                                        "whatsapp" -> "WhatsApp"
-                                        "telegram" -> "Telegram"
-                                        else -> "Google Meet"
-                                    }
-                                    val appIcon = when (app) {
-                                        "whatsapp" -> whatsAppIcon
-                                        "telegram" -> telegramIcon
-                                        else -> meetIcon
-                                    }
-
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    selectedSocialApp = null
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = "Back",
-                                                    tint = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            if (appIcon != null) {
-                                                Image(
-                                                    bitmap = appIcon,
-                                                    contentDescription = appLabel,
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .clip(CircleShape)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                            }
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = appLabel,
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 15.sp
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = contactName.ifBlank { phoneNumber },
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            if (app != "googlemeet") {
-                                                SocialActionOptionRow(
-                                                    icon = Icons.AutoMirrored.Filled.Chat,
-                                                    title = "Chat",
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        if (app == "whatsapp") {
-                                                            openWhatsAppChat(context, phoneNumber)
-                                                        } else {
-                                                            openTelegramChat(context, phoneNumber)
-                                                        }
-                                                        triggerDismiss()
-                                                    }
-                                                )
-                                            }
-
-                                            SocialActionOptionRow(
-                                                icon = Icons.Default.Call,
-                                                title = "Voice Call",
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    val started = when (app) {
-                                                        "whatsapp" -> startWhatsAppVoiceCall(context, phoneNumber)
-                                                        "telegram" -> startTelegramVoiceCall(context, phoneNumber)
-                                                        else -> startGoogleMeetVoiceCall(context, phoneNumber)
-                                                    }
-                                                    if (!started) {
-                                                        android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                    triggerDismiss()
-                                                }
-                                            )
-
-                                            SocialActionOptionRow(
-                                                icon = Icons.Default.Videocam,
-                                                title = "Video Call",
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    val started = when (app) {
-                                                        "whatsapp" -> startWhatsAppVideoCall(context, phoneNumber)
-                                                        "telegram" -> startTelegramVideoCall(context, phoneNumber)
-                                                        else -> startGoogleMeetVideoCall(context, phoneNumber)
-                                                    }
-                                                    if (!started) {
-                                                        android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                    triggerDismiss()
-                                                }
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                    }
-                                }
-                                "sim" -> {
-                                    val accounts = selectedSimAccounts.orEmpty()
-                                    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    performAppHaptic(context, "light")
-                                                    selectedSimAccounts = null
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = "Back",
-                                                    tint = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Select SIM Card",
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            accounts.forEachIndexed { index, accountHandle ->
-                                                val info = try { telecomManager?.getPhoneAccount(accountHandle) } catch (_: Exception) { null }
-                                                val simLabel = info?.label?.toString() ?: "SIM ${index + 1}"
-                                                val simDesc = info?.shortDescription?.toString()
-
-                                                Surface(
-                                                    onClick = {
-                                                        performAppHaptic(context, "light")
-                                                        makeCall(context, phoneNumber, accountHandle)
-                                                        triggerDismiss()
-                                                    },
-                                                    shape = RoundedCornerShape(16.dp),
-                                                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Surface(
-                                                            modifier = Modifier.size(36.dp),
-                                                            shape = CircleShape,
-                                                            color = MaterialTheme.colorScheme.primaryContainer
-                                                        ) {
-                                                            Box(contentAlignment = Alignment.Center) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.SimCard,
-                                                                    contentDescription = null,
-                                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                                    modifier = Modifier.size(20.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                        Spacer(modifier = Modifier.width(14.dp))
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text(
-                                                                text = simLabel,
-                                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                                    fontWeight = FontWeight.SemiBold,
-                                                                    fontSize = 14.sp
-                                                                ),
-                                                                color = MaterialTheme.colorScheme.onSurface
-                                                            )
-                                                            if (!simDesc.isNullOrBlank()) {
-                                                                Text(
-                                                                    text = simDesc,
-                                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }
@@ -1552,6 +1865,7 @@ class MissedCallPopupService : Service() {
         iconTint: Color = MaterialTheme.colorScheme.onSurface,
         onClick: () -> Unit
     ) {
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -1564,7 +1878,7 @@ class MissedCallPopupService : Service() {
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(if (isLandscape) 44.dp else 42.dp)
                     .then(
                         if (containerColor != null) Modifier.background(containerColor, CircleShape)
                         else Modifier
@@ -1576,7 +1890,7 @@ class MissedCallPopupService : Service() {
                         bitmap = iconBitmap,
                         contentDescription = label,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(if (isLandscape) 38.dp else 38.dp)
                             .clip(CircleShape)
                     )
                 } else if (iconVector != null) {
@@ -1584,7 +1898,7 @@ class MissedCallPopupService : Service() {
                         imageVector = iconVector,
                         contentDescription = label,
                         tint = iconTint,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(if (isLandscape) 22.dp else 22.dp)
                     )
                 }
             }
@@ -1593,7 +1907,7 @@ class MissedCallPopupService : Service() {
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 11.sp
+                    fontSize = if (isLandscape) 11.5.sp else 11.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

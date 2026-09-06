@@ -37,7 +37,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -119,8 +121,8 @@ class FloatingCallService : Service() {
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START; x = 24; y = 320 }
 
@@ -132,7 +134,8 @@ class FloatingCallService : Service() {
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
@@ -399,7 +402,9 @@ class FloatingCallService : Service() {
         onDismiss: () -> Unit,
         onAction: (MenuAction) -> Unit
     ) {
-        val context    = LocalContext.current
+        val context       = LocalContext.current
+        val configuration = LocalConfiguration.current
+        val isLandscape   = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val audioState by CallService.audioState.collectAsState()
         val isMuted    = audioState?.isMuted ?: false
         val isSpeaker  = audioState?.route == CallAudioState.ROUTE_SPEAKER
@@ -432,8 +437,17 @@ class FloatingCallService : Service() {
                 ) + fadeOut(tween(300, easing = FastOutLinearInEasing))
             ) {
                 Surface(
-                    modifier        = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
-                    shape           = RoundedCornerShape(32.dp),
+                    modifier        = if (isLandscape) {
+                        Modifier
+                            .widthIn(max = 500.dp)
+                            .fillMaxWidth(0.65f)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                    },
+                    shape           = RoundedCornerShape(if (isLandscape) 24.dp else 32.dp),
                     color           = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation  = 4.dp,
                     shadowElevation = 0.dp
@@ -441,15 +455,15 @@ class FloatingCallService : Service() {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 16.dp),
+                            .padding(horizontal = if (isLandscape) 16.dp else 24.dp)
+                            .padding(top = if (isLandscape) 10.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         // Drag handle
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
+                                .width(if (isLandscape) 32.dp else 40.dp)
+                                .height(if (isLandscape) 3.dp else 4.dp)
                                 .align(Alignment.CenterHorizontally)
                         ) {
                             Surface(
@@ -461,7 +475,7 @@ class FloatingCallService : Service() {
                             ) {}
                         }
 
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 14.dp))
 
                         // Contact info row
                         Row(
@@ -472,15 +486,18 @@ class FloatingCallService : Service() {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text       = contactName,
-                                    style      = MaterialTheme.typography.titleMedium,
+                                    style      = if (isLandscape) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color      = MaterialTheme.colorScheme.onSurface
+                                    color      = MaterialTheme.colorScheme.onSurface,
+                                    maxLines   = 1,
+                                    overflow   = TextOverflow.Ellipsis
                                 )
                                 if (phoneNumber.isNotEmpty()) {
                                     Text(
-                                        text  = phoneNumber,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text     = phoneNumber,
+                                        style    = MaterialTheme.typography.bodySmall.copy(fontSize = if (isLandscape) 11.sp else 12.sp),
+                                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -494,19 +511,24 @@ class FloatingCallService : Service() {
                             FilledIconButton(
                                 onClick           = onDismiss,
                                 interactionSource = dimSrc,
-                                modifier          = Modifier.graphicsLayer(scaleX = dimScale, scaleY = dimScale),
+                                modifier          = Modifier
+                                    .size(if (isLandscape) 32.dp else 40.dp)
+                                    .graphicsLayer(scaleX = dimScale, scaleY = dimScale),
                                 colors            = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 )
                             ) {
-                                Icon(Icons.Default.KeyboardArrowDown, "Dismiss",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown, "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(if (isLandscape) 18.dp else 24.dp)
+                                )
                             }
                         }
 
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(if (isLandscape) 6.dp else 10.dp))
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 14.dp))
 
                         // Row 1: Speaker · Mute · Notes
                         Row(
@@ -518,24 +540,27 @@ class FloatingCallService : Service() {
                                 if (isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
                                 if (isSpeaker) "Earpiece" else "Speaker",
                                 if (isSpeaker) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                if (isSpeaker) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                                if (isSpeaker) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
                             ) { onAction(MenuAction.Speaker(if (isSpeaker) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)) }
 
                             SheetAction(1,
                                 if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                                 if (isMuted) "Unmute" else "Mute",
                                 if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                                if (isMuted) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                                if (isMuted) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
                             ) { onAction(MenuAction.Mute(!isMuted)) }
 
                             SheetAction(2,
                                 Icons.Default.Note, "Notes",
                                 MaterialTheme.colorScheme.onTertiaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                isLandscape = isLandscape
                             ) { onAction(MenuAction.Notes(context, contactName, phoneNumber)) }
                         }
 
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(if (isLandscape) 6.dp else 12.dp))
 
                         // Row 2: Back to call · Close Floating Circle · Hangup
                         Row(
@@ -547,26 +572,29 @@ class FloatingCallService : Service() {
                                 SheetAction(3,
                                     Icons.Default.Call, "Answer Call",
                                     Color.White,
-                                    Color(0xFF2E7D32)
+                                    Color(0xFF2E7D32),
+                                    isLandscape = isLandscape
                                 ) { onAction(MenuAction.AnswerCall(context)) }
                             } else {
                                 SheetAction(3,
                                     Icons.Default.Phone, "Back to call",
                                     MaterialTheme.colorScheme.onPrimaryContainer,
-                                    MaterialTheme.colorScheme.primaryContainer
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    isLandscape = isLandscape
                                 ) { onAction(MenuAction.BackToCall(context)) }
                             }
 
                             SheetAction(4,
-                                Icons.Default.Close, "Close Floating Circle",
+                                Icons.Default.Close, if (isLandscape) "Close" else "Close Floating Circle",
                                 MaterialTheme.colorScheme.onSurfaceVariant,
-                                MaterialTheme.colorScheme.surfaceContainerHighest
+                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
                             ) { onAction(MenuAction.Close) }
 
-                            HangupSheetAction(5) { onAction(MenuAction.Hangup) }
+                            HangupSheetAction(5, isLandscape = isLandscape) { onAction(MenuAction.Hangup) }
                         }
 
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 16.dp))
                         // Fills exactly the navigation bar height so Surface bg extends behind it
                         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                     }
@@ -584,6 +612,7 @@ class FloatingCallService : Service() {
         label: String,
         tint: Color,
         bgColor: Color,
+        isLandscape: Boolean = false,
         onClick: () -> Unit
     ) {
         var entered by remember { mutableStateOf(false) }
@@ -608,10 +637,10 @@ class FloatingCallService : Service() {
 
         Column(
             modifier = Modifier
-                .width(80.dp)
+                .width(if (isLandscape) 64.dp else 80.dp)
                 .graphicsLayer(scaleX = eScale * pScale, scaleY = eScale * pScale, alpha = eAlpha),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 3.dp else 6.dp)
         ) {
             Surface(
                 shape           = CircleShape,
@@ -619,26 +648,27 @@ class FloatingCallService : Service() {
                 tonalElevation  = 0.dp,
                 shadowElevation = 0.dp,
                 modifier        = Modifier
-                    .size(54.dp)
+                    .size(if (isLandscape) 42.dp else 54.dp)
                     .clickable(interactionSource = pSrc, indication = null, onClick = onClick)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp))
                 }
             }
             Text(
                 text      = label,
-                style     = MaterialTheme.typography.labelSmall,
+                style     = MaterialTheme.typography.labelSmall.copy(fontSize = if (isLandscape) 10.sp else 11.sp),
                 color     = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines  = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines  = if (isLandscape) 1 else 2,
+                overflow  = TextOverflow.Ellipsis,
                 modifier  = Modifier.fillMaxWidth()
             )
         }
     }
 
     @Composable
-    private fun HangupSheetAction(index: Int, onClick: () -> Unit) {
+    private fun HangupSheetAction(index: Int, isLandscape: Boolean = false, onClick: () -> Unit) {
         var entered by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { delay(100L + index * 55L); entered = true }
         val eScale by animateFloatAsState(
@@ -661,10 +691,10 @@ class FloatingCallService : Service() {
 
         Column(
             modifier = Modifier
-                .width(80.dp)
+                .width(if (isLandscape) 64.dp else 80.dp)
                 .graphicsLayer(scaleX = eScale * pScale, scaleY = eScale * pScale, alpha = eAlpha),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 3.dp else 6.dp)
         ) {
             Surface(
                 shape           = CircleShape,
@@ -672,18 +702,18 @@ class FloatingCallService : Service() {
                 tonalElevation  = 0.dp,
                 shadowElevation = 0.dp,
                 modifier        = Modifier
-                    .size(54.dp)
+                    .size(if (isLandscape) 42.dp else 54.dp)
                     .clickable(interactionSource = pSrc, indication = null, onClick = onClick)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.CallEnd, "Hangup", tint = Color.White, modifier = Modifier.size(26.dp))
+                    Icon(Icons.Default.CallEnd, "Hangup", tint = Color.White, modifier = Modifier.size(if (isLandscape) 22.dp else 26.dp))
                 }
             }
             Text(
                 text      = "Hangup",
-                style     = MaterialTheme.typography.labelSmall,
+                style     = MaterialTheme.typography.labelSmall.copy(fontSize = if (isLandscape) 10.sp else 11.sp),
                 color     = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier  = Modifier.fillMaxWidth()
             )
         }

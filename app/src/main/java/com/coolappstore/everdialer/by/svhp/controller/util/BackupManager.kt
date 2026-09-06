@@ -26,10 +26,11 @@ object BackupManager {
         val hasCallingCards: Boolean = false,
         val hasNotes: Boolean = false,
         val hasRecordings: Boolean = false,
-        val hasContacts: Boolean = false
+        val hasContacts: Boolean = false,
+        val hasCallLogs: Boolean = false
     ) {
         val hasAny: Boolean
-            get() = hasSettings || hasCallingCards || hasNotes || hasRecordings || hasContacts
+            get() = hasSettings || hasCallingCards || hasNotes || hasRecordings || hasContacts || hasCallLogs
     }
 
     const val PREFS_RIVO = "rivo_prefs"
@@ -93,7 +94,8 @@ object BackupManager {
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
         backupRecordings: Boolean = true,
-        backupContacts: Boolean = false
+        backupContacts: Boolean = false,
+        backupCallLogs: Boolean = false
     ): Boolean {
         return try {
             ZipOutputStream(outputStream).use { zip ->
@@ -296,6 +298,58 @@ object BackupManager {
                         android.util.Log.e("BackupManager", "Failed to backup contacts", e)
                     }
                 }
+
+                if (backupCallLogs) {
+                    try {
+                        val cursor = context.contentResolver.query(
+                            android.provider.CallLog.Calls.CONTENT_URI,
+                            arrayOf(
+                                android.provider.CallLog.Calls.NUMBER,
+                                android.provider.CallLog.Calls.CACHED_NAME,
+                                android.provider.CallLog.Calls.TYPE,
+                                android.provider.CallLog.Calls.DATE,
+                                android.provider.CallLog.Calls.DURATION,
+                                android.provider.CallLog.Calls.PHONE_ACCOUNT_ID,
+                                android.provider.CallLog.Calls.IS_READ,
+                                android.provider.CallLog.Calls.NEW
+                            ),
+                            null,
+                            null,
+                            "${android.provider.CallLog.Calls.DATE} DESC"
+                        )
+                        cursor?.use { c ->
+                            val numIdx = c.getColumnIndex(android.provider.CallLog.Calls.NUMBER)
+                            val nameIdx = c.getColumnIndex(android.provider.CallLog.Calls.CACHED_NAME)
+                            val typeIdx = c.getColumnIndex(android.provider.CallLog.Calls.TYPE)
+                            val dateIdx = c.getColumnIndex(android.provider.CallLog.Calls.DATE)
+                            val durIdx = c.getColumnIndex(android.provider.CallLog.Calls.DURATION)
+                            val accIdx = c.getColumnIndex(android.provider.CallLog.Calls.PHONE_ACCOUNT_ID)
+                            val isReadIdx = c.getColumnIndex(android.provider.CallLog.Calls.IS_READ)
+                            val newIdx = c.getColumnIndex(android.provider.CallLog.Calls.NEW)
+
+                            val jsonArray = JSONArray()
+                            while (c.moveToNext()) {
+                                val obj = JSONObject()
+                                if (numIdx >= 0) obj.put("number", c.getString(numIdx) ?: "")
+                                if (nameIdx >= 0 && !c.isNull(nameIdx)) obj.put("cachedName", c.getString(nameIdx))
+                                if (typeIdx >= 0) obj.put("type", c.getInt(typeIdx))
+                                if (dateIdx >= 0) obj.put("date", c.getLong(dateIdx))
+                                if (durIdx >= 0) obj.put("duration", c.getLong(durIdx))
+                                if (accIdx >= 0 && !c.isNull(accIdx)) obj.put("phoneAccountId", c.getString(accIdx))
+                                if (isReadIdx >= 0) obj.put("isRead", c.getInt(isReadIdx))
+                                if (newIdx >= 0) obj.put("isNew", c.getInt(newIdx))
+                                jsonArray.put(obj)
+                            }
+                            if (jsonArray.length() > 0) {
+                                zip.putNextEntry(ZipEntry("call_logs/call_logs.json"))
+                                zip.write(jsonArray.toString().toByteArray(Charsets.UTF_8))
+                                zip.closeEntry()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("BackupManager", "Failed to backup call logs", e)
+                    }
+                }
             }
             true
         } catch (_: Exception) {
@@ -309,13 +363,14 @@ object BackupManager {
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
         backupRecordings: Boolean = true,
-        backupContacts: Boolean = false
+        backupContacts: Boolean = false,
+        backupCallLogs: Boolean = false
     ): File? {
         return try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFile = File(getBackupDir(context), "EverDialer_Backup_$timestamp.everdialer")
             val ok = FileOutputStream(backupFile).use { outputStream ->
-                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts)
+                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs)
             }
             if (ok) backupFile else null
         } catch (_: Exception) {
@@ -329,6 +384,7 @@ object BackupManager {
         var hasNotes = false
         var hasRecordings = false
         var hasContacts = false
+        var hasCallLogs = false
 
         try {
             ZipInputStream(FileInputStream(backupFile)).use { zip ->
@@ -355,6 +411,9 @@ object BackupManager {
                         name.startsWith("contacts/") && !name.endsWith("/") -> {
                             hasContacts = true
                         }
+                        name.startsWith("call_logs/") && !name.endsWith("/") -> {
+                            hasCallLogs = true
+                        }
                     }
                     zip.closeEntry()
                     entry = zip.nextEntry
@@ -367,7 +426,8 @@ object BackupManager {
             hasCallingCards = hasCallingCards,
             hasNotes = hasNotes,
             hasRecordings = hasRecordings,
-            hasContacts = hasContacts
+            hasContacts = hasContacts,
+            hasCallLogs = hasCallLogs
         )
     }
 
@@ -378,7 +438,8 @@ object BackupManager {
         restoreCallingCards: Boolean = true,
         restoreNotes: Boolean = true,
         restoreRecordings: Boolean = true,
-        restoreContacts: Boolean = true
+        restoreContacts: Boolean = true,
+        restoreCallLogs: Boolean = true
     ): Boolean {
         return try {
             var restoredAny = false
@@ -534,6 +595,77 @@ object BackupManager {
                                     restoredAny = true
                                 } catch (e: Exception) {
                                     android.util.Log.e("BackupManager", "Failed to restore contacts", e)
+                                }
+                            }
+                        }
+                        name == "call_logs/call_logs.json" -> {
+                            if (restoreCallLogs) {
+                                try {
+                                    val jsonStr = zip.readBytes().toString(Charsets.UTF_8)
+                                    val jsonArray = JSONArray(jsonStr)
+
+                                    val existingKeys = mutableSetOf<String>()
+                                    try {
+                                        val cursor = context.contentResolver.query(
+                                            android.provider.CallLog.Calls.CONTENT_URI,
+                                            arrayOf(
+                                                android.provider.CallLog.Calls.NUMBER,
+                                                android.provider.CallLog.Calls.DATE,
+                                                android.provider.CallLog.Calls.TYPE
+                                            ),
+                                            null,
+                                            null,
+                                            null
+                                        )
+                                        cursor?.use { c ->
+                                            val numIdx = c.getColumnIndex(android.provider.CallLog.Calls.NUMBER)
+                                            val dateIdx = c.getColumnIndex(android.provider.CallLog.Calls.DATE)
+                                            val typeIdx = c.getColumnIndex(android.provider.CallLog.Calls.TYPE)
+                                            while (c.moveToNext()) {
+                                                val num = if (numIdx >= 0) c.getString(numIdx) ?: "" else ""
+                                                val date = if (dateIdx >= 0) c.getLong(dateIdx) else 0L
+                                                val type = if (typeIdx >= 0) c.getInt(typeIdx) else 0
+                                                existingKeys.add("$num|$date|$type")
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+
+                                    for (i in 0 until jsonArray.length()) {
+                                        val obj = jsonArray.getJSONObject(i)
+                                        val number = obj.optString("number", "")
+                                        val date = obj.optLong("date", 0L)
+                                        val type = obj.optInt("type", 1)
+                                        val key = "$number|$date|$type"
+                                        if (!existingKeys.contains(key)) {
+                                            val values = android.content.ContentValues().apply {
+                                                put(android.provider.CallLog.Calls.NUMBER, number)
+                                                if (obj.has("cachedName")) {
+                                                    put(android.provider.CallLog.Calls.CACHED_NAME, obj.getString("cachedName"))
+                                                }
+                                                put(android.provider.CallLog.Calls.TYPE, type)
+                                                put(android.provider.CallLog.Calls.DATE, date)
+                                                put(android.provider.CallLog.Calls.DURATION, obj.optLong("duration", 0L))
+                                                if (obj.has("phoneAccountId")) {
+                                                    put(android.provider.CallLog.Calls.PHONE_ACCOUNT_ID, obj.getString("phoneAccountId"))
+                                                }
+                                                if (obj.has("isRead")) {
+                                                    put(android.provider.CallLog.Calls.IS_READ, obj.getInt("isRead"))
+                                                }
+                                                if (obj.has("isNew")) {
+                                                    put(android.provider.CallLog.Calls.NEW, obj.getInt("isNew"))
+                                                }
+                                            }
+                                            try {
+                                                context.contentResolver.insert(android.provider.CallLog.Calls.CONTENT_URI, values)
+                                                existingKeys.add(key)
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("BackupManager", "Failed to insert call log entry", e)
+                                            }
+                                        }
+                                    }
+                                    restoredAny = true
+                                } catch (e: Exception) {
+                                    android.util.Log.e("BackupManager", "Failed to restore call logs", e)
                                 }
                             }
                         }
