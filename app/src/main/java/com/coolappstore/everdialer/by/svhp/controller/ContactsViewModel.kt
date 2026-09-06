@@ -59,24 +59,62 @@ class ContactsViewModel(
     }
 
     fun fetchContactGroups() {
-        _contactGroups.value = prefs.getContactGroups()
+        viewModelScope.launch(Dispatchers.IO) {
+            val localGroups = prefs.getContactGroups()
+            val systemGroups = runCatching { contactsRepo.getSystemContactGroups() }.getOrDefault(emptyList())
+
+            val merged = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+            merged.addAll(localGroups)
+
+            // Add system groups that are not already present
+            for (sg in systemGroups) {
+                if (merged.none { it.name.equals(sg.name, ignoreCase = true) && it.accountType == sg.accountType && it.accountName == sg.accountName }) {
+                    merged.add(sg)
+                }
+            }
+
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                _contactGroups.value = merged
+            }
+        }
     }
 
     fun addContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup) {
-        prefs.addContactGroup(group)
-        fetchContactGroups()
-        if (_selectedGroupId.value == group.id) {
-            updateDisplayedContacts()
+        viewModelScope.launch(Dispatchers.IO) {
+            var finalGroup = group
+            if (!group.accountType.isNullOrBlank() || !group.accountName.isNullOrBlank() || group.id.startsWith("sys_group_")) {
+                val sysId = runCatching { contactsRepo.saveSystemContactGroup(group) }.getOrNull()
+                if (sysId != null) {
+                    finalGroup = group.copy(id = sysId)
+                }
+            }
+            prefs.addContactGroup(finalGroup)
+            fetchContactGroups()
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                if (_selectedGroupId.value == group.id || _selectedGroupId.value == finalGroup.id) {
+                    updateDisplayedContacts()
+                }
+            }
         }
     }
 
     fun deleteContactGroup(groupId: String) {
-        prefs.deleteContactGroup(groupId)
-        fetchContactGroups()
-        if (_selectedGroupId.value == groupId) {
-            _selectedGroupId.value = null
-            updateDisplayedContacts()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { contactsRepo.deleteSystemContactGroup(groupId) }
+            prefs.deleteContactGroup(groupId)
+            fetchContactGroups()
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                if (_selectedGroupId.value == groupId) {
+                    _selectedGroupId.value = null
+                    updateDisplayedContacts()
+                }
+            }
         }
+    }
+
+    fun toggleContactGroupVisibility(groupId: String, isHidden: Boolean) {
+        prefs.setContactGroupHidden(groupId, isHidden)
+        fetchContactGroups()
     }
 
     fun reorderContactGroups(groups: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>) {
@@ -150,7 +188,7 @@ class ContactsViewModel(
         val groupId = _selectedGroupId.value
         val sessionKey = _selectedAccountKey.value
         if (groupId != null) {
-            val group = prefs.getContactGroups().find { it.id == groupId }
+            val group = _contactGroups.value.find { it.id == groupId } ?: prefs.getContactGroups().find { it.id == groupId }
             val groupContactIds = group?.contactIds?.toSet() ?: emptySet()
             _displayedContacts.value = baseContacts.filter { it.id in groupContactIds }
         } else if (sessionKey != null) {

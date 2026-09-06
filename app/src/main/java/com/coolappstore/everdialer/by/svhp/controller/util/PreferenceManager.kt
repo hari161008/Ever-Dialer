@@ -165,6 +165,9 @@ class PreferenceManager(context: Context) {
                 val obj = jsonArray.getJSONObject(i)
                 val id = obj.optString("id", java.util.UUID.randomUUID().toString())
                 val name = obj.optString("name", "")
+                val accountType = if (obj.has("accountType")) obj.optString("accountType").ifBlank { null } else null
+                val accountName = if (obj.has("accountName")) obj.optString("accountName").ifBlank { null } else null
+                val targetLabel = if (obj.has("targetLabel")) obj.optString("targetLabel").ifBlank { null } else null
                 val contactsArray = obj.optJSONArray("contactIds")
                 val contactIds = mutableListOf<String>()
                 if (contactsArray != null) {
@@ -173,7 +176,16 @@ class PreferenceManager(context: Context) {
                     }
                 }
                 if (name.isNotBlank()) {
-                    list.add(com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(id = id, name = name, contactIds = contactIds))
+                    list.add(
+                        com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
+                            id = id,
+                            name = name,
+                            contactIds = contactIds,
+                            accountType = accountType,
+                            accountName = accountName,
+                            targetLabel = targetLabel
+                        )
+                    )
                 }
             }
             list
@@ -188,6 +200,9 @@ class PreferenceManager(context: Context) {
             val obj = org.json.JSONObject()
             obj.put("id", g.id)
             obj.put("name", g.name)
+            if (g.accountType != null) obj.put("accountType", g.accountType)
+            if (g.accountName != null) obj.put("accountName", g.accountName)
+            if (g.targetLabel != null) obj.put("targetLabel", g.targetLabel)
             val contactsArray = org.json.JSONArray()
             for (cId in g.contactIds) {
                 contactsArray.put(cId)
@@ -234,7 +249,19 @@ class PreferenceManager(context: Context) {
         setString(KEY_CONTACTS_DISPLAY_ORDER, order.joinToString(","))
     }
 
+    fun getHiddenContactGroupIds(): Set<String> {
+        val raw = getString(KEY_HIDDEN_CONTACT_GROUPS, null) ?: return emptySet()
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    }
+
+    fun setContactGroupHidden(groupId: String, hidden: Boolean) {
+        val current = getHiddenContactGroupIds().toMutableSet()
+        if (hidden) current.add(groupId) else current.remove(groupId)
+        setString(KEY_HIDDEN_CONTACT_GROUPS, current.joinToString(","))
+    }
+
     companion object {
+        const val KEY_HIDDEN_CONTACT_GROUPS = "hidden_contact_groups"
         const val ITEM_ALL_CONTACTS = "all_contacts"
         const val ITEM_CONTACT_GROUPS = "contact_groups"
         const val KEY_CONTACT_GROUPS = "contact_groups"
@@ -309,6 +336,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DELETE_NOTES_WITH_RECORDING = "delete_notes_with_recording"
         const val KEY_CUSTOM_FONT_PATH      = "custom_font_path"
         const val KEY_CUSTOM_FONT_SIZE      = "custom_font_size"
+        const val KEY_DISPLAY_SCALE         = "display_scale"
         const val KEY_THEME_MODE            = "theme_mode"
         const val KEY_SATURATED_COLORS      = "saturated_colors"
         const val KEY_SATURATED_MODES       = "saturated_modes"

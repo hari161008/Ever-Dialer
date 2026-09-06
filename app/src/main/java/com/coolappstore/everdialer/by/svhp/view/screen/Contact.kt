@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
@@ -370,8 +371,13 @@ fun ContactContent(
             val activePillBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
             val activePillFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
+            val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
+            val visibleContactGroups = remember(contactGroups, hiddenGroupIds) {
+                contactGroups.filter { it.id !in hiddenGroupIds }
+            }
+
             // ── 1. Contact Groups Section (ABOVE Contacts to Display) ─────────
-            if (contactGroups.isNotEmpty()) {
+            if (visibleContactGroups.isNotEmpty()) {
                 androidx.compose.foundation.lazy.LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -399,7 +405,7 @@ fun ContactContent(
                     }
 
                     // Contact groups in user-ordered sequence
-                    items(contactGroups, key = { it.id }) { grp ->
+                    items(visibleContactGroups, key = { it.id }) { grp ->
                         val isSelected = selectedGroupId == grp.id
                         FilterChip(
                             selected = isSelected,

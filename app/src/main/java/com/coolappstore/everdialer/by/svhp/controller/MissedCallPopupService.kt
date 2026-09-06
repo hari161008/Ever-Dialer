@@ -350,23 +350,31 @@ class MissedCallPopupService : Service() {
     }
 
     private fun dismissAndStop() {
-        scope.launch {
-            try {
-                overlayView?.let { wm.removeView(it) }
-            } catch (_: Exception) {}
-            overlayView = null
-            stopSelf()
-        }
+        try {
+            overlayView?.let {
+                if (it.isAttachedToWindow) {
+                    wm.removeViewImmediate(it)
+                }
+            }
+        } catch (_: Exception) {}
+        overlayView = null
+        stopSelf()
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        lifecycleOwner.onDestroy()
         try {
-            overlayView?.let { wm.removeView(it) }
+            overlayView?.let {
+                if (it.isAttachedToWindow) {
+                    wm.removeViewImmediate(it)
+                }
+            }
         } catch (_: Exception) {}
         overlayView = null
+        try {
+            lifecycleOwner.onDestroy()
+        } catch (_: Exception) {}
         scope.cancel()
+        super.onDestroy()
     }
 
     @Composable
@@ -383,6 +391,7 @@ class MissedCallPopupService : Service() {
         onRegisterBackHandler: (() -> Boolean) -> Unit
     ) {
         val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
         var visible by remember { mutableStateOf(false) }
         var isCustomTyping by remember { mutableStateOf(false) }
         var customMessageText by remember { mutableStateOf("") }
@@ -394,7 +403,7 @@ class MissedCallPopupService : Service() {
         fun triggerDismiss() {
             if (!visible) return
             visible = false
-            scope.launch {
+            coroutineScope.launch {
                 delay(220)
                 onDismiss()
             }

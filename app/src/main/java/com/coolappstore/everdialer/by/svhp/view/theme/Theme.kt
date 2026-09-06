@@ -380,9 +380,22 @@ fun Rivo4Theme(
         buildTypography(customFontFamily, fontSizeScale)
     }
 
+    val displayScale = prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)
+    val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+    val scaledDensity = remember(baseDensity, displayScale) {
+        androidx.compose.ui.unit.Density(
+            density = baseDensity.density * displayScale,
+            fontScale = baseDensity.fontScale
+        )
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography  = typography,
-        content     = content
-    )
+        typography  = typography
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides scaledDensity,
+            content = content
+        )
+    }
 }

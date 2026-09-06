@@ -306,10 +306,11 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
     var hexError by remember { mutableStateOf(false) }
 
-    // Font state
+    // Font & Display Scaling state
     val savedFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     var hasFontSet    by remember { mutableStateOf(savedFontPath != null) }
     var fontSizeScale by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)) }
+    var displayScale  by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)) }
 
     val fontPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
@@ -865,6 +866,78 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(12.dp))
+                            RivoExpressiveCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        "Display & Font Size",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+
+                                    // Display Scaling Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Display Scaling",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(displayScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = displayScale,
+                                        onValueChange = { displayScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, displayScale)
+                                        },
+                                        valueRange = 0.70f..1.40f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Font Size Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Font Size",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(fontSizeScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontSizeScale,
+                                        onValueChange = { fontSizeScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, fontSizeScale)
+                                        },
+                                        valueRange = 0.70f..1.40f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1322,21 +1395,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         }
                                         IconButton(onClick = { fontPickerLauncher.launch("font/ttf") }) {
                                             Icon(Icons.Default.FolderOpen, "Pick font", tint = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                    if (hasFontSet) {
-                                        Spacer(Modifier.height(12.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("Size", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(36.dp))
-                                            Slider(
-                                                value = fontSizeScale,
-                                                onValueChange = { fontSizeScale = it },
-                                                onValueChangeFinished = { prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, fontSizeScale) },
-                                                valueRange = 0.8f..1.4f,
-                                                steps = 11,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Text("${(fontSizeScale * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(42.dp).padding(start = 8.dp))
                                         }
                                     }
                                 }

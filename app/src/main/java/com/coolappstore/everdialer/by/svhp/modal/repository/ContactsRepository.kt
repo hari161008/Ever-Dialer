@@ -84,10 +84,22 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         emptyList()
     }
 
+    private fun extractPhoneNumberFromSyncData(data1: String?, data3: String?): String? {
+        if (!data1.isNullOrBlank() && data1.contains("@")) {
+            val candidate = data1.substringBefore("@").filter { it.isDigit() || it == '+' }
+            if (candidate.length >= 7) return candidate
+        }
+        if (!data3.isNullOrBlank()) {
+            val digits = data3.filter { it.isDigit() || it == '+' }
+            if (digits.length >= 7) return digits
+        }
+        return null
+    }
+
     private fun getContactsInternal(enabledAccountKeys: Set<String>): List<Contact> {
-        // Build list of raw contact IDs allowed by the enabled account filter
-        val allowedRawContactIds: Set<Long>? = if (enabledAccountKeys.isNotEmpty()) {
-            buildAllowedRawContactIds(enabledAccountKeys)
+        // Build list of contact IDs allowed by the enabled account filter
+        val allowedContactIds: Set<String>? = if (enabledAccountKeys.isNotEmpty()) {
+            buildAllowedContactIds(enabledAccountKeys)
         } else null // null = no filter, show all
 
         // Build contact_id -> distinct source-account labels (Google account(s), SIM, phone
@@ -124,19 +136,15 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             val data2Idx = cursor.getColumnIndex(ContactsContract.Data.DATA2)
             val data3Idx = cursor.getColumnIndex(ContactsContract.Data.DATA3)
             val starredIdx = cursor.getColumnIndex(ContactsContract.Data.STARRED)
-            val rawIdIdx = cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getString(idIdx) ?: continue
+
+                // Apply account filter: skip contacts not from allowed contact IDs
+                if (allowedContactIds != null && id !in allowedContactIds) continue
+
                 val mimeType = cursor.getString(mimeIdx)
                 val data1 = cursor.getString(data1Idx) ?: continue
-
-                // Apply account filter: skip contacts not from allowed raw contact IDs
-                if (allowedRawContactIds != null) {
-                    val rawId = cursor.getLong(rawIdIdx)
-                    if (rawId !in allowedRawContactIds) continue
-                }
-
                 val isStarred = cursor.getInt(starredIdx) == 1
 
                 val contact = contactsMap.getOrPut(id) {
@@ -149,21 +157,28 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     )
                 }
 
-                when (mimeType) {
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
+                when {
+                    mimeType == ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
                         contactsMap[id] = contact.copy(phoneNumbers = (contact.phoneNumbers + data1).distinct())
                     }
-                    ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
+                    mimeType == ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
                         contactsMap[id] = contact.copy(emails = (contact.emails + data1).distinct())
                     }
-                    ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
+                    mimeType == ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
                         contactsMap[id] = contact.copy(addresses = (contact.addresses + data1).distinct())
                     }
-                    ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
+                    mimeType == ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
                         val type = cursor.getInt(data2Idx)
                         val label = cursor.getString(data3Idx)
                         val event = ContactEvent(type, label, data1)
                         contactsMap[id] = contact.copy(events = (contact.events + event).distinct())
+                    }
+                    mimeType?.contains("whatsapp", ignoreCase = true) == true ||
+                    mimeType?.contains("tachyon", ignoreCase = true) == true -> {
+                        val extracted = extractPhoneNumberFromSyncData(data1, cursor.getString(data3Idx))
+                        if (!extracted.isNullOrBlank()) {
+                            contactsMap[id] = contact.copy(phoneNumbers = (contact.phoneNumbers + extracted).distinct())
+                        }
                     }
                 }
             }
@@ -173,18 +188,40 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             .sortedBy { it.name }
     }
 
+    private fun matchesAccountFilter(key: String, accountType: String, accountName: String, enabledKeys: Set<String>): Boolean {
+        if (enabledKeys.isEmpty()) return false
+        if (key in enabledKeys) return true
+        return enabledKeys.any { targetKey ->
+            when {
+                targetKey == key -> true
+                targetKey == "sim_0" && (key == "sim_0" || accountType.isBlank() || accountType.equals("com.android.local", true) || accountType.equals("com.android.contacts", true)) -> true
+                targetKey.startsWith("sim_") && key == targetKey -> true
+                targetKey.startsWith("google_") -> {
+                    val email = targetKey.removePrefix("google_")
+                    accountType.contains("google", ignoreCase = true) && accountName.equals(email, ignoreCase = true)
+                }
+                targetKey.startsWith("whatsapp") -> {
+                    accountType.contains("whatsapp", ignoreCase = true) || accountName.contains("whatsapp", ignoreCase = true)
+                }
+                targetKey.startsWith("acc:") -> {
+                    val parts = targetKey.removePrefix("acc:").split(":", limit = 2)
+                    if (parts.size == 2) {
+                        accountType.equals(parts[0], ignoreCase = true) && accountName.equals(parts[1], ignoreCase = true)
+                    } else false
+                }
+                else -> false
+            }
+        }
+    }
+
     /**
-     * Returns raw contact IDs for accounts matching the enabled account keys.
-     * Key format matches what ContactsToDisplayDialog produces:
-     *   "google_<email>"  → account type "com.google", name == email
-     *   "sim_<subId>"     → account type "com.android.local" or null (device/SIM contacts)
-     *   "whatsapp"        → account type contains "whatsapp"
+     * Returns aggregate contact IDs for accounts matching the enabled account keys.
      */
-    private fun buildAllowedRawContactIds(enabledKeys: Set<String>): Set<Long> {
-        val allowed = mutableSetOf<Long>()
+    private fun buildAllowedContactIds(enabledKeys: Set<String>): Set<String> {
+        val allowed = mutableSetOf<String>()
 
         val rcProjection = arrayOf(
-            ContactsContract.RawContacts._ID,
+            ContactsContract.RawContacts.CONTACT_ID,
             ContactsContract.RawContacts.ACCOUNT_TYPE,
             ContactsContract.RawContacts.ACCOUNT_NAME
         )
@@ -195,46 +232,19 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             null,
             null
         )?.use { cursor ->
-            val idIdx   = cursor.getColumnIndex(ContactsContract.RawContacts._ID)
+            val contactIdIdx = cursor.getColumnIndex(ContactsContract.RawContacts.CONTACT_ID)
             val typeIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)
             val nameIdx = cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)
 
             while (cursor.moveToNext()) {
-                val rawId = cursor.getLong(idIdx)
+                val contactId = if (contactIdIdx >= 0) cursor.getString(contactIdIdx) ?: continue else continue
                 val accountType = cursor.getString(typeIdx) ?: ""
                 val accountName = cursor.getString(nameIdx) ?: ""
+                val key = buildAccountKey(accountType, accountName)
 
-                val matchesAny = enabledKeys.any { key ->
-                    when {
-                        key.startsWith("google_") -> {
-                            val email = key.removePrefix("google_")
-                            accountType.equals("com.google", ignoreCase = true) &&
-                                accountName.equals(email, ignoreCase = true)
-                        }
-                        key.startsWith("sim_") -> {
-                            // SIM/device contacts have blank or local account type
-                            val isLocalType = accountType.isBlank() ||
-                                accountType.equals("com.android.local", ignoreCase = true) ||
-                                accountType.equals("com.android.contacts", ignoreCase = true) ||
-                                accountType.contains("sim", ignoreCase = true) ||
-                                accountType.contains("icc", ignoreCase = true)
-                            if (!isLocalType) return@any false
-                            val slotNum = key.removePrefix("sim_").toIntOrNull() ?: 0
-                            val slot = getSimSlotForAccount(accountType, accountName)
-                            // slot == -1 means genuine device/local storage (maps to key "sim_0");
-                            // slot 0/1/... map to "sim_1"/"sim_2"/... — a raw contact can only ever
-                            // satisfy exactly one of these, never fall through into SIM1/SIM2 by default.
-                            if (slot == -1) slotNum == 0
-                            else (slot + 1) == slotNum
-                        }
-                        key == "whatsapp" -> {
-                            accountType.contains("whatsapp", ignoreCase = true) ||
-                                accountName.contains("whatsapp", ignoreCase = true)
-                        }
-                        else -> false
-                    }
+                if (matchesAccountFilter(key, accountType, accountName, enabledKeys)) {
+                    allowed.add(contactId)
                 }
-                if (matchesAny) allowed.add(rawId)
             }
         }
         return allowed
@@ -723,27 +733,70 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         } catch (_: Exception) { -1 }
     }
 
-    private fun buildAccountKey(type: String, name: String): String = when {
-        type.contains("google", ignoreCase = true) -> "google_$name"
-        type.contains("whatsapp", ignoreCase = true) -> "whatsapp"
-        else -> {
-            // SIM / local / device storage — assign per-SIM keys using SubscriptionManager
-            val simSlot = getSimSlotForAccount(type, name)
-            if (simSlot >= 0) "sim_${simSlot + 1}" else "sim_0"
+    private fun buildAccountKey(type: String, name: String): String {
+        val simSlot = getSimSlotForAccount(type, name)
+        if (simSlot >= 0) return "sim_${simSlot + 1}"
+        val isLocal = type.isBlank() ||
+            type.equals("com.android.local", ignoreCase = true) ||
+            type.equals("com.android.contacts", ignoreCase = true) ||
+            type.equals("phone", ignoreCase = true) ||
+            type.equals("device", ignoreCase = true)
+        if (isLocal) return "sim_0"
+        if (type.equals("com.google", ignoreCase = true)) return "google_$name"
+        if (type.contains("whatsapp", ignoreCase = true)) {
+            return if (name.isNotBlank() && !name.equals("WhatsApp", ignoreCase = true)) "whatsapp_$name" else "whatsapp"
         }
+        return "acc:${type}:${name}"
     }
 
-    private fun buildAccountDisplayName(type: String, name: String): String = when {
-        type.contains("google", ignoreCase = true) -> name.ifBlank { "Google" }
-        type.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
-        else -> {
-            val simSlot = getSimSlotForAccount(type, name)
-            when {
+    private fun buildAccountDisplayName(type: String, name: String): String {
+        val simSlot = getSimSlotForAccount(type, name)
+        if (simSlot >= 0) {
+            return when {
                 simSlot == 0 -> "SIM 1"
                 simSlot == 1 -> "SIM 2"
-                simSlot > 1  -> "SIM ${simSlot + 1}"
-                else         -> "Device Storage"
+                else         -> "SIM ${simSlot + 1}"
             }
+        }
+        val isLocal = type.isBlank() ||
+            type.equals("com.android.local", ignoreCase = true) ||
+            type.equals("com.android.contacts", ignoreCase = true) ||
+            type.equals("phone", ignoreCase = true) ||
+            type.equals("device", ignoreCase = true)
+        if (isLocal) return "Device Storage"
+
+        if (type.equals("com.google", ignoreCase = true)) {
+            return if (name.isNotBlank()) name else "Google"
+        }
+        if (type.contains("whatsapp", ignoreCase = true)) {
+            return if (type.contains("w4b", ignoreCase = true) || name.contains("business", ignoreCase = true)) {
+                "WhatsApp Business"
+            } else {
+                "WhatsApp"
+            }
+        }
+
+        // Try getting installed app label from PackageManager for Exchange, Meet, Telegram, etc.
+        val appLabel = runCatching {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(type, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        }.getOrNull()
+
+        val baseLabel = when {
+            !appLabel.isNullOrBlank() -> appLabel
+            type.contains("tachyon", ignoreCase = true) || type.contains("meet", ignoreCase = true) -> "Google Meet"
+            type.contains("exchange", ignoreCase = true) -> "Exchange"
+            type.contains("outlook", ignoreCase = true) -> "Outlook"
+            type.contains("telegram", ignoreCase = true) -> "Telegram"
+            type.contains("signal", ignoreCase = true) -> "Signal"
+            else -> type.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+        }
+
+        return if (name.isNotBlank() && !name.equals(baseLabel, ignoreCase = true) && !name.equals(type, ignoreCase = true)) {
+            "$baseLabel ($name)"
+        } else {
+            baseLabel
         }
     }
 
@@ -894,5 +947,199 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             }
         }
         return null
+    }
+
+    override fun getSystemContactGroups(): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup> {
+        val groups = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+        val groupIdToGroupMap = mutableMapOf<Long, com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+
+        val groupProjection = arrayOf(
+            ContactsContract.Groups._ID,
+            ContactsContract.Groups.TITLE,
+            ContactsContract.Groups.ACCOUNT_TYPE,
+            ContactsContract.Groups.ACCOUNT_NAME
+        )
+        try {
+            contentResolver.query(
+                ContactsContract.Groups.CONTENT_URI,
+                groupProjection,
+                "${ContactsContract.Groups.DELETED} = 0",
+                null,
+                "${ContactsContract.Groups.TITLE} ASC"
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
+                val titleIdx = cursor.getColumnIndex(ContactsContract.Groups.TITLE)
+                val typeIdx = cursor.getColumnIndex(ContactsContract.Groups.ACCOUNT_TYPE)
+                val nameIdx = cursor.getColumnIndex(ContactsContract.Groups.ACCOUNT_NAME)
+
+                while (cursor.moveToNext()) {
+                    val rowId = if (idIdx >= 0) cursor.getLong(idIdx) else continue
+                    val title = if (titleIdx >= 0) cursor.getString(titleIdx) ?: "" else ""
+                    val accType = if (typeIdx >= 0) cursor.getString(typeIdx) else null
+                    val accName = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+
+                    if (title.isNotBlank()) {
+                        val g = com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
+                            id = "sys_group_$rowId",
+                            name = title,
+                            contactIds = emptyList(),
+                            accountType = accType,
+                            accountName = accName,
+                            targetLabel = if (!accName.isNullOrBlank()) "$accName (${buildAccountDisplayName(accType ?: "", accName)})" else null
+                        )
+                        groupIdToGroupMap[rowId] = g
+                    }
+                }
+            }
+
+            if (groupIdToGroupMap.isNotEmpty()) {
+                val memberMap = mutableMapOf<Long, MutableSet<String>>()
+                val memberProjection = arrayOf(
+                    ContactsContract.Data.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID
+                )
+                val memberSelection = "${ContactsContract.Data.MIMETYPE} = ?"
+                val memberArgs = arrayOf(ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE)
+
+                contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    memberProjection,
+                    memberSelection,
+                    memberArgs,
+                    null
+                )?.use { cursor ->
+                    val contactIdIdx = cursor.getColumnIndex(ContactsContract.Data.CONTACT_ID)
+                    val groupRowIdIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID)
+
+                    while (cursor.moveToNext()) {
+                        val contactId = if (contactIdIdx >= 0) cursor.getString(contactIdIdx) else null
+                        val gRowId = if (groupRowIdIdx >= 0) cursor.getLong(groupRowIdIdx) else 0L
+                        if (contactId != null && gRowId != 0L) {
+                            memberMap.getOrPut(gRowId) { mutableSetOf() }.add(contactId)
+                        }
+                    }
+                }
+
+                groupIdToGroupMap.forEach { (rowId, g) ->
+                    val contactIds = memberMap[rowId]?.toList() ?: emptyList()
+                    groups.add(g.copy(contactIds = contactIds))
+                }
+            }
+        } catch (_: Exception) {}
+
+        return groups
+    }
+
+    override fun saveSystemContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup): String? {
+        val ops = ArrayList<ContentProviderOperation>()
+        var targetGroupId: Long? = null
+
+        // 1. Determine or create the group in ContactsContract.Groups
+        if (group.id.startsWith("sys_group_")) {
+            targetGroupId = group.id.removePrefix("sys_group_").toLongOrNull()
+        }
+
+        try {
+            if (targetGroupId == null) {
+                val groupValues = ContentValues().apply {
+                    put(ContactsContract.Groups.TITLE, group.name)
+                    put(ContactsContract.Groups.GROUP_VISIBLE, 1)
+                    if (!group.accountType.isNullOrBlank()) {
+                        put(ContactsContract.Groups.ACCOUNT_TYPE, group.accountType)
+                    }
+                    if (!group.accountName.isNullOrBlank()) {
+                        put(ContactsContract.Groups.ACCOUNT_NAME, group.accountName)
+                    }
+                }
+                val newGroupUri = contentResolver.insert(ContactsContract.Groups.CONTENT_URI, groupValues)
+                targetGroupId = newGroupUri?.lastPathSegment?.toLongOrNull()
+            } else {
+                // Update group title if existing
+                val updateValues = ContentValues().apply {
+                    put(ContactsContract.Groups.TITLE, group.name)
+                }
+                contentResolver.update(
+                    ContactsContract.Groups.CONTENT_URI,
+                    updateValues,
+                    "${ContactsContract.Groups._ID} = ?",
+                    arrayOf(targetGroupId.toString())
+                )
+            }
+
+            if (targetGroupId != null) {
+                // 2. Remove previous group memberships
+                ops.add(
+                    ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID} = ?",
+                            arrayOf(
+                                ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE,
+                                targetGroupId.toString()
+                            )
+                        )
+                        .build()
+                )
+
+                // 3. For each contact, find raw contact id matching account or first raw contact
+                for (contactId in group.contactIds) {
+                    val rawContactIds = getRawContactIdsForContact(contactId)
+                    val targetRawId = rawContactIds.firstOrNull() ?: contactId.toLongOrNull()
+                    if (targetRawId != null) {
+                        ops.add(
+                            ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                                .withValue(ContactsContract.Data.RAW_CONTACT_ID, targetRawId)
+                                .withValue(
+                                    ContactsContract.Data.MIMETYPE,
+                                    ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE
+                                )
+                                .withValue(
+                                    ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID,
+                                    targetGroupId
+                                )
+                                .build()
+                        )
+                    }
+                }
+
+                if (ops.isNotEmpty()) {
+                    contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
+                }
+
+                return "sys_group_$targetGroupId"
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error saving system contact group", e)
+        }
+        return null
+    }
+
+    override fun deleteSystemContactGroup(groupId: String): Boolean {
+        val targetId = if (groupId.startsWith("sys_group_")) {
+            groupId.removePrefix("sys_group_").toLongOrNull()
+        } else {
+            groupId.toLongOrNull()
+        } ?: return false
+
+        return try {
+            // 1. Delete group memberships first
+            contentResolver.delete(
+                ContactsContract.Data.CONTENT_URI,
+                "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID} = ?",
+                arrayOf(
+                    ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE,
+                    targetId.toString()
+                )
+            )
+            // 2. Delete group from ContactsContract.Groups
+            val deletedRows = contentResolver.delete(
+                ContactsContract.Groups.CONTENT_URI,
+                "${ContactsContract.Groups._ID} = ?",
+                arrayOf(targetId.toString())
+            )
+            deletedRows > 0
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error deleting system contact group", e)
+            false
+        }
     }
 }

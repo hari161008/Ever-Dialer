@@ -220,6 +220,9 @@ object BackupManager {
                                 val obj = JSONObject()
                                 obj.put("id", g.id)
                                 obj.put("name", g.name)
+                                if (g.accountType != null) obj.put("accountType", g.accountType)
+                                if (g.accountName != null) obj.put("accountName", g.accountName)
+                                if (g.targetLabel != null) obj.put("targetLabel", g.targetLabel)
                                 val contactsArr = JSONArray()
                                 g.contactIds.forEach { contactsArr.put(it) }
                                 obj.put("contactIds", contactsArr)
@@ -566,6 +569,9 @@ object BackupManager {
                                         val obj = jsonArray.getJSONObject(i)
                                         val id = obj.optString("id", java.util.UUID.randomUUID().toString())
                                         val gName = obj.optString("name", "")
+                                        val accountType = if (obj.has("accountType")) obj.optString("accountType").ifBlank { null } else null
+                                        val accountName = if (obj.has("accountName")) obj.optString("accountName").ifBlank { null } else null
+                                        val targetLabel = if (obj.has("targetLabel")) obj.optString("targetLabel").ifBlank { null } else null
                                         val contactIds = mutableListOf<String>()
                                         val arr = obj.optJSONArray("contactIds")
                                         if (arr != null) {
@@ -574,7 +580,16 @@ object BackupManager {
                                             }
                                         }
                                         if (gName.isNotBlank()) {
-                                            list.add(com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(id, gName, contactIds))
+                                            list.add(
+                                                com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
+                                                    id = id,
+                                                    name = gName,
+                                                    contactIds = contactIds,
+                                                    accountType = accountType,
+                                                    accountName = accountName,
+                                                    targetLabel = targetLabel
+                                                )
+                                            )
                                         }
                                     }
                                     val prefs = PreferenceManager(context)

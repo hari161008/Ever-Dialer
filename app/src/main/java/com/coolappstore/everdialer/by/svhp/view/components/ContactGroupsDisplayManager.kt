@@ -65,10 +65,14 @@ fun ContactsToDisplaySheet(
     var showDeleteGroupDialog by remember { mutableStateOf(false) }
     var groupToEdit by remember { mutableStateOf<ContactGroup?>(null) }
 
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+    val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
+
     // Reorderable groups state
     var groupsList by remember(groups) { mutableStateOf(groups) }
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var isGroupsExpanded by remember { mutableStateOf(false) }
 
     fun dismissSmoothly(action: (() -> Unit)? = null) {
         scope.launch {
@@ -214,8 +218,10 @@ fun ContactsToDisplaySheet(
                     }
                 }
             } else {
+                val displayedGroupsList = if (groupsList.size > 4 && !isGroupsExpanded) groupsList.take(4) else groupsList
+
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                    groupsList.forEachIndexed { index, group ->
+                    displayedGroupsList.forEachIndexed { index, group ->
                         val isSelected = selectedGroupId == group.id
                         val isBeingDragged = draggedIndex == index
 
@@ -268,10 +274,39 @@ fun ContactsToDisplaySheet(
                                         color = if (isSelected) MaterialTheme.colorScheme.primary
                                                 else MaterialTheme.colorScheme.onSurface
                                     )
+                                    val subtitle = buildString {
+                                        append("${group.contactIds.size} contacts")
+                                        if (!group.targetLabel.isNullOrBlank()) {
+                                            append(" · ")
+                                            append(group.targetLabel)
+                                        } else if (!group.accountName.isNullOrBlank()) {
+                                            append(" · ")
+                                            append(group.accountName)
+                                        }
+                                    }
                                     Text(
-                                        "${group.contactIds.size} contacts",
+                                        subtitle,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+
+                                val isGroupHidden = group.id in hiddenGroupIds
+
+                                // Hide / Show Group in Contact section Button
+                                IconButton(
+                                    onClick = {
+                                        contactsVM.toggleContactGroupVisibility(group.id, !isGroupHidden)
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        if (isGroupHidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                        contentDescription = if (isGroupHidden) "Show in contacts" else "Hide from contacts",
+                                        modifier = Modifier.size(18.dp),
+                                        tint = if (isGroupHidden) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                               else MaterialTheme.colorScheme.primary
                                     )
                                 }
 
@@ -346,6 +381,27 @@ fun ContactsToDisplaySheet(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    if (groupsList.size > 4) {
+                        TextButton(
+                            onClick = { isGroupsExpanded = !isGroupsExpanded },
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Icon(
+                                if (isGroupsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                if (isGroupsExpanded) "Show less" else "Show more (${groupsList.size - 4}+)",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
@@ -483,12 +539,22 @@ fun ContactsToDisplaySheet(
                         Icons.Default.SimCard to Color(0xFF4CAF50)
                     acc.key == "sim_2" ->
                         Icons.Default.SimCard to Color(0xFF009688)
-                    acc.key.startsWith("sim_") ->
+                    acc.key.startsWith("sim_") && acc.key != "sim_0" ->
                         Icons.Default.SimCard to Color(0xFF00BCD4)
                     acc.key.equals("whatsapp", ignoreCase = true) || acc.accountType.contains("whatsapp", ignoreCase = true) ->
                         Icons.Default.ChatBubble to Color(0xFF25D366)
+                    acc.accountType.contains("tachyon", ignoreCase = true) || acc.accountType.contains("meet", ignoreCase = true) ->
+                        Icons.Default.VideoCall to Color(0xFF00897B)
+                    acc.accountType.contains("exchange", ignoreCase = true) || acc.accountType.contains("outlook", ignoreCase = true) ->
+                        Icons.Default.Business to Color(0xFF0078D4)
+                    acc.accountType.contains("telegram", ignoreCase = true) ->
+                        Icons.Default.Send to Color(0xFF29B6F6)
+                    acc.accountType.contains("signal", ignoreCase = true) ->
+                        Icons.Default.Security to Color(0xFF3A76F0)
+                    acc.key == "sim_0" || acc.accountType.isBlank() ->
+                        Icons.Default.PhoneAndroid to Color(0xFF607D8B)
                     else ->
-                        Icons.Default.AccountCircle to Color(0xFF9C27B0)
+                        Icons.Default.AccountCircle to Color(0xFF7C4DFF)
                 }
 
                 Surface(
@@ -569,6 +635,7 @@ fun AddContactGroupDialog(
     var groupName by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedContactIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showTargetPicker by remember { mutableStateOf(false) }
 
     val filteredContacts = remember(allContacts, searchQuery) {
         if (searchQuery.isBlank()) allContacts
@@ -576,6 +643,25 @@ fun AddContactGroupDialog(
             it.name.contains(searchQuery, ignoreCase = true) ||
             it.phoneNumbers.any { num -> num.contains(searchQuery) }
         }
+    }
+
+    if (showTargetPicker) {
+        SelectGroupSaveTargetDialog(
+            groupName = groupName.trim(),
+            targets = contactsVM.getSaveTargets(),
+            onSelect = { target ->
+                val newGroup = ContactGroup(
+                    name = groupName.trim(),
+                    contactIds = selectedContactIds.toList(),
+                    accountType = target.accountType,
+                    accountName = target.accountName,
+                    targetLabel = target.label + (if (target.subLabel != null) " (${target.subLabel})" else "")
+                )
+                showTargetPicker = false
+                onSave(newGroup)
+            },
+            onDismiss = { showTargetPicker = false }
+        )
     }
 
     Dialog(
@@ -808,11 +894,7 @@ fun AddContactGroupDialog(
                     Button(
                         onClick = {
                             if (groupName.isNotBlank()) {
-                                val newGroup = ContactGroup(
-                                    name = groupName.trim(),
-                                    contactIds = selectedContactIds.toList()
-                                )
-                                onSave(newGroup)
+                                showTargetPicker = true
                             }
                         },
                         enabled = groupName.isNotBlank(),
@@ -1084,7 +1166,10 @@ fun EditContactGroupDialog(
                                 val updatedGroup = ContactGroup(
                                     id = group.id,
                                     name = groupName.trim(),
-                                    contactIds = selectedContactIds.toList()
+                                    contactIds = selectedContactIds.toList(),
+                                    accountType = group.accountType,
+                                    accountName = group.accountName,
+                                    targetLabel = group.targetLabel
                                 )
                                 onSave(updatedGroup)
                             }
@@ -1361,3 +1446,138 @@ fun DeleteContactGroupDialog(
         }
     }
 }
+
+@Composable
+fun SelectGroupSaveTargetDialog(
+    groupName: String,
+    targets: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget>,
+    onSelect: (com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Outlined.FolderShared,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Save Group To",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (groupName.isNotBlank()) "Choose account/storage for \"$groupName\"" else "Choose account or storage destination",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                val groupTargets = targets.filter { !it.isSim }
+                if (groupTargets.isEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelect(
+                                    com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget(
+                                        label = "Device",
+                                        subLabel = "This phone only"
+                                    )
+                                )
+                            }
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF607D8B).copy(alpha = 0.12f),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFF607D8B), modifier = Modifier.size(22.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Device", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                            Text("This phone only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    groupTargets.forEach { target ->
+                        val (icon, tint) = when {
+                            target.accountType?.contains("google", ignoreCase = true) == true ->
+                                Icons.Default.Email to Color(0xFFE53935)
+                            target.accountType?.contains("exchange", ignoreCase = true) == true ||
+                            target.accountType?.contains("outlook", ignoreCase = true) == true ->
+                                Icons.Default.Business to Color(0xFF0078D4)
+                            target.accountType == null ->
+                                Icons.Default.PhoneAndroid to Color(0xFF607D8B)
+                            else ->
+                                Icons.Default.AccountCircle to MaterialTheme.colorScheme.primary
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(target) }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = tint.copy(alpha = 0.12f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                                }
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                if (target.subLabel != null) {
+                                    Text(
+                                        target.subLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
+            }
+        }
+    }
+}
+

@@ -21,4 +21,10 @@ interface IContactsRepository {
      *  and removes only the raw contact(s) tied to its current account(s), leaving any other
      *  raw contacts merged into the same aggregate (e.g. from a different account) untouched. */
     fun moveContact(contact: Contact, target: ContactSaveTarget): Boolean
+    /** Retrieves contact groups/labels from the system Contacts provider (Gmail, Exchange, etc.) */
+    fun getSystemContactGroups(): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>
+    /** Creates or updates a contact group/label in the system Contacts provider with members */
+    fun saveSystemContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup): String?
+    /** Deletes a contact group/label and its memberships from the system Contacts provider */
+    fun deleteSystemContactGroup(groupId: String): Boolean
 }
