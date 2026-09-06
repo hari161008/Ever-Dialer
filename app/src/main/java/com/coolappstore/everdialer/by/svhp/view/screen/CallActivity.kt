@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1569,7 +1570,7 @@ fun ExpressiveCallScreen(
                                         callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
                                             if (isIncomingMode) "Declined" else "Hanging up..."
                                         }
-                                        else -> "Connecting..."
+                                        else -> if (isIncomingMode) "Connecting..." else "Calling"
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                     style = lsBaseStatusStyle.copy(fontSize = lsBaseStatusStyle.fontSize * currentBgConfig.fontSizeScale)
@@ -1824,7 +1825,7 @@ fun ExpressiveCallScreen(
                                                     callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
                                                         if (isIncomingMode) "Declined" else "Hanging up..."
                                                     }
-                                                    else -> "Connecting..."
+                                                    else -> if (isIncomingMode) "Connecting..." else "Calling"
                                                 },
                                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                                 style = statusStyle
@@ -1879,7 +1880,7 @@ fun ExpressiveCallScreen(
                                         callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
                                             if (isIncomingMode) "Declined" else "Hanging up..."
                                         }
-                                        else -> "Connecting..."
+                                        else -> if (isIncomingMode) "Connecting..." else "Calling"
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                     style = statusStyle
@@ -3100,11 +3101,18 @@ private fun FloatingCallNoteBox(
     modifier: Modifier = Modifier
 ) {
     Surface(
+        modifier = modifier
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(32.dp),
+                ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                clip = false
+            ),
         shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 8.dp,
-        shadowElevation = 14.dp,
-        modifier = modifier
+        shadowElevation = 0.dp
     ) {
         Column(modifier = Modifier.padding(22.dp)) {
             Row(

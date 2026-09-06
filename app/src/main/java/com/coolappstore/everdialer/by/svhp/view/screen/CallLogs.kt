@@ -37,11 +37,12 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.koinInject
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import java.util.Locale
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 
-@Destination<RootGraph>(route = "call_log_detail_screen")
+@Destination<RootGraph>(route = "call_log_detail_screen", style = SettingsTransitionStyle::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallLogFullScreen(

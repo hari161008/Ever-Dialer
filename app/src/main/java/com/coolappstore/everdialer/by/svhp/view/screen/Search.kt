@@ -76,7 +76,7 @@ private fun matchesNoteQuery(text: String, query: String): Boolean {
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle::class)
 @Composable
 fun SearchScreen(navController: NavController, navigator: DestinationsNavigator) {
     val permState = rememberPermissionState(Manifest.permission.READ_CONTACTS)

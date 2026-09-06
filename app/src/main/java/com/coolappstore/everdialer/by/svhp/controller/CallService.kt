@@ -68,41 +68,52 @@ class CallService : InCallService() {
     private val callConnectTimes = mutableMapOf<Call, Long>()
     private val callRingStartTimes = mutableMapOf<Call, Long>()
     private val callAnsweredSet = mutableSetOf<Call>()
+    private val handledCallEndedPopups = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Call, Boolean>())
 
     private fun recordMissedCallDurationIfNeeded(call: Call) {
         val ringStart = callRingStartTimes.remove(call)
         val wasAnswered = callAnsweredSet.remove(call)
-        if (ringStart != null && !wasAnswered) {
-            val ringDurationSec = ((System.currentTimeMillis() - ringStart) / 1000L).coerceAtLeast(1L)
-            val number = call.details?.handle?.schemeSpecificPart?.let { android.net.Uri.decode(it) } ?: ""
-            val callDate = call.details?.creationTimeMillis?.takeIf { it > 0 } ?: ringStart
-            if (number.isNotBlank()) {
+        val isMissed = ringStart != null && !wasAnswered
+        val ringDurationSec = if (isMissed) {
+            ((System.currentTimeMillis() - (ringStart ?: System.currentTimeMillis())) / 1000L).coerceAtLeast(1L)
+        } else {
+            0L
+        }
+        val number = call.details?.handle?.schemeSpecificPart?.let { android.net.Uri.decode(it) } ?: ""
+        val callDate = call.details?.creationTimeMillis?.takeIf { it > 0 } ?: (ringStart ?: System.currentTimeMillis())
+
+        if (number.isNotBlank()) {
+            if (isMissed) {
                 com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.saveDuration(
                     this, number, callDate, ringDurationSec
                 )
                 com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.updateProviderDuration(
                     this, number, ringDurationSec
                 )
+            }
 
-                // Trigger Missed Call Popup if enabled and permission granted
-                val popupEnabled = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false)
-                if (popupEnabled && android.provider.Settings.canDrawOverlays(this)) {
-                    val contact = try { contactsRepository.getContactByNumber(number) } catch (_: Exception) { null }
-                    val name = contact?.name ?: number
-                    val photo = contact?.photoUri
-                    val contactId = contact?.id
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        MissedCallPopupService.start(
-                            context = this,
-                            number = number,
-                            name = name,
-                            photoUri = photo,
-                            contactId = contactId,
-                            callDate = callDate,
-                            ringDurationSec = ringDurationSec
-                        )
-                    }, 300)
-                }
+            // Trigger Missed Call / Call End Popup if enabled and permission granted
+            val missedPopupEnabled = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_POPUP_ENABLED, false)
+            val alwaysAfterCallEnds = prefs.getBoolean(PreferenceManager.KEY_ALWAYS_SHOW_MISSED_CALL_POPUP_AFTER_CALL_END, false)
+            val shouldShowPopup = ((isMissed && missedPopupEnabled) || alwaysAfterCallEnds) && android.provider.Settings.canDrawOverlays(this)
+
+            if (shouldShowPopup && handledCallEndedPopups.add(call)) {
+                val contact = try { contactsRepository.getContactByNumber(number) } catch (_: Exception) { null }
+                val name = contact?.name ?: number
+                val photo = contact?.photoUri
+                val contactId = contact?.id
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    MissedCallPopupService.start(
+                        context = this,
+                        number = number,
+                        name = name,
+                        photoUri = photo,
+                        contactId = contactId,
+                        callDate = callDate,
+                        ringDurationSec = ringDurationSec,
+                        isMissedCall = isMissed
+                    )
+                }, 300)
             }
         }
     }

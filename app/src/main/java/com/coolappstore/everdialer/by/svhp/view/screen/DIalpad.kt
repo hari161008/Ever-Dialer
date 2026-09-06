@@ -129,6 +129,8 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
 import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import kotlinx.coroutines.CancellationException
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 /**
@@ -329,9 +331,26 @@ fun DialPadScreen(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp
         ) {
-            // System back should feel identical to tapping the X — the same slow, smooth
-            // slide-down — instead of the sheet's own quicker default dismiss.
-            BackHandler(enabled = true) { closeWithSlowAnimation() }
+            val prefs = koinInject<PreferenceManager>()
+            val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
+                prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
+            }
+            if (predictiveBackEnabled) {
+                PredictiveBackHandler(enabled = true) { progressFlow ->
+                    try {
+                        progressFlow.collect { backEvent ->
+                            dialpadClosing = true
+                            closeProgress.snapTo(backEvent.progress * 0.45f)
+                        }
+                        closeWithSlowAnimation()
+                    } catch (e: CancellationException) {
+                        dialpadClosing = false
+                        closeProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                }
+            } else {
+                BackHandler(enabled = true) { closeWithSlowAnimation() }
+            }
             Column(modifier = Modifier.statusBarsPadding().navigationBarsPadding()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),

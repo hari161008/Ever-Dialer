@@ -64,15 +64,23 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toTab   = isTabRoute(targetState.destination.route)
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
-        val toSettings = isSettingsRoute(targetState.destination.route)
+        val toSettings   = isSettingsRoute(targetState.destination.route)
+        val fromSettings = isSettingsRoute(initialState.destination.route)
 
         when {
             toSettings -> {
                 scaleIn(
                     animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
-                    initialScale = 0.88f,
+                    initialScale = SETTINGS_SCALE_ENTER_FROM,
                     transformOrigin = TransformOrigin.Center
-                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 60, easing = SettingsSmoothEase))
+                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+            }
+            fromSettings -> {
+                scaleIn(
+                    animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                    initialScale = SETTINGS_SCALE_EXIT_TO,
+                    transformOrigin = TransformOrigin.Center
+                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
             }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
@@ -103,9 +111,9 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromSettings || toSettings -> {
                 scaleOut(
                     animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
-                    targetScale = 1.06f,
+                    targetScale = SETTINGS_SCALE_EXIT_TO,
                     transformOrigin = TransformOrigin.Center
-                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 80, easing = SettingsSmoothEase))
+                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
             }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
@@ -142,9 +150,9 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromSettings || toSettings -> {
                 scaleIn(
                     animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
-                    initialScale = 1.06f,
+                    initialScale = SETTINGS_SCALE_EXIT_TO,
                     transformOrigin = TransformOrigin.Center
-                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 60, easing = SettingsSmoothEase))
+                ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
             }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
@@ -169,14 +177,15 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromIdx = routeOrder(initialState.destination.route)
         val toIdx   = routeOrder(targetState.destination.route)
         val fromSettings = isSettingsRoute(initialState.destination.route)
+        val toSettings   = isSettingsRoute(targetState.destination.route)
 
         when {
-            fromSettings -> {
+            fromSettings || toSettings -> {
                 scaleOut(
                     animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
-                    targetScale = 0.88f,
+                    targetScale = SETTINGS_SCALE_ENTER_FROM,
                     transformOrigin = TransformOrigin.Center
-                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 80, easing = SettingsSmoothEase))
+                ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
             }
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx

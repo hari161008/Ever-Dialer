@@ -31,11 +31,12 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.viewmodel.koinActivityViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun ContactEditScreen(
     contactId: String? = null,

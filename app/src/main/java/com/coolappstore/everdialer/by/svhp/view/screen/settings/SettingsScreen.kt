@@ -175,30 +175,11 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var pendingBackupCallingCards by remember { mutableStateOf(true) }
     var pendingBackupNotes by remember { mutableStateOf(true) }
     var pendingBackupRecordings by remember { mutableStateOf(true) }
+    var pendingBackupContacts by remember { mutableStateOf(false) }
 
-    var visible by remember { mutableStateOf(false) }
-    var isClosing by remember { mutableStateOf(false) }
-
-    fun navigateBack() {
-        isClosing = true
-        scope.launch {
-            delay(280)
-            navigator.navigateUp()
-        }
-    }
-
-    val alpha by animateFloatAsState(
-        targetValue = if (visible && !isClosing) 1f else 0f,
-        animationSpec = if (isClosing) tween(280, easing = FastOutLinearInEasing) else tween(350),
-        label = "settingsAlpha"
-    )
-    val offsetY by animateDpAsState(
-        targetValue = if (visible && !isClosing) 0.dp else if (isClosing) 60.dp else 30.dp,
-        animationSpec = if (isClosing) tween(300, easing = FastOutLinearInEasing)
-                        else spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-        label = "settingsOffsetY"
-    )
-    LaunchedEffect(Unit) { visible = true }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var pendingRestoreFile by remember { mutableStateOf<File?>(null) }
+    var pendingRestoreContents by remember { mutableStateOf<BackupManager.BackupContents?>(null) }
 
     // Save backup file picker
     val saveBackupLauncher = rememberLauncherForActivityResult(
@@ -215,7 +196,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             pendingBackupSettings,
                             pendingBackupCallingCards,
                             pendingBackupNotes,
-                            pendingBackupRecordings
+                            pendingBackupRecordings,
+                            pendingBackupContacts
                         )
                     } ?: false
                     withContext(Dispatchers.Main) {
@@ -238,22 +220,20 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             scope.launch(Dispatchers.IO) {
-                withContext(Dispatchers.Main) {
-                    backupState = BackupDialogState.Restoring
-                }
                 try {
                     val tmpFile = File(context.cacheDir, "restore_tmp.everdialer")
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         tmpFile.outputStream().use { output -> input.copyTo(output) }
                     }
-                    val ok = BackupManager.restoreBackup(context, tmpFile)
-                    tmpFile.delete()
+                    val contents = BackupManager.inspectBackup(tmpFile)
                     withContext(Dispatchers.Main) {
-                        backupState = if (ok) BackupDialogState.RestoreSuccess else BackupDialogState.Error("Restore failed")
+                        pendingRestoreFile = tmpFile
+                        pendingRestoreContents = contents
+                        showRestoreDialog = true
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        backupState = BackupDialogState.Error(e.message ?: "Unknown error")
+                        backupState = BackupDialogState.Error(e.message ?: "Failed to read backup file")
                     }
                 }
             }
@@ -845,7 +825,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     if (showBackupDialog) {
         CreateBackupDialog(
             onDismiss = { showBackupDialog = false },
-            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings ->
+            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts ->
                 showBackupDialog = false
                 backupState = BackupDialogState.Creating
                 scope.launch(Dispatchers.IO) {
@@ -854,7 +834,8 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         backupSettings,
                         backupCallingCards,
                         backupNotes,
-                        backupRecordings
+                        backupRecordings,
+                        backupContacts
                     )
                     withContext(Dispatchers.Main) {
                         if (file != null) {
@@ -876,14 +857,59 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                 }
             },
-            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings ->
+            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts ->
                 showBackupDialog = false
                 pendingBackupSettings = backupSettings
                 pendingBackupCallingCards = backupCallingCards
                 pendingBackupNotes = backupNotes
                 pendingBackupRecordings = backupRecordings
+                pendingBackupContacts = backupContacts
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
+            }
+        )
+    }
+
+    if (showRestoreDialog && pendingRestoreContents != null && pendingRestoreFile != null) {
+        val restoreFile = pendingRestoreFile!!
+        val contents = pendingRestoreContents!!
+        RestoreBackupDialog(
+            contents = contents,
+            onDismiss = {
+                showRestoreDialog = false
+                pendingRestoreFile?.delete()
+                pendingRestoreFile = null
+                pendingRestoreContents = null
+            },
+            onRestore = { restoreSettings, restoreCallingCards, restoreNotes, restoreRecordings, restoreContacts ->
+                showRestoreDialog = false
+                backupState = BackupDialogState.Restoring
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val ok = BackupManager.restoreBackup(
+                            context,
+                            restoreFile,
+                            restoreSettings,
+                            restoreCallingCards,
+                            restoreNotes,
+                            restoreRecordings,
+                            restoreContacts
+                        )
+                        restoreFile.delete()
+                        withContext(Dispatchers.Main) {
+                            pendingRestoreFile = null
+                            pendingRestoreContents = null
+                            backupState = if (ok) BackupDialogState.RestoreSuccess else BackupDialogState.Error("Restore failed")
+                        }
+                    } catch (e: Exception) {
+                        restoreFile.delete()
+                        withContext(Dispatchers.Main) {
+                            pendingRestoreFile = null
+                            pendingRestoreContents = null
+                            backupState = BackupDialogState.Error(e.message ?: "Unknown error")
+                        }
+                    }
+                }
             }
         )
     }
@@ -962,17 +988,16 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         topBar = {
             com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
                 title = "Settings",
-                onBackClick = { navigateBack() }
+                onBackClick = { navigator.navigateUp() }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
-        BackHandler { navigateBack() }
         ScrollHapticsEffect(listState = listState)
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).alpha(alpha).offset(y = offsetY).imePadding(),
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding(),
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             // While showing search results, every visible item below the search field is one
             // row of the same result group, so the list-wide gap must be 0 there — otherwise the
@@ -1789,15 +1814,17 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
 @Composable
 private fun CreateBackupDialog(
     onDismiss: () -> Unit,
-    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean) -> Unit,
-    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean) -> Unit
+    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean) -> Unit,
+    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean) -> Unit
 ) {
     var backupSettings by remember { mutableStateOf(true) }
     var backupCallingCards by remember { mutableStateOf(true) }
     var backupNotes by remember { mutableStateOf(true) }
     var backupRecordings by remember { mutableStateOf(true) }
+    var backupContacts by remember { mutableStateOf(false) }
 
-    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings
+    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings || backupContacts
+    val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1809,7 +1836,8 @@ private fun CreateBackupDialog(
             tonalElevation = 6.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .widthIn(max = 440.dp)
+                .padding(horizontal = 20.dp, vertical = 24.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -1844,44 +1872,60 @@ private fun CreateBackupDialog(
                 )
                 Spacer(Modifier.height(16.dp))
 
-                RivoExpressiveCard(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = maxContainerHeight)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    RivoSwitchListItem(
-                        headline = "Backup settings",
-                        supporting = "App preferences, Call Recorder & Network Switcher settings",
-                        leadingIcon = Icons.Outlined.Settings,
-                        iconContainerColor = Color(0xFF4CAF50),
-                        checked = backupSettings,
-                        onCheckedChange = { backupSettings = it }
-                    )
-                    CardDivider()
-                    RivoSwitchListItem(
-                        headline = "Backup calling cards",
-                        supporting = "Saved calling cards, contact backgrounds and PFP customization",
-                        leadingIcon = Icons.Outlined.ContactPhone,
-                        iconContainerColor = Color(0xFF2196F3),
-                        checked = backupCallingCards,
-                        onCheckedChange = { backupCallingCards = it }
-                    )
-                    CardDivider()
-                    RivoSwitchListItem(
-                        headline = "Backup notes",
-                        supporting = "Contact notes and general standalone notes",
-                        leadingIcon = Icons.Outlined.Notes,
-                        iconContainerColor = Color(0xFF9C27B0),
-                        checked = backupNotes,
-                        onCheckedChange = { backupNotes = it }
-                    )
-                    CardDivider()
-                    RivoSwitchListItem(
-                        headline = "Backup call recordings",
-                        supporting = "Audio recordings, favourites and recording notes",
-                        leadingIcon = Icons.Outlined.Mic,
-                        iconContainerColor = Color(0xFFE53935),
-                        checked = backupRecordings,
-                        onCheckedChange = { backupRecordings = it }
-                    )
+                    RivoExpressiveCard(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        RivoSwitchListItem(
+                            headline = "Backup settings",
+                            supporting = "App preferences, Call Recorder & Network Switcher settings",
+                            leadingIcon = Icons.Outlined.Settings,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            checked = backupSettings,
+                            onCheckedChange = { backupSettings = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Backup calling cards",
+                            supporting = "Saved calling cards, contact backgrounds and PFP customization",
+                            leadingIcon = Icons.Outlined.ContactPhone,
+                            iconContainerColor = Color(0xFF2196F3),
+                            checked = backupCallingCards,
+                            onCheckedChange = { backupCallingCards = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Backup notes",
+                            supporting = "Contact notes and general standalone notes",
+                            leadingIcon = Icons.Outlined.Notes,
+                            iconContainerColor = Color(0xFF9C27B0),
+                            checked = backupNotes,
+                            onCheckedChange = { backupNotes = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Backup call recordings",
+                            supporting = "Audio recordings, favourites and recording notes",
+                            leadingIcon = Icons.Outlined.Mic,
+                            iconContainerColor = Color(0xFFE53935),
+                            checked = backupRecordings,
+                            onCheckedChange = { backupRecordings = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Backup contacts",
+                            supporting = "Device & local contacts list and details",
+                            leadingIcon = Icons.Outlined.Contacts,
+                            iconContainerColor = Color(0xFFFF9800),
+                            checked = backupContacts,
+                            onCheckedChange = { backupContacts = it }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -1891,7 +1935,7 @@ private fun CreateBackupDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings) },
+                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -1909,7 +1953,7 @@ private fun CreateBackupDialog(
                     }
 
                     Button(
-                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings) },
+                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
@@ -1924,6 +1968,178 @@ private fun CreateBackupDialog(
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Save", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                TextButton(
+                    onClick = onDismiss
+                ) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestoreBackupDialog(
+    contents: BackupManager.BackupContents,
+    onDismiss: () -> Unit,
+    onRestore: (restoreSettings: Boolean, restoreCallingCards: Boolean, restoreNotes: Boolean, restoreRecordings: Boolean, restoreContacts: Boolean) -> Unit
+) {
+    var restoreSettings by remember { mutableStateOf(contents.hasSettings) }
+    var restoreCallingCards by remember { mutableStateOf(contents.hasCallingCards) }
+    var restoreNotes by remember { mutableStateOf(contents.hasNotes) }
+    var restoreRecordings by remember { mutableStateOf(contents.hasRecordings) }
+    var restoreContacts by remember { mutableStateOf(contents.hasContacts) }
+
+    val hasAnySelected = (restoreSettings && contents.hasSettings) ||
+            (restoreCallingCards && contents.hasCallingCards) ||
+            (restoreNotes && contents.hasNotes) ||
+            (restoreRecordings && contents.hasRecordings) ||
+            (restoreContacts && contents.hasContacts)
+
+    val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 440.dp)
+                .padding(horizontal = 20.dp, vertical = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Restore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Restore Backup",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Select items to restore from this backup",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = maxContainerHeight)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    RivoExpressiveCard(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        RivoSwitchListItem(
+                            headline = "Restore settings",
+                            supporting = if (contents.hasSettings) "App preferences, Call Recorder & Network Switcher settings" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.Settings,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            checked = restoreSettings && contents.hasSettings,
+                            enabled = contents.hasSettings,
+                            onCheckedChange = { restoreSettings = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Restore calling cards",
+                            supporting = if (contents.hasCallingCards) "Saved calling cards, contact backgrounds and PFP customization" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.ContactPhone,
+                            iconContainerColor = Color(0xFF2196F3),
+                            checked = restoreCallingCards && contents.hasCallingCards,
+                            enabled = contents.hasCallingCards,
+                            onCheckedChange = { restoreCallingCards = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Restore notes",
+                            supporting = if (contents.hasNotes) "Contact notes and general standalone notes" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.Notes,
+                            iconContainerColor = Color(0xFF9C27B0),
+                            checked = restoreNotes && contents.hasNotes,
+                            enabled = contents.hasNotes,
+                            onCheckedChange = { restoreNotes = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Restore call recordings",
+                            supporting = if (contents.hasRecordings) "Audio recordings, favourites and recording notes" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.Mic,
+                            iconContainerColor = Color(0xFFE53935),
+                            checked = restoreRecordings && contents.hasRecordings,
+                            enabled = contents.hasRecordings,
+                            onCheckedChange = { restoreRecordings = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Restore contacts",
+                            supporting = if (contents.hasContacts) "Device & local contacts list and details" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.Contacts,
+                            iconContainerColor = Color(0xFFFF9800),
+                            checked = restoreContacts && contents.hasContacts,
+                            enabled = contents.hasContacts,
+                            onCheckedChange = { restoreContacts = it }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            onRestore(
+                                restoreSettings && contents.hasSettings,
+                                restoreCallingCards && contents.hasCallingCards,
+                                restoreNotes && contents.hasNotes,
+                                restoreRecordings && contents.hasRecordings,
+                                restoreContacts && contents.hasContacts
+                            )
+                        },
+                        enabled = hasAnySelected,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp)
+                    ) {
+                        Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Restore", fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
 

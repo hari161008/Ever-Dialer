@@ -29,9 +29,10 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 import android.content.Context
 import android.telecom.TelecomManager
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun HiddenContactsScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()

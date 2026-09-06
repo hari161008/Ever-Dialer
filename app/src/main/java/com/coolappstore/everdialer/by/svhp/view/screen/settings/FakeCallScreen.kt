@@ -92,14 +92,6 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
     var showAddSheet by remember { mutableStateOf(false) }
     var addMode by remember { mutableStateOf<AddMode?>(null) } // contact or number
 
-    var screenVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { screenVisible = true }
-    val screenAlpha by animateFloatAsState(
-        targetValue = if (screenVisible) 1f else 0f,
-        animationSpec = tween(320),
-        label = "fcAlpha"
-    )
-
     if (showAddSheet && addMode != null) {
         FakeCallAddSheet(
             mode = addMode!!,
@@ -227,9 +219,7 @@ fun FakeCallScreen(navigator: DestinationsNavigator) {
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(screenAlpha),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {

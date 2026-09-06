@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -170,36 +171,21 @@ private fun FloatingNoteOverlay(
                 targetScale   = 0.86f
             ) + fadeOut(tween(340, easing = FastOutLinearInEasing))
         ) {
-            // Card wrapper with manual rounded shadow via BlurMaskFilter
+            // Card wrapper with rounded shadow
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(0.93f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable(onClick = {})  // consume – block scrim dismiss
-                    .drawBehind {
-                        val blurR = 22.dp.toPx()
-                        val offY  =  8.dp.toPx()
-                        drawIntoCanvas { canvas ->
-                            val paint = androidx.compose.ui.graphics.Paint()
-                            paint.asFrameworkPaint().apply {
-                                isAntiAlias = true
-                                color       = shadowColor
-                                maskFilter  = BlurMaskFilter(blurR, BlurMaskFilter.Blur.NORMAL)
-                            }
-                            canvas.drawRoundRect(
-                                left    = blurR,
-                                top     = blurR,
-                                right   = size.width  - blurR,
-                                bottom  = size.height - blurR + offY,
-                                radiusX = 24.dp.toPx(),
-                                radiusY = 24.dp.toPx(),
-                                paint   = paint
-                            )
-                        }
-                    },
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = RoundedCornerShape(24.dp),
+                        ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f),
+                        spotColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.25f),
+                        clip = false
+                    )
+                    .clickable(onClick = {}),  // consume – block scrim dismiss
                 shape           = RoundedCornerShape(24.dp),
                 color           = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation  = 2.dp,
+                tonalElevation  = 4.dp,
                 shadowElevation = 0.dp
             ) {
                 Column(

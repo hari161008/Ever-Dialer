@@ -310,6 +310,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
         const val KEY_TELEGRAM_SHOWN        = "telegram_shown"
         const val KEY_MOTION_BLUR_ANIMATION = "motion_blur_animation_enabled"
+        const val KEY_PREDICTIVE_BACK_GESTURE = "predictive_back_gesture_enabled"
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"
         const val KEY_POCKET_MODE_PREVENTION = "pocket_mode_prevention"
         const val KEY_DIRECT_CALL_ON_TAP     = "direct_call_on_tap"
@@ -492,6 +493,7 @@ class PreferenceManager(context: Context) {
 
         // Missed Call Popup (display over other apps)
         const val KEY_MISSED_CALL_POPUP_ENABLED    = "missed_call_popup_enabled"
+        const val KEY_ALWAYS_SHOW_MISSED_CALL_POPUP_AFTER_CALL_END = "always_show_missed_call_popup_after_call_end"
         const val KEY_MISSED_CALL_QUICK_REPLY_1    = "missed_call_quick_reply_1"
         const val KEY_MISSED_CALL_QUICK_REPLY_2    = "missed_call_quick_reply_2"
         const val KEY_MISSED_CALL_QUICK_REPLY_3    = "missed_call_quick_reply_3"

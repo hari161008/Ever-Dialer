@@ -64,14 +64,6 @@ fun RaiseToAnswerScreen(navigator: DestinationsNavigator, highlightKey: String? 
     var beepFeedback by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_BEEP, true)) }
     var vibrateFeedback by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_VIBRATE, false)) }
 
-    var visible by remember { mutableStateOf(false) }
-    val screenAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "raiseToAnswerAlpha"
-    )
-    LaunchedEffect(Unit) { visible = true }
-
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -87,7 +79,6 @@ fun RaiseToAnswerScreen(navigator: DestinationsNavigator, highlightKey: String? 
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
-                .alpha(screenAlpha)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(20.dp)

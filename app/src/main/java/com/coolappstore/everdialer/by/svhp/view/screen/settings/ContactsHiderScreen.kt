@@ -68,16 +68,13 @@ fun ContactsHiderScreen(navigator: DestinationsNavigator) {
         
     }
 
-    fun navigateBack() { navigator.navigateUp() }
-    BackHandler { navigateBack() }
-
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
                 title = "Contacts Hider",
-                onBackClick = { navigateBack() }
+                onBackClick = { navigator.navigateUp() }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface

@@ -86,6 +86,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVideoC
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import androidx.activity.compose.BackHandler
 import androidx.navigation.NavController
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -98,7 +99,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import androidx.compose.material.icons.outlined.Block
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun ContactDetailsScreen(
     contactId: String? = null,
@@ -295,36 +296,6 @@ fun ContactDetailsScreen(
         contactLogs.maxByOrNull { it.date }?.simSlot?.takeIf { it >= 0 }
     }
 
-    // Entrance / exit animation
-    var screenVisible by remember { mutableStateOf(false) }
-    var isClosing by remember { mutableStateOf(false) }
-
-    fun navigateBack() {
-        isClosing = true
-        scope.launch {
-            kotlinx.coroutines.delay(420)
-            navigator.navigateUp()
-        }
-    }
-
-    val screenAlpha by animateFloatAsState(
-        targetValue = if (screenVisible && !isClosing) 1f else 0f,
-        animationSpec = if (isClosing) tween(380, easing = androidx.compose.animation.core.FastOutLinearInEasing)
-                        else tween(500, easing = androidx.compose.animation.core.LinearOutSlowInEasing),
-        label = "screenAlpha"
-    )
-    val screenOffsetY by animateDpAsState(
-        targetValue = if (screenVisible && !isClosing) 0.dp else if (isClosing) 80.dp else 56.dp,
-        animationSpec = if (isClosing) tween(400, easing = androidx.compose.animation.core.FastOutLinearInEasing)
-                        else spring(
-                            stiffness = Spring.StiffnessLow,
-                            dampingRatio = Spring.DampingRatioMediumBouncy
-                        ),
-        label = "screenOffsetY"
-    )
-    LaunchedEffect(Unit) { screenVisible = true }
-    BackHandler { navigateBack() }
-
     val initiateCall = { number: String ->
         placeCallWithContactSimPreference(
             context, number, contactSimChoice, simPref, recentSimSlotForContact
@@ -481,7 +452,7 @@ fun ContactDetailsScreen(
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     contactsViewModel.deleteContact(contact.id)
-                    navigateBack()
+                    navigator.navigateUp()
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
@@ -563,46 +534,44 @@ fun ContactDetailsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
-        Box(modifier = Modifier.fillMaxSize().alpha(screenAlpha).offset(y = screenOffsetY)) {
+        // Background image layer sits behind the whole column so it shows through
+        // the transparent header instead of a solid banner.
+        Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
+            AsyncImage(model = contact?.photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(50.dp), contentScale = ContentScale.Crop)
+            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))
+        }
 
-            // Background image layer sits behind the whole column so it shows through
-            // the transparent header instead of a solid banner.
-            Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
-                AsyncImage(model = contact?.photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(50.dp), contentScale = ContentScale.Crop)
-                Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(onClick = { navigateBack() }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                            IconButton(onClick = { navigator.navigateUp() }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
                             }
+                        }
 
                             Row(
                                 modifier = Modifier
@@ -1175,7 +1144,6 @@ fun ContactDetailsScreen(
             }
         }
     }
-}
 
 @Composable
 fun QrCodeDialog(name: String, phone: String?, email: String?, onDismiss: () -> Unit) {

@@ -9,7 +9,9 @@ import android.os.VibratorManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
-import androidx.compose.material3.ripple
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.CancellationException
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -849,7 +851,8 @@ fun RivoSwitchListItem(
     iconContainerColor: Color? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
@@ -857,7 +860,7 @@ fun RivoSwitchListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
+        targetValue = if (isPressed && enabled) 0.98f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "SwitchItemScale"
     )
@@ -867,9 +870,11 @@ fun RivoSwitchListItem(
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
+            .then(if (!enabled) Modifier.alpha(0.38f) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = {
                     if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                         performAppHaptic(
@@ -921,8 +926,9 @@ fun RivoSwitchListItem(
             val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
             val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Switch(
-                checked = checked,
+                checked = checked && enabled,
                 onCheckedChange = onCheckedChange,
+                enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
                     checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -1100,6 +1106,26 @@ fun RivoDropdownMenu(
                 decorFitsSystemWindows = false
             )
         ) {
+            val predictiveBackEnabled = remember(settingsVer) {
+                prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
+            }
+            val backScale = remember { Animatable(1f) }
+            val backAlpha = remember { Animatable(1f) }
+
+            PredictiveBackHandler(enabled = expanded && predictiveBackEnabled) { progressFlow ->
+                try {
+                    progressFlow.collect { backEvent ->
+                        val p = backEvent.progress
+                        backScale.snapTo(1f - p * 0.28f)
+                        backAlpha.snapTo(1f - p * 0.45f)
+                    }
+                    onDismissRequest()
+                } catch (e: CancellationException) {
+                    backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                    backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                }
+            }
+
             val dimAlpha by animateFloatAsState(
                 targetValue = if (expanded) 0.45f else 0f,
                 animationSpec = tween(320),
@@ -1110,7 +1136,7 @@ fun RivoDropdownMenu(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = dimAlpha))
+                    .background(Color.Black.copy(alpha = dimAlpha * backAlpha.value))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1142,6 +1168,8 @@ fun RivoDropdownMenu(
                     Box(
                         modifier = modifier
                             .width(260.dp)
+                            .scale(backScale.value)
+                            .alpha(backAlpha.value)
                             .then(
                                 if (useLgDropdown) Modifier
                                 else Modifier.shadow(

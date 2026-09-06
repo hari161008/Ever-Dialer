@@ -102,25 +102,6 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showTypeSheet by remember { mutableStateOf(false) }
     var showPinSetup by remember { mutableStateOf(false) }
     var showPasswordSetup by remember { mutableStateOf(false) }
-    var isClosing by remember { mutableStateOf(false) }
-    var visible by remember { mutableStateOf(false) }
-
-    val alpha by animateFloatAsState(
-        targetValue = if (visible && !isClosing) 1f else 0f,
-        animationSpec = if (isClosing) tween(260) else tween(320),
-        label = "alpha"
-    )
-    val offsetY by animateDpAsState(
-        targetValue = if (visible && !isClosing) 0.dp else if (isClosing) 40.dp else 24.dp,
-        animationSpec = if (isClosing) tween(270) else spring(stiffness = Spring.StiffnessMediumLow),
-        label = "offsetY"
-    )
-    LaunchedEffect(Unit) { visible = true }
-
-    fun navigateBack() {
-        isClosing = true
-        scope.launch { delay(260); navigator.navigateUp() }
-    }
 
     val systemBiometricsAvailable = remember {
         val bm = BiometricManager.from(context)
@@ -141,7 +122,7 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         topBar = {
             com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
                 title = "Authentication",
-                onBackClick = ::navigateBack
+                onBackClick = { navigator.navigateUp() }
             )
         },
         containerColor = MaterialTheme.colorScheme.surface
@@ -151,8 +132,6 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             modifier = Modifier
                 .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
-                .offset(y = offsetY)
-                .alpha(alpha)
                 .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

@@ -239,6 +239,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Rain Mode", "Answer/decline calls by shaking your device", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
         GlobalSettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, GsColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_redial")) },
         GlobalSettingsSearchEntry("Missed Call Popup", "Show interactive popup over other apps on missed calls", "missed_call_popup", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_popup")) },
+        GlobalSettingsSearchEntry("Always Show Popup After Every Call Ends", "Show popup after every call ends with only custom response", "always_show_after_call_ends", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_popup")) },
         GlobalSettingsSearchEntry("Volume DND", "Toggle Do Not Disturb using volume button combination", "volume_dnd", Icons.Outlined.VolumeUp, GsColorPurple) { it.navigate(CallSettingsScreenDestination(highlightKey = "volume_dnd")) },
 
         // ── Rain Mode screen ─────────────────────────────────────────────────────

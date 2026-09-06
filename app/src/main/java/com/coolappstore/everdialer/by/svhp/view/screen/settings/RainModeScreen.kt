@@ -122,14 +122,6 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         }
     }
 
-    var visible by remember { mutableStateOf(false) }
-    val screenAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "rainModeAlpha"
-    )
-    LaunchedEffect(Unit) { visible = true }
-
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -145,7 +137,6 @@ fun RainModeScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
-                .alpha(screenAlpha)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(20.dp)

@@ -25,6 +25,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.CancellationException
+import org.koin.compose.koinInject
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
@@ -58,12 +67,34 @@ fun AppQuickActionsDialog(
     onVideoCall: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val predictiveBackEnabled = remember { prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true) }
+    val backScale = remember { Animatable(1f) }
+    val backAlpha = remember { Animatable(1f) }
+
     Dialog(onDismissRequest = onDismiss) {
+        PredictiveBackHandler(enabled = predictiveBackEnabled) { progressFlow ->
+            try {
+                progressFlow.collect { backEvent ->
+                    val p = backEvent.progress
+                    backScale.snapTo(1f - p * 0.28f)
+                    backAlpha.snapTo(1f - p * 0.45f)
+                }
+                onDismiss()
+            } catch (e: CancellationException) {
+                backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+            }
+        }
+
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .scale(backScale.value)
+                .alpha(backAlpha.value)
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(

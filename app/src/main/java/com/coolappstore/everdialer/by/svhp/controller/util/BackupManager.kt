@@ -2,8 +2,12 @@ package com.coolappstore.everdialer.by.svhp.controller.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
+import com.coolappstore.everdialer.by.svhp.modal.repository.ContactsRepository
 import org.json.JSONArray
 import org.json.JSONObject
+import org.koin.core.context.GlobalContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -16,6 +20,17 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 object BackupManager {
+
+    data class BackupContents(
+        val hasSettings: Boolean = false,
+        val hasCallingCards: Boolean = false,
+        val hasNotes: Boolean = false,
+        val hasRecordings: Boolean = false,
+        val hasContacts: Boolean = false
+    ) {
+        val hasAny: Boolean
+            get() = hasSettings || hasCallingCards || hasNotes || hasRecordings || hasContacts
+    }
 
     const val PREFS_RIVO = "rivo_prefs"
     const val PREFS_RECORDER = "evercallrecorder_prefs"
@@ -53,13 +68,32 @@ object BackupManager {
         return dir
     }
 
+    fun isCallingCardKey(key: String): Boolean {
+        return key.startsWith("contact_") ||
+                key.startsWith("incoming_bg_") ||
+                key.startsWith("ongoing_bg_") ||
+                key.startsWith("incoming_font_") ||
+                key.startsWith("ongoing_font_") ||
+                key.startsWith("incoming_elements_") ||
+                key.startsWith("ongoing_elements_") ||
+                key.startsWith("incoming_custom_pfp_") ||
+                key.startsWith("ongoing_custom_pfp_") ||
+                key.startsWith("incoming_auto_refresh_wallpaper") ||
+                key.startsWith("ongoing_auto_refresh_wallpaper") ||
+                key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
+                key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP ||
+                key == PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER ||
+                key == PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER
+    }
+
     fun writeBackup(
         context: Context,
         outputStream: OutputStream,
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
-        backupRecordings: Boolean = true
+        backupRecordings: Boolean = true,
+        backupContacts: Boolean = false
     ): Boolean {
         return try {
             ZipOutputStream(outputStream).use { zip ->
@@ -230,6 +264,38 @@ object BackupManager {
                         zip.closeEntry()
                     }
                 }
+
+                // 7. Backup contacts (if enabled)
+                if (backupContacts) {
+                    try {
+                        val contactsRepo = GlobalContext.get().getOrNull<IContactsRepository>()
+                            ?: ContactsRepository(context.contentResolver, context)
+                        val contactsList = contactsRepo.getContacts()
+                        if (contactsList.isNotEmpty()) {
+                            val jsonArray = JSONArray()
+                            contactsList.forEach { c ->
+                                val obj = JSONObject()
+                                obj.put("name", c.name)
+                                obj.put("isFavorite", c.isFavorite)
+                                val phoneArr = JSONArray()
+                                c.phoneNumbers.forEach { phoneArr.put(it) }
+                                obj.put("phoneNumbers", phoneArr)
+                                val emailArr = JSONArray()
+                                c.emails.forEach { emailArr.put(it) }
+                                obj.put("emails", emailArr)
+                                val addrArr = JSONArray()
+                                c.addresses.forEach { addrArr.put(it) }
+                                obj.put("addresses", addrArr)
+                                jsonArray.put(obj)
+                            }
+                            zip.putNextEntry(ZipEntry("contacts/contacts.json"))
+                            zip.write(jsonArray.toString().toByteArray(Charsets.UTF_8))
+                            zip.closeEntry()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("BackupManager", "Failed to backup contacts", e)
+                    }
+                }
             }
             true
         } catch (_: Exception) {
@@ -242,13 +308,14 @@ object BackupManager {
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
-        backupRecordings: Boolean = true
+        backupRecordings: Boolean = true,
+        backupContacts: Boolean = false
     ): File? {
         return try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFile = File(getBackupDir(context), "EverDialer_Backup_$timestamp.everdialer")
             val ok = FileOutputStream(backupFile).use { outputStream ->
-                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings)
+                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts)
             }
             if (ok) backupFile else null
         } catch (_: Exception) {
@@ -256,7 +323,63 @@ object BackupManager {
         }
     }
 
-    fun restoreBackup(context: Context, backupFile: File): Boolean {
+    fun inspectBackup(backupFile: File): BackupContents {
+        var hasSettings = false
+        var hasCallingCards = false
+        var hasNotes = false
+        var hasRecordings = false
+        var hasContacts = false
+
+        try {
+            ZipInputStream(FileInputStream(backupFile)).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val name = entry.name
+                    when {
+                        name.startsWith("prefs/") || name == "prefs.json" -> {
+                            hasSettings = true
+                            hasCallingCards = true
+                        }
+                        name.startsWith("datastore/") || name == "custom_font.ttf" -> {
+                            hasSettings = true
+                        }
+                        name.startsWith("backgrounds/") -> {
+                            hasCallingCards = true
+                        }
+                        name.startsWith("notes/") -> {
+                            hasNotes = true
+                        }
+                        name.startsWith("recordings/") && !name.endsWith("/") -> {
+                            hasRecordings = true
+                        }
+                        name.startsWith("contacts/") && !name.endsWith("/") -> {
+                            hasContacts = true
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        } catch (_: Exception) {}
+
+        return BackupContents(
+            hasSettings = hasSettings,
+            hasCallingCards = hasCallingCards,
+            hasNotes = hasNotes,
+            hasRecordings = hasRecordings,
+            hasContacts = hasContacts
+        )
+    }
+
+    fun restoreBackup(
+        context: Context,
+        backupFile: File,
+        restoreSettings: Boolean = true,
+        restoreCallingCards: Boolean = true,
+        restoreNotes: Boolean = true,
+        restoreRecordings: Boolean = true,
+        restoreContacts: Boolean = true
+    ): Boolean {
         return try {
             var restoredAny = false
             var restoredRivoFromPrefsDir = false
@@ -273,66 +396,145 @@ object BackupManager {
                         name.startsWith("prefs/") && name.endsWith(".json") -> {
                             val prefName = name.removePrefix("prefs/").removeSuffix(".json")
                             val json = zip.readBytes().toString(Charsets.UTF_8)
-                            restorePrefs(context, prefName, json)
-                            if (prefName == PREFS_RIVO) {
+                            if (restoreSettings) {
+                                restorePrefs(context, prefName, json, onlyCallingCardKeys = false)
+                                if (prefName == PREFS_RIVO) {
+                                    restoredRivoFromPrefsDir = true
+                                }
+                                restoredAny = true
+                            } else if (restoreCallingCards && prefName == PREFS_RIVO) {
+                                restorePrefs(context, prefName, json, onlyCallingCardKeys = true)
                                 restoredRivoFromPrefsDir = true
+                                restoredAny = true
                             }
-                            restoredAny = true
                         }
                         name == "prefs.json" -> {
                             val json = zip.readBytes().toString(Charsets.UTF_8)
                             if (!restoredRivoFromPrefsDir) {
-                                restorePrefs(context, PREFS_RIVO, json)
+                                if (restoreSettings) {
+                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = false)
+                                    restoredAny = true
+                                } else if (restoreCallingCards) {
+                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = true)
+                                    restoredAny = true
+                                }
                             }
-                            restoredAny = true
                         }
                         name.startsWith("datastore/") -> {
-                            val relativePath = name.removePrefix("datastore/")
-                            if (relativePath.isNotEmpty()) {
-                                val dsFile = File(File(context.filesDir, "datastore"), relativePath)
-                                dsFile.parentFile?.mkdirs()
-                                FileOutputStream(dsFile).use { zip.copyTo(it) }
-                                restoredAny = true
+                            if (restoreSettings) {
+                                val relativePath = name.removePrefix("datastore/")
+                                if (relativePath.isNotEmpty()) {
+                                    val dsFile = File(File(context.filesDir, "datastore"), relativePath)
+                                    dsFile.parentFile?.mkdirs()
+                                    FileOutputStream(dsFile).use { zip.copyTo(it) }
+                                    restoredAny = true
+                                }
                             }
                         }
                         name == "custom_font.ttf" -> {
-                            val fontFile = File(context.filesDir, "custom_font.ttf")
-                            FileOutputStream(fontFile).use { zip.copyTo(it) }
-                            val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
-                            rivoPrefs.edit().putString(PreferenceManager.KEY_CUSTOM_FONT_PATH, fontFile.absolutePath).apply()
-                            restoredAny = true
+                            if (restoreSettings) {
+                                val fontFile = File(context.filesDir, "custom_font.ttf")
+                                FileOutputStream(fontFile).use { zip.copyTo(it) }
+                                val rivoPrefs = context.getSharedPreferences(PREFS_RIVO, Context.MODE_PRIVATE)
+                                rivoPrefs.edit().putString(PreferenceManager.KEY_CUSTOM_FONT_PATH, fontFile.absolutePath).apply()
+                                restoredAny = true
+                            }
                         }
                         name.startsWith("backgrounds/") -> {
-                            val fileName = name.removePrefix("backgrounds/")
-                            if (fileName.isNotEmpty()) {
-                                val bgDir = getBackgroundsDir(context)
-                                val bgFile = File(bgDir, fileName)
-                                bgFile.parentFile?.mkdirs()
-                                FileOutputStream(bgFile).use { zip.copyTo(it) }
-                                restoredAny = true
+                            if (restoreCallingCards || restoreSettings) {
+                                val fileName = name.removePrefix("backgrounds/")
+                                if (fileName.isNotEmpty()) {
+                                    val bgDir = getBackgroundsDir(context)
+                                    val bgFile = File(bgDir, fileName)
+                                    bgFile.parentFile?.mkdirs()
+                                    FileOutputStream(bgFile).use { zip.copyTo(it) }
+                                    restoredAny = true
+                                }
                             }
                         }
                         name.startsWith("notes/") -> {
-                            val fileName = name.removePrefix("notes/")
-                            if (fileName.isNotEmpty()) {
-                                val noteFile = File(NoteManager.getNotesDir(context), fileName)
-                                noteFile.parentFile?.mkdirs()
-                                FileOutputStream(noteFile).use { zip.copyTo(it) }
-                                restoredAny = true
+                            if (restoreNotes || restoreCallingCards) {
+                                val fileName = name.removePrefix("notes/")
+                                if (fileName.isNotEmpty()) {
+                                    val noteFile = File(NoteManager.getNotesDir(context), fileName)
+                                    noteFile.parentFile?.mkdirs()
+                                    FileOutputStream(noteFile).use { zip.copyTo(it) }
+                                    restoredAny = true
+                                }
                             }
                         }
                         name == "recordings/recordings_meta.json" -> {
-                            restoredMetaJson = zip.readBytes().toString(Charsets.UTF_8)
-                            restoredAny = true
+                            if (restoreRecordings) {
+                                restoredMetaJson = zip.readBytes().toString(Charsets.UTF_8)
+                                restoredAny = true
+                            }
                         }
                         name.startsWith("recordings/") -> {
-                            val fileName = name.removePrefix("recordings/")
-                            if (fileName.isNotEmpty() && !fileName.endsWith(".json")) {
-                                val recFile = File(privateRecDir, fileName)
-                                recFile.parentFile?.mkdirs()
-                                FileOutputStream(recFile).use { zip.copyTo(it) }
-                                recordingsRestoredCount++
-                                restoredAny = true
+                            if (restoreRecordings) {
+                                val fileName = name.removePrefix("recordings/")
+                                if (fileName.isNotEmpty() && !fileName.endsWith(".json")) {
+                                    val recFile = File(privateRecDir, fileName)
+                                    recFile.parentFile?.mkdirs()
+                                    FileOutputStream(recFile).use { zip.copyTo(it) }
+                                    recordingsRestoredCount++
+                                    restoredAny = true
+                                }
+                            }
+                        }
+                        name == "contacts/contacts.json" -> {
+                            if (restoreContacts) {
+                                try {
+                                    val jsonStr = zip.readBytes().toString(Charsets.UTF_8)
+                                    val jsonArray = JSONArray(jsonStr)
+                                    val contactsRepo = GlobalContext.get().getOrNull<IContactsRepository>()
+                                        ?: ContactsRepository(context.contentResolver, context)
+                                    val existingContacts = contactsRepo.getContacts()
+                                    for (i in 0 until jsonArray.length()) {
+                                        val obj = jsonArray.getJSONObject(i)
+                                        val cName = obj.optString("name", "")
+                                        val isFavorite = obj.optBoolean("isFavorite", false)
+                                        val phoneNumbers = mutableListOf<String>()
+                                        val phoneArr = obj.optJSONArray("phoneNumbers")
+                                        if (phoneArr != null) {
+                                            for (j in 0 until phoneArr.length()) {
+                                                phoneNumbers.add(phoneArr.getString(j))
+                                            }
+                                        }
+                                        val emails = mutableListOf<String>()
+                                        val emailArr = obj.optJSONArray("emails")
+                                        if (emailArr != null) {
+                                            for (j in 0 until emailArr.length()) {
+                                                emails.add(emailArr.getString(j))
+                                            }
+                                        }
+                                        val addresses = mutableListOf<String>()
+                                        val addrArr = obj.optJSONArray("addresses")
+                                        if (addrArr != null) {
+                                            for (j in 0 until addrArr.length()) {
+                                                addresses.add(addrArr.getString(j))
+                                            }
+                                        }
+
+                                        val alreadyExists = existingContacts.any { ec ->
+                                            ec.name.equals(cName, ignoreCase = true) &&
+                                            (phoneNumbers.isEmpty() || ec.phoneNumbers.any { ep -> phoneNumbers.any { numbersLikelyMatch(ep, it) } })
+                                        }
+                                        if (!alreadyExists && (cName.isNotBlank() || phoneNumbers.isNotEmpty())) {
+                                            val contactToSave = Contact(
+                                                id = "",
+                                                name = cName.ifBlank { phoneNumbers.firstOrNull() ?: "Unknown" },
+                                                phoneNumbers = phoneNumbers,
+                                                emails = emails,
+                                                addresses = addresses,
+                                                isFavorite = isFavorite
+                                            )
+                                            contactsRepo.saveContact(contactToSave)
+                                        }
+                                    }
+                                    restoredAny = true
+                                } catch (e: Exception) {
+                                    android.util.Log.e("BackupManager", "Failed to restore contacts", e)
+                                }
                             }
                         }
                     }
@@ -381,7 +583,9 @@ object BackupManager {
             }
 
             // Fix and validate all background paths after restore so they point to current device directories
-            fixBackgroundPathsAfterRestore(context)
+            if (restoreCallingCards || restoreSettings) {
+                fixBackgroundPathsAfterRestore(context)
+            }
 
             // Sync services and stores after restore
             try {
@@ -409,25 +613,8 @@ object BackupManager {
     private fun filterCallingCardPrefs(prefs: SharedPreferences): Map<String, Any> {
         val result = mutableMapOf<String, Any>()
         prefs.all.forEach { (key, value) ->
-            if (value != null) {
-                if (key.startsWith("contact_") ||
-                    key.startsWith("incoming_bg_") ||
-                    key.startsWith("ongoing_bg_") ||
-                    key.startsWith("incoming_font_") ||
-                    key.startsWith("ongoing_font_") ||
-                    key.startsWith("incoming_elements_") ||
-                    key.startsWith("ongoing_elements_") ||
-                    key.startsWith("incoming_custom_pfp_") ||
-                    key.startsWith("ongoing_custom_pfp_") ||
-                    key.startsWith("incoming_auto_refresh_wallpaper") ||
-                    key.startsWith("ongoing_auto_refresh_wallpaper") ||
-                    key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
-                    key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP ||
-                    key == PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER ||
-                    key == PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER
-                ) {
-                    result[key] = value
-                }
+            if (value != null && isCallingCardKey(key)) {
+                result[key] = value
             }
         }
         return result
@@ -511,7 +698,7 @@ object BackupManager {
         return wrapper.toString()
     }
 
-    private fun restorePrefs(context: Context, prefName: String, json: String) {
+    private fun restorePrefs(context: Context, prefName: String, json: String, onlyCallingCardKeys: Boolean = false) {
         try {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
             val editor = prefs.edit()
@@ -541,6 +728,9 @@ object BackupManager {
             }
 
             jsonObj.keys().forEach { key ->
+                if (onlyCallingCardKeys && !isCallingCardKey(key)) {
+                    return@forEach
+                }
                 val typeHint = meta.optString(key, "")
                 when (typeHint) {
                     "boolean" -> {

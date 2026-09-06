@@ -159,9 +159,6 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         installedNotesLoaded = true
     }
 
-    var screenVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { screenVisible = true }
-
     // ── Download confirmation + progress flow ──────────────────────────────
     when (val ds = downloadState) {
         is DownloadState.Confirm -> {

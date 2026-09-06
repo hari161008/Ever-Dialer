@@ -92,6 +92,7 @@ class MissedCallPopupService : Service() {
     private val contactIdState = mutableStateOf<String?>(null)
     private val callDateState = mutableLongStateOf(0L)
     private val ringDurationSecState = mutableLongStateOf(0L)
+    private val isMissedCallState = mutableStateOf(true)
     private var dismissTriggerCallback: (() -> Unit)? = null
     private var backHandlerCallback: (() -> Boolean)? = null
 
@@ -105,7 +106,7 @@ class MissedCallPopupService : Service() {
                 WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
         PixelFormat.TRANSLUCENT
     ).apply {
-        gravity = Gravity.CENTER
+        gravity = Gravity.FILL
         softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -123,6 +124,7 @@ class MissedCallPopupService : Service() {
         const val EXTRA_CONTACT_ID = "extra_contact_id"
         const val EXTRA_CALL_DATE = "extra_call_date"
         const val EXTRA_RING_DURATION = "extra_ring_duration"
+        const val EXTRA_IS_MISSED_CALL = "extra_is_missed_call"
 
         fun start(
             context: Context,
@@ -131,7 +133,8 @@ class MissedCallPopupService : Service() {
             photoUri: String? = null,
             contactId: String? = null,
             callDate: Long = System.currentTimeMillis(),
-            ringDurationSec: Long = 0L
+            ringDurationSec: Long = 0L,
+            isMissedCall: Boolean = true
         ) {
             if (!Settings.canDrawOverlays(context)) return
             val intent = Intent(context, MissedCallPopupService::class.java).apply {
@@ -141,6 +144,7 @@ class MissedCallPopupService : Service() {
                 putExtra(EXTRA_CONTACT_ID, contactId)
                 putExtra(EXTRA_CALL_DATE, callDate)
                 putExtra(EXTRA_RING_DURATION, ringDurationSec)
+                putExtra(EXTRA_IS_MISSED_CALL, isMissedCall)
             }
             try {
                 context.startService(intent)
@@ -273,6 +277,7 @@ class MissedCallPopupService : Service() {
         val contactId = intent?.getStringExtra(EXTRA_CONTACT_ID)
         val callDate = intent?.getLongExtra(EXTRA_CALL_DATE, System.currentTimeMillis()) ?: System.currentTimeMillis()
         val ringDuration = intent?.getLongExtra(EXTRA_RING_DURATION, 0L) ?: 0L
+        val isMissed = intent?.getBooleanExtra(EXTRA_IS_MISSED_CALL, true) ?: true
 
         phoneNumberState.value = number
         contactNameState.value = name
@@ -280,6 +285,7 @@ class MissedCallPopupService : Service() {
         contactIdState.value = contactId
         callDateState.longValue = callDate
         ringDurationSecState.longValue = ringDuration
+        isMissedCallState.value = isMissed
 
         if (overlayView == null) {
             createOverlayView()
@@ -294,6 +300,12 @@ class MissedCallPopupService : Service() {
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             fitsSystemWindows = false
+            @Suppress("DEPRECATION")
+            systemUiVisibility = (
+                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            )
             isFocusable = true
             isFocusableInTouchMode = true
             setContent {
@@ -305,6 +317,7 @@ class MissedCallPopupService : Service() {
                         callDate = callDateState.longValue,
                         ringDurationSec = ringDurationSecState.longValue,
                         contactId = contactIdState.value,
+                        isMissedCall = isMissedCallState.value,
                         onDismiss = { dismissAndStop() },
                         onRegisterDismiss = { dismissTriggerCallback = it },
                         onRegisterBackHandler = { backHandlerCallback = it }
@@ -361,6 +374,7 @@ class MissedCallPopupService : Service() {
         callDate: Long,
         ringDurationSec: Long,
         contactId: String?,
+        isMissedCall: Boolean = true,
         onDismiss: () -> Unit,
         onRegisterDismiss: (() -> Unit) -> Unit,
         onRegisterBackHandler: (() -> Boolean) -> Unit
@@ -443,17 +457,21 @@ class MissedCallPopupService : Service() {
         val reply3 = remember(prefs) {
             prefs.getString(PreferenceManager.KEY_MISSED_CALL_QUICK_REPLY_3, PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3) ?: PreferenceManager.DEFAULT_MISSED_CALL_REPLY_3
         }
-        val quickReplies = remember(reply1, reply2, reply3, customFirst) {
-            val list = mutableListOf<String>()
-            if (reply1.isNotBlank()) list.add(reply1.trim())
-            if (reply2.isNotBlank()) list.add(reply2.trim())
-            if (reply3.isNotBlank()) list.add(reply3.trim())
-            if (customFirst) {
-                list.add(0, "Type custom...")
+        val quickReplies = remember(reply1, reply2, reply3, customFirst, isMissedCall) {
+            if (!isMissedCall) {
+                listOf("Type custom...")
             } else {
-                list.add("Type custom...")
+                val list = mutableListOf<String>()
+                if (reply1.isNotBlank()) list.add(reply1.trim())
+                if (reply2.isNotBlank()) list.add(reply2.trim())
+                if (reply3.isNotBlank()) list.add(reply3.trim())
+                if (customFirst) {
+                    list.add(0, "Type custom...")
+                } else {
+                    list.add("Type custom...")
+                }
+                list
             }
-            list
         }
 
         // Social apps detection from SocialAppActions
@@ -476,8 +494,6 @@ class MissedCallPopupService : Service() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
-                .navigationBarsPadding()
                 .background(Color.Black.copy(alpha = animatedDimAlpha))
                 .focusRequester(focusRequester)
                 .focusable()
@@ -513,7 +529,10 @@ class MissedCallPopupService : Service() {
                 exit = slideOutVertically(
                     targetOffsetY = { it },
                     animationSpec = tween(220, easing = FastOutSlowInEasing)
-                ) + fadeOut(animationSpec = tween(200))
+                ) + fadeOut(animationSpec = tween(200)),
+                modifier = Modifier
+                    .imePadding()
+                    .navigationBarsPadding()
             ) {
                 Surface(
                     modifier = Modifier
@@ -594,7 +613,7 @@ class MissedCallPopupService : Service() {
                                 ) {
                                     // Contact PFP with expressive styling
                                     Box(
-                                        modifier = Modifier.size(62.dp),
+                                        modifier = Modifier.size(76.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (hasPfp) {
@@ -602,7 +621,7 @@ class MissedCallPopupService : Service() {
                                                 model = photoUri,
                                                 contentDescription = contactName,
                                                 modifier = Modifier
-                                                    .size(58.dp)
+                                                    .size(72.dp)
                                                     .clip(CircleShape)
                                                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                                                 contentScale = ContentScale.Crop
@@ -612,26 +631,28 @@ class MissedCallPopupService : Service() {
                                                 name = contactName,
                                                 photoUri = null,
                                                 forcePersonIcon = true,
-                                                modifier = Modifier.size(58.dp)
+                                                modifier = Modifier.size(72.dp)
                                             )
                                         }
 
                                         // Gold ring & missed call badge
-                                        Surface(
-                                            modifier = Modifier
-                                                .align(Alignment.TopStart)
-                                                .size(20.dp),
-                                            shape = CircleShape,
-                                            color = Color(0xFFFFB300),
-                                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
-                                            shadowElevation = 2.dp
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.CallMissed,
-                                                contentDescription = null,
-                                                tint = Color(0xFF4A3200),
-                                                modifier = Modifier.padding(3.dp)
-                                            )
+                                        if (isMissedCall) {
+                                            Surface(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .size(24.dp),
+                                                shape = CircleShape,
+                                                color = Color(0xFFFFB300),
+                                                border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+                                                shadowElevation = 2.dp
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.CallMissed,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF4A3200),
+                                                    modifier = Modifier.padding(3.5.dp)
+                                                )
+                                            }
                                         }
                                     }
 
@@ -643,7 +664,7 @@ class MissedCallPopupService : Service() {
                                         verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = "Missed call $relativeTime, $ringText",
+                                            text = if (isMissedCall) "Missed call $relativeTime, $ringText" else relativeTime,
                                             style = MaterialTheme.typography.labelMedium.copy(
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 12.sp
@@ -706,6 +727,8 @@ class MissedCallPopupService : Service() {
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    val buttonBg = if (hasPfp || isDark) Color(0xFF3B2D0E) else Color(0xFFFFDE8A)
+                                    val buttonFg = if (hasPfp || isDark) Color(0xFFFFD56B) else Color(0xFF4E3714)
                                     Surface(
                                         onClick = {
                                             performAppHaptic(context, "light")
@@ -720,7 +743,7 @@ class MissedCallPopupService : Service() {
                                             triggerDismiss()
                                         },
                                         shape = CircleShape,
-                                        color = if (hasPfp || isDark) Color(0xFF3B2D0E) else Color(0xFF4E3714),
+                                        color = buttonBg,
                                         shadowElevation = 2.dp
                                     ) {
                                         Row(
@@ -733,7 +756,7 @@ class MissedCallPopupService : Service() {
                                             Icon(
                                                 imageVector = Icons.Outlined.History,
                                                 contentDescription = null,
-                                                tint = Color(0xFFFFD56B),
+                                                tint = buttonFg,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
@@ -743,7 +766,7 @@ class MissedCallPopupService : Service() {
                                                     fontWeight = FontWeight.Bold,
                                                     letterSpacing = 0.3.sp
                                                 ),
-                                                color = Color(0xFFFFD56B)
+                                                color = buttonFg
                                             )
                                         }
                                     }
@@ -1082,16 +1105,7 @@ class MissedCallPopupService : Service() {
                                             maxLines = 4,
                                             keyboardOptions = KeyboardOptions(
                                                 capitalization = KeyboardCapitalization.Sentences,
-                                                imeAction = ImeAction.Send
-                                            ),
-                                            keyboardActions = KeyboardActions(
-                                                onSend = {
-                                                    if (customMessageText.isNotBlank()) {
-                                                        performAppHaptic(context, "light")
-                                                        selectedMessageForAppChoice = customMessageText.trim()
-                                                        isCustomTyping = false
-                                                    }
-                                                }
+                                                imeAction = ImeAction.Default
                                             ),
                                             trailingIcon = {
                                                 if (customMessageText.isNotEmpty()) {

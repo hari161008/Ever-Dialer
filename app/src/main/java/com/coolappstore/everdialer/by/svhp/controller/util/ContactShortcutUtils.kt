@@ -59,6 +59,7 @@ object ContactShortcutUtils {
     fun pinCallShortcut(context: Context, keyId: String, displayName: String, number: String, photoUri: String?) {
         val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
             setClass(context, MainActivity::class.java)
+            putExtra("contact_id", keyId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         pin(

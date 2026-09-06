@@ -354,6 +354,9 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var customFirst by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_CUSTOM_FIRST, false))
     }
+    var alwaysShowAfterCallEnds by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ALWAYS_SHOW_MISSED_CALL_POPUP_AFTER_CALL_END, false))
+    }
     var showOverlayPermissionDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
@@ -369,14 +372,6 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-
-    var visible by remember { mutableStateOf(false) }
-    val screenAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "callSettingsAlpha"
-    )
-    LaunchedEffect(Unit) { visible = true }
 
     if (showContactsToDisplayDialog) {
         ContactsToDisplayDialog(
@@ -474,7 +469,6 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
-                .alpha(screenAlpha)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -843,6 +837,39 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                             )
                                             Text(
                                                 text = "Show the custom message button first in the response list",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                alwaysShowAfterCallEnds = !alwaysShowAfterCallEnds
+                                                prefs.setBoolean(PreferenceManager.KEY_ALWAYS_SHOW_MISSED_CALL_POPUP_AFTER_CALL_END, alwaysShowAfterCallEnds)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = alwaysShowAfterCallEnds,
+                                            onCheckedChange = {
+                                                alwaysShowAfterCallEnds = it
+                                                prefs.setBoolean(PreferenceManager.KEY_ALWAYS_SHOW_MISSED_CALL_POPUP_AFTER_CALL_END, it)
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "Always show missed call popup after every call ends",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Show popup after every call ends with only the custom response option",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
