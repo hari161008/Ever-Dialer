@@ -586,6 +586,14 @@ fun CallLogFullContent(
                 CallLogFilter.Contacts -> logs.filter { it.name != null && it.name != it.number }
             }
         }
+        val totalCallsMap = remember(logs) {
+            val map = mutableMapOf<String, Int>()
+            for (entry in logs) {
+                val key = entry.contactId?.takeIf { it.isNotBlank() } ?: entry.number.filter { it.isDigit() }.ifEmpty { entry.number }
+                map[key] = (map[key] ?: 0) + entry.count
+            }
+            map
+        }
         val groupedLogs = remember(filteredLogs) { filteredLogs.groupBy { formatDateHeader(it.date) } }
 
         // Bug fix: a new call (e.g. the first call of a new day, when the last entry in the list
@@ -920,8 +928,10 @@ fun CallLogFullContent(
                                                             thickness = 0.5.dp
                                                         )
                                                     }
+                                                    val contactKey = lg.contactId?.takeIf { it.isNotBlank() } ?: lg.number.filter { it.isDigit() }.ifEmpty { lg.number }
                                                     CallLogTile(
                                                         log = lg,
+                                                        totalCallsCount = totalCallsMap[contactKey] ?: lg.count,
                                                         isSelected = selectedLogs.contains("${lg.number}|${lg.date}"),
                                                         selectionMode = selectionMode,
                                                         onSelectToggle = { log ->

@@ -145,6 +145,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
     var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())) }
+    var showTotalCallsMade  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)) }
     var nameNonContactsAsUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)) }
     var dialpadMemory  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
 
@@ -191,6 +192,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var tabShowFavorites  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)) }
     var tabShowCalls      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)) }
     var tabShowContacts   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)) }
+    var tabShowGroups     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)) }
     var tabShowRecordings by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)) }
     var tabShowNotes      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)) }
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -198,6 +200,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
         TabOption("calls",      "Calls",      Icons.Outlined.History),
         TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
+        TabOption("groups",     "Groups",     Icons.Outlined.Group),
         TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
         TabOption("notes",      "Note",       Icons.Outlined.Note)
     )
@@ -221,11 +224,12 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         tabOrder.clear()
         tabOrder.addAll(defaults)
         persistTabOrder()
-        tabShowFavorites  = true; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)
-        tabShowCalls      = true; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)
-        tabShowContacts   = true; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)
-        tabShowRecordings = true; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
-        tabShowNotes      = true; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)
+        tabShowFavorites  = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)
+        tabShowCalls      = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)
+        tabShowContacts   = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)
+        tabShowGroups     = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)
+        tabShowRecordings = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+        tabShowNotes      = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)
     }
 
     // ── Context Menu Elements ──────────────────────────────────────────────
@@ -495,6 +499,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             "favorites"  -> tabShowFavorites
             "calls"      -> tabShowCalls
             "contacts"   -> tabShowContacts
+            "groups"     -> tabShowGroups
             "recordings" -> tabShowRecordings
             "notes"      -> tabShowNotes
             else         -> true
@@ -504,6 +509,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 "favorites"  -> { tabShowFavorites = value;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  value) }
                 "calls"      -> { tabShowCalls = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      value) }
                 "contacts"   -> { tabShowContacts = value;   prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   value) }
+                "groups"     -> { tabShowGroups = value;     prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     value) }
                 "recordings" -> { tabShowRecordings = value; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, value) }
                 "notes"      -> { tabShowNotes = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      value) }
             }
@@ -1650,6 +1656,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         showSimsInCallLogs = it
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show total number of calls made",
+                                    supporting = "Show the total call count for each contact or number in Call Logs",
+                                    leadingIcon = Icons.Outlined.Call,
+                                    iconContainerColor = ColorPurple,
+                                    checked = showTotalCallsMade,
+                                    modifier = Modifier.settingsSearchHighlight("show_total_calls_made", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        showTotalCallsMade = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, it)
                                     }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),

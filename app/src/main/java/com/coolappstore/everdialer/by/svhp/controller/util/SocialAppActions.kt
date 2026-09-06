@@ -18,7 +18,9 @@ import androidx.core.content.ContextCompat
 // Shared between the Contact Info "Social" card and the Dialpad's long-press menu, so both
 // surfaces use the exact same install-detection, icon-loading, and launch behavior.
 
-val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+const val WHATSAPP_PACKAGE = "com.whatsapp"
+const val WHATSAPP_BUSINESS_PACKAGE = "com.whatsapp.w4b"
+val WHATSAPP_PACKAGES = setOf(WHATSAPP_PACKAGE, WHATSAPP_BUSINESS_PACKAGE)
 const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
 const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
 const val TRUECALLER_PACKAGE = "com.truecaller"
@@ -32,6 +34,9 @@ fun isPackageInstalled(context: Context, pkg: String): Boolean =
 fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
     packages.any { pkg -> isPackageInstalled(context, pkg) }
 
+fun isWhatsAppInstalled(context: Context): Boolean = isPackageInstalled(context, WHATSAPP_PACKAGE)
+fun isWhatsAppBusinessInstalled(context: Context): Boolean = isPackageInstalled(context, WHATSAPP_BUSINESS_PACKAGE)
+
 fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): ImageBitmap {
     val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
     val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
@@ -42,11 +47,16 @@ fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): ImageBi
     return bitmap.asImageBitmap()
 }
 
-/** Loads the real launcher icon of whichever WhatsApp variant is installed (WhatsApp or WhatsApp
- *  Business), so quick-action UI can show the actual app icon instead of a generic chat glyph. */
+/** Loads the real launcher icon of WhatsApp if installed. */
 fun getWhatsAppIcon(context: Context): ImageBitmap? {
-    val pkg = WHATSAPP_PACKAGES.firstOrNull { isPackageInstalled(context, it) } ?: return null
-    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(pkg)) } catch (_: Exception) { null }
+    if (!isWhatsAppInstalled(context)) return null
+    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_PACKAGE)) } catch (_: Exception) { null }
+}
+
+/** Loads the real launcher icon of WhatsApp Business if installed. */
+fun getWhatsAppBusinessIcon(context: Context): ImageBitmap? {
+    if (!isWhatsAppBusinessInstalled(context)) return null
+    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_BUSINESS_PACKAGE)) } catch (_: Exception) { null }
 }
 
 /** Telegram has many third-party clients/forks. Rather than guessing a package name, this
@@ -141,9 +151,9 @@ private fun toInternationalNumber(context: Context, phoneNumber: String): String
     return digitsOnly
 }
 
-/** Opens a WhatsApp chat with [phoneNumber]. If [message] is provided, pre-fills the message. Returns false if WhatsApp isn't installed. */
+/** Opens a WhatsApp chat with [phoneNumber]. If [message] is provided, pre-fills the message. Targets standard WhatsApp specifically. */
 fun openWhatsAppChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
-    if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
     val clean = toInternationalNumber(context, phoneNumber)
     if (clean.isEmpty()) return false
     val uriStr = if (!message.isNullOrBlank()) {
@@ -151,12 +161,46 @@ fun openWhatsAppChat(context: Context, phoneNumber: String, message: String? = n
     } else {
         "https://wa.me/$clean"
     }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+        if (isWhatsAppInstalled(context)) {
+            setPackage(WHATSAPP_PACKAGE)
+        }
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
     return try {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
+        context.startActivity(intent)
         true
-    } catch (_: Exception) { false }
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
+}
+
+/** Opens a WhatsApp Business chat with [phoneNumber]. If [message] is provided, pre-fills the message. Targets WhatsApp Business specifically. */
+fun openWhatsAppBusinessChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val clean = toInternationalNumber(context, phoneNumber)
+    if (clean.isEmpty()) return false
+    val uriStr = if (!message.isNullOrBlank()) {
+        "https://wa.me/$clean?text=${Uri.encode(message)}"
+    } else {
+        "https://wa.me/$clean"
+    }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+        setPackage(WHATSAPP_BUSINESS_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
 }
 
 /** Opens a Telegram chat with [phoneNumber] via Android's own app chooser. If [message] is provided, pre-fills the message. Returns false if no Telegram-capable app is installed. */
@@ -368,16 +412,21 @@ private fun findWhatsAppCallDataUri(context: Context, phoneNumber: String, mimeT
 
 private const val MIME_WHATSAPP_VOICE_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
 private const val MIME_WHATSAPP_VIDEO_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
+private const val MIME_WHATSAPP_BUSINESS_VOICE_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.voip.call"
+private const val MIME_WHATSAPP_BUSINESS_VIDEO_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.video.call"
 
 /** Starts a real WhatsApp voice call to [phoneNumber] if this contact is WhatsApp-synced on the
- *  device. Falls back to opening the WhatsApp chat (so the user can tap Call themselves) when the
- *  direct-call shortcut isn't available. Returns false only if WhatsApp isn't installed at all. */
+ *  device. Falls back to opening the WhatsApp chat when direct-call shortcut isn't available. */
 fun startWhatsAppVoiceCall(context: Context, phoneNumber: String): Boolean {
-    if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
     val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VOICE_CALL)
     if (uri != null) {
         return try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                if (isWhatsAppInstalled(context)) setPackage(WHATSAPP_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
             true
         } catch (_: Exception) { openWhatsAppChat(context, phoneNumber) }
     }
@@ -385,18 +434,57 @@ fun startWhatsAppVoiceCall(context: Context, phoneNumber: String): Boolean {
 }
 
 /** Starts a real WhatsApp video call to [phoneNumber] if this contact is WhatsApp-synced on the
- *  device. Falls back to opening the WhatsApp chat (so the user can tap Video Call themselves)
- *  when the direct-call shortcut isn't available. Returns false only if WhatsApp isn't installed. */
+ *  device. Falls back to opening the WhatsApp chat when direct-call shortcut isn't available. */
 fun startWhatsAppVideoCall(context: Context, phoneNumber: String): Boolean {
-    if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
     val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VIDEO_CALL)
     if (uri != null) {
         return try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                if (isWhatsAppInstalled(context)) setPackage(WHATSAPP_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
             true
         } catch (_: Exception) { openWhatsAppChat(context, phoneNumber) }
     }
     return openWhatsAppChat(context, phoneNumber)
+}
+
+/** Starts a real WhatsApp Business voice call to [phoneNumber] if synced on the device. */
+fun startWhatsAppBusinessVoiceCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_BUSINESS_VOICE_CALL)
+        ?: findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VOICE_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage(WHATSAPP_BUSINESS_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppBusinessChat(context, phoneNumber) }
+    }
+    return openWhatsAppBusinessChat(context, phoneNumber)
+}
+
+/** Starts a real WhatsApp Business video call to [phoneNumber] if synced on the device. */
+fun startWhatsAppBusinessVideoCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_BUSINESS_VIDEO_CALL)
+        ?: findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VIDEO_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage(WHATSAPP_BUSINESS_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppBusinessChat(context, phoneNumber) }
+    }
+    return openWhatsAppBusinessChat(context, phoneNumber)
 }
 
 /**

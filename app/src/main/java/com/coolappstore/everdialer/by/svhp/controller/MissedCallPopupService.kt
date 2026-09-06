@@ -487,12 +487,14 @@ class MissedCallPopupService : Service() {
         }
 
         // Social apps detection from SocialAppActions
-        val whatsAppInstalled = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+        val whatsAppInstalled = remember(context) { isWhatsAppInstalled(context) }
+        val whatsAppBusinessInstalled = remember(context) { isWhatsAppBusinessInstalled(context) }
         val telegramInstalled = remember(context) { isTelegramInstalled(context) }
         val meetInstalled = remember(context) { isGoogleMeetInstalled(context) }
         val truecallerInstalled = remember(context) { isTruecallerInstalled(context) }
 
         val whatsAppIcon: ImageBitmap? = remember(context, whatsAppInstalled) { if (whatsAppInstalled) getWhatsAppIcon(context) else null }
+        val whatsAppBusinessIcon: ImageBitmap? = remember(context, whatsAppBusinessInstalled) { if (whatsAppBusinessInstalled) getWhatsAppBusinessIcon(context) else null }
         val telegramIcon: ImageBitmap? = remember(context, telegramInstalled) { if (telegramInstalled) getTelegramIcon(context) else null }
         val meetIcon: ImageBitmap? = remember(context, meetInstalled) { if (meetInstalled) getGoogleMeetIcon(context) else null }
         val truecallerIcon: ImageBitmap? = remember(context, truecallerInstalled) { if (truecallerInstalled) getTruecallerIcon(context) else null }
@@ -604,6 +606,13 @@ class MissedCallPopupService : Service() {
                 performAppHaptic(context, "light")
                 val messageToSend = if (msg != "Type custom...") msg else null
                 openWhatsAppChat(context, phoneNumber, messageToSend)
+                triggerDismiss()
+            }
+
+            fun sendViaWhatsAppBusiness(msg: String?) {
+                performAppHaptic(context, "light")
+                val messageToSend = if (msg != "Type custom...") msg else null
+                openWhatsAppBusinessChat(context, phoneNumber, messageToSend)
                 triggerDismiss()
             }
 
@@ -1161,6 +1170,19 @@ class MissedCallPopupService : Service() {
                                         )
                                     }
 
+                                    // 3b. WhatsApp Business (if installed)
+                                    if (whatsAppBusinessInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = whatsAppBusinessIcon,
+                                            iconVector = Icons.Default.Chat,
+                                            label = "WA Business",
+                                            onClick = {
+                                                performAppHaptic(context, "light")
+                                                selectedSocialApp = "whatsapp_business"
+                                            }
+                                        )
+                                    }
+
                                     // 4. Telegram (if installed)
                                     if (telegramInstalled) {
                                         ActionButtonItem(
@@ -1431,6 +1453,18 @@ class MissedCallPopupService : Service() {
                                         )
                                     }
 
+                                    // 2b. WhatsApp Business (if installed)
+                                    if (whatsAppBusinessInstalled) {
+                                        ActionButtonItem(
+                                            iconBitmap = whatsAppBusinessIcon,
+                                            iconVector = Icons.Default.Chat,
+                                            label = "WA Business",
+                                            onClick = {
+                                                sendViaWhatsAppBusiness(chosenMsg)
+                                            }
+                                        )
+                                    }
+
                                     // 3. Telegram (if installed)
                                     if (telegramInstalled) {
                                         ActionButtonItem(
@@ -1465,11 +1499,13 @@ class MissedCallPopupService : Service() {
                             val app = selectedSocialApp
                             val appLabel = when (app) {
                                 "whatsapp" -> "WhatsApp"
+                                "whatsapp_business" -> "WhatsApp Business"
                                 "telegram" -> "Telegram"
                                 else -> "Google Meet"
                             }
                             val appIcon = when (app) {
                                 "whatsapp" -> whatsAppIcon
+                                "whatsapp_business" -> whatsAppBusinessIcon
                                 "telegram" -> telegramIcon
                                 else -> meetIcon
                             }
@@ -1559,6 +1595,8 @@ class MissedCallPopupService : Service() {
                                                 performAppHaptic(context, "light")
                                                 if (app == "whatsapp") {
                                                     openWhatsAppChat(context, phoneNumber)
+                                                } else if (app == "whatsapp_business") {
+                                                    openWhatsAppBusinessChat(context, phoneNumber)
                                                 } else {
                                                     openTelegramChat(context, phoneNumber)
                                                 }
@@ -1574,6 +1612,7 @@ class MissedCallPopupService : Service() {
                                             performAppHaptic(context, "light")
                                             val started = when (app) {
                                                 "whatsapp" -> startWhatsAppVoiceCall(context, phoneNumber)
+                                                "whatsapp_business" -> startWhatsAppBusinessVoiceCall(context, phoneNumber)
                                                 "telegram" -> startTelegramVoiceCall(context, phoneNumber)
                                                 else -> startGoogleMeetVoiceCall(context, phoneNumber)
                                             }
@@ -1591,6 +1630,7 @@ class MissedCallPopupService : Service() {
                                             performAppHaptic(context, "light")
                                             val started = when (app) {
                                                 "whatsapp" -> startWhatsAppVideoCall(context, phoneNumber)
+                                                "whatsapp_business" -> startWhatsAppBusinessVideoCall(context, phoneNumber)
                                                 "telegram" -> startTelegramVideoCall(context, phoneNumber)
                                                 else -> startGoogleMeetVideoCall(context, phoneNumber)
                                             }

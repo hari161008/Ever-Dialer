@@ -59,6 +59,7 @@ fun ContactEditScreen(
     }
     val emails = remember { mutableStateListOf<String>().apply { add("") } }
     val addresses = remember { mutableStateListOf<String>().apply { add("") } }
+    var description by remember { mutableStateOf("") }
 
     LaunchedEffect(contactId, allContacts) {
         if (contactId != null && contactId != "0" && contactId != "null" && !isInitialized) {
@@ -89,6 +90,7 @@ fun ContactEditScreen(
                 } else {
                     addresses.add("")
                 }
+                description = contact.note ?: ""
                 isInitialized = true
             }
         }
@@ -127,7 +129,8 @@ fun ContactEditScreen(
                                 phoneNumbers = phoneNumbers.filter { it.isNotBlank() },
                                 emails = emails.filter { it.isNotBlank() },
                                 addresses = addresses.filter { it.isNotBlank() },
-                                photoUri = photoUri
+                                photoUri = photoUri,
+                                note = description.trim().ifBlank { null }
                             )
                             if (isNewContact) {
                                 pendingContact = contactToSave
@@ -304,6 +307,27 @@ fun ContactEditScreen(
                 }
             }
             
+            item {
+                RivoSectionHeader(title = "Description")
+                RivoExpressiveCard {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Description") },
+                        placeholder = { Text("Notes synced with Google / Exchange") },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = { Icon(Icons.Default.Description, null) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary
+                        ),
+                        minLines = 3,
+                        maxLines = 6
+                    )
+                }
+            }
+
             item { Spacer(modifier = Modifier.height(100.dp)) }
         }
     }

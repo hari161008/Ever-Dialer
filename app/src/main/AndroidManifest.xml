@@ -988,6 +988,7 @@
             android:name=".widget.DirectCallWidgetConfigureActivity"
             android:exported="true"
             android:theme="@style/Theme.RivoPhone"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/widget_direct_call_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
@@ -1012,6 +1013,7 @@
             android:name=".widget.ContactInfoWidgetConfigureActivity"
             android:exported="true"
             android:theme="@style/Theme.RivoPhone"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/widget_contact_info_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />

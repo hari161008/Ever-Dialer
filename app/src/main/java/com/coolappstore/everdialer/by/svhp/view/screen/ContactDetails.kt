@@ -67,18 +67,24 @@ import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithContactS
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isWhatsAppInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isWhatsAppBusinessInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppIcon
+import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppBusinessIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTruecallerIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.openWhatsAppChat
+import com.coolappstore.everdialer.by.svhp.controller.util.openWhatsAppBusinessChat
 import com.coolappstore.everdialer.by.svhp.controller.util.openTelegramChat
 import com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller
 import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppVoiceCall
+import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppBusinessVoiceCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppVideoCall
+import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppBusinessVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startTelegramVoiceCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startTelegramVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVoiceCall
@@ -146,6 +152,7 @@ fun ContactDetailsScreen(
     var showShortcutNumberPicker by remember { mutableStateOf(false) }
     var showShortcutActionPicker by remember { mutableStateOf(false) }
     var pendingShortcutNumber by remember { mutableStateOf<String?>(null) }
+    var showDescriptionEditor by remember { mutableStateOf(false) }
     var showNoteEditor by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -171,11 +178,12 @@ fun ContactDetailsScreen(
     var pendingSocialApp by remember { mutableStateOf<String?>(null) }
     var socialSelectedNumber by remember { mutableStateOf<String?>(null) }
 
-    val whatsAppInstalled = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+    val whatsAppInstalled = remember(context) { isWhatsAppInstalled(context) }
+    val whatsAppBusinessInstalled = remember(context) { isWhatsAppBusinessInstalled(context) }
     val telegramInstalled = remember(context) { isTelegramInstalled(context) }
     val meetInstalled = remember(context) { isGoogleMeetInstalled(context) }
     val truecallerInstalled = remember(context) { isTruecallerInstalled(context) }
-    val hasAnySocialApp = whatsAppInstalled || telegramInstalled || meetInstalled || truecallerInstalled
+    val hasAnySocialApp = whatsAppInstalled || whatsAppBusinessInstalled || telegramInstalled || meetInstalled || truecallerInstalled
 
     // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
     // so the actions shown here always match what's configured for the contact's context menu.
@@ -347,6 +355,7 @@ fun ContactDetailsScreen(
         val socialPhone = socialSelectedNumber!!
         val appLabel = when (app) {
             "whatsapp" -> "WhatsApp"
+            "whatsapp_business" -> "WhatsApp Business"
             "telegram" -> "Telegram"
             else -> "Google Meet"
         }
@@ -355,7 +364,11 @@ fun ContactDetailsScreen(
             onChat = if (app == "googlemeet") null else {
                 {
                     showAppQuickActions = null
-                    val opened = if (app == "whatsapp") openWhatsAppChat(context, socialPhone) else openTelegramChat(context, socialPhone)
+                    val opened = when (app) {
+                        "whatsapp" -> openWhatsAppChat(context, socialPhone)
+                        "whatsapp_business" -> openWhatsAppBusinessChat(context, socialPhone)
+                        else -> openTelegramChat(context, socialPhone)
+                    }
                     if (!opened) android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
@@ -363,6 +376,7 @@ fun ContactDetailsScreen(
                 showAppQuickActions = null
                 val started = when (app) {
                     "whatsapp" -> startWhatsAppVoiceCall(context, socialPhone)
+                    "whatsapp_business" -> startWhatsAppBusinessVoiceCall(context, socialPhone)
                     "telegram" -> startTelegramVoiceCall(context, socialPhone)
                     else -> startGoogleMeetVoiceCall(context, socialPhone)
                 }
@@ -372,6 +386,7 @@ fun ContactDetailsScreen(
                 showAppQuickActions = null
                 val started = when (app) {
                     "whatsapp" -> startWhatsAppVideoCall(context, socialPhone)
+                    "whatsapp_business" -> startWhatsAppBusinessVideoCall(context, socialPhone)
                     "telegram" -> startTelegramVideoCall(context, socialPhone)
                     else -> startGoogleMeetVideoCall(context, socialPhone)
                 }
@@ -419,6 +434,21 @@ fun ContactDetailsScreen(
                 )
             },
             onDismiss = { showShortcutActionPicker = false }
+        )
+    }
+    if (showDescriptionEditor && contact != null) {
+        DescriptionEditorDialog(
+            contactName = displayName,
+            initialDescription = contact.note ?: "",
+            onSave = { newNote ->
+                showDescriptionEditor = false
+                contactsViewModel.updateContactNote(contact.id, newNote.ifBlank { null })
+            },
+            onDelete = {
+                showDescriptionEditor = false
+                contactsViewModel.updateContactNote(contact.id, null)
+            },
+            onDismiss = { showDescriptionEditor = false }
         )
     }
     if (showNoteEditor) {
@@ -805,6 +835,48 @@ fun ContactDetailsScreen(
                     }
                 }
 
+                // Description section (synced with Microsoft Exchange / Gmail contact notes via ContactsContract)
+                item {
+                    val currentDescription = contact?.note ?: ""
+
+                    RivoExpressiveCard(title = "Description", icon = Icons.Default.Description) {
+                        if (currentDescription.isNotBlank()) {
+                            // Inline preview with clickable links
+                            val annotated = buildClickableAnnotatedString(currentDescription)
+                            ClickableText(
+                                text = annotated,
+                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                onClick = { offset ->
+                                    annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
+                                        val url = if (ann.item.startsWith("http")) ann.item else "https://${ann.item}"
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }
+                                }
+                            )
+                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        }
+
+                        if (contact != null) {
+                            TextButton(
+                                onClick = { showDescriptionEditor = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(if (currentDescription.isBlank()) Icons.Default.Add else Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (currentDescription.isBlank()) "Add description..." else "Edit description")
+                            }
+                        } else {
+                            Text(
+                                text = "Save contact to sync description with Google & Exchange",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
                 // Notes section (between Contact Info and Recent Activity)
                 item {
                     var currentNote by remember(displayName, displayPhone) {
@@ -869,11 +941,12 @@ fun ContactDetailsScreen(
                     }
                 }
 
-                // Social — contact through WhatsApp / Telegram / Meet / Truecaller. Only displayed when at least
+                // Social — contact through WhatsApp / WA Business / Telegram / Meet / Truecaller. Only displayed when at least
                 // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
                 if (hasAnySocialApp) {
                     item {
                         val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
+                        val whatsAppBusinessIcon = remember(context) { getWhatsAppBusinessIcon(context) }
                         val telegramIcon = remember(context) { getTelegramIcon(context) }
                         val meetIcon = remember(context) { getGoogleMeetIcon(context) }
                         val truecallerIcon = remember(context) { getTruecallerIcon(context) }
@@ -883,6 +956,12 @@ fun ContactDetailsScreen(
                                     RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
                                         if (displayPhone == "Unknown") return@RivoExpressiveButton
                                         chooseSocialApp("whatsapp")
+                                    })
+                                }
+                                if (whatsAppBusinessInstalled) {
+                                    RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                        chooseSocialApp("whatsapp_business")
                                     })
                                 }
                                 if (telegramInstalled) {
@@ -1190,5 +1269,81 @@ private fun buildClickableAnnotatedString(text: String): AnnotatedString {
             lastIdx = end
         }
         append(text.substring(lastIdx))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DescriptionEditorDialog(
+    contactName: String,
+    initialDescription: String,
+    onSave: (String) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember { mutableStateOf(initialDescription) }
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            onSave(text.trim())
+        },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Description",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Syncs with Gmail & Microsoft Exchange",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (initialDescription.isNotBlank()) {
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete Description",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Button(
+                            onClick = { onSave(text.trim()) },
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Save") }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 180.dp),
+                    placeholder = { Text("Enter contact description / notes...") },
+                    shape = RoundedCornerShape(16.dp),
+                    minLines = 6
+                )
+            }
+        }
     }
 }

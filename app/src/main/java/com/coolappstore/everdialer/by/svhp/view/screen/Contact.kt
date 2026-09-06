@@ -372,8 +372,18 @@ fun ContactContent(
             val activePillFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
             val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
-            val visibleContactGroups = remember(contactGroups, hiddenGroupIds) {
-                contactGroups.filter { it.id !in hiddenGroupIds }
+            val enabledAccountKeys by contactsVM.enabledAccountKeys.collectAsState()
+            val visibleContactGroups = remember(contactGroups, hiddenGroupIds, enabledAccountKeys) {
+                contactGroups.filter { it.id !in hiddenGroupIds }.filter { group ->
+                    if (enabledAccountKeys == null) true
+                    else {
+                        val key = if (group.accountType != null || group.accountName != null) {
+                            "${group.accountType ?: ""}:${group.accountName ?: ""}"
+                        } else null
+                        if (key != null) key in enabledAccountKeys!!
+                        else true
+                    }
+                }
             }
 
             // ── 1. Contact Groups Section (ABOVE Contacts to Display) ─────────

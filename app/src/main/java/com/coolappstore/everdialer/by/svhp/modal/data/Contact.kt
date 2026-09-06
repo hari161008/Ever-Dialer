@@ -23,6 +23,8 @@ data class Contact(
     // "jane@gmail.com", "SIM 1", "Device Storage" — a contact merged across multiple sources
     // (e.g. saved on the SIM and also synced to a Google account) will show more than one.
     val sourceAccounts: List<String> = emptyList(),
+    // Custom note/description synced with Microsoft Exchange / Google Contacts / ContactsContract
+    val note: String? = null,
 )
 
 @Serializable

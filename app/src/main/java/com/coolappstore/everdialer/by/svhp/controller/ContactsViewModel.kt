@@ -264,7 +264,29 @@ class ContactsViewModel(
 
     fun saveContact(contact: Contact, accountType: String? = null, accountName: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
+            // Optimistically update memory and cache for instant UI feedback
+            if (contact.id.isNotEmpty() && contact.id != "0") {
+                val current = _allContacts.value
+                val updated = current.map { if (it.id == contact.id) contact else it }
+                _allContacts.value = updated
+                updateDisplayedContacts(updated)
+                ContactsCache.write(getApplication(), updated)
+            }
             contactsRepo.saveContact(contact, accountType, accountName)
+            fetchContacts()
+        }
+    }
+
+    fun updateContactNote(contactId: String, note: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Optimistically update memory and cache
+            val current = _allContacts.value
+            val updated = current.map { if (it.id == contactId) it.copy(note = note) else it }
+            _allContacts.value = updated
+            updateDisplayedContacts(updated)
+            ContactsCache.write(getApplication(), updated)
+            
+            contactsRepo.updateContactNote(contactId, note)
             fetchContacts()
         }
     }

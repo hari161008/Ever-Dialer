@@ -25,11 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FiberManualRecord
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Note
 import androidx.compose.material.icons.outlined.Person
@@ -55,6 +57,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
@@ -76,6 +79,7 @@ private val TAB_ROUTES = setOf(
     FavoritesScreenDestination.route,
     RecentScreenDestination.route,
     ContactScreenDestination.route,
+    GroupsScreenDestination.route,
     RecordingsScreenDestination.route,
     NotesScreenDestination.route
 )
@@ -115,6 +119,7 @@ fun BottomBar(navController: NavController) {
     val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
     val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
+    val showGroupsTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false) }
     val showRecordingsTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
     val showNotesTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true) }
     val tabOrder          = remember(settingsState) { parseTabOrder(prefs.getString(PreferenceManager.KEY_TAB_ORDER, null)) }
@@ -127,15 +132,17 @@ fun BottomBar(navController: NavController) {
     val isFavoritesSelected  = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
     val isRecentsSelected    = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
     val isContactsSelected   = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isGroupsSelected     = currentDestination?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true
     val isRecordingsSelected = currentDestination?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true
     val isNotesSelected      = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
 
     // Build visible tab routes dynamically based on prefs
-    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showRecordingsTab, showNotesTab) {
+    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab) {
         buildSet {
             if (showFavoritesTab)  add(FavoritesScreenDestination.route)
             if (showCallsTab)      add(RecentScreenDestination.route)
             if (showContactsTab)   add(ContactScreenDestination.route)
+            if (showGroupsTab)     add(GroupsScreenDestination.route)
             if (showRecordingsTab) add(RecordingsScreenDestination.route)
             if (showNotesTab)      add(NotesScreenDestination.route)
         }
@@ -162,6 +169,7 @@ fun BottomBar(navController: NavController) {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route
         "contacts"   -> ContactScreenDestination.route
+        "groups"     -> GroupsScreenDestination.route
         "recordings" -> RecordingsScreenDestination.route
         "notes"      -> NotesScreenDestination.route
         else         -> null
@@ -232,8 +240,8 @@ fun BottomBar(navController: NavController) {
     }
 
     val orderedTabs: List<TabSpec> = remember(
-        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showRecordingsTab, showNotesTab,
-        isFavoritesSelected, isRecentsSelected, isContactsSelected, isRecordingsSelected, isNotesSelected
+        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab,
+        isFavoritesSelected, isRecentsSelected, isContactsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected
     ) {
         tabOrder.mapNotNull { key ->
             when (key) {
@@ -254,6 +262,12 @@ fun BottomBar(navController: NavController) {
                     selectedIcon = Icons.Filled.Person, unselectedIcon = Icons.Outlined.Person,
                     selected = isContactsSelected,
                     onClick = { doHaptic(); navigate(ContactScreenDestination.route) }
+                ) else null
+                "groups" -> if (showGroupsTab) TabSpec(
+                    key = key, route = GroupsScreenDestination.route, label = "Groups",
+                    selectedIcon = Icons.Filled.Group, unselectedIcon = Icons.Outlined.Group,
+                    selected = isGroupsSelected,
+                    onClick = { doHaptic(); navigate(GroupsScreenDestination.route) }
                 ) else null
                 "recordings" -> if (showRecordingsTab) TabSpec(
                     key = key, route = RecordingsScreenDestination.route, label = "Recordings",

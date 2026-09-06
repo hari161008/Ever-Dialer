@@ -14,6 +14,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
@@ -27,6 +28,7 @@ private fun routeForTabKey(key: String): String? = when (key) {
     "favorites"  -> FavoritesScreenDestination.route
     "calls"      -> RecentScreenDestination.route
     "contacts"   -> ContactScreenDestination.route
+    "groups"     -> GroupsScreenDestination.route
     "recordings" -> RecordingsScreenDestination.route
     "notes"      -> NotesScreenDestination.route
     else         -> null

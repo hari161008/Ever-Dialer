@@ -86,13 +86,15 @@ class PreferenceManager(context: Context) {
         return if (mode == "specified") match else !match
     }
 
-    /** Per-contact "Choose Sim" preference from the contact info screen (Contact Info → Choose
-     *  Sim, between "Recent Activity" and "Saved In"). [contactKey] should be the contact's id
-     *  for a saved contact, or the raw phone number for an unsaved/unknown number, so both kinds
-     *  of contacts can have their own remembered choice. Defaults to [SIM_CHOICE_SETTINGS], which
-     *  means "fall back to the app-wide default SIM setting". */
-    fun getContactSimChoice(contactKey: String): String =
-        getString(KEY_CONTACT_SIM_CHOICE_PREFIX + contactKey, SIM_CHOICE_SETTINGS) ?: SIM_CHOICE_SETTINGS
+    fun getContactSimChoice(contactKey: String, fallbackNumber: String? = null): String {
+        val choice = getString(KEY_CONTACT_SIM_CHOICE_PREFIX + contactKey, SIM_CHOICE_SETTINGS) ?: SIM_CHOICE_SETTINGS
+        if (choice != SIM_CHOICE_SETTINGS) return choice
+        if (!fallbackNumber.isNullOrBlank() && fallbackNumber != contactKey) {
+            val numChoice = getString(KEY_CONTACT_SIM_CHOICE_PREFIX + fallbackNumber, SIM_CHOICE_SETTINGS) ?: SIM_CHOICE_SETTINGS
+            if (numChoice != SIM_CHOICE_SETTINGS) return numChoice
+        }
+        return SIM_CHOICE_SETTINGS
+    }
 
     fun setContactSimChoice(contactKey: String, choice: String) =
         setString(KEY_CONTACT_SIM_CHOICE_PREFIX + contactKey, choice)
@@ -375,6 +377,7 @@ class PreferenceManager(context: Context) {
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_PILL_NAV              = "pill_style_nav"
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
+        const val KEY_SHOW_TOTAL_CALLS_MADE = "show_total_calls_made"
         // Dialpad Memory — on by default. When on, whatever digits are typed into the Dialpad
         // stay there after the sheet is closed or a call is placed, so reopening the Dialpad
         // shows the same number again. When off, the Dialpad is wiped in both of those cases.
@@ -447,12 +450,13 @@ class PreferenceManager(context: Context) {
         const val KEY_TAB_SHOW_FAVORITES       = "tab_show_favorites"
         const val KEY_TAB_SHOW_CALLS           = "tab_show_calls"
         const val KEY_TAB_SHOW_CONTACTS        = "tab_show_contacts"
+        const val KEY_TAB_SHOW_GROUPS          = "tab_show_groups"
         const val KEY_TAB_SHOW_RECORDINGS      = "tab_show_recordings"
         const val KEY_TAB_SHOW_NOTES           = "tab_show_notes"
-        // Comma-separated list of tab keys (favorites, calls, contacts, recordings, notes)
+        // Comma-separated list of tab keys (favorites, calls, contacts, groups, recordings, notes)
         // describing the order tabs appear in the bottom navigation bar.
         const val KEY_TAB_ORDER                = "tab_order"
-        const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,recordings,notes"
+        const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,groups,recordings,notes"
         // Biometrics
         const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | ""
         const val KEY_BIOMETRICS_PIN           = "biometrics_pin"

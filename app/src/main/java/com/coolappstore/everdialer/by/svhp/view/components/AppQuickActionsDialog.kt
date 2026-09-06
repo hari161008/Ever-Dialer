@@ -38,18 +38,24 @@ import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTruecallerIcon
+import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppBusinessIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getWhatsAppIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isWhatsAppBusinessInstalled
+import com.coolappstore.everdialer.by.svhp.controller.util.isWhatsAppInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.openTelegramChat
 import com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller
+import com.coolappstore.everdialer.by.svhp.controller.util.openWhatsAppBusinessChat
 import com.coolappstore.everdialer.by.svhp.controller.util.openWhatsAppChat
 import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startGoogleMeetVoiceCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startTelegramVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startTelegramVoiceCall
+import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppBusinessVideoCall
+import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppBusinessVoiceCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppVideoCall
 import com.coolappstore.everdialer.by.svhp.controller.util.startWhatsAppVoiceCall
 
@@ -193,11 +199,12 @@ fun CallChatViaOverlay(
     }
 
     if (showPicker) {
-        val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+        val hasWhatsApp = remember(context) { isWhatsAppInstalled(context) }
+        val hasWhatsAppBusiness = remember(context) { isWhatsAppBusinessInstalled(context) }
         val hasTelegram = remember(context) { isTelegramInstalled(context) }
         val hasGoogleMeet = remember(context, showGoogleMeet) { showGoogleMeet && isGoogleMeetInstalled(context) }
         val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
-        val hasAnyApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller || (showFakeCall && onFakeCall != null)
+        val hasAnyApp = hasWhatsApp || hasWhatsAppBusiness || hasTelegram || hasGoogleMeet || hasTruecaller || (showFakeCall && onFakeCall != null)
 
         if (hasAnyApp) {
             RivoDropdownMenu(expanded = showPicker, onDismissRequest = onPickerDismiss) {
@@ -206,6 +213,13 @@ fun CallChatViaOverlay(
                         text = "WhatsApp",
                         iconBitmap = remember(context) { getWhatsAppIcon(context) },
                         onClick = { onPickerDismiss(); chooseApp("whatsapp") }
+                    )
+                }
+                if (hasWhatsAppBusiness) {
+                    RivoDropdownMenuItem(
+                        text = "WhatsApp Business",
+                        iconBitmap = remember(context) { getWhatsAppBusinessIcon(context) },
+                        onClick = { onPickerDismiss(); chooseApp("whatsapp_business") }
                     )
                 }
                 if (hasTelegram) {
@@ -269,6 +283,7 @@ fun CallChatViaOverlay(
         val number = selectedNumber!!
         val appLabel = when (app) {
             "whatsapp" -> "WhatsApp"
+            "whatsapp_business" -> "WhatsApp Business"
             "telegram" -> "Telegram"
             else -> "Google Meet"
         }
@@ -277,7 +292,11 @@ fun CallChatViaOverlay(
             onChat = if (app == "googlemeet") null else {
                 {
                     showAppQuickActions = null
-                    val opened = if (app == "whatsapp") openWhatsAppChat(context, number) else openTelegramChat(context, number)
+                    val opened = when (app) {
+                        "whatsapp" -> openWhatsAppChat(context, number)
+                        "whatsapp_business" -> openWhatsAppBusinessChat(context, number)
+                        else -> openTelegramChat(context, number)
+                    }
                     if (!opened) android.widget.Toast.makeText(context, "$appLabel isn't installed", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
@@ -285,6 +304,7 @@ fun CallChatViaOverlay(
                 showAppQuickActions = null
                 val started = when (app) {
                     "whatsapp" -> startWhatsAppVoiceCall(context, number)
+                    "whatsapp_business" -> startWhatsAppBusinessVoiceCall(context, number)
                     "telegram" -> startTelegramVoiceCall(context, number)
                     else -> startGoogleMeetVoiceCall(context, number)
                 }
@@ -294,6 +314,7 @@ fun CallChatViaOverlay(
                 showAppQuickActions = null
                 val started = when (app) {
                     "whatsapp" -> startWhatsAppVideoCall(context, number)
+                    "whatsapp_business" -> startWhatsAppBusinessVideoCall(context, number)
                     "telegram" -> startTelegramVideoCall(context, number)
                     else -> startGoogleMeetVideoCall(context, number)
                 }

@@ -84,18 +84,21 @@ import android.view.Surface
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Note
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
@@ -207,6 +210,7 @@ class MainActivity : FragmentActivity() {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
                         "favorites"  -> FavoritesScreenDestination
                         "contacts"   -> ContactScreenDestination
+                        "groups"     -> GroupsScreenDestination
                         "recordings" -> RecordingsScreenDestination()
                         "notes"      -> NotesScreenDestination()
                         else         -> RecentScreenDestination
@@ -562,6 +566,7 @@ class MainActivity : FragmentActivity() {
                                         val showFavoritesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)
                                         val showCallsRail     = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
                                         val showContactsRail  = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
+                                        val showGroupsRail    = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
                                         val railTabOrder = remember(settingsVer) {
                                             PreferenceManager.parseTabOrder(prefs2.getString(PreferenceManager.KEY_TAB_ORDER, null))
                                         }
@@ -592,6 +597,14 @@ class MainActivity : FragmentActivity() {
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
                                                         onClick = { navTo(ContactScreenDestination.route) }
+                                                    )
+                                                    "groups" -> if (showGroupsRail) RailItem(
+                                                        selected = currentDest?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true,
+                                                        icon = { sel -> Icon(if (sel) Icons.Filled.Group else Icons.Outlined.Group, "Groups", modifier = Modifier.size(24.dp)) },
+                                                        label = "Groups",
+                                                        paddingStart = railPaddingStart,
+                                                        paddingEnd = railPaddingEnd,
+                                                        onClick = { navTo(GroupsScreenDestination.route) }
                                                     )
                                                     "recordings" -> if (showRecordingsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true,
@@ -930,7 +943,7 @@ class MainActivity : FragmentActivity() {
 
         val prefs = GlobalContext.get().get<PreferenceManager>()
         // If contactKey wasn't supplied, try finding the matching contact by phone number
-        val resolvedKey = contactKey ?: run {
+        val resolvedKey = contactKey?.takeIf { it.isNotBlank() } ?: run {
             try {
                 val contactsRepo = GlobalContext.get().get<IContactsRepository>()
                 contactsRepo.getContactByNumber(cleanNumber)?.id

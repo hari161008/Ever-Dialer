@@ -294,7 +294,7 @@ fun placeCallHonoringContactSim(
     onShowSimPicker: () -> Unit
 ) {
     val globalSimPref = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
-    val contactSimChoice = prefs.getContactSimChoice(contactKey)
+    val contactSimChoice = prefs.getContactSimChoice(contactKey, number)
     placeCallWithContactSimPreference(context, number, contactSimChoice, globalSimPref, recentSimSlotForContact, onShowSimPicker)
 }
 

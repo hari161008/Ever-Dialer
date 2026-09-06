@@ -5,9 +5,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 enum class CallLogFilter {
     All,
     Contacts,
+    Missed,
     Incoming,
-    Outgoing,
-    Missed;
+    Outgoing;
 
     companion object {
         public fun filter(logs: List<CallLogEntry>, type: CallLogFilter): List<List<CallLogEntry>> {

@@ -135,6 +135,14 @@ fun CallLogTileSimple(log: CallLogEntry) {
     )
 }
 
+fun toSuperscript(number: Int): String {
+    val superscripts = mapOf(
+        '0' to '⁰', '1' to '¹', '2' to '²', '3' to '³', '4' to '⁴',
+        '5' to '⁵', '6' to '⁶', '7' to '⁷', '8' to '⁸', '9' to '⁹'
+    )
+    return number.toString().map { superscripts[it] ?: it }.joinToString("")
+}
+
 @Composable
 fun CallLogTile(
     log: CallLogEntry,
@@ -145,7 +153,8 @@ fun CallLogTile(
     isSelected: Boolean = false,
     selectionMode: Boolean = false,
     onSelectToggle: ((CallLogEntry) -> Unit)? = null,
-    onSelectMode: ((CallLogEntry) -> Unit)? = null
+    onSelectMode: ((CallLogEntry) -> Unit)? = null,
+    totalCallsCount: Int? = null
 ) {
     val context   = LocalContext.current
     val isContact = log.name != null && log.name != log.number
@@ -157,6 +166,7 @@ fun CallLogTile(
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    val showTotalCallsMade = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false) }
     val isNumberBlocked = remember(settingsVer, log.number) { BlockedNumbersManager.isBlocked(context, prefs, log.number) }
     var showFakeCallSheet by remember { mutableStateOf(false) }
     var showCallChatViaPicker by remember { mutableStateOf(false) }
@@ -168,14 +178,6 @@ fun CallLogTile(
         if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
     }
     val contactsRepo = koinInject<IContactsRepository>()
-    // Bug fix: this used to call contactsRepo.getContactByNumber(log.number) here — a synchronous
-    // PhoneLookup ContentResolver query (with a full-table fallback scan on top) run directly
-    // during composition for every tile. Since the LazyColumn composes new tiles continuously
-    // while scrolling, that meant a live DB query on the UI thread for every row that scrolled
-    // into view - the actual cause of call logs scrolling laggy while Contacts (which has no
-    // per-item DB calls) stayed smooth. CallLogEntry.contactId is already resolved once up front
-    // by CallLogRepository, so checking hidden status is now a plain in-memory lookup with zero
-    // IPC.
     val isHiddenContact = remember(log.contactId, hiddenIds, hideNames) {
         hideNames && hiddenIds.isNotEmpty() && log.contactId != null && log.contactId in hiddenIds
     }
@@ -188,9 +190,6 @@ fun CallLogTile(
         nameNonContactsAsUnknown -> "Unknown"
         else -> log.number
     }
-    // Headline shows "Unknown" for unsaved numbers, but the avatar should still look like a real
-    // per-number identity — first digit of the actual number (country code stripped) and a color
-    // that varies by number — rather than every unsaved caller getting an identical grey/green "U".
     val avatarSourceName = when {
         isHiddenContact -> log.number
         isContact -> log.name!!
@@ -214,14 +213,16 @@ fun CallLogTile(
         Box(modifier = Modifier.weight(1f)) {
         val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
-        // The number shows on the *supporting* line under the name/"Unknown" headline, unless
-        // hidden-name masking already put the number on the headline itself or non-contacts are named by number.
         val showNumberOnSupportingLine = !isHiddenContact && (isContact || nameNonContactsAsUnknown)
         val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({ SimSlotBadge(slot = log.simSlot, modifier = Modifier.size(width = 14.dp, height = 16.dp)) }) else null
         RivoListItem(
             headline = buildString {
                 append(displayName)
                 if (log.count > 1) append(" (${log.count})")
+                if (showTotalCallsMade) {
+                    val total = totalCallsCount ?: log.count
+                    append(toSuperscript(total))
+                }
             },
             supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,

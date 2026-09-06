@@ -67,9 +67,23 @@ fun ContactsToDisplaySheet(
 
     val settingsVersion by prefs.settingsChanged.collectAsState()
     val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
+    val enabledAccountKeys by contactsVM.enabledAccountKeys.collectAsState()
+
+    val filteredGroups = remember(groups, enabledAccountKeys) {
+        if (enabledAccountKeys == null) groups
+        else {
+            groups.filter { group ->
+                val key = if (group.accountType != null || group.accountName != null) {
+                    "${group.accountType ?: ""}:${group.accountName ?: ""}"
+                } else null
+                if (key != null) key in enabledAccountKeys!!
+                else true
+            }
+        }
+    }
 
     // Reorderable groups state
-    var groupsList by remember(groups) { mutableStateOf(groups) }
+    var groupsList by remember(filteredGroups) { mutableStateOf(filteredGroups) }
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isGroupsExpanded by remember { mutableStateOf(false) }
