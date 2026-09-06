@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp
 import android.Manifest
 import android.app.DownloadManager
 import android.app.NotificationManager
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -51,6 +52,8 @@ import com.coolappstore.everdialer.by.svhp.controller.CallService
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
 import com.coolappstore.everdialer.by.svhp.controller.util.fetchLatestRelease
@@ -129,11 +132,7 @@ class MainActivity : FragmentActivity() {
         pendingExternalCallContactKey = null
         if (number != null) {
             if (granted) {
-                val prefs = GlobalContext.get().get<PreferenceManager>()
-                placeCallHonoringContactSim(this, prefs, contactKey ?: number, number) {
-                    pendingSimPickerNumber = number
-                    showSimPicker = true
-                }
+                placeDirectCall(number, contactKey)
             } else {
                 val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.fromParts("tel", number, null))
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -747,57 +746,206 @@ class MainActivity : FragmentActivity() {
         pendingIntent = intent
     }
 
-    private fun resolvePhoneNumberFromContactUri(context: Context, uri: Uri): String? {
-        if (uri.scheme == "tel") return uri.schemeSpecificPart
+    private data class ResolvedCallTarget(
+        val number: String,
+        val contactId: String? = null,
+        val displayName: String? = null
+    )
+
+    private fun resolveCallTargetByContactId(context: Context, contactId: String): ResolvedCallTarget? {
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        val defaultNumber = prefs.getContactDefaultNumber(contactId)
+
         return try {
-            // These content:// URIs come in several incompatible shapes depending on which app
-            // built them:
-            //  - content://com.android.contacts/data/<id>            → a Data row id (one
-            //    specific phone number entry)
-            //  - content://com.android.contacts/contacts/<id>         → an aggregate Contact id
-            //  - content://com.android.contacts/contacts/lookup/<key>/<id> → lookup-key form,
-            //    where lastPathSegment can be the numeric id BUT the segment before it is the
-            //    non-numeric lookup key, and on some OEM builds the trailing numeric id is stale
-            //    and needs re-resolving via the lookup key instead.
-            // Blindly treating lastPathSegment as a CommonDataKinds.Phone.CONTACT_ID (the old
-            // behavior) silently returns null - and therefore silently drops the call - for the
-            // first and third shapes above. Try each interpretation in turn.
-            val lastSegment = uri.lastPathSegment
-            val isDataUri = uri.pathSegments.getOrNull(0) == "data"
-
-            fun queryByContactId(id: Long): String? =
-                context.contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                    arrayOf(id.toString()),
-                    "${ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY} DESC"
-                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-
-            fun queryByDataId(id: Long): String? =
-                context.contentResolver.query(
-                    uri.buildUpon().authority(ContactsContract.AUTHORITY).path(null)
-                        .appendPath("data").appendPath(id.toString()).build(),
-                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                    null, null, null
-                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-
-            fun queryByLookup(): String? {
-                val lookupUri = try { ContactsContract.Contacts.lookupContact(context.contentResolver, uri) } catch (_: Exception) { null } ?: return null
-                val id = lookupUri.lastPathSegment?.toLongOrNull() ?: return null
-                return queryByContactId(id)
+            val cr = context.contentResolver
+            cr.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+                    ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY,
+                    ContactsContract.CommonDataKinds.Phone.IS_PRIMARY
+                ),
+                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                arrayOf(contactId),
+                "${ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY} DESC, ${ContactsContract.CommonDataKinds.Phone.IS_PRIMARY} DESC"
+            )?.use { cursor ->
+                val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
+                var firstNum: String? = null
+                var contactName: String? = null
+                while (cursor.moveToNext()) {
+                    val num = if (numIdx >= 0) cursor.getString(numIdx) else null
+                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+                    if (contactName == null && !name.isNullOrBlank()) contactName = name
+                    if (!num.isNullOrBlank()) {
+                        if (firstNum == null) firstNum = num
+                        if (defaultNumber != null && numbersLikelyMatch(num, defaultNumber)) {
+                            return@use ResolvedCallTarget(number = num, contactId = contactId, displayName = contactName)
+                        }
+                    }
+                }
+                if (firstNum != null) {
+                    ResolvedCallTarget(number = firstNum, contactId = contactId, displayName = contactName)
+                } else null
             }
+        } catch (_: Exception) { null }
+    }
 
-            when {
-                isDataUri -> lastSegment?.toLongOrNull()?.let(::queryByDataId) ?: queryByLookup()
-                else -> {
-                    val id = lastSegment?.toLongOrNull()
-                    (id?.let(::queryByContactId)) ?: queryByLookup()
+    private fun resolveCallTargetFromUri(context: Context, uri: Uri): ResolvedCallTarget? {
+        if (uri.scheme == "tel" || uri.scheme == "sip") {
+            val num = uri.schemeSpecificPart?.let { Uri.decode(it) }?.trim()
+            if (!num.isNullOrBlank()) return ResolvedCallTarget(number = num)
+        }
+
+        // Try querying the URI directly first
+        try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val numColIdx = cursor.columnNames.indexOfFirst {
+                        it.equals(ContactsContract.CommonDataKinds.Phone.NUMBER, ignoreCase = true) ||
+                        it.equals(ContactsContract.Data.DATA1, ignoreCase = true) ||
+                        it.equals("number", ignoreCase = true) ||
+                        it.equals("data1", ignoreCase = true)
+                    }
+                    val cidColIdx = cursor.columnNames.indexOfFirst {
+                        it.equals(ContactsContract.CommonDataKinds.Phone.CONTACT_ID, ignoreCase = true) ||
+                        it.equals(ContactsContract.Contacts._ID, ignoreCase = true) ||
+                        it.equals("contact_id", ignoreCase = true) ||
+                        it.equals("_id", ignoreCase = true)
+                    }
+                    val nameColIdx = cursor.columnNames.indexOfFirst {
+                        it.equals(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY, ignoreCase = true) ||
+                        it.equals(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY, ignoreCase = true) ||
+                        it.equals("display_name", ignoreCase = true)
+                    }
+
+                    val number = if (numColIdx >= 0) cursor.getString(numColIdx) else null
+                    val cid = if (cidColIdx >= 0) cursor.getString(cidColIdx) else null
+                    val name = if (nameColIdx >= 0) cursor.getString(nameColIdx) else null
+
+                    if (!number.isNullOrBlank()) {
+                        return ResolvedCallTarget(number = number.trim(), contactId = cid, displayName = name)
+                    }
+
+                    if (!cid.isNullOrBlank()) {
+                        val byId = resolveCallTargetByContactId(context, cid)
+                        if (byId != null) return byId
+                    }
                 }
             }
-        } catch (e: Exception) {
-            android.util.Log.e("EverDialerCall", "resolvePhoneNumberFromContactUri failed for $uri", e)
-            null
+        } catch (_: Exception) {}
+
+        // If direct query didn't return a phone number, try lookup / contact ID extraction
+        try {
+            val lastSegment = uri.lastPathSegment
+            val id = lastSegment?.toLongOrNull()
+            if (id != null) {
+                // If it's a data ID
+                val isData = uri.pathSegments.contains("data")
+                if (isData) {
+                    val dataUri = ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, id)
+                    context.contentResolver.query(
+                        dataUri,
+                        arrayOf(ContactsContract.Data.DATA1, ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DISPLAY_NAME_PRIMARY),
+                        null, null, null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val num = cursor.getString(0)
+                            val cid = cursor.getString(1)
+                            val name = cursor.getString(2)
+                            if (!num.isNullOrBlank()) {
+                                return ResolvedCallTarget(number = num.trim(), contactId = cid, displayName = name)
+                            }
+                        }
+                    }
+                }
+
+                // If it's a contact ID
+                val byId = resolveCallTargetByContactId(context, id.toString())
+                if (byId != null) return byId
+            }
+
+            // Try lookupContact
+            val lookupUri = try { ContactsContract.Contacts.lookupContact(context.contentResolver, uri) } catch (_: Exception) { null }
+            if (lookupUri != null) {
+                val lookupId = lookupUri.lastPathSegment
+                if (lookupId != null) {
+                    val byId = resolveCallTargetByContactId(context, lookupId)
+                    if (byId != null) return byId
+                }
+            }
+        } catch (_: Exception) {}
+
+        return null
+    }
+
+    private fun resolveCallTargetFromIntent(context: Context, intent: Intent): ResolvedCallTarget? {
+        val data = intent.data
+
+        // 1. Direct extras
+        val extraPhone = intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
+            ?: intent.getStringExtra("android.intent.extra.PHONE_NUMBER")
+            ?: intent.getStringExtra("phone")
+            ?: intent.getStringExtra("phone_number")
+            ?: intent.getStringExtra("number")
+        val extraContactId = intent.getStringExtra("contact_id")
+
+        if (!extraPhone.isNullOrBlank()) {
+            return ResolvedCallTarget(extraPhone.trim(), extraContactId)
+        }
+
+        // 2. Data with tel: / sip: scheme
+        if (data?.scheme == "tel" || data?.scheme == "sip") {
+            val num = data.schemeSpecificPart?.let { Uri.decode(it) }?.trim()
+            if (!num.isNullOrBlank()) {
+                return ResolvedCallTarget(num, extraContactId)
+            }
+        }
+
+        // 3. Data with content: scheme or other URI
+        if (data != null) {
+            val fromUri = resolveCallTargetFromUri(context, data)
+            if (fromUri != null) {
+                return ResolvedCallTarget(
+                    number = fromUri.number,
+                    contactId = extraContactId ?: fromUri.contactId,
+                    displayName = fromUri.displayName
+                )
+            }
+        }
+
+        // 4. Fallback by contact_id extra if number wasn't provided yet
+        if (!extraContactId.isNullOrBlank()) {
+            val byId = resolveCallTargetByContactId(context, extraContactId)
+            if (byId != null) return byId
+        }
+
+        return null
+    }
+
+    private fun placeDirectCall(targetNumber: String, contactKey: String? = null) {
+        val cleanNumber = targetNumber.trim()
+        if (cleanNumber.isBlank()) return
+
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        // If contactKey wasn't supplied, try finding the matching contact by phone number
+        val resolvedKey = contactKey ?: run {
+            try {
+                val contactsRepo = GlobalContext.get().get<IContactsRepository>()
+                contactsRepo.getContactByNumber(cleanNumber)?.id
+            } catch (_: Exception) { null }
+        } ?: cleanNumber
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            placeCallHonoringContactSim(this, prefs, resolvedKey, cleanNumber) {
+                pendingSimPickerNumber = cleanNumber
+                showSimPicker = true
+            }
+        } else {
+            pendingExternalCallNumber = cleanNumber
+            pendingExternalCallContactKey = resolvedKey
+            requestCallPhonePermissionLauncher.launch(Manifest.permission.CALL_PHONE)
         }
     }
 
@@ -843,67 +991,53 @@ class MainActivity : FragmentActivity() {
                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                         launchSingleTop = true
                     }
+                } else if (mimeType == "vnd.android.cursor.item/phone" ||
+                    mimeType == "vnd.android.cursor.item/phone_v2" ||
+                    intent.getBooleanExtra("android.intent.extra.CALL_NOW", false) ||
+                    intent.getBooleanExtra("direct_call", false)) {
+                    val target = resolveCallTargetFromIntent(this, intent)
+                    if (target != null && target.number.isNotBlank()) {
+                        placeDirectCall(target.number, target.contactId)
+                    } else if (data?.scheme == "tel") {
+                        val number = data.schemeSpecificPart
+                        navController.navigate(DialPadScreenDestination(initialNumber = number).route)
+                    }
                 } else if (data?.scheme == "tel") {
                     val number = data.schemeSpecificPart
                     navController.navigate(DialPadScreenDestination(initialNumber = number).route)
                 } else if (data?.toString()?.contains("contacts") == true ||
                     data?.toString()?.contains("com.android.contacts") == true ||
                     intent.hasExtra("contact_id")) {
-                    // Home-screen contact widgets and "call this contact" shortcuts (e.g. from
-                    // Google Search/Assistant) hand us a contact content:// URI instead of a
-                    // tel: URI. Resolve it to the contact's number so we can dial straight away
-                    // instead of just opening the contact's detail page with nothing filled in.
-                    val number = data?.let { resolvePhoneNumberFromContactUri(this, it) }
-                    if (number != null) {
-                        navController.navigate(DialPadScreenDestination(initialNumber = number).route)
-                    } else {
-                        val id = data?.lastPathSegment ?: intent.getStringExtra("contact_id")
-                        if (id != null) {
-                            navController.navigate(ContactDetailsScreenDestination(contactId = id).route)
-                        }
+                    val id = data?.lastPathSegment ?: intent.getStringExtra("contact_id")
+                    if (id != null) {
+                        navController.navigate(ContactDetailsScreenDestination(contactId = id).route)
                     }
                 }
             }
             Intent.ACTION_DIAL -> {
+                if (intent.getBooleanExtra("android.intent.extra.CALL_NOW", false) ||
+                    intent.getBooleanExtra("direct_call", false)) {
+                    val target = resolveCallTargetFromIntent(this, intent)
+                    if (target != null && target.number.isNotBlank()) {
+                        placeDirectCall(target.number, target.contactId)
+                        return
+                    }
+                }
                 if (data?.scheme == "tel") {
                     val number = data.schemeSpecificPart
                     navController.navigate(DialPadScreenDestination(initialNumber = number).route)
                 } else if (data != null) {
-                    val number = resolvePhoneNumberFromContactUri(this, data)
-                    if (number != null) {
-                        navController.navigate(DialPadScreenDestination(initialNumber = number).route)
+                    val target = resolveCallTargetFromUri(this, data)
+                    if (target != null && target.number.isNotBlank()) {
+                        navController.navigate(DialPadScreenDestination(initialNumber = target.number).route)
                     }
                 }
             }
             Intent.ACTION_CALL, "android.intent.action.CALL_PRIVILEGED" -> {
-                // Contact widgets/Assistant "call [contact]" shortcuts, and third-party caller-ID
-                // apps like Truecaller "call back" on a missed call, send plain ACTION_CALL with
-                // a tel: URI expecting the call to be placed immediately, not just shown on a
-                // dialpad — that's the realistic third-party trigger. (ACTION_CALL_PRIVILEGED is
-                // also matched here defensively, but note it's restricted by the system to
-                // apps holding the signature|privileged CALL_PRIVILEGED permission — ordinary
-                // third-party apps and launcher shortcuts cannot send it, so in practice this
-                // branch is reached via ACTION_CALL.)
-                val number = when {
-                    data?.scheme == "tel" -> data.schemeSpecificPart?.let { android.net.Uri.decode(it) }
-                    data?.scheme == "voicemail" -> null // not handled; let system voicemail flow own it
-                    data != null -> resolvePhoneNumberFromContactUri(this, data)
-                    else -> null
-                }?.trim()
-                android.util.Log.d("EverDialerCall", "external call intent action=$action data=$data resolvedNumber=$number")
-                if (!number.isNullOrBlank()) {
-                    val contactKey = intent.getStringExtra("contact_id") ?: number
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                        val prefs = GlobalContext.get().get<PreferenceManager>()
-                        placeCallHonoringContactSim(this, prefs, contactKey, number) {
-                            pendingSimPickerNumber = number
-                            showSimPicker = true
-                        }
-                    } else {
-                        pendingExternalCallNumber = number
-                        pendingExternalCallContactKey = contactKey
-                        requestCallPhonePermissionLauncher.launch(Manifest.permission.CALL_PHONE)
-                    }
+                val target = resolveCallTargetFromIntent(this, intent)
+                android.util.Log.d("EverDialerCall", "external call intent action=$action data=$data target=$target")
+                if (target != null && target.number.isNotBlank()) {
+                    placeDirectCall(target.number, target.contactId)
                 } else {
                     android.util.Log.w("EverDialerCall", "external call intent had no resolvable number, ignoring")
                 }

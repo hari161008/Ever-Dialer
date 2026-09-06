@@ -126,17 +126,60 @@
                 <action android:name="android.intent.action.CALL" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="tel" />
+                <data android:scheme="sip" />
+                <data android:scheme="voicemail" />
             </intent-filter>
-            <!-- android.intent.action.CALL_PRIVILEGED is restricted to apps holding the
-                 signature|privileged CALL_PRIVILEGED permission — ordinary third-party apps and
-                 home-screen shortcuts cannot send it, so it's not a real integration point and
-                 isn't declared here. Real "direct call" shortcuts use plain ACTION_CALL above. -->
+            <intent-filter>
+                <action android:name="android.intent.action.CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.item/phone" />
+                <data android:mimeType="vnd.android.cursor.item/phone_v2" />
+                <data android:mimeType="vnd.android.cursor.item/person" />
+                <data android:mimeType="vnd.android.cursor.item/contact" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="contacts" />
+                <data android:host="com.android.contacts" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_PRIVILEGED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+                <data android:scheme="sip" />
+                <data android:scheme="voicemail" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_PRIVILEGED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.item/phone" />
+                <data android:mimeType="vnd.android.cursor.item/phone_v2" />
+                <data android:mimeType="vnd.android.cursor.item/person" />
+                <data android:mimeType="vnd.android.cursor.item/contact" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_PRIVILEGED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="contacts" />
+                <data android:host="com.android.contacts" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="vnd.android.cursor.item/contact" />
+                <data android:mimeType="vnd.android.cursor.item/phone" />
                 <data android:mimeType="vnd.android.cursor.item/phone_v2" />
                 <data android:mimeType="vnd.android.cursor.item/person" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="contacts" />
+                <data android:host="com.android.contacts" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.INSERT" />
@@ -927,6 +970,54 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/recent_calls_widget_info" />
         </receiver>
+
+        <!-- Direct Call Home Screen Widget -->
+        <receiver
+            android:name=".widget.DirectCallWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_direct_call_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/direct_call_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".widget.DirectCallWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.RivoPhone"
+            android:label="@string/widget_direct_call_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Contact Info Home Screen Widget -->
+        <receiver
+            android:name=".widget.ContactInfoWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_contact_info_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/contact_info_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".widget.ContactInfoWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.RivoPhone"
+            android:label="@string/widget_contact_info_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".widget.RecentCallsWidgetService"

@@ -156,7 +156,90 @@ class PreferenceManager(context: Context) {
         }
     }
 
+    fun getContactGroups(): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup> {
+        val raw = getString(KEY_CONTACT_GROUPS, null) ?: return emptyList()
+        return try {
+            val jsonArray = org.json.JSONArray(raw)
+            val list = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val id = obj.optString("id", java.util.UUID.randomUUID().toString())
+                val name = obj.optString("name", "")
+                val contactsArray = obj.optJSONArray("contactIds")
+                val contactIds = mutableListOf<String>()
+                if (contactsArray != null) {
+                    for (j in 0 until contactsArray.length()) {
+                        contactIds.add(contactsArray.getString(j))
+                    }
+                }
+                if (name.isNotBlank()) {
+                    list.add(com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(id = id, name = name, contactIds = contactIds))
+                }
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveContactGroups(groups: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>) {
+        val jsonArray = org.json.JSONArray()
+        for (g in groups) {
+            val obj = org.json.JSONObject()
+            obj.put("id", g.id)
+            obj.put("name", g.name)
+            val contactsArray = org.json.JSONArray()
+            for (cId in g.contactIds) {
+                contactsArray.put(cId)
+            }
+            obj.put("contactIds", contactsArray)
+            jsonArray.put(obj)
+        }
+        setString(KEY_CONTACT_GROUPS, jsonArray.toString())
+    }
+
+    fun addContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup) {
+        val current = getContactGroups().toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == group.id }
+        if (existingIndex >= 0) {
+            current[existingIndex] = group
+        } else {
+            current.add(group)
+        }
+        saveContactGroups(current)
+
+        val order = getContactsDisplayOrder().toMutableList()
+        val groupKey = "group_${group.id}"
+        if (groupKey !in order) {
+            order.add(groupKey)
+            setContactsDisplayOrder(order)
+        }
+    }
+
+    fun deleteContactGroup(groupId: String) {
+        val current = getContactGroups().filterNot { it.id == groupId }
+        saveContactGroups(current)
+
+        val order = getContactsDisplayOrder().filterNot { it == "group_$groupId" }
+        setContactsDisplayOrder(order)
+    }
+
+    fun getContactsDisplayOrder(): List<String> {
+        val raw = getString(KEY_CONTACTS_DISPLAY_ORDER, null)
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(",").filter { it.isNotBlank() }
+    }
+
+    fun setContactsDisplayOrder(order: List<String>) {
+        setString(KEY_CONTACTS_DISPLAY_ORDER, order.joinToString(","))
+    }
+
     companion object {
+        const val ITEM_ALL_CONTACTS = "all_contacts"
+        const val ITEM_CONTACT_GROUPS = "contact_groups"
+        const val KEY_CONTACT_GROUPS = "contact_groups"
+        const val KEY_CONTACTS_DISPLAY_ORDER = "contacts_display_order"
+
         /** Parses a raw comma-separated tab-order preference string into an ordered list of
          *  valid tab keys, falling back to [DEFAULT_TAB_ORDER] and appending any tab keys
          *  missing from a stale/older saved order (so newly-added tabs always show up). */

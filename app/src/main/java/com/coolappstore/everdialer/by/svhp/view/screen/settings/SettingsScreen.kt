@@ -174,6 +174,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var pendingBackupSettings by remember { mutableStateOf(true) }
     var pendingBackupCallingCards by remember { mutableStateOf(true) }
     var pendingBackupNotes by remember { mutableStateOf(true) }
+    var pendingBackupContactGroups by remember { mutableStateOf(true) }
     var pendingBackupRecordings by remember { mutableStateOf(true) }
     var pendingBackupContacts by remember { mutableStateOf(false) }
     var pendingBackupCallLogs by remember { mutableStateOf(false) }
@@ -197,6 +198,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             pendingBackupSettings,
                             pendingBackupCallingCards,
                             pendingBackupNotes,
+                            pendingBackupContactGroups,
                             pendingBackupRecordings,
                             pendingBackupContacts,
                             pendingBackupCallLogs
@@ -827,7 +829,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     if (showBackupDialog) {
         CreateBackupDialog(
             onDismiss = { showBackupDialog = false },
-            onShare = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs ->
+            onShare = { backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs ->
                 showBackupDialog = false
                 backupState = BackupDialogState.Creating
                 scope.launch(Dispatchers.IO) {
@@ -836,6 +838,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         backupSettings,
                         backupCallingCards,
                         backupNotes,
+                        backupContactGroups,
                         backupRecordings,
                         backupContacts,
                         backupCallLogs
@@ -860,11 +863,12 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                 }
             },
-            onSave = { backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs ->
+            onSave = { backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs ->
                 showBackupDialog = false
                 pendingBackupSettings = backupSettings
                 pendingBackupCallingCards = backupCallingCards
                 pendingBackupNotes = backupNotes
+                pendingBackupContactGroups = backupContactGroups
                 pendingBackupRecordings = backupRecordings
                 pendingBackupContacts = backupContacts
                 pendingBackupCallLogs = backupCallLogs
@@ -885,7 +889,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 pendingRestoreFile = null
                 pendingRestoreContents = null
             },
-            onRestore = { restoreSettings, restoreCallingCards, restoreNotes, restoreRecordings, restoreContacts, restoreCallLogs ->
+            onRestore = { restoreSettings, restoreCallingCards, restoreNotes, restoreContactGroups, restoreRecordings, restoreContacts, restoreCallLogs ->
                 showRestoreDialog = false
                 backupState = BackupDialogState.Restoring
                 scope.launch(Dispatchers.IO) {
@@ -896,6 +900,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             restoreSettings,
                             restoreCallingCards,
                             restoreNotes,
+                            restoreContactGroups,
                             restoreRecordings,
                             restoreContacts,
                             restoreCallLogs
@@ -1819,17 +1824,18 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
 @Composable
 private fun CreateBackupDialog(
     onDismiss: () -> Unit,
-    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit,
-    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit
+    onShare: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupContactGroups: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit,
+    onSave: (backupSettings: Boolean, backupCallingCards: Boolean, backupNotes: Boolean, backupContactGroups: Boolean, backupRecordings: Boolean, backupContacts: Boolean, backupCallLogs: Boolean) -> Unit
 ) {
     var backupSettings by remember { mutableStateOf(true) }
     var backupCallingCards by remember { mutableStateOf(true) }
     var backupNotes by remember { mutableStateOf(true) }
+    var backupContactGroups by remember { mutableStateOf(true) }
     var backupRecordings by remember { mutableStateOf(true) }
     var backupContacts by remember { mutableStateOf(false) }
     var backupCallLogs by remember { mutableStateOf(false) }
 
-    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupRecordings || backupContacts || backupCallLogs
+    val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupContactGroups || backupRecordings || backupContacts || backupCallLogs
     val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
     Dialog(
@@ -1915,6 +1921,15 @@ private fun CreateBackupDialog(
                         )
                         CardDivider()
                         RivoSwitchListItem(
+                            headline = "Backup contact groups",
+                            supporting = "Custom contact groups and shown contact references",
+                            leadingIcon = Icons.Outlined.Groups,
+                            iconContainerColor = Color(0xFF3F51B5),
+                            checked = backupContactGroups,
+                            onCheckedChange = { backupContactGroups = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
                             headline = "Backup call recordings",
                             supporting = "Audio recordings, favourites and recording notes",
                             leadingIcon = Icons.Outlined.Mic,
@@ -1950,7 +1965,7 @@ private fun CreateBackupDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs) },
+                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -1968,7 +1983,7 @@ private fun CreateBackupDialog(
                     }
 
                     Button(
-                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs) },
+                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
                         enabled = hasAnySelected,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
@@ -2002,11 +2017,12 @@ private fun CreateBackupDialog(
 private fun RestoreBackupDialog(
     contents: BackupManager.BackupContents,
     onDismiss: () -> Unit,
-    onRestore: (restoreSettings: Boolean, restoreCallingCards: Boolean, restoreNotes: Boolean, restoreRecordings: Boolean, restoreContacts: Boolean, restoreCallLogs: Boolean) -> Unit
+    onRestore: (restoreSettings: Boolean, restoreCallingCards: Boolean, restoreNotes: Boolean, restoreContactGroups: Boolean, restoreRecordings: Boolean, restoreContacts: Boolean, restoreCallLogs: Boolean) -> Unit
 ) {
     var restoreSettings by remember { mutableStateOf(contents.hasSettings) }
     var restoreCallingCards by remember { mutableStateOf(contents.hasCallingCards) }
     var restoreNotes by remember { mutableStateOf(contents.hasNotes) }
+    var restoreContactGroups by remember { mutableStateOf(contents.hasContactGroups) }
     var restoreRecordings by remember { mutableStateOf(contents.hasRecordings) }
     var restoreContacts by remember { mutableStateOf(contents.hasContacts) }
     var restoreCallLogs by remember { mutableStateOf(contents.hasCallLogs) }
@@ -2014,6 +2030,7 @@ private fun RestoreBackupDialog(
     val hasAnySelected = (restoreSettings && contents.hasSettings) ||
             (restoreCallingCards && contents.hasCallingCards) ||
             (restoreNotes && contents.hasNotes) ||
+            (restoreContactGroups && contents.hasContactGroups) ||
             (restoreRecordings && contents.hasRecordings) ||
             (restoreContacts && contents.hasContacts) ||
             (restoreCallLogs && contents.hasCallLogs)
@@ -2106,6 +2123,16 @@ private fun RestoreBackupDialog(
                         )
                         CardDivider()
                         RivoSwitchListItem(
+                            headline = "Restore contact groups",
+                            supporting = if (contents.hasContactGroups) "Custom contact groups and shown contact references" else "Not present in this backup",
+                            leadingIcon = Icons.Outlined.Groups,
+                            iconContainerColor = Color(0xFF3F51B5),
+                            checked = restoreContactGroups && contents.hasContactGroups,
+                            enabled = contents.hasContactGroups,
+                            onCheckedChange = { restoreContactGroups = it }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
                             headline = "Restore call recordings",
                             supporting = if (contents.hasRecordings) "Audio recordings, favourites and recording notes" else "Not present in this backup",
                             leadingIcon = Icons.Outlined.Mic,
@@ -2149,6 +2176,7 @@ private fun RestoreBackupDialog(
                                 restoreSettings && contents.hasSettings,
                                 restoreCallingCards && contents.hasCallingCards,
                                 restoreNotes && contents.hasNotes,
+                                restoreContactGroups && contents.hasContactGroups,
                                 restoreRecordings && contents.hasRecordings,
                                 restoreContacts && contents.hasContacts,
                                 restoreCallLogs && contents.hasCallLogs

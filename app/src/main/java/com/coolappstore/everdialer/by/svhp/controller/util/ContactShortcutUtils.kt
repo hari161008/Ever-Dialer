@@ -89,7 +89,7 @@ object ContactShortcutUtils {
 
     /** The contact's saved photo (cropped to a circle) if available, else a colored circle with
      *  their initial — matching RivoAvatar's look so shortcuts stay visually distinct per contact. */
-    private fun buildIconBitmap(context: Context, name: String, photoUri: String?): Bitmap {
+    fun buildIconBitmap(context: Context, name: String, photoUri: String?): Bitmap {
         val size = 192
         if (!photoUri.isNullOrBlank()) {
             try {

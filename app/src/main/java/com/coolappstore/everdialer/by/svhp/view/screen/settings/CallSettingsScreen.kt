@@ -64,6 +64,8 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.RaiseToAnswerManager
 import com.coolappstore.everdialer.by.svhp.controller.VolumeDndAccessibilityService
+import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import org.koin.compose.viewmodel.koinActivityViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.enqueueApkDownload
 import com.coolappstore.everdialer.by.svhp.controller.util.getApkDestinationFile
@@ -374,9 +376,34 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     }
 
     if (showContactsToDisplayDialog) {
-        ContactsToDisplayDialog(
+        val contactsVM: ContactsViewModel = org.koin.compose.viewmodel.koinActivityViewModel()
+        val accounts by contactsVM.availableAccounts.collectAsState()
+        val groups by contactsVM.contactGroups.collectAsState()
+        val selectedAccountKey by contactsVM.selectedAccountKey.collectAsState()
+        val selectedGroupId by contactsVM.selectedGroupId.collectAsState()
+        val contacts by contactsVM.allContacts.collectAsState()
+
+        LaunchedEffect(Unit) {
+            contactsVM.fetchAvailableAccounts()
+            contactsVM.fetchContactGroups()
+        }
+
+        com.coolappstore.everdialer.by.svhp.view.components.ContactsToDisplaySheet(
+            accounts = accounts,
+            groups = groups,
+            selectedAccountKey = selectedAccountKey,
+            selectedGroupId = selectedGroupId,
+            totalCount = accounts.sumOf { it.contactCount }.takeIf { it > 0 } ?: contacts.size,
+            onSelectAccount = { key ->
+                contactsVM.setAccountFilter(key)
+                showContactsToDisplayDialog = false
+            },
+            onSelectGroup = { groupId ->
+                contactsVM.setGroupFilter(groupId)
+                showContactsToDisplayDialog = false
+            },
             onDismiss = { showContactsToDisplayDialog = false },
-            prefs = prefs
+            contactsVM = contactsVM
         )
     }
 

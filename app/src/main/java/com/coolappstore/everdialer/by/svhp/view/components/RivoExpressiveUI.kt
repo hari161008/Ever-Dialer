@@ -557,7 +557,10 @@ internal fun adjustIconColorForTheme(color: Color, isDark: Boolean): Color {
 fun RivoIconBox(
     icon: ImageVector,
     iconContainerColor: Color?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    iconSize: Dp = 24.dp,
+    shape: androidx.compose.ui.graphics.Shape? = null
 ) {
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
@@ -607,9 +610,12 @@ fun RivoIconBox(
         adjusted.copy(alpha = if (isDark) 0.22f else 0.14f) to adjusted
     }
 
+    val cornerRadius = (size.value * (14f / 44f)).dp
+    val defaultShape = if (circleIcons) CircleShape else RoundedCornerShape(cornerRadius)
+
     Surface(
-        modifier = modifier.size(44.dp).scale(iconScale).alpha(iconAlpha),
-        shape = if (circleIcons) CircleShape else RoundedCornerShape(14.dp),
+        modifier = modifier.size(size).scale(iconScale).alpha(iconAlpha),
+        shape = shape ?: defaultShape,
         color = bgColor,
         shadowElevation = 0.dp
     ) {
@@ -617,7 +623,7 @@ fun RivoIconBox(
             Icon(
                 icon, null,
                 tint = fgColor,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
     }

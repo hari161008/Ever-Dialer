@@ -27,29 +27,61 @@ class ContactsViewModel(
     private val _allContacts = MutableStateFlow<List<Contact>>(emptyList())
     val allContacts: StateFlow<List<Contact>> = _allContacts.asStateFlow()
 
+    private val _displayedContacts = MutableStateFlow<List<Contact>>(emptyList())
+    val displayedContacts: StateFlow<List<Contact>> = _displayedContacts.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _selectedAccountKey = MutableStateFlow<String?>(null)
     val selectedAccountKey: StateFlow<String?> = _selectedAccountKey.asStateFlow()
 
+    private val _selectedGroupId = MutableStateFlow<String?>(null)
+    val selectedGroupId: StateFlow<String?> = _selectedGroupId.asStateFlow()
+
+    private val _contactGroups = MutableStateFlow<List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>>(emptyList())
+    val contactGroups: StateFlow<List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>> = _contactGroups.asStateFlow()
+
     private val _availableAccounts = MutableStateFlow<List<ContactAccount>>(emptyList())
     val availableAccounts: StateFlow<List<ContactAccount>> = _availableAccounts.asStateFlow()
 
-    // Tracks the in-flight fetch job so a fast follow-up filter change (e.g. tapping SIM, then
-    // Gmail, then WhatsApp in quick succession) cancels the older, still-running fetch instead
-    // of letting it race the newer one and potentially overwrite fresh results with stale ones
-    // — or leave the loading spinner stuck if it never completes.
-    private var fetchJob: Job? = null
+    private val _enabledAccountKeys = MutableStateFlow<Set<String>?>(null)
+    val enabledAccountKeys: StateFlow<Set<String>?> = _enabledAccountKeys.asStateFlow()
 
-    // True once a real fetchContacts() run (cache-refresh or otherwise) has completed, so we
-    // know whether it's safe to overwrite the on-disk cache — e.g. never write an empty/filtered
-    // result over the cache from a run that was cancelled mid-flight.
+    private var fetchJob: Job? = null
     private var hasLoadedFromCache = false
 
     init {
+        _enabledAccountKeys.value = getEnabledAccountKeys()
+        fetchContactGroups()
         loadCachedContactsThenRefresh()
         fetchAvailableAccounts()
+    }
+
+    fun fetchContactGroups() {
+        _contactGroups.value = prefs.getContactGroups()
+    }
+
+    fun addContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup) {
+        prefs.addContactGroup(group)
+        fetchContactGroups()
+        if (_selectedGroupId.value == group.id) {
+            updateDisplayedContacts()
+        }
+    }
+
+    fun deleteContactGroup(groupId: String) {
+        prefs.deleteContactGroup(groupId)
+        fetchContactGroups()
+        if (_selectedGroupId.value == groupId) {
+            _selectedGroupId.value = null
+            updateDisplayedContacts()
+        }
+    }
+
+    fun reorderContactGroups(groups: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>) {
+        prefs.saveContactGroups(groups)
+        _contactGroups.value = groups
     }
 
     /** Shows the last-known contacts list from disk immediately (near-instant even for a few
@@ -67,6 +99,7 @@ class ContactsViewModel(
             val cached = runCatching { ContactsCache.read(ctx) }.getOrDefault(emptyList())
             if (cached.isNotEmpty() && !hasLoadedFromCache) {
                 _allContacts.value = cached
+                updateDisplayedContacts(cached)
                 _isLoading.value = false
             }
             fetchContacts()
@@ -85,34 +118,52 @@ class ContactsViewModel(
         // Only show the blocking loading state if we don't already have a cached list on
         // screen — otherwise this becomes a silent background refresh.
         if (_allContacts.value.isEmpty()) _isLoading.value = true
-        val sessionKey = _selectedAccountKey.value
         val enabledKeys = getEnabledAccountKeys()
-        val isUnfiltered = sessionKey == null && enabledKeys.isEmpty()
+        val isUnfiltered = enabledKeys == null
         fetchJob = viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val raw = if (sessionKey != null) {
-                    contactsRepo.getContacts(setOf(sessionKey))
+                val raw = if (enabledKeys == null) {
+                    contactsRepo.getContacts()
+                } else if (enabledKeys.isEmpty()) {
+                    emptyList()
                 } else {
-                    if (enabledKeys.isEmpty()) contactsRepo.getContacts()
-                    else contactsRepo.getContacts(enabledKeys)
+                    contactsRepo.getContacts(enabledKeys)
                 }
                 // Filter out hidden contacts from the main list
                 val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
                 val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
                                else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                 if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
-            }.onSuccess {
+            }.onSuccess { contacts ->
                 hasLoadedFromCache = true
-                _allContacts.value = it
+                _allContacts.value = contacts
+                updateDisplayedContacts(contacts)
                 _isLoading.value = false
-                // Only cache the unfiltered "all accounts" result — that's the list every cold
-                // start and every unified-Search session actually wants preloaded; per-filter
-                // views stay fetch-on-demand since they're already an explicit, interactive
-                // user action rather than something that needs to feel instant on launch.
-                if (isUnfiltered) ContactsCache.write(ctx, it)
+                if (isUnfiltered) ContactsCache.write(ctx, contacts)
             }.onFailure {
                 _isLoading.value = false
             }
+        }
+    }
+
+    private fun updateDisplayedContacts(baseContacts: List<Contact> = _allContacts.value) {
+        val groupId = _selectedGroupId.value
+        val sessionKey = _selectedAccountKey.value
+        if (groupId != null) {
+            val group = prefs.getContactGroups().find { it.id == groupId }
+            val groupContactIds = group?.contactIds?.toSet() ?: emptySet()
+            _displayedContacts.value = baseContacts.filter { it.id in groupContactIds }
+        } else if (sessionKey != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val raw = contactsRepo.getContacts(setOf(sessionKey))
+                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
+                               else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+                val filtered = if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
+                _displayedContacts.value = filtered
+            }
+        } else {
+            _displayedContacts.value = baseContacts
         }
     }
 
@@ -130,13 +181,40 @@ class ContactsViewModel(
     }
 
     fun setAccountFilter(key: String?) {
+        _selectedGroupId.value = null
         _selectedAccountKey.value = key
-        fetchContacts()
+        updateDisplayedContacts()
     }
 
-    private fun getEnabledAccountKeys(): Set<String> {
+    fun setGroupFilter(groupId: String?) {
+        _selectedAccountKey.value = null
+        _selectedGroupId.value = groupId
+        updateDisplayedContacts()
+    }
+
+    fun clearFilters() {
+        _selectedAccountKey.value = null
+        _selectedGroupId.value = null
+        updateDisplayedContacts()
+    }
+
+    fun getEnabledAccountKeys(): Set<String>? {
         val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS, null)
-        return if (raw.isNullOrBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        if (raw == null) return null
+        if (raw == "__NONE__" || raw.isBlank()) return emptySet()
+        return raw.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    fun setEnabledAccountKeys(keys: Set<String>?) {
+        _enabledAccountKeys.value = keys
+        if (keys == null) {
+            prefs.setString(PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS, null)
+        } else if (keys.isEmpty()) {
+            prefs.setString(PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS, "__NONE__")
+        } else {
+            prefs.setString(PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS, keys.joinToString(","))
+        }
+        fetchContacts()
     }
 
     fun toggleFavorite(contact: Contact) {

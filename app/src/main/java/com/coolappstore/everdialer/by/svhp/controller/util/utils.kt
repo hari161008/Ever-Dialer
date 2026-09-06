@@ -200,6 +200,45 @@ fun placeCallWithSimPreference(
  * [globalSimPref] is the app-wide default-SIM setting (0 = ask, 1 = SIM1, 2 = SIM2), used when
  * the contact's own choice is "According to settings".
  */
+fun queryRecentSimSlot(context: Context, number: String): Int? {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return null
+    return try {
+        val cr = context.contentResolver
+        val uri = android.provider.CallLog.Calls.CONTENT_URI
+        val cleanNumber = number.trim()
+        val digits = cleanNumber.filter { it.isDigit() }
+        if (digits.isEmpty()) return null
+
+        cr.query(
+            uri,
+            arrayOf(android.provider.CallLog.Calls.PHONE_ACCOUNT_ID, android.provider.CallLog.Calls.NUMBER),
+            "${android.provider.CallLog.Calls.PHONE_ACCOUNT_ID} IS NOT NULL",
+            null,
+            "${android.provider.CallLog.Calls.DATE} DESC LIMIT 50"
+        )?.use { cursor ->
+            val accountIdIdx = cursor.getColumnIndex(android.provider.CallLog.Calls.PHONE_ACCOUNT_ID)
+            val numberIdx = cursor.getColumnIndex(android.provider.CallLog.Calls.NUMBER)
+            while (cursor.moveToNext()) {
+                val num = if (numberIdx >= 0) cursor.getString(numberIdx) else null
+                if (num != null && numbersLikelyMatch(num, cleanNumber)) {
+                    val accountId = if (accountIdIdx >= 0) cursor.getString(accountIdIdx) else null
+                    if (!accountId.isNullOrBlank()) {
+                        val subId = accountId.toIntOrNull()
+                        if (subId != null) {
+                            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                                    as? android.telephony.SubscriptionManager
+                            val info = sm?.getActiveSubscriptionInfo(subId)
+                            val slot = info?.simSlotIndex
+                            if (slot != null && slot in 0..1) return slot
+                        }
+                    }
+                }
+            }
+            null
+        }
+    } catch (_: Exception) { null }
+}
+
 fun placeCallWithContactSimPreference(
     context: Context,
     number: String,
@@ -222,7 +261,7 @@ fun placeCallWithContactSimPreference(
             if (accounts.size >= 2) makeCall(context, number, accounts[1]) else onShowSimPicker()
         }
         PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT -> {
-            val slot = recentSimSlotForContact
+            val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
             if (slot != null && slot in accounts.indices) makeCall(context, number, accounts[slot])
             else onShowSimPicker()
         }

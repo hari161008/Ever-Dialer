@@ -25,12 +25,13 @@ object BackupManager {
         val hasSettings: Boolean = false,
         val hasCallingCards: Boolean = false,
         val hasNotes: Boolean = false,
+        val hasContactGroups: Boolean = false,
         val hasRecordings: Boolean = false,
         val hasContacts: Boolean = false,
         val hasCallLogs: Boolean = false
     ) {
         val hasAny: Boolean
-            get() = hasSettings || hasCallingCards || hasNotes || hasRecordings || hasContacts || hasCallLogs
+            get() = hasSettings || hasCallingCards || hasNotes || hasContactGroups || hasRecordings || hasContacts || hasCallLogs
     }
 
     const val PREFS_RIVO = "rivo_prefs"
@@ -93,6 +94,7 @@ object BackupManager {
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
+        backupContactGroups: Boolean = true,
         backupRecordings: Boolean = true,
         backupContacts: Boolean = false,
         backupCallLogs: Boolean = false
@@ -205,6 +207,29 @@ object BackupManager {
                         FileInputStream(noteFile).use { it.copyTo(zip) }
                         zip.closeEntry()
                     }
+                }
+
+                // 5.5. Backup contact groups (names and shown contact references)
+                if (backupContactGroups) {
+                    try {
+                        val prefs = PreferenceManager(context)
+                        val groups = prefs.getContactGroups()
+                        if (groups.isNotEmpty()) {
+                            val jsonArray = JSONArray()
+                            for (g in groups) {
+                                val obj = JSONObject()
+                                obj.put("id", g.id)
+                                obj.put("name", g.name)
+                                val contactsArr = JSONArray()
+                                g.contactIds.forEach { contactsArr.put(it) }
+                                obj.put("contactIds", contactsArr)
+                                jsonArray.put(obj)
+                            }
+                            zip.putNextEntry(ZipEntry("contact_groups.json"))
+                            zip.write(jsonArray.toString().toByteArray(Charsets.UTF_8))
+                            zip.closeEntry()
+                        }
+                    } catch (_: Exception) {}
                 }
 
                 // 6. Backup call recordings & their metadata (favourites & notes)
@@ -362,6 +387,7 @@ object BackupManager {
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
+        backupContactGroups: Boolean = true,
         backupRecordings: Boolean = true,
         backupContacts: Boolean = false,
         backupCallLogs: Boolean = false
@@ -370,7 +396,7 @@ object BackupManager {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFile = File(getBackupDir(context), "EverDialer_Backup_$timestamp.everdialer")
             val ok = FileOutputStream(backupFile).use { outputStream ->
-                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupRecordings, backupContacts, backupCallLogs)
+                writeBackup(context, outputStream, backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs)
             }
             if (ok) backupFile else null
         } catch (_: Exception) {
@@ -382,6 +408,7 @@ object BackupManager {
         var hasSettings = false
         var hasCallingCards = false
         var hasNotes = false
+        var hasContactGroups = false
         var hasRecordings = false
         var hasContacts = false
         var hasCallLogs = false
@@ -405,6 +432,9 @@ object BackupManager {
                         name.startsWith("notes/") -> {
                             hasNotes = true
                         }
+                        name == "contact_groups.json" -> {
+                            hasContactGroups = true
+                        }
                         name.startsWith("recordings/") && !name.endsWith("/") -> {
                             hasRecordings = true
                         }
@@ -425,6 +455,7 @@ object BackupManager {
             hasSettings = hasSettings,
             hasCallingCards = hasCallingCards,
             hasNotes = hasNotes,
+            hasContactGroups = hasContactGroups,
             hasRecordings = hasRecordings,
             hasContacts = hasContacts,
             hasCallLogs = hasCallLogs
@@ -437,6 +468,7 @@ object BackupManager {
         restoreSettings: Boolean = true,
         restoreCallingCards: Boolean = true,
         restoreNotes: Boolean = true,
+        restoreContactGroups: Boolean = true,
         restoreRecordings: Boolean = true,
         restoreContacts: Boolean = true,
         restoreCallLogs: Boolean = true
@@ -522,6 +554,33 @@ object BackupManager {
                                     FileOutputStream(noteFile).use { zip.copyTo(it) }
                                     restoredAny = true
                                 }
+                            }
+                        }
+                        name == "contact_groups.json" -> {
+                            if (restoreContactGroups) {
+                                try {
+                                    val json = zip.readBytes().toString(Charsets.UTF_8)
+                                    val jsonArray = JSONArray(json)
+                                    val list = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+                                    for (i in 0 until jsonArray.length()) {
+                                        val obj = jsonArray.getJSONObject(i)
+                                        val id = obj.optString("id", java.util.UUID.randomUUID().toString())
+                                        val gName = obj.optString("name", "")
+                                        val contactIds = mutableListOf<String>()
+                                        val arr = obj.optJSONArray("contactIds")
+                                        if (arr != null) {
+                                            for (j in 0 until arr.length()) {
+                                                contactIds.add(arr.getString(j))
+                                            }
+                                        }
+                                        if (gName.isNotBlank()) {
+                                            list.add(com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(id, gName, contactIds))
+                                        }
+                                    }
+                                    val prefs = PreferenceManager(context)
+                                    prefs.saveContactGroups(list)
+                                    restoredAny = true
+                                } catch (_: Exception) {}
                             }
                         }
                         name == "recordings/recordings_meta.json" -> {
