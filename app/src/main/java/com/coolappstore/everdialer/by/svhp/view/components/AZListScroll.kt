@@ -467,7 +467,7 @@ fun ContactListItem(
 
         val hasNumber = !contact.phoneNumbers.firstOrNull().isNullOrEmpty()
         val contactNumberBlocked = remember(settingsVer, hasNumber, contact.phoneNumbers) {
-            hasNumber && BlockedNumbersManager.isBlocked(prefs, contact.phoneNumbers.firstOrNull())
+            hasNumber && BlockedNumbersManager.isBlocked(context, prefs, contact.phoneNumbers.firstOrNull())
         }
         val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
         val hasTelegram = remember(context) { isTelegramInstalled(context) }

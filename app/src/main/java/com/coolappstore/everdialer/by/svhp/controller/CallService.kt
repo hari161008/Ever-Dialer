@@ -685,7 +685,7 @@ class CallService : InCallService() {
     }
 
     private fun isNumberBlocked(number: String): Boolean =
-        com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.isBlocked(prefs, number)
+        com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.isBlocked(this, prefs, number)
 
     private fun launchCallActivity(answeredFromNotification: Boolean = false) {
         val intent = Intent(this, CallActivity::class.java).apply {

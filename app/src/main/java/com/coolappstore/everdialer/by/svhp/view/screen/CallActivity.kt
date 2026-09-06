@@ -217,33 +217,75 @@ class CallActivity : FragmentActivity() {
                     val simSlot = remember(call) { getSimSlotForAccountHandle(this@CallActivity, call.details?.accountHandle) }
                     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
                     // Stable initial values — number shown immediately, replaced by
-                    // contact name in-place once async lookup completes (no layout shift
-                    // because the composable tree is already present and sized).
-                    // Start empty so the layout is stable from the first frame.
-                    // contactName is filled by the async lookup; until then we
-                    // show the number as a subtitle-style fallback (see the status
-                    // text below the name), so there is no visible content gap.
-                    var contactName by remember { mutableStateOf("") }
-                    var photoUri by remember { mutableStateOf<String?>(null) }
-                    var contactId by remember { mutableStateOf<String?>(null) }
+                    val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
+                    val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+                    val hiddenIds = remember(hiddenIdsRaw) {
+                        if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+                    }
+
+                    val initialContact = remember(number) {
+                        if (number.isNotEmpty()) {
+                            try { contactsRepo.getContactByNumber(number) } catch (_: Exception) { null }
+                        } else null
+                    }
+                    var contactName by remember(number) {
+                        mutableStateOf(
+                            if (initialContact != null) {
+                                if (hideNames && initialContact.id in hiddenIds) number else initialContact.name
+                            } else number.ifEmpty { "" }
+                        )
+                    }
+                    var photoUri by remember(number) {
+                        mutableStateOf(
+                            if (initialContact != null) {
+                                if (hideNames && initialContact.id in hiddenIds) null else initialContact.photoUri
+                            } else null
+                        )
+                    }
+                    var contactId by remember(number) { mutableStateOf(initialContact?.id) }
 
                     val heldCall = heldSession?.call
                     val heldNumber = heldCall?.details?.handle?.schemeSpecificPart ?: ""
-                    var heldContactName by remember(heldNumber) { mutableStateOf(heldNumber.ifEmpty { "Unknown" }) }
+                    val initialHeldContact = remember(heldNumber) {
+                        if (heldNumber.isNotEmpty()) {
+                            try { contactsRepo.getContactByNumber(heldNumber) } catch (_: Exception) { null }
+                        } else null
+                    }
+                    var heldContactName by remember(heldNumber) {
+                        mutableStateOf(
+                            if (initialHeldContact != null) {
+                                if (hideNames && initialHeldContact.id in hiddenIds) heldNumber else initialHeldContact.name
+                            } else heldNumber.ifEmpty { "Unknown" }
+                        )
+                    }
 
                     val incomingCall = incomingSession?.call
                     val incomingNumber = incomingCall?.details?.handle?.schemeSpecificPart ?: ""
                     val incomingSimSlot = remember(incomingCall) { getSimSlotForAccountHandle(this@CallActivity, incomingCall?.details?.accountHandle) }
-                    var incomingContactName by remember(incomingNumber) { mutableStateOf(incomingNumber.ifEmpty { "Unknown" }) }
-                    var incomingPhotoUri by remember(incomingNumber) { mutableStateOf<String?>(null) }
+                    val initialIncomingContact = remember(incomingNumber) {
+                        if (incomingNumber.isNotEmpty()) {
+                            try { contactsRepo.getContactByNumber(incomingNumber) } catch (_: Exception) { null }
+                        } else null
+                    }
+                    var incomingContactName by remember(incomingNumber) {
+                        mutableStateOf(
+                            if (initialIncomingContact != null) {
+                                if (hideNames && initialIncomingContact.id in hiddenIds) incomingNumber else initialIncomingContact.name
+                            } else incomingNumber.ifEmpty { "Unknown" }
+                        )
+                    }
+                    var incomingPhotoUri by remember(incomingNumber) {
+                        mutableStateOf(
+                            if (initialIncomingContact != null) {
+                                if (hideNames && initialIncomingContact.id in hiddenIds) null else initialIncomingContact.photoUri
+                            } else null
+                        )
+                    }
 
                     LaunchedEffect(number) {
                         if (number.isNotEmpty()) {
                             val contact = contactsRepo.getContactByNumber(number)
                             if (contact != null) {
-                                val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
-                                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-                                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                                 contactName = if (hideNames && contact.id in hiddenIds) number else contact.name
                                 photoUri = if (hideNames && contact.id in hiddenIds) null else contact.photoUri
                                 contactId = contact.id
@@ -261,9 +303,6 @@ class CallActivity : FragmentActivity() {
                         if (heldNumber.isNotEmpty()) {
                             val c = contactsRepo.getContactByNumber(heldNumber)
                             if (c != null) {
-                                val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
-                                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-                                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                                 heldContactName = if (hideNames && c.id in hiddenIds) heldNumber else c.name
                             }
                         }
@@ -273,9 +312,6 @@ class CallActivity : FragmentActivity() {
                         if (incomingNumber.isNotEmpty()) {
                             val c = contactsRepo.getContactByNumber(incomingNumber)
                             if (c != null) {
-                                val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
-                                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-                                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
                                 incomingContactName = if (hideNames && c.id in hiddenIds) incomingNumber else c.name
                                 incomingPhotoUri = if (hideNames && c.id in hiddenIds) null else c.photoUri
                             }
@@ -539,7 +575,7 @@ private fun CallAvatar(
             AsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
                     .data(photoUri)
-                    .crossfade(300)
+                    .crossfade(false)
                     .build(),
                 contentDescription = null,
                 modifier = Modifier
@@ -982,12 +1018,17 @@ fun ExpressiveCallScreen(
         }
     }
 
-    var resolvedContactId by remember(contactId, phoneNumber) { mutableStateOf(contactId) }
-    var resolvedContact by remember(phoneNumber) { mutableStateOf<Contact?>(null) }
+    val initialResolved = remember(phoneNumber, contactsRepo) {
+        if (phoneNumber.isNotEmpty() && contactsRepo != null) {
+            try { contactsRepo.getContactByNumber(phoneNumber) } catch (_: Exception) { null }
+        } else null
+    }
+    var resolvedContactId by remember(contactId, phoneNumber) { mutableStateOf(contactId ?: initialResolved?.id) }
+    var resolvedContact by remember(phoneNumber) { mutableStateOf<Contact?>(initialResolved) }
 
     LaunchedEffect(phoneNumber, contactsRepo) {
         if (phoneNumber.isNotEmpty() && contactsRepo != null) {
-            val c = try { contactsRepo.getContactByNumber(phoneNumber) } catch (_: Exception) { null }
+            val c = contactsRepo.getContactByNumber(phoneNumber)
             resolvedContact = c
             if (c?.id != null) {
                 resolvedContactId = c.id

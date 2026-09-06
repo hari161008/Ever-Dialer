@@ -9,6 +9,7 @@ import android.telecom.TelecomManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SimCard
@@ -61,72 +62,71 @@ fun SimPickerDialog(
             onDismissRequest = onDismissRequest,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .wrapContentHeight()
-                    .padding(top = 100.dp), 
-                shape = RoundedCornerShape(32.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column(
+            com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+                Surface(
                     modifier = Modifier
-                        .padding(24.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .wrapContentHeight()
+                        .padding(top = 100.dp), 
+                    shape = RoundedCornerShape(32.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Text(
-                        text = "Select SIM Card",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    )
-
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
                     ) {
-                        items(phoneAccounts) { accountHandle ->
-                            val info = try {
-                                telecomManager.getPhoneAccount(accountHandle)
-                            } catch (e: Exception) {
-                                null
-                            }
-                            
-                            Surface(
-                                onClick = { onSimSelected(accountHandle) },
-                                shape = RoundedCornerShape(20.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = "Select SIM Card",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(phoneAccounts) { handle ->
+                                val info = telecomManager.getPhoneAccount(handle)
+                                val label = info?.label?.toString() ?: "SIM"
+                                val isSim1 = label.contains("1") || phoneAccounts.indexOf(handle) == 0
+                                
+                                Surface(
+                                    onClick = { onSimSelected(handle) },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Surface(
-                                        modifier = Modifier.size(48.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.SimCard,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = if (isSim1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                            modifier = Modifier.size(48.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Default.SimCard,
+                                                    contentDescription = null,
+                                                    tint = if (isSim1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
                                         }
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    
-                                    Column {
-                                        Text(
-                                            text = info?.label?.toString() ?: "Unknown SIM",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        if (info?.shortDescription != null) {
+                                        
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        
+                                        Column {
                                             Text(
-                                                text = info.shortDescription.toString(),
+                                                text = label,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = info?.address?.schemeSpecificPart ?: "Ready",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -135,15 +135,15 @@ fun SimPickerDialog(
                                 }
                             }
                         }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    TextButton(
-                        onClick = onDismissRequest,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Cancel")
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        TextButton(
+                            onClick = onDismissRequest,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Cancel")
+                        }
                     }
                 }
             }

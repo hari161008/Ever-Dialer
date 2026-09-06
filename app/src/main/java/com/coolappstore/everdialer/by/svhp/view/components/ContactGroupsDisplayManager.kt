@@ -122,28 +122,31 @@ fun ContactsToDisplaySheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(3.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.size(width = 36.dp, height = 4.dp)
-                ) {}
+            com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        modifier = Modifier.size(width = 36.dp, height = 4.dp)
+                    ) {}
+                }
             }
         }
     ) {
-        val isDragging = draggedIndex != null
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState(), enabled = !isDragging)
-                .padding(bottom = 24.dp)
-        ) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            val isDragging = draggedIndex != null
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState(), enabled = !isDragging)
+                    .padding(bottom = 24.dp)
+            ) {
             // Header
             Row(
                 modifier = Modifier
@@ -622,6 +625,7 @@ fun ContactsToDisplaySheet(
         }
     }
 }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -664,18 +668,21 @@ fun AddContactGroupDialog(
         )
     }
 
+    val prefs = koinInject<PreferenceManager>()
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.88f),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp
-        ) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .fillMaxHeight(0.88f),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -910,6 +917,7 @@ fun AddContactGroupDialog(
         }
     }
 }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -933,18 +941,21 @@ fun EditContactGroupDialog(
         }
     }
 
+    val prefs = koinInject<PreferenceManager>()
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.88f),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp
-        ) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .fillMaxHeight(0.88f),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1187,6 +1198,7 @@ fun EditContactGroupDialog(
         }
     }
 }
+}
 
 @Composable
 fun DeleteContactGroupDialog(
@@ -1194,6 +1206,7 @@ fun DeleteContactGroupDialog(
     onDismiss: () -> Unit,
     onDelete: (String) -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
     var selectedGroupIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
@@ -1201,47 +1214,50 @@ fun DeleteContactGroupDialog(
         val count = selectedGroupIds.size
         val firstGroupName = groups.find { it.id in selectedGroupIds }?.name ?: "Group"
         val titleText = if (count == 1) "Delete \"$firstGroupName\"?" else "Delete $count Contact Groups?"
-        AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
-            title = { Text(titleText, fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Are you sure you want to delete the selected contact group(s)? The contacts inside these groups will not be deleted."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        selectedGroupIds.forEach { id -> onDelete(id) }
-                        selectedGroupIds = emptySet()
-                        showConfirmDialog = false
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete")
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            AlertDialog(
+                onDismissRequest = { showConfirmDialog = false },
+                title = { Text(titleText, fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "Are you sure you want to delete the selected contact group(s)? The contacts inside these groups will not be deleted."
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            selectedGroupIds.forEach { id -> onDelete(id) }
+                            selectedGroupIds = emptySet()
+                            showConfirmDialog = false
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
+            )
+        }
     }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.70f),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp
-        ) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.70f),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1446,6 +1462,7 @@ fun DeleteContactGroupDialog(
         }
     }
 }
+}
 
 @Composable
 fun SelectGroupSaveTargetDialog(
@@ -1454,127 +1471,130 @@ fun SelectGroupSaveTargetDialog(
     onSelect: (com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Outlined.FolderShared,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "Save Group To",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            if (groupName.isNotBlank()) "Choose account/storage for \"$groupName\"" else "Choose account or storage destination",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                val groupTargets = targets.filter { !it.isSim }
-                if (groupTargets.isEmpty()) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                onSelect(
-                                    com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget(
-                                        label = "Device",
-                                        subLabel = "This phone only"
-                                    )
-                                )
-                            }
-                            .padding(horizontal = 24.dp, vertical = 14.dp),
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF607D8B).copy(alpha = 0.12f),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFF607D8B), modifier = Modifier.size(22.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Device", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            Text("This phone only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(
+                            Icons.Outlined.FolderShared,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Save Group To",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                if (groupName.isNotBlank()) "Choose account/storage for \"$groupName\"" else "Choose account or storage destination",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-                } else {
-                    groupTargets.forEach { target ->
-                        val (icon, tint) = when {
-                            target.accountType?.contains("google", ignoreCase = true) == true ->
-                                Icons.Default.Email to Color(0xFFE53935)
-                            target.accountType?.contains("exchange", ignoreCase = true) == true ||
-                            target.accountType?.contains("outlook", ignoreCase = true) == true ->
-                                Icons.Default.Business to Color(0xFF0078D4)
-                            target.accountType == null ->
-                                Icons.Default.PhoneAndroid to Color(0xFF607D8B)
-                            else ->
-                                Icons.Default.AccountCircle to MaterialTheme.colorScheme.primary
-                        }
 
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    val groupTargets = targets.filter { !it.isSim }
+                    if (groupTargets.isEmpty()) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onSelect(target) }
+                                .clickable {
+                                    onSelect(
+                                        com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget(
+                                            label = "Device",
+                                            subLabel = "This phone only"
+                                        )
+                                    )
+                                }
                                 .padding(horizontal = 24.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = tint.copy(alpha = 0.12f),
+                                color = Color(0xFF607D8B).copy(alpha = 0.12f),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFF607D8B), modifier = Modifier.size(22.dp))
                                 }
                             }
                             Spacer(Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                if (target.subLabel != null) {
-                                    Text(
-                                        target.subLabel,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Text("Device", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                Text("This phone only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        groupTargets.forEach { target ->
+                            val (icon, tint) = when {
+                                target.accountType?.contains("google", ignoreCase = true) == true ->
+                                    Icons.Default.Email to Color(0xFFE53935)
+                                target.accountType?.contains("exchange", ignoreCase = true) == true ||
+                                target.accountType?.contains("outlook", ignoreCase = true) == true ->
+                                    Icons.Default.Business to Color(0xFF0078D4)
+                                target.accountType == null ->
+                                    Icons.Default.PhoneAndroid to Color(0xFF607D8B)
+                                else ->
+                                    Icons.Default.AccountCircle to MaterialTheme.colorScheme.primary
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(target) }
+                                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = tint.copy(alpha = 0.12f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                    if (target.subLabel != null) {
+                                        Text(
+                                            target.subLabel,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = onDismiss) { Text("Cancel") }
+                    }
                 }
             }
         }

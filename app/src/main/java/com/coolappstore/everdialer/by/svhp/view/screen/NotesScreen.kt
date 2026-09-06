@@ -624,54 +624,56 @@ fun NoteEditorDialog(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        contactName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (phoneNumber.isNotEmpty()) {
-                        Text(
-                            phoneNumber,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Button(
-                    onClick = {
-                        NoteManager.writeNote(context, contactName, phoneNumber, text)
-                        onDismiss()
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("Save") }
-            }
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp),
-                placeholder = { Text("Type your note here...") },
-                shape = RoundedCornerShape(16.dp),
-                minLines = 8,
-                visualTransformation = if (!highlightQuery.isNullOrBlank())
-                    NoteHighlightTransformation(highlightQuery, MaterialTheme.colorScheme.tertiary)
-                else
-                    androidx.compose.ui.text.input.VisualTransformation.None
-            )
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            contactName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (phoneNumber.isNotEmpty()) {
+                            Text(
+                                phoneNumber,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            NoteManager.writeNote(context, contactName, phoneNumber, text)
+                            onDismiss()
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Save") }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp),
+                    placeholder = { Text("Type your note here...") },
+                    shape = RoundedCornerShape(16.dp),
+                    minLines = 8,
+                    visualTransformation = if (!highlightQuery.isNullOrBlank())
+                        NoteHighlightTransformation(highlightQuery, MaterialTheme.colorScheme.tertiary)
+                    else
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                )
+            }
         }
     }
 }

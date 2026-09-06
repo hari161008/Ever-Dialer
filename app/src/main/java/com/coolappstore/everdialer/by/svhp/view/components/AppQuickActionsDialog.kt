@@ -73,46 +73,48 @@ fun AppQuickActionsDialog(
     val backAlpha = remember { Animatable(1f) }
 
     Dialog(onDismissRequest = onDismiss) {
-        PredictiveBackHandler(enabled = predictiveBackEnabled) { progressFlow ->
-            try {
-                progressFlow.collect { backEvent ->
-                    val p = backEvent.progress
-                    backScale.snapTo(1f - p * 0.28f)
-                    backAlpha.snapTo(1f - p * 0.45f)
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            PredictiveBackHandler(enabled = predictiveBackEnabled) { progressFlow ->
+                try {
+                    progressFlow.collect { backEvent ->
+                        val p = backEvent.progress
+                        backScale.snapTo(1f - p * 0.28f)
+                        backAlpha.snapTo(1f - p * 0.45f)
+                    }
+                    onDismiss()
+                } catch (e: CancellationException) {
+                    backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                    backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
                 }
-                onDismiss()
-            } catch (e: CancellationException) {
-                backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
-                backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
             }
-        }
 
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .scale(backScale.value)
-                .alpha(backAlpha.value)
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    appName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-                )
-                if (onChat != null) {
-                    AppQuickActionRow(icon = Icons.AutoMirrored.Filled.Chat, label = "Chat", onClick = onChat)
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(backScale.value)
+                    .alpha(backAlpha.value)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        appName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
+                    if (onChat != null) {
+                        AppQuickActionRow(icon = Icons.AutoMirrored.Filled.Chat, label = "Chat", onClick = onChat)
+                    }
+                    AppQuickActionRow(icon = Icons.Default.Call, label = "Voice Call", onClick = onVoiceCall)
+                    AppQuickActionRow(icon = Icons.Default.Videocam, label = "Video Call", onClick = onVideoCall)
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
+                    ) { Text("Cancel") }
                 }
-                AppQuickActionRow(icon = Icons.Default.Call, label = "Voice Call", onClick = onVoiceCall)
-                AppQuickActionRow(icon = Icons.Default.Videocam, label = "Video Call", onClick = onVideoCall)
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
-                ) { Text("Cancel") }
             }
         }
     }

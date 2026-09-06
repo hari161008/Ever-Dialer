@@ -323,61 +323,63 @@ fun DialPadScreen(
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         dragHandle = null
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = slideDistance * closeProgress.value),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 4.dp
-        ) {
-            val prefs = koinInject<PreferenceManager>()
-            val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
-                prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
-            }
-            if (predictiveBackEnabled) {
-                PredictiveBackHandler(enabled = true) { progressFlow ->
-                    try {
-                        progressFlow.collect { backEvent ->
-                            dialpadClosing = true
-                            closeProgress.snapTo(backEvent.progress * 0.45f)
+        val prefs = koinInject<PreferenceManager>()
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = slideDistance * closeProgress.value),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
+                    prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
+                }
+                if (predictiveBackEnabled) {
+                    PredictiveBackHandler(enabled = true) { progressFlow ->
+                        try {
+                            progressFlow.collect { backEvent ->
+                                dialpadClosing = true
+                                closeProgress.snapTo(backEvent.progress * 0.45f)
+                            }
+                            closeWithSlowAnimation()
+                        } catch (e: CancellationException) {
+                            dialpadClosing = false
+                            closeProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
                         }
-                        closeWithSlowAnimation()
-                    } catch (e: CancellationException) {
-                        dialpadClosing = false
-                        closeProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
                     }
+                } else {
+                    BackHandler(enabled = true) { closeWithSlowAnimation() }
                 }
-            } else {
-                BackHandler(enabled = true) { closeWithSlowAnimation() }
-            }
-            Column(modifier = Modifier.statusBarsPadding().navigationBarsPadding()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(3.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.size(width = 36.dp, height = 4.dp)
-                    ) {}
-                }
-                DialPadContent(
-                    initialNumber = initialNumber,
-                    navigator = navigator,
-                    onDismiss = { closeWithSlowAnimation() },
-                    closing = dialpadClosing,
-                    // Because this screen's content is a ModalBottomSheet (its own Dialog window), the
-                    // NavHost's normal slide/fade destination transition can't visually animate it — a
-                    // Dialog window ignores the parent's transition offsets. So instead of navigating
-                    // immediately (which just swapped destinations with no visible motion), we play our
-                    // own slow, smooth slide-down first, then navigate once it's finished — giving
-                    // Contact Info a gentle reveal instead of popping in instantly.
-                    onNavigateToContact = { contactId, phoneNumber ->
-                        didNavigateAway = true
-                        navigator.navigate(ContactDetailsScreenDestination(contactId = contactId, phoneNumber = phoneNumber))
+                Column(modifier = Modifier.statusBarsPadding().navigationBarsPadding()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(width = 36.dp, height = 4.dp)
+                        ) {}
                     }
-                )
+                    DialPadContent(
+                        initialNumber = initialNumber,
+                        navigator = navigator,
+                        onDismiss = { closeWithSlowAnimation() },
+                        closing = dialpadClosing,
+                        // Because this screen's content is a ModalBottomSheet (its own Dialog window), the
+                        // NavHost's normal slide/fade destination transition can't visually animate it — a
+                        // Dialog window ignores the parent's transition offsets. So instead of navigating
+                        // immediately (which just swapped destinations with no visible motion), we play our
+                        // own slow, smooth slide-down first, then navigate once it's finished — giving
+                        // Contact Info a gentle reveal instead of popping in instantly.
+                        onNavigateToContact = { contactId, phoneNumber ->
+                            didNavigateAway = true
+                            navigator.navigate(ContactDetailsScreenDestination(contactId = contactId, phoneNumber = phoneNumber))
+                        }
+                    )
+                }
             }
         }
     }
@@ -839,14 +841,15 @@ fun DialPadContent(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    if (isLandscape) {
-        // Landscape: side-by-side layout — left=search+search results, right=dialpad keys+number+actions
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+        if (isLandscape) {
+            // Landscape: side-by-side layout — left=search+search results, right=dialpad keys+number+actions
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             // Left panel: search bar + results only
             Column(
                 modifier = Modifier
@@ -1540,6 +1543,7 @@ fun DialPadContent(
         } // end BoxWithConstraints (screen)
     }
 }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1765,8 +1769,9 @@ fun DialPadKey(
 
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
-    val mainFontSize = (if (compact) 18f else 22f) * scaleFactor.coerceIn(0.6f, 1.4f)
-    val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f))
+    val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
+    val mainFontSize = (if (compact) 18f else 22f) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
+    val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f)) * fontScale
 
     val triggerTapPulse = {
         tapJob?.cancel()
@@ -1831,10 +1836,13 @@ private fun DialpadNumberDisplay(
     onCursorPositionChange: (Int) -> Unit = {},
     onLongPress: () -> Unit = {}
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsState by prefs.settingsChanged.collectAsState()
+    val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
     val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
     val textColor   = MaterialTheme.colorScheme.onSurface
     val textStyle   = MaterialTheme.typography.displaySmall.copy(
-        fontSize   = fontSize.sp,
+        fontSize   = (fontSize * fontScale).sp,
         fontWeight = FontWeight.Light
     )
 

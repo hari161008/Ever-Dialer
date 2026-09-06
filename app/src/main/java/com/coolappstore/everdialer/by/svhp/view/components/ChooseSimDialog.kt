@@ -154,31 +154,33 @@ fun ChooseSimDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                RivoChoiceDialogHeader(title = "Choose Sim", icon = Icons.Default.SimCard)
-                Spacer(Modifier.height(8.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SIM_CHOICE_OPTIONS.forEach { option ->
-                        RivoChoiceRow(
-                            icon = option.icon,
-                            label = option.label,
-                            subLabel = option.subLabel,
-                            selected = option.value == currentChoice,
-                            onClick = { onSelect(option.value) }
-                        )
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    RivoChoiceDialogHeader(title = "Choose Sim", icon = Icons.Default.SimCard)
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SIM_CHOICE_OPTIONS.forEach { option ->
+                            RivoChoiceRow(
+                                icon = option.icon,
+                                label = option.label,
+                                subLabel = option.subLabel,
+                                selected = option.value == currentChoice,
+                                onClick = { onSelect(option.value) }
+                            )
+                        }
                     }
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text("Cancel") }
                 }
-                Spacer(Modifier.height(12.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) { Text("Cancel") }
             }
         }
     }
@@ -200,37 +202,39 @@ fun ChooseDefaultNumberDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                RivoChoiceDialogHeader(title = "Choose Default Number", icon = Icons.Default.Numbers)
-                Spacer(Modifier.height(8.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RivoChoiceRow(
-                        icon = Icons.Default.HelpOutline,
-                        label = "Ask Every Time",
-                        subLabel = "Show the number picker on every call",
-                        selected = currentChoice == null,
-                        onClick = { onSelect(null) }
-                    )
-                    numbers.forEach { number ->
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    RivoChoiceDialogHeader(title = "Choose Default Number", icon = Icons.Default.Numbers)
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         RivoChoiceRow(
-                            icon = Icons.Default.Phone,
-                            label = number,
-                            selected = number == currentChoice,
-                            onClick = { onSelect(number) }
+                            icon = Icons.Default.HelpOutline,
+                            label = "Ask Every Time",
+                            subLabel = "Show the number picker on every call",
+                            selected = currentChoice == null,
+                            onClick = { onSelect(null) }
                         )
+                        numbers.forEach { number ->
+                            RivoChoiceRow(
+                                icon = Icons.Default.Phone,
+                                label = number,
+                                selected = number == currentChoice,
+                                onClick = { onSelect(number) }
+                            )
+                        }
                     }
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text("Cancel") }
                 }
-                Spacer(Modifier.height(12.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) { Text("Cancel") }
             }
         }
     }

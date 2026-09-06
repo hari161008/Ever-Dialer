@@ -30,60 +30,62 @@ fun MoveContactDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    "Move \"$contactName\" to",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-                )
-                if (targets.isEmpty()) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     Text(
-                        "No other storage destinations found on this device.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        "Move \"$contactName\" to",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                     )
-                }
-                targets.forEach { target ->
-                    val icon: ImageVector = when {
-                        target.isSim -> Icons.Default.SimCard
-                        target.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
-                        target.accountType != null -> Icons.Default.Sync
-                        else -> Icons.Default.PhoneAndroid
+                    if (targets.isEmpty()) {
+                        Text(
+                            "No other storage destinations found on this device.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        )
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(target) }
-                            .padding(horizontal = 24.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                            if (target.subLabel != null) {
-                                Text(
-                                    target.subLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    targets.forEach { target ->
+                        val icon: ImageVector = when {
+                            target.isSim -> Icons.Default.SimCard
+                            target.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
+                            target.accountType != null -> Icons.Default.Sync
+                            else -> Icons.Default.PhoneAndroid
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(target) }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                if (target.subLabel != null) {
+                                    Text(
+                                        target.subLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
+                    ) { Text("Cancel") }
                 }
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
-                ) { Text("Cancel") }
             }
         }
     }

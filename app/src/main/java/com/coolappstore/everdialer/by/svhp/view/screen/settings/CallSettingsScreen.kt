@@ -206,60 +206,62 @@ fun ContactsToDisplayDialog(
     }
     val checkedKeys = remember { mutableStateOf(savedKeys) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Contacts to display") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                sources.forEach { source ->
-                    val isChecked = source.key in checkedKeys.value
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                checkedKeys.value = if (checked) {
-                                    checkedKeys.value + source.key
-                                } else {
-                                    checkedKeys.value - source.key
+    com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Contacts to display") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    sources.forEach { source ->
+                        val isChecked = source.key in checkedKeys.value
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    checkedKeys.value = if (checked) {
+                                        checkedKeys.value + source.key
+                                    } else {
+                                        checkedKeys.value - source.key
+                                    }
                                 }
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = source.label,
-                                style = MaterialTheme.typography.bodyLarge
                             )
-                            if (source.subLabel != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
                                 Text(
-                                    text = source.subLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = source.label,
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
+                                if (source.subLabel != null) {
+                                    Text(
+                                        text = source.subLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.setString(
+                        PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS,
+                        checkedKeys.value.joinToString(",")
+                    )
+                    onDismiss()
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                prefs.setString(
-                    PreferenceManager.KEY_CONTACTS_DISPLAY_ACCOUNTS,
-                    checkedKeys.value.joinToString(",")
-                )
-                onDismiss()
-            }) { Text("OK") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

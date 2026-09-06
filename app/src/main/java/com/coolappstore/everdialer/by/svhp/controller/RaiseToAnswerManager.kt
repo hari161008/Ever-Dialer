@@ -52,14 +52,18 @@ object RaiseToAnswerManager {
         val appContext = context.applicationContext
         val prefs = PreferenceManager(appContext)
 
-        if (!prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_ENABLED, false)) return
+        val raiseEnabled = prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_ENABLED, false)
+        val flipDeclineEnabled = prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_DECLINE_FLIP, false)
+
+        if (!raiseEnabled && !flipDeclineEnabled) return
         if (!hasRequiredSensors(appContext)) return
         if (isRunning) return
 
         val intent = Intent(appContext, RaiseToAnswerService::class.java).apply {
             val forcedAnyAngle = !hasMagnetometer(appContext)
+            putExtra(RaiseToAnswerService.EXTRA_ANSWER_ENABLED, raiseEnabled)
             putExtra(RaiseToAnswerService.EXTRA_ANSWER_ALL_ANGLES, forcedAnyAngle || prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_ANY_ANGLE, false))
-            putExtra(RaiseToAnswerService.EXTRA_DECLINE_ENABLED, prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_DECLINE_FLIP, false))
+            putExtra(RaiseToAnswerService.EXTRA_DECLINE_ENABLED, flipDeclineEnabled)
             putExtra(RaiseToAnswerService.EXTRA_BEEP_ENABLED, prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_BEEP, true))
             putExtra(RaiseToAnswerService.EXTRA_VIBRATE_ENABLED, prefs.getBoolean(PreferenceManager.KEY_RAISE_TO_ANSWER_VIBRATE, false))
         }

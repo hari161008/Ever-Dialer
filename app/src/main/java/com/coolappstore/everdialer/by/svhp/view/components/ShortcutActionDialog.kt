@@ -26,36 +26,38 @@ fun ShortcutActionDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    "Add to Home Screen",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-                )
-                ShortcutActionRow(
-                    icon = Icons.Default.Person,
-                    label = "Open contact info",
-                    subLabel = "Shortcut opens this contact's info page",
-                    onClick = onOpenContactInfo
-                )
-                ShortcutActionRow(
-                    icon = Icons.Default.Call,
-                    label = "Call directly",
-                    subLabel = "Shortcut calls this contact right away",
-                    onClick = onCallDirectly
-                )
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
-                ) { Text("Cancel") }
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        "Add to Home Screen",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
+                    ShortcutActionRow(
+                        icon = Icons.Default.Person,
+                        label = "Open contact info",
+                        subLabel = "Shortcut opens this contact's info page",
+                        onClick = onOpenContactInfo
+                    )
+                    ShortcutActionRow(
+                        icon = Icons.Default.Call,
+                        label = "Call directly",
+                        subLabel = "Shortcut calls this contact right away",
+                        onClick = onCallDirectly
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)
+                    ) { Text("Cancel") }
+                }
             }
         }
     }

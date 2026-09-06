@@ -229,17 +229,18 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
             dragHandle = null
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(y = slideDistance * closeProgress.value),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
-            ) {
-                val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
-                    prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
-                }
+            com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = slideDistance * closeProgress.value),
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp
+                ) {
+                    val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
+                        prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
+                    }
                 if (predictiveBackEnabled) {
                     PredictiveBackHandler(enabled = true) { progressFlow ->
                         try {
@@ -280,6 +281,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 }
             }
         }
+    }
     }
 
     var childHScrolling by remember { mutableStateOf(false) }

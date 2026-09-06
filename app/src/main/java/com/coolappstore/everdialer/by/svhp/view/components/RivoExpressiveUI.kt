@@ -1112,131 +1112,133 @@ fun RivoDropdownMenu(
                 decorFitsSystemWindows = false
             )
         ) {
-            val predictiveBackEnabled = remember(settingsVer) {
-                prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
-            }
-            val backScale = remember { Animatable(1f) }
-            val backAlpha = remember { Animatable(1f) }
-
-            PredictiveBackHandler(enabled = expanded && predictiveBackEnabled) { progressFlow ->
-                try {
-                    progressFlow.collect { backEvent ->
-                        val p = backEvent.progress
-                        backScale.snapTo(1f - p * 0.28f)
-                        backAlpha.snapTo(1f - p * 0.45f)
-                    }
-                    onDismissRequest()
-                } catch (e: CancellationException) {
-                    backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
-                    backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+            com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs) {
+                val predictiveBackEnabled = remember(settingsVer) {
+                    prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
                 }
-            }
+                val backScale = remember { Animatable(1f) }
+                val backAlpha = remember { Animatable(1f) }
 
-            val dimAlpha by animateFloatAsState(
-                targetValue = if (expanded) 0.45f else 0f,
-                animationSpec = tween(320),
-                label = "dimAlpha",
-                finishedListener = { if (!expanded) showContent = false }
-            )
+                PredictiveBackHandler(enabled = expanded && predictiveBackEnabled) { progressFlow ->
+                    try {
+                        progressFlow.collect { backEvent ->
+                            val p = backEvent.progress
+                            backScale.snapTo(1f - p * 0.28f)
+                            backAlpha.snapTo(1f - p * 0.45f)
+                        }
+                        onDismissRequest()
+                    } catch (e: CancellationException) {
+                        backScale.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                        backAlpha.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = dimAlpha * backAlpha.value))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismissRequest
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = scaleIn(
-                        animationSpec = spring(
-                            stiffness = Spring.StiffnessLow,
-                            dampingRatio = Spring.DampingRatioMediumBouncy
+                val dimAlpha by animateFloatAsState(
+                    targetValue = if (expanded) 0.45f else 0f,
+                    animationSpec = tween(320),
+                    label = "dimAlpha",
+                    finishedListener = { if (!expanded) showContent = false }
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = dimAlpha * backAlpha.value))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismissRequest
                         ),
-                        initialScale = 0.75f,
-                        transformOrigin = TransformOrigin(0.5f, 0.5f)
-                    ) + fadeIn(tween(280)),
-                    exit = scaleOut(
-                        animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                        targetScale = 0.85f,
-                        transformOrigin = TransformOrigin(0.5f, 0.5f)
-                    ) + fadeOut(tween(200))
+                    contentAlignment = Alignment.Center
                 ) {
-                    val menuShape = RoundedCornerShape(35.dp)
-                    val globalBackdrop = LocalLiquidGlassBackdrop.current
-                    val useLgDropdown = liquidGlass && lgDropdownMenu && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-                    val useBlurDropdown = blurEffects && blurDropdownMenu && !useLgDropdown
-
-                    Box(
-                        modifier = modifier
-                            .width(260.dp)
-                            .scale(backScale.value)
-                            .alpha(backAlpha.value)
-                            .then(
-                                if (useLgDropdown) Modifier
-                                else Modifier.shadow(
-                                    elevation = 16.dp,
-                                    shape = RoundedCornerShape(24.dp),
-                                    spotColor = Color.Black.copy(alpha = 0.28f),
-                                    ambientColor = Color.Black.copy(alpha = 0.12f)
-                                )
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {}
-                            )
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = scaleIn(
+                            animationSpec = spring(
+                                stiffness = Spring.StiffnessLow,
+                                dampingRatio = Spring.DampingRatioMediumBouncy
+                            ),
+                            initialScale = 0.75f,
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        ) + fadeIn(tween(280)),
+                        exit = scaleOut(
+                            animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                            targetScale = 0.85f,
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        ) + fadeOut(tween(200))
                     ) {
-                        val dropdownShape = if (useLgDropdown) menuShape else RoundedCornerShape(24.dp)
-                        if (useLgDropdown) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .drawBackdrop(
-                                        backdrop = globalBackdrop!!,
-                                        shape = { menuShape },
-                                        effects = {
-                                            val d = density
-                                            colorControls(brightness = -0.13f, saturation = 1.4f)
-                                            blur(6f * d)
-                                            lens(
-                                                refractionHeight = 40f * d,
-                                                refractionAmount = 248f * d
-                                            )
-                                        },
-                                        highlight = { Highlight.Plain }
+                        val menuShape = RoundedCornerShape(35.dp)
+                        val globalBackdrop = LocalLiquidGlassBackdrop.current
+                        val useLgDropdown = liquidGlass && lgDropdownMenu && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
+                        val useBlurDropdown = blurEffects && blurDropdownMenu && !useLgDropdown
+
+                        Box(
+                            modifier = modifier
+                                .width(260.dp)
+                                .scale(backScale.value)
+                                .alpha(backAlpha.value)
+                                .then(
+                                    if (useLgDropdown) Modifier
+                                    else Modifier.shadow(
+                                        elevation = 16.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.28f),
+                                        ambientColor = Color.Black.copy(alpha = 0.12f)
+                                    )
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {}
+                                )
+                        ) {
+                            val dropdownShape = if (useLgDropdown) menuShape else RoundedCornerShape(24.dp)
+                            if (useLgDropdown) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .drawBackdrop(
+                                            backdrop = globalBackdrop!!,
+                                            shape = { menuShape },
+                                            effects = {
+                                                val d = density
+                                                colorControls(brightness = -0.13f, saturation = 1.4f)
+                                                blur(6f * d)
+                                                lens(
+                                                    refractionHeight = 40f * d,
+                                                    refractionAmount = 248f * d
+                                                )
+                                            },
+                                            highlight = { Highlight.Plain }
+                                        ),
+                                    shape = menuShape,
+                                    color = Color.Black.copy(alpha = 0.25f),
+                                    tonalElevation = 0.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                                }
+                            } else if (useBlurDropdown && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth().drawPlainBackdrop(
+                                        backdrop = globalBackdrop,
+                                        shape    = { dropdownShape },
+                                        effects  = { blur(30f * density) }
                                     ),
-                                shape = menuShape,
-                                color = Color.Black.copy(alpha = 0.25f),
-                                tonalElevation = 0.dp
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
-                            }
-                        } else if (useBlurDropdown && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth().drawPlainBackdrop(
-                                    backdrop = globalBackdrop,
-                                    shape    = { dropdownShape },
-                                    effects  = { blur(30f * density) }
-                                ),
-                                shape = dropdownShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                                tonalElevation = 0.dp
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
-                            }
-                        } else {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = dropdownShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 0.dp
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                                    shape = dropdownShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                                    tonalElevation = 0.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                                }
+                            } else {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = dropdownShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    tonalElevation = 0.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+                                }
                             }
                         }
                     }

@@ -848,10 +848,31 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
     }
 
 
-    override fun getContactByNumber(number: String): Contact? = try {
-        getContactByNumberInternal(number)
-    } catch (_: Exception) {
-        null
+    private val numberLookupCache = java.util.concurrent.ConcurrentHashMap<String, Contact>()
+    private val unknownNumberCache = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
+    fun clearNumberLookupCache() {
+        numberLookupCache.clear()
+        unknownNumberCache.clear()
+    }
+
+    override fun getContactByNumber(number: String): Contact? {
+        val trimmed = number.trim()
+        if (trimmed.isEmpty()) return null
+        numberLookupCache[trimmed]?.let { return it }
+        if (unknownNumberCache.contains(trimmed)) return null
+
+        return try {
+            val contact = getContactByNumberInternal(trimmed)
+            if (contact != null) {
+                numberLookupCache[trimmed] = contact
+            } else {
+                unknownNumberCache.add(trimmed)
+            }
+            contact
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun getContactByNumberInternal(number: String): Contact? {

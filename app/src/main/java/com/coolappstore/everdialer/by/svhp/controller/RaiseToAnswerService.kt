@@ -40,6 +40,7 @@ import kotlin.math.sqrt
  */
 class RaiseToAnswerService : Service(), SensorEventListener {
 
+    private var featureAnswerEnabled = true
     private var featureAnswerAllAnglesEnabled = false
     private var featureDeclineEnabled = false
     private var behaviourBeepEnabled = true
@@ -71,6 +72,7 @@ class RaiseToAnswerService : Service(), SensorEventListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        featureAnswerEnabled = intent?.getBooleanExtra(EXTRA_ANSWER_ENABLED, true) ?: true
         featureAnswerAllAnglesEnabled = intent?.getBooleanExtra(EXTRA_ANSWER_ALL_ANGLES, false) ?: false
         featureDeclineEnabled = intent?.getBooleanExtra(EXTRA_DECLINE_ENABLED, false) ?: false
         behaviourBeepEnabled = intent?.getBooleanExtra(EXTRA_BEEP_ENABLED, true) ?: true
@@ -125,7 +127,7 @@ class RaiseToAnswerService : Service(), SensorEventListener {
         val notification: Notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle("Raise to Answer")
-            .setContentText("Listening for raise gesture…")
+            .setContentText("Listening for gesture…")
             .setContentIntent(contentIntent)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
@@ -164,6 +166,33 @@ class RaiseToAnswerService : Service(), SensorEventListener {
         }
 
         val proximityValue = mProximityValue
+        val isCovered = proximityValue != null && (proximityValue <= proximitySensorThreshold || (proximitySensorRange > 0f && proximityValue < proximitySensorRange) || proximityValue == 0.0f)
+
+        // ── 1. Decline by flipping check ──────────────────────────────────────────
+        // Lying on a flat surface with screen facing downwards:
+        // Gravity is in the negative Z direction (az < -6.5 m/s²), while X and Y are nearly 0.
+        val az = if (mAccelerometerValues.isNotEmpty()) mAccelerometerValues[2] else 0f
+        val ax = if (mAccelerometerValues.isNotEmpty()) mAccelerometerValues[0] else 0f
+        val ay = if (mAccelerometerValues.isNotEmpty()) mAccelerometerValues[1] else 0f
+        val xyTilt = sqrt(ax * ax + ay * ay)
+        val isScreenFacingDownFlat = az < -6.5f && xyTilt < 5.5f
+
+        if (featureDeclineEnabled && isCovered && isScreenFacingDownFlat) {
+            feedback(ToneGenerator.TONE_PROP_NACK, 100)
+            declineTicksDone += 1
+            if (declineTicksDone >= 2) {
+                declineDetected()
+                return
+            }
+        } else {
+            declineTicksDone = 0
+        }
+
+        // ── 2. Raise to answer check ──────────────────────────────────────────────
+        if (!featureAnswerEnabled) {
+            return
+        }
+
         val inclinationValue = mInclinationValue
 
         val orientation = FloatArray(3)
@@ -192,9 +221,6 @@ class RaiseToAnswerService : Service(), SensorEventListener {
         }
 
         if (hasMagnetometer && !featureAnswerAllAnglesEnabled) {
-            var hasRegistered = false
-
-            val pitch = Math.toDegrees(orientation[1].toDouble()) + 180.0
             val roll = Math.toDegrees(orientation[2].toDouble()) + 180.0
 
             if (inclinationValue != null && inclinationValue in -90..90 &&
@@ -202,25 +228,12 @@ class RaiseToAnswerService : Service(), SensorEventListener {
                 roll in 45.0..315.0
             ) {
                 feedback(ToneGenerator.TONE_CDMA_PIP, 100)
-                hasRegistered = true
                 answerTicksDone += 1
-                if (answerTicksDone == 3) {
+                if (answerTicksDone >= 3) {
                     answerDetected()
                 }
             } else {
                 answerTicksDone = 0
-            }
-
-            if (featureDeclineEnabled && !hasRegistered) {
-                if (pitch in 150.0..210.0 && (roll >= 315.0 || roll <= 45.0) && proximityValue == 0.0f) {
-                    feedback(ToneGenerator.TONE_PROP_NACK, 100)
-                    declineTicksDone += 1
-                    if (declineTicksDone == 3) {
-                        declineDetected()
-                    }
-                } else {
-                    declineTicksDone = 0
-                }
             }
         } else {
             // Simpler algorithm when there's no magnetometer (or all-angles mode is on):
@@ -230,7 +243,7 @@ class RaiseToAnswerService : Service(), SensorEventListener {
             ) {
                 feedback(ToneGenerator.TONE_CDMA_PIP, 100)
                 answerTicksDone += 1
-                if (answerTicksDone == 3) {
+                if (answerTicksDone >= 3) {
                     answerDetected()
                 }
             } else {
@@ -313,6 +326,7 @@ class RaiseToAnswerService : Service(), SensorEventListener {
         private const val TAG = "RaiseToAnswer"
         private const val NOTIFICATION_ID = 9421
 
+        const val EXTRA_ANSWER_ENABLED = "extra_answer_enabled"
         const val EXTRA_ANSWER_ALL_ANGLES = "extra_answer_all_angles"
         const val EXTRA_DECLINE_ENABLED = "extra_decline_enabled"
         const val EXTRA_BEEP_ENABLED = "extra_beep_enabled"
