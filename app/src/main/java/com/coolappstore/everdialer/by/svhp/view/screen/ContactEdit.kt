@@ -35,6 +35,8 @@ import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.viewmodel.koinActivityViewModel
 
+private data class EditableField(val id: Long, val value: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
@@ -49,16 +51,17 @@ fun ContactEditScreen(
     
     var resolvedContact by remember { mutableStateOf<Contact?>(null) }
     var isInitialized by remember { mutableStateOf(false) }
+    var nextFieldId by remember { mutableLongStateOf(100L) }
 
     var name by remember { mutableStateOf(initialName ?: "") }
     var photoUri by remember { mutableStateOf<String?>(null) }
-    val phoneNumbers = remember { 
-        mutableStateListOf<String>().apply { 
-            if (!initialPhone.isNullOrBlank()) add(initialPhone) else add("") 
+    val phoneFields = remember { 
+        mutableStateListOf<EditableField>().apply { 
+            add(EditableField(1L, initialPhone ?: "")) 
         } 
     }
-    val emails = remember { mutableStateListOf<String>().apply { add("") } }
-    val addresses = remember { mutableStateListOf<String>().apply { add("") } }
+    val emailFields = remember { mutableStateListOf<EditableField>().apply { add(EditableField(2L, "")) } }
+    val addressFields = remember { mutableStateListOf<EditableField>().apply { add(EditableField(3L, "")) } }
     var description by remember { mutableStateOf("") }
 
     LaunchedEffect(contactId, allContacts) {
@@ -70,25 +73,25 @@ fun ContactEditScreen(
                 name = contact.name
                 photoUri = contact.photoUri
                 
-                phoneNumbers.clear()
+                phoneFields.clear()
                 if (contact.phoneNumbers.isNotEmpty()) {
-                    phoneNumbers.addAll(contact.phoneNumbers)
+                    contact.phoneNumbers.forEach { phoneFields.add(EditableField(nextFieldId++, it)) }
                 } else {
-                    phoneNumbers.add("")
+                    phoneFields.add(EditableField(nextFieldId++, ""))
                 }
 
-                emails.clear()
+                emailFields.clear()
                 if (contact.emails.isNotEmpty()) {
-                    emails.addAll(contact.emails)
+                    contact.emails.forEach { emailFields.add(EditableField(nextFieldId++, it)) }
                 } else {
-                    emails.add("")
+                    emailFields.add(EditableField(nextFieldId++, ""))
                 }
 
-                addresses.clear()
+                addressFields.clear()
                 if (contact.addresses.isNotEmpty()) {
-                    addresses.addAll(contact.addresses)
+                    contact.addresses.forEach { addressFields.add(EditableField(nextFieldId++, it)) }
                 } else {
-                    addresses.add("")
+                    addressFields.add(EditableField(nextFieldId++, ""))
                 }
                 description = contact.note ?: ""
                 isInitialized = true
@@ -104,14 +107,14 @@ fun ContactEditScreen(
     val context = LocalContext.current
     var showSaveTargetDialog by remember { mutableStateOf(false) }
     var pendingContact by remember { mutableStateOf<Contact?>(null) }
-    val isNewContact = contactId == null || contactId == "0"
+    val isNewContact = contactId.isNullOrBlank() || contactId == "0" || contactId == "null"
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
                     Text(
-                        if (contactId == null || contactId == "0") "Create Contact" else "Edit Contact",
+                        if (isNewContact) "Create Contact" else "Edit Contact",
                         fontWeight = FontWeight.Bold
                     ) 
                 },
@@ -121,16 +124,21 @@ fun ContactEditScreen(
                     }
                 },
                 actions = {
+                    val validPhones = phoneFields.map { it.value.trim() }.filter { it.isNotBlank() }
                     Button(
                         onClick = {
+                            val finalContactId = if (isNewContact) "0" else (contactId ?: "0")
                             val contactToSave = Contact(
-                                id = contactId ?: "0",
-                                name = name,
-                                phoneNumbers = phoneNumbers.filter { it.isNotBlank() },
-                                emails = emails.filter { it.isNotBlank() },
-                                addresses = addresses.filter { it.isNotBlank() },
+                                id = finalContactId,
+                                name = name.trim(),
+                                phoneNumbers = validPhones,
+                                emails = emailFields.map { it.value.trim() }.filter { it.isNotBlank() },
+                                addresses = addressFields.map { it.value.trim() }.filter { it.isNotBlank() },
                                 photoUri = photoUri,
-                                note = description.trim().ifBlank { null }
+                                note = description.trim().ifBlank { null },
+                                isFavorite = resolvedContact?.isFavorite ?: false,
+                                sourceAccounts = resolvedContact?.sourceAccounts ?: emptyList(),
+                                events = resolvedContact?.events ?: emptyList()
                             )
                             if (isNewContact) {
                                 pendingContact = contactToSave
@@ -140,7 +148,7 @@ fun ContactEditScreen(
                                 navigator.navigateUp()
                             }
                         },
-                        enabled = name.isNotBlank() && phoneNumbers.any { it.isNotBlank() },
+                        enabled = name.isNotBlank() && validPhones.isNotEmpty(),
                         modifier = Modifier.padding(end = 8.dp),
                         shape = RoundedCornerShape(24.dp),
                         elevation = ButtonDefaults.buttonElevation(0.dp)
@@ -234,17 +242,21 @@ fun ContactEditScreen(
                 RivoSectionHeader(title = "Phone Numbers")
                 RivoExpressiveCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        phoneNumbers.forEachIndexed { index, phone ->
-                            EditField(
-                                value = phone,
-                                onValueChange = { phoneNumbers[index] = it },
-                                label = "Phone",
-                                icon = Icons.Default.Phone,
-                                onDelete = if (phoneNumbers.size > 1) { { phoneNumbers.removeAt(index) } } else null
-                            )
+                        phoneFields.forEachIndexed { index, field ->
+                            key(field.id) {
+                                EditField(
+                                    value = field.value,
+                                    onValueChange = { newValue ->
+                                        phoneFields[index] = field.copy(value = newValue)
+                                    },
+                                    label = "Phone",
+                                    icon = Icons.Default.Phone,
+                                    onDelete = if (phoneFields.size > 1) { { phoneFields.removeAt(index) } } else null
+                                )
+                            }
                         }
                         TextButton(
-                            onClick = { phoneNumbers.add("") },
+                            onClick = { phoneFields.add(EditableField(nextFieldId++, "")) },
                             modifier = Modifier.align(Alignment.Start)
                         ) {
                             Icon(Icons.Default.Add, null)
@@ -260,17 +272,21 @@ fun ContactEditScreen(
                 RivoSectionHeader(title = "Emails")
                 RivoExpressiveCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        emails.forEachIndexed { index, email ->
-                            EditField(
-                                value = email,
-                                onValueChange = { emails[index] = it },
-                                label = "Email",
-                                icon = Icons.Default.Email,
-                                onDelete = if (emails.size > 1) { { emails.removeAt(index) } } else null
-                            )
+                        emailFields.forEachIndexed { index, field ->
+                            key(field.id) {
+                                EditField(
+                                    value = field.value,
+                                    onValueChange = { newValue ->
+                                        emailFields[index] = field.copy(value = newValue)
+                                    },
+                                    label = "Email",
+                                    icon = Icons.Default.Email,
+                                    onDelete = if (emailFields.size > 1) { { emailFields.removeAt(index) } } else null
+                                )
+                            }
                         }
                         TextButton(
-                            onClick = { emails.add("") },
+                            onClick = { emailFields.add(EditableField(nextFieldId++, "")) },
                             modifier = Modifier.align(Alignment.Start)
                         ) {
                             Icon(Icons.Default.Add, null)
@@ -286,17 +302,21 @@ fun ContactEditScreen(
                 RivoSectionHeader(title = "Address")
                 RivoExpressiveCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        addresses.forEachIndexed { index, address ->
-                            EditField(
-                                value = address,
-                                onValueChange = { addresses[index] = it },
-                                label = "Address",
-                                icon = Icons.Default.LocationOn,
-                                onDelete = if (addresses.size > 1) { { addresses.removeAt(index) } } else null
-                            )
+                        addressFields.forEachIndexed { index, field ->
+                            key(field.id) {
+                                EditField(
+                                    value = field.value,
+                                    onValueChange = { newValue ->
+                                        addressFields[index] = field.copy(value = newValue)
+                                    },
+                                    label = "Address",
+                                    icon = Icons.Default.LocationOn,
+                                    onDelete = if (addressFields.size > 1) { { addressFields.removeAt(index) } } else null
+                                )
+                            }
                         }
                         TextButton(
-                            onClick = { addresses.add("") },
+                            onClick = { addressFields.add(EditableField(nextFieldId++, "")) },
                             modifier = Modifier.align(Alignment.Start)
                         ) {
                             Icon(Icons.Default.Add, null)

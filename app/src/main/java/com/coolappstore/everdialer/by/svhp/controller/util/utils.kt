@@ -360,3 +360,15 @@ fun silenceRingingCall(context: Context) {
         tm?.silenceRinger()
     } catch (_: Exception) {}
 }
+
+fun deduplicatePhoneNumbers(numbers: List<String>): List<String> {
+    val result = mutableListOf<String>()
+    for (num in numbers) {
+        val trimmed = num.trim()
+        if (trimmed.isBlank()) continue
+        if (result.none { numbersLikelyMatch(it, trimmed) }) {
+            result.add(trimmed)
+        }
+    }
+    return result
+}

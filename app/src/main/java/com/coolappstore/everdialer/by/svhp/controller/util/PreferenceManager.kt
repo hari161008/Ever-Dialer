@@ -530,6 +530,7 @@ class PreferenceManager(context: Context) {
         const val KEY_FLOATING_CALL_POS_LANDSCAPE_X = "floating_call_pos_landscape_x"
         const val KEY_FLOATING_CALL_POS_LANDSCAPE_Y = "floating_call_pos_landscape_y"
 
+        const val KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT = "hide_duplicate_numbers_in_contact"
         const val KEY_NAME_NON_CONTACTS_AS_UNKNOWN  = "name_non_contacts_as_unknown"
 
         // Custom Call Backgrounds (Incoming & Ongoing)

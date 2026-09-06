@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
@@ -215,20 +216,39 @@ fun CallLogTile(
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
         val showNumberOnSupportingLine = !isHiddenContact && (isContact || nameNonContactsAsUnknown)
         val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({ SimSlotBadge(slot = log.simSlot, modifier = Modifier.size(width = 14.dp, height = 16.dp)) }) else null
+        val totalCallsBadge: (@Composable () -> Unit)? = if (showTotalCallsMade) {
+            val total = totalCallsCount ?: log.count
+            {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$total",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 12.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        } else null
         RivoListItem(
             headline = buildString {
                 append(displayName)
                 if (log.count > 1) append(" (${log.count})")
-                if (showTotalCallsMade) {
-                    val total = totalCallsCount ?: log.count
-                    append(toSuperscript(total))
-                }
             },
             supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,
             avatarForcePersonIcon = !isContact,
             photoUri    = log.photoUri,
             headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
+            headlineEndContent = totalCallsBadge,
             supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
             trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,

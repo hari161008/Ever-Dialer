@@ -100,6 +100,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.koinInject
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
+import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbers
 import com.coolappstore.everdialer.by.svhp.controller.util.ContactRingtoneUtils
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import androidx.compose.material.icons.outlined.Block
@@ -166,11 +167,22 @@ fun ContactDetailsScreen(
     // "chat_app" for the Social card's WhatsApp/Telegram quick-action popup: null when hidden,
     // otherwise "whatsapp" or "telegram" to say which app's Chat/Voice Call/Video Call sheet to show.
     var showAppQuickActions by remember { mutableStateOf<String?>(null) }
+    // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
+    // so the actions shown here always match what's configured for the contact's context menu.
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val hideDuplicateNumbers = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
+    }
+    val contactPhoneNumbers = remember(contact, hideDuplicateNumbers) {
+        val raw = contact?.phoneNumbers?.filter { it.isNotBlank() } ?: emptyList()
+        if (hideDuplicateNumbers) deduplicatePhoneNumbers(raw) else raw
+    }
+
     // All this contact's saved numbers, so the Social card can offer a choice when there's more
     // than one (e.g. one saved with a country code, one without) instead of always defaulting to
     // the first saved number — which could be one that isn't actually registered on that app.
-    val socialNumbers = remember(contact, phoneNumber) {
-        contact?.phoneNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+    val socialNumbers = remember(contactPhoneNumbers, phoneNumber) {
+        contactPhoneNumbers.takeIf { it.isNotEmpty() }
             ?: listOfNotNull(phoneNumber?.takeIf { it.isNotBlank() })
     }
     // App tapped in the Social card but still awaiting a number pick (only used when the contact
@@ -185,9 +197,6 @@ fun ContactDetailsScreen(
     val truecallerInstalled = remember(context) { isTruecallerInstalled(context) }
     val hasAnySocialApp = whatsAppInstalled || whatsAppBusinessInstalled || telegramInstalled || meetInstalled || truecallerInstalled
 
-    // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
-    // so the actions shown here always match what's configured for the contact's context menu.
-    val settingsVer by prefs.settingsChanged.collectAsState()
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
     val contactInfoActionKeys = remember(settingsVer) {
@@ -313,7 +322,7 @@ fun ContactDetailsScreen(
     }
 
     if (showNumberPicker && contact != null) {
-        NumberPickerDialog(numbers = contact.phoneNumbers, onDismissRequest = { showNumberPicker = false }, onNumberSelected = { showNumberPicker = false; initiateCall(it) })
+        NumberPickerDialog(numbers = contactPhoneNumbers, onDismissRequest = { showNumberPicker = false }, onNumberSelected = { showNumberPicker = false; initiateCall(it) })
     }
     if (showSimPicker && pendingNumber != null) {
         SimPickerDialog(onDismissRequest = { showSimPicker = false }, onSimSelected = { handle -> makeCall(context, pendingNumber!!, handle); showSimPicker = false })
@@ -330,7 +339,7 @@ fun ContactDetailsScreen(
     }
     if (showChooseDefaultNumberDialog && contact != null) {
         ChooseDefaultNumberDialog(
-            numbers = contact.phoneNumbers,
+            numbers = contactPhoneNumbers,
             currentChoice = contactDefaultNumber,
             onSelect = { number ->
                 prefs.setContactDefaultNumber(contactSimKey, number)
@@ -398,8 +407,8 @@ fun ContactDetailsScreen(
     if (showQrDialog) {
         QrCodeDialog(name = displayName, phone = displayPhone, email = contact?.emails?.firstOrNull(), onDismiss = { showQrDialog = false })
     }
-    val shortcutNumbers = remember(contact, phoneNumber) {
-        contact?.phoneNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+    val shortcutNumbers = remember(contactPhoneNumbers, phoneNumber) {
+        contactPhoneNumbers.takeIf { it.isNotEmpty() }
             ?: listOfNotNull(phoneNumber?.takeIf { it.isNotBlank() && it != "Unknown" })
     }
     if (showShortcutNumberPicker) {
@@ -675,10 +684,11 @@ fun ContactDetailsScreen(
                     ) {
                         Surface(
                             onClick = {
-                                if (contact != null && contact.phoneNumbers.size > 1) {
+                                if (contact != null && contactPhoneNumbers.size > 1) {
                                     if (contactDefaultNumber != null) initiateCall(contactDefaultNumber)
                                     else showNumberPicker = true
                                 }
+                                else if (contact != null && contactPhoneNumbers.isNotEmpty()) initiateCall(contactPhoneNumbers.first())
                                 else if (displayPhone != "Unknown") initiateCall(displayPhone)
                             },
                             modifier = Modifier.weight(1f).height(64.dp),
@@ -722,12 +732,12 @@ fun ContactDetailsScreen(
                 item {
                     RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
                         if (contact != null) {
-                            contact.phoneNumbers.forEachIndexed { index, number ->
+                            contactPhoneNumbers.forEachIndexed { index, number ->
                                 RivoListItem(
                                     headline = number,
                                     supporting = "Mobile",
                                     leadingIcon = Icons.Default.Phone,
-                                    compact = contact.phoneNumbers.size > 1,
+                                    compact = contactPhoneNumbers.size > 1,
                                     onClick = { initiateCall(number) },
                                     onLongClick = {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -735,7 +745,7 @@ fun ContactDetailsScreen(
                                         android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 )
-                                if (index < contact.phoneNumbers.size - 1 || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
+                                if (index < contactPhoneNumbers.size - 1 || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
                                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
@@ -803,9 +813,10 @@ fun ContactDetailsScreen(
                                             size = 52.dp,
                                             iconSize = 20.dp,
                                             onClick = {
+                                                val numbersToShare = if (contactPhoneNumbers.isNotEmpty()) contactPhoneNumbers else contact.phoneNumbers
                                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
-                                                    putExtra(Intent.EXTRA_TEXT, "$displayName\n${contact.phoneNumbers.joinToString(", ")}")
+                                                    putExtra(Intent.EXTRA_TEXT, "$displayName\n${numbersToShare.joinToString(", ")}")
                                                 }
                                                 context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
                                             }
@@ -1187,7 +1198,7 @@ fun ContactDetailsScreen(
 
                 // Choose Default Number — only meaningful (and only shown) when the contact has
                 // 2+ saved numbers, e.g. one saved with a country code and one without.
-                if (contact != null && contact.phoneNumbers.size > 1) {
+                if (contact != null && contactPhoneNumbers.size > 1) {
                     item {
                         RivoExpressiveCard(title = "Choose Default Number", icon = Icons.Default.Numbers) {
                             RivoListItem(

@@ -2222,6 +2222,7 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Pill Style Navigation", "Pill-shaped bottom navigation bar", "pill_style_nav", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "pill_style_nav")) },
         SettingsSearchEntry("Show Sims In Call Logs", "Show which SIM a call used in the call log", "show_sims_call_logs", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "show_sims_call_logs")) },
         SettingsSearchEntry("Show total number of calls made", "Show total call count in call logs", "show_total_calls_made", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "show_total_calls_made")) },
+        SettingsSearchEntry("Hide Duplicate Numbers In A Contact", "Show only one of multiple identical phone numbers", "hide_duplicate_numbers_in_contact", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "hide_duplicate_numbers_in_contact")) },
         SettingsSearchEntry("Name non contacts as Unknown", "Display Unknown or phone number for unsaved callers", "name_non_contacts_as_unknown", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "name_non_contacts_as_unknown")) },
         SettingsSearchEntry("Auto Delete Unknown No in call log", "Automatically clean up unknown-number entries", "auto_delete_unknown_calllog", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "auto_delete_unknown_calllog")) },
 
@@ -2320,175 +2321,178 @@ private fun CreateBackupDialog(
     val hasAnySelected = backupSettings || backupCallingCards || backupNotes || backupContactGroups || backupRecordings || backupContacts || backupCallLogs
     val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
+    val prefs = koinInject<PreferenceManager>()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 440.dp)
-                .padding(horizontal = 20.dp, vertical = 24.dp)
-        ) {
-            Column(
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp,
                 modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .widthIn(max = 440.dp)
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Backup,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Create Backup",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Select items to include in your backup",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(16.dp))
-
-                Box(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = maxContainerHeight)
-                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    RivoExpressiveCard(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        modifier = Modifier.size(52.dp)
                     ) {
-                        RivoSwitchListItem(
-                            headline = "Backup settings",
-                            supporting = "App preferences, Call Recorder & Network Switcher settings",
-                            leadingIcon = Icons.Outlined.Settings,
-                            iconContainerColor = Color(0xFF4CAF50),
-                            checked = backupSettings,
-                            onCheckedChange = { backupSettings = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup calling cards",
-                            supporting = "Saved calling cards, contact backgrounds and PFP customization",
-                            leadingIcon = Icons.Outlined.ContactPhone,
-                            iconContainerColor = Color(0xFF2196F3),
-                            checked = backupCallingCards,
-                            onCheckedChange = { backupCallingCards = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup notes",
-                            supporting = "Contact notes and general standalone notes",
-                            leadingIcon = Icons.Outlined.Notes,
-                            iconContainerColor = Color(0xFF9C27B0),
-                            checked = backupNotes,
-                            onCheckedChange = { backupNotes = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup contact groups",
-                            supporting = "Custom contact groups and shown contact references",
-                            leadingIcon = Icons.Outlined.Groups,
-                            iconContainerColor = Color(0xFF3F51B5),
-                            checked = backupContactGroups,
-                            onCheckedChange = { backupContactGroups = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup call recordings",
-                            supporting = "Audio recordings, favourites and recording notes",
-                            leadingIcon = Icons.Outlined.Mic,
-                            iconContainerColor = Color(0xFFE53935),
-                            checked = backupRecordings,
-                            onCheckedChange = { backupRecordings = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup contacts",
-                            supporting = "Device & local contacts list and details",
-                            leadingIcon = Icons.Outlined.Contacts,
-                            iconContainerColor = Color(0xFFFF9800),
-                            checked = backupContacts,
-                            onCheckedChange = { backupContacts = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Backup call logs",
-                            supporting = "Device call history and logs",
-                            leadingIcon = Icons.Outlined.History,
-                            iconContainerColor = Color(0xFF009688),
-                            checked = backupCallLogs,
-                            onCheckedChange = { backupCallLogs = it }
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Backup,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
-                }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Create Backup",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Select items to include in your backup",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(16.dp))
 
-                Spacer(Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
-                        enabled = hasAnySelected,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
+                    Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp)
+                            .fillMaxWidth()
+                            .heightIn(max = maxContainerHeight)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Share", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        RivoExpressiveCard(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            RivoSwitchListItem(
+                                headline = "Backup settings",
+                                supporting = "App preferences, Call Recorder & Network Switcher settings",
+                                leadingIcon = Icons.Outlined.Settings,
+                                iconContainerColor = Color(0xFF4CAF50),
+                                checked = backupSettings,
+                                onCheckedChange = { backupSettings = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup calling cards",
+                                supporting = "Saved calling cards, contact backgrounds and PFP customization",
+                                leadingIcon = Icons.Outlined.ContactPhone,
+                                iconContainerColor = Color(0xFF2196F3),
+                                checked = backupCallingCards,
+                                onCheckedChange = { backupCallingCards = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup notes",
+                                supporting = "Contact notes and general standalone notes",
+                                leadingIcon = Icons.Outlined.Notes,
+                                iconContainerColor = Color(0xFF9C27B0),
+                                checked = backupNotes,
+                                onCheckedChange = { backupNotes = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup contact groups",
+                                supporting = "Custom contact groups and shown contact references",
+                                leadingIcon = Icons.Outlined.Groups,
+                                iconContainerColor = Color(0xFF3F51B5),
+                                checked = backupContactGroups,
+                                onCheckedChange = { backupContactGroups = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup call recordings",
+                                supporting = "Audio recordings, favourites and recording notes",
+                                leadingIcon = Icons.Outlined.Mic,
+                                iconContainerColor = Color(0xFFE53935),
+                                checked = backupRecordings,
+                                onCheckedChange = { backupRecordings = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup contacts",
+                                supporting = "Device & local contacts list and details",
+                                leadingIcon = Icons.Outlined.Contacts,
+                                iconContainerColor = Color(0xFFFF9800),
+                                checked = backupContacts,
+                                onCheckedChange = { backupContacts = it }
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Backup call logs",
+                                supporting = "Device call history and logs",
+                                leadingIcon = Icons.Outlined.History,
+                                iconContainerColor = Color(0xFF009688),
+                                checked = backupCallLogs,
+                                onCheckedChange = { backupCallLogs = it }
+                            )
+                        }
                     }
 
-                    Button(
-                        onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
-                        enabled = hasAnySelected,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp)
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Save", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Button(
+                            onClick = { onShare(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
+                            enabled = hasAnySelected,
+                            shape = CircleShape,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Share", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+
+                        Button(
+                            onClick = { onSave(backupSettings, backupCallingCards, backupNotes, backupContactGroups, backupRecordings, backupContacts, backupCallLogs) },
+                            enabled = hasAnySelected,
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Save", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
                     }
-                }
 
-                Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(4.dp))
 
-                TextButton(
-                    onClick = onDismiss
-                ) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(
+                        onClick = onDismiss
+                    ) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -2519,174 +2523,177 @@ private fun RestoreBackupDialog(
 
     val maxContainerHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
 
+    val prefs = koinInject<PreferenceManager>()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 440.dp)
-                .padding(horizontal = 20.dp, vertical = 24.dp)
-        ) {
-            Column(
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 6.dp,
                 modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .widthIn(max = 440.dp)
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Restore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Restore Backup",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Select items to restore from this backup",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(16.dp))
-
-                Box(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = maxContainerHeight)
-                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    RivoExpressiveCard(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        modifier = Modifier.size(52.dp)
                     ) {
-                        RivoSwitchListItem(
-                            headline = "Restore settings",
-                            supporting = if (contents.hasSettings) "App preferences, Call Recorder & Network Switcher settings" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.Settings,
-                            iconContainerColor = Color(0xFF4CAF50),
-                            checked = restoreSettings && contents.hasSettings,
-                            enabled = contents.hasSettings,
-                            onCheckedChange = { restoreSettings = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore calling cards",
-                            supporting = if (contents.hasCallingCards) "Saved calling cards, contact backgrounds and PFP customization" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.ContactPhone,
-                            iconContainerColor = Color(0xFF2196F3),
-                            checked = restoreCallingCards && contents.hasCallingCards,
-                            enabled = contents.hasCallingCards,
-                            onCheckedChange = { restoreCallingCards = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore notes",
-                            supporting = if (contents.hasNotes) "Contact notes and general standalone notes" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.Notes,
-                            iconContainerColor = Color(0xFF9C27B0),
-                            checked = restoreNotes && contents.hasNotes,
-                            enabled = contents.hasNotes,
-                            onCheckedChange = { restoreNotes = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore contact groups",
-                            supporting = if (contents.hasContactGroups) "Custom contact groups and shown contact references" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.Groups,
-                            iconContainerColor = Color(0xFF3F51B5),
-                            checked = restoreContactGroups && contents.hasContactGroups,
-                            enabled = contents.hasContactGroups,
-                            onCheckedChange = { restoreContactGroups = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore call recordings",
-                            supporting = if (contents.hasRecordings) "Audio recordings, favourites and recording notes" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.Mic,
-                            iconContainerColor = Color(0xFFE53935),
-                            checked = restoreRecordings && contents.hasRecordings,
-                            enabled = contents.hasRecordings,
-                            onCheckedChange = { restoreRecordings = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore contacts",
-                            supporting = if (contents.hasContacts) "Device & local contacts list and details" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.Contacts,
-                            iconContainerColor = Color(0xFFFF9800),
-                            checked = restoreContacts && contents.hasContacts,
-                            enabled = contents.hasContacts,
-                            onCheckedChange = { restoreContacts = it }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline = "Restore call logs",
-                            supporting = if (contents.hasCallLogs) "Device call history and logs" else "Not present in this backup",
-                            leadingIcon = Icons.Outlined.History,
-                            iconContainerColor = Color(0xFF009688),
-                            checked = restoreCallLogs && contents.hasCallLogs,
-                            enabled = contents.hasCallLogs,
-                            onCheckedChange = { restoreCallLogs = it }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            onRestore(
-                                restoreSettings && contents.hasSettings,
-                                restoreCallingCards && contents.hasCallingCards,
-                                restoreNotes && contents.hasNotes,
-                                restoreContactGroups && contents.hasContactGroups,
-                                restoreRecordings && contents.hasRecordings,
-                                restoreContacts && contents.hasContacts,
-                                restoreCallLogs && contents.hasCallLogs
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Restore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
                             )
-                        },
-                        enabled = hasAnySelected,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Restore Backup",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Select items to restore from this backup",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(16.dp))
+
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp)
+                            .heightIn(max = maxContainerHeight)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Restore", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        RivoExpressiveCard(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            RivoSwitchListItem(
+                                headline = "Restore settings",
+                                supporting = if (contents.hasSettings) "App preferences, Call Recorder & Network Switcher settings" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.Settings,
+                                iconContainerColor = Color(0xFF4CAF50),
+                                checked = restoreSettings,
+                                onCheckedChange = { restoreSettings = it },
+                                enabled = contents.hasSettings
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore calling cards",
+                                supporting = if (contents.hasCallingCards) "Saved calling cards, contact backgrounds and PFP customization" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.ContactPhone,
+                                iconContainerColor = Color(0xFF2196F3),
+                                checked = restoreCallingCards,
+                                onCheckedChange = { restoreCallingCards = it },
+                                enabled = contents.hasCallingCards
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore notes",
+                                supporting = if (contents.hasNotes) "Contact notes and general standalone notes" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.Notes,
+                                iconContainerColor = Color(0xFF9C27B0),
+                                checked = restoreNotes,
+                                onCheckedChange = { restoreNotes = it },
+                                enabled = contents.hasNotes
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore contact groups",
+                                supporting = if (contents.hasContactGroups) "Custom contact groups and shown contact references" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.Groups,
+                                iconContainerColor = Color(0xFF3F51B5),
+                                checked = restoreContactGroups,
+                                onCheckedChange = { restoreContactGroups = it },
+                                enabled = contents.hasContactGroups
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore call recordings",
+                                supporting = if (contents.hasRecordings) "Audio recordings, favourites and recording notes" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.Mic,
+                                iconContainerColor = Color(0xFFE53935),
+                                checked = restoreRecordings,
+                                onCheckedChange = { restoreRecordings = it },
+                                enabled = contents.hasRecordings
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore contacts",
+                                supporting = if (contents.hasContacts) "Device & local contacts list and details" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.Contacts,
+                                iconContainerColor = Color(0xFFFF9800),
+                                checked = restoreContacts,
+                                onCheckedChange = { restoreContacts = it },
+                                enabled = contents.hasContacts
+                            )
+                            CardDivider()
+                            RivoSwitchListItem(
+                                headline = "Restore call logs",
+                                supporting = if (contents.hasCallLogs) "Device call history and logs" else "Not present in this backup",
+                                leadingIcon = Icons.Outlined.History,
+                                iconContainerColor = Color(0xFF009688),
+                                checked = restoreCallLogs,
+                                onCheckedChange = { restoreCallLogs = it },
+                                enabled = contents.hasCallLogs
+                            )
+                        }
                     }
-                }
 
-                Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(20.dp))
 
-                TextButton(
-                    onClick = onDismiss
-                ) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                onRestore(
+                                    restoreSettings,
+                                    restoreCallingCards,
+                                    restoreNotes,
+                                    restoreContactGroups,
+                                    restoreRecordings,
+                                    restoreContacts,
+                                    restoreCallLogs
+                                )
+                            },
+                            enabled = hasAnySelected,
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp)
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Restore", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    TextButton(
+                        onClick = onDismiss
+                    ) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

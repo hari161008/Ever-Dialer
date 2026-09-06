@@ -34,6 +34,7 @@ import androidx.compose.animation.core.spring
 import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbers
 import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.getGoogleMeetIcon
 import com.coolappstore.everdialer.by.svhp.controller.util.getTelegramIcon
@@ -172,7 +173,12 @@ fun CallChatViaOverlay(
     // be saved first, even if that's not the one actually registered on WhatsApp/Meet/etc.
     phoneNumbers: List<String> = phoneNumber?.let { listOf(it) } ?: emptyList()
 ) {
-    val allNumbers = remember(phoneNumbers) { phoneNumbers.filter { it.isNotBlank() }.distinct() }
+    val prefs = koinInject<PreferenceManager>()
+    val hideDuplicates = remember { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false) }
+    val allNumbers = remember(phoneNumbers, hideDuplicates) {
+        val raw = phoneNumbers.filter { it.isNotBlank() }.distinct()
+        if (hideDuplicates) deduplicatePhoneNumbers(raw) else raw
+    }
     if (allNumbers.isEmpty()) return
     val context = LocalContext.current
     // App chosen from the picker but still waiting on a number pick (only used when the contact

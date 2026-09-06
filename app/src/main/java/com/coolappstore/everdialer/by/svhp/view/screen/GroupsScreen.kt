@@ -1,4 +1,4 @@
-﻿package com.coolappstore.everdialer.by.svhp.view.screen
+package com.coolappstore.everdialer.by.svhp.view.screen
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -62,14 +62,7 @@ fun GroupsScreen(
 
     val visibleContactGroups = remember(contactGroups, hiddenGroupIds, enabledAccountKeys) {
         contactGroups.filter { it.id !in hiddenGroupIds }.filter { group ->
-            if (enabledAccountKeys == null) true
-            else {
-                val key = if (group.accountType != null || group.accountName != null) {
-                    "${group.accountType ?: ""}:${group.accountName ?: ""}"
-                } else null
-                if (key != null) key in enabledAccountKeys!!
-                else true
-            }
+            com.coolappstore.everdialer.by.svhp.view.components.isGroupMatchingAccountFilter(group, enabledAccountKeys)
         }
     }
 

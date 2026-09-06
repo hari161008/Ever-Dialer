@@ -44,6 +44,41 @@ import com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+fun isGroupMatchingAccountFilter(group: ContactGroup, enabledAccountKeys: Set<String>?): Boolean {
+    if (enabledAccountKeys == null) return true
+    if (enabledAccountKeys.isEmpty()) return false
+    val accType = group.accountType ?: ""
+    val accName = group.accountName ?: ""
+    if (accType.isBlank() && accName.isBlank()) return true
+
+    val groupKey = when {
+        accType.contains("google", ignoreCase = true) -> "google_$accName"
+        accType.contains("whatsapp", ignoreCase = true) -> if (accName.isNotBlank() && !accName.equals("WhatsApp", ignoreCase = true)) "whatsapp_$accName" else "whatsapp"
+        accType.isBlank() || accType.equals("com.android.local", true) || accType.equals("com.android.contacts", true) || accType.equals("phone", true) || accType.equals("device", true) -> "sim_0"
+        else -> "acc:$accType:$accName"
+    }
+
+    if (groupKey in enabledAccountKeys) return true
+    if ("$accType:$accName" in enabledAccountKeys) return true
+
+    return enabledAccountKeys.any { targetKey ->
+        when {
+            targetKey == groupKey -> true
+            targetKey == "$accType:$accName" -> true
+            targetKey == "sim_0" && (groupKey == "sim_0" || accType.isBlank() || accType.equals("com.android.local", true) || accType.equals("com.android.contacts", true)) -> true
+            targetKey.startsWith("google_") && (accType.contains("google", ignoreCase = true) && accName.equals(targetKey.removePrefix("google_"), ignoreCase = true)) -> true
+            targetKey.startsWith("whatsapp") && (accType.contains("whatsapp", ignoreCase = true) || accName.contains("whatsapp", ignoreCase = true)) -> true
+            targetKey.startsWith("acc:") -> {
+                val parts = targetKey.removePrefix("acc:").split(":", limit = 2)
+                if (parts.size == 2) {
+                    accType.equals(parts[0], ignoreCase = true) && accName.equals(parts[1], ignoreCase = true)
+                } else false
+            }
+            else -> false
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsToDisplaySheet(
@@ -71,15 +106,7 @@ fun ContactsToDisplaySheet(
 
     val filteredGroups = remember(groups, enabledAccountKeys) {
         if (enabledAccountKeys == null) groups
-        else {
-            groups.filter { group ->
-                val key = if (group.accountType != null || group.accountName != null) {
-                    "${group.accountType ?: ""}:${group.accountName ?: ""}"
-                } else null
-                if (key != null) key in enabledAccountKeys!!
-                else true
-            }
-        }
+        else groups.filter { isGroupMatchingAccountFilter(it, enabledAccountKeys) }
     }
 
     // Reorderable groups state

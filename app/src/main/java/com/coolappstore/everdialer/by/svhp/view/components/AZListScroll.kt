@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbers
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
@@ -566,9 +567,11 @@ fun ContactListItem(
                         iconTint = Color(0xFFFF9800),
                         onClick  = {
                             showMenu = false
+                            val hideDuplicates = prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
+                            val numbersToShare = if (hideDuplicates) deduplicatePhoneNumbers(contact.phoneNumbers) else contact.phoneNumbers
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${contact.phoneNumbers.joinToString(", ")}")
+                                putExtra(Intent.EXTRA_TEXT, "${contact.name}\n${numbersToShare.joinToString(", ")}")
                             }
                             context.startActivity(Intent.createChooser(intent, "Share contact"))
                         }
@@ -634,9 +637,15 @@ fun ContactListItem(
         }
     }
 
+    val hideDuplicatesInContact = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false) }
+    val displayContactNumbers = remember(contact.phoneNumbers, hideDuplicatesInContact) {
+        val raw = contact.phoneNumbers.filter { it.isNotBlank() }
+        if (hideDuplicatesInContact) deduplicatePhoneNumbers(raw) else raw
+    }
+
     CallChatViaOverlay(
-        phoneNumber = contact.phoneNumbers.firstOrNull()?.takeIf { it.isNotBlank() },
-        phoneNumbers = contact.phoneNumbers.filter { it.isNotBlank() },
+        phoneNumber = displayContactNumbers.firstOrNull(),
+        phoneNumbers = displayContactNumbers,
         showPicker = showCallChatViaPicker,
         onPickerDismiss = { showCallChatViaPicker = false },
         showGoogleMeet = true

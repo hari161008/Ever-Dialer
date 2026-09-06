@@ -146,6 +146,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
     var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())) }
     var showTotalCallsMade  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)) }
+    var hideDuplicateNumbersInContact by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)) }
     var nameNonContactsAsUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)) }
     var dialpadMemory  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
 
@@ -1674,8 +1675,22 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoSwitchListItem(
-                                    headline = "Name non contacts as Unknown",
+                                 RivoSwitchListItem(
+                                     headline = "Hide Duplicate Numbers In A Contact",
+                                     supporting = "Show only one of multiple identical or matching numbers saved under the same contact",
+                                     leadingIcon = Icons.Outlined.FilterNone,
+                                     iconContainerColor = ColorPurple,
+                                     checked = hideDuplicateNumbersInContact,
+                                     modifier = Modifier.settingsSearchHighlight("hide_duplicate_numbers_in_contact", highlightedKey) { highlightedKey = null },
+                                     onCheckedChange = {
+                                         hideDuplicateNumbersInContact = it
+                                         prefs.setBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, it)
+                                     }
+                                 )
+                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                 RivoSwitchListItem(
+                                     headline = "Name non contacts as Unknown",
                                     supporting = if (nameNonContactsAsUnknown) "Show \"Unknown\" as the name for numbers not in your contacts" else "Directly show the phone number instead of \"Unknown\"",
                                     leadingIcon = Icons.Outlined.PersonOff,
                                     iconContainerColor = ColorTeal,
