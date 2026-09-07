@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.CallLog
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import androidx.compose.ui.graphics.ImageBitmap
@@ -53,6 +54,21 @@ data class SortConfig(
 
 enum class FilterTab { ALL, FAVOURITES }
 
+data class ContactIndexEntry(
+    val contactId: Long,
+    val name: String?,
+    val photoUri: String?,
+    val savedDigits: String
+)
+
+data class SimpleCallLog(
+    val number: String,
+    val date: Long,
+    val type: Int,
+    val durationSec: Long,
+    val cachedName: String?
+)
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val preferences = AppPreferences(application)
@@ -60,6 +76,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val notesPrefs    = application.getSharedPreferences("recording_notes",    Context.MODE_PRIVATE)
     private val sortPrefs     = application.getSharedPreferences("sort_config",        Context.MODE_PRIVATE)
     private val durationCache = application.getSharedPreferences("recording_duration", Context.MODE_PRIVATE)
+
+    private val phonePhotoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    @Volatile private var cachedExactIndex: Map<String, ContactIndexEntry> = emptyMap()
+    @Volatile private var cachedSuffixIndex: Map<String, MutableList<ContactIndexEntry>> = emptyMap()
 
     private val _allRecordings = MutableStateFlow<List<RecordingItem>>(emptyList())
     private val _isLoading     = MutableStateFlow(false)
@@ -480,15 +500,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        val (exactContactIndex, suffixContactIndex) = buildContactIndex(context)
+        cachedExactIndex = exactContactIndex
+        cachedSuffixIndex = suffixContactIndex
+        val recentCallLogs = readRecentCallLogs(context)
+
         entries.mapNotNull { entry ->
             val name     = entry.name
             val ext      = name.substringAfterLast('.', "")
             var baseName = name.substringBeforeLast('.')
 
-            // Strip the hidden phone-number suffix (see RecordingFileNameFormatter.formatFileName)
-            // before running the template parser below, so it doesn't confuse the field matching,
-            // and remember the number it carried — this is the number we fall back to whenever the
-            // visible template itself doesn't expose one.
             val hiddenPhoneNumber = extractHiddenPhoneSuffix(baseName)
             if (hiddenPhoneNumber != null) {
                 baseName = baseName.substringBeforeLast(RecordingFileNameFormatter.HIDDEN_NUMBER_MARKER)
@@ -496,27 +517,56 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             val parsed   = parseFilenameWithTemplate(baseName, template)
             val date        = parseDate(parsed.dateStr)
-            // Bug fix: previously this only ever fell back to "Unknown" when the template simply
-            // didn't produce a phone number (e.g. the default "{contact_name}_{date}_{direction}"
-            // template never includes one at all), which is exactly what made the player and the
-            // recordings list permanently show "Unknown" for the number — and, since contact name/
-            // photo lookups both key off that number, the contact's saved photo (and sometimes name)
-            // disappeared right along with it. The hidden suffix recovered above now supplies the
-            // real number in that case.
-            val phoneNumber = parsed.phoneNumber.trim().ifBlank { hiddenPhoneNumber ?: "" }.ifBlank { "Unknown" }
-            // Prefer contact name embedded in filename (if template uses {contact_name}),
-            // then fall back to a live contacts-db lookup by phone number.
-            //
-            // Bug fix: previously this only ever consulted contactFromFile/resolveContactName
-            // when phoneNumber != "Unknown", which meant a contact name embedded directly in
-            // the filename (via {contact_name}) was thrown away and shown as "Unknown" on any
-            // template that doesn't also include {phone_number} — e.g. the default template.
-            // contactFromFile is now checked first, independent of whether a phone number was
-            // parsed, and the live lookup is only attempted when we actually have a number.
-            val contactFromFile = if (template.contains("{contact_name}"))
-                parsed.contactName.ifBlank { null } else null
-            val contactName = contactFromFile
-                ?: if (phoneNumber != "Unknown") resolveContactName(context, phoneNumber) else null
+            var phoneNumber = parsed.phoneNumber.trim().ifBlank { hiddenPhoneNumber ?: "" }.ifBlank { "Unknown" }
+
+            // Use call logs logic to resolve phone number and contact if incoming or outgoing call is unknown
+            val recTimeMs = date?.time ?: 0L
+            val targetType = when (parsed.direction.lowercase()) {
+                "in" -> CallLog.Calls.INCOMING_TYPE
+                "out" -> CallLog.Calls.OUTGOING_TYPE
+                else -> 0
+            }
+
+            var callLogMatch: SimpleCallLog? = null
+            if (recTimeMs > 0L && recentCallLogs.isNotEmpty()) {
+                var bestDiff = Long.MAX_VALUE
+                for (call in recentCallLogs) {
+                    if (targetType != 0 && call.type != targetType) continue
+                    val diff = kotlin.math.abs(call.date - recTimeMs)
+                    if (diff <= 600_000L && diff < bestDiff) {
+                        bestDiff = diff
+                        callLogMatch = call
+                    }
+                }
+            }
+
+            if ((phoneNumber == "Unknown" || phoneNumber.isBlank()) && callLogMatch != null) {
+                if (callLogMatch.number.isNotBlank()) {
+                    phoneNumber = callLogMatch.number
+                }
+            }
+
+            var contactName: String? = null
+            var photoUri: String? = null
+
+            if (phoneNumber != "Unknown" && phoneNumber.isNotBlank()) {
+                val match = resolveContactFromIndex(phoneNumber, exactContactIndex, suffixContactIndex)
+                if (match != null) {
+                    contactName = match.name
+                    photoUri = match.photoUri
+                }
+            }
+
+            if (contactName.isNullOrBlank()) {
+                val contactFromFile = if (template.contains("{contact_name}"))
+                    parsed.contactName.ifBlank { null } else null
+                contactName = contactFromFile ?: callLogMatch?.cachedName
+            }
+
+            if (photoUri != null && phoneNumber != "Unknown") {
+                phonePhotoCache[phoneNumber] = photoUri
+            }
+
             val noteText = notesPrefs.getString(entry.uri.toString(), "") ?: ""
             val fileSize = entry.length
             val durationMs = resolveAudioDuration(context, entry.uri, fileSize)
@@ -639,6 +689,106 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    private fun buildContactIndex(context: Context): Pair<Map<String, ContactIndexEntry>, Map<String, MutableList<ContactIndexEntry>>> {
+        val exact = HashMap<String, ContactIndexEntry>()
+        val suffix = HashMap<String, MutableList<ContactIndexEntry>>()
+        try {
+            context.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+                    ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+                    ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null, null
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
+                val photoIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_URI)
+                val thumbIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI)
+                val numberIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
+                while (cursor.moveToNext()) {
+                    val savedNumber = cursor.getString(numberIdx) ?: continue
+                    val digits = savedNumber.filter { it.isDigit() }
+                    if (digits.isEmpty()) continue
+
+                    val photo = (if (photoIdx >= 0) cursor.getString(photoIdx) else null)
+                        ?: (if (thumbIdx >= 0) cursor.getString(thumbIdx) else null)
+
+                    val entry = ContactIndexEntry(
+                        contactId = if (idIdx >= 0) cursor.getLong(idIdx) else 0L,
+                        name = if (nameIdx >= 0) cursor.getString(nameIdx) else null,
+                        photoUri = photo,
+                        savedDigits = digits
+                    )
+
+                    exact.putIfAbsent(digits, entry)
+                    if (digits.length >= 7) {
+                        suffix.getOrPut(digits.takeLast(7)) { mutableListOf() }.add(entry)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        cachedExactIndex = exact
+        cachedSuffixIndex = suffix
+        return exact to suffix
+    }
+
+    private fun readRecentCallLogs(context: Context): List<SimpleCallLog> {
+        val list = mutableListOf<SimpleCallLog>()
+        try {
+            context.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(
+                    CallLog.Calls.NUMBER,
+                    CallLog.Calls.DATE,
+                    CallLog.Calls.TYPE,
+                    CallLog.Calls.DURATION,
+                    CallLog.Calls.CACHED_NAME
+                ),
+                null, null,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                val numIdx = cursor.getColumnIndex(CallLog.Calls.NUMBER)
+                val dateIdx = cursor.getColumnIndex(CallLog.Calls.DATE)
+                val typeIdx = cursor.getColumnIndex(CallLog.Calls.TYPE)
+                val durIdx = cursor.getColumnIndex(CallLog.Calls.DURATION)
+                val nameIdx = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME)
+
+                var count = 0
+                while (cursor.moveToNext() && count < 1000) {
+                    count++
+                    val num = if (numIdx >= 0) cursor.getString(numIdx) ?: "" else ""
+                    val date = if (dateIdx >= 0) cursor.getLong(dateIdx) else 0L
+                    val type = if (typeIdx >= 0) cursor.getInt(typeIdx) else 0
+                    val dur = if (durIdx >= 0) cursor.getLong(durIdx) else 0L
+                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+                    list.add(SimpleCallLog(num, date, type, dur, name))
+                }
+            }
+        } catch (_: Exception) {}
+        return list
+    }
+
+    private fun resolveContactFromIndex(
+        phoneNumber: String,
+        exact: Map<String, ContactIndexEntry>,
+        suffix: Map<String, MutableList<ContactIndexEntry>>
+    ): ContactIndexEntry? {
+        val digits = phoneNumber.filter { it.isDigit() }
+        if (digits.isEmpty()) return null
+        exact[digits]?.let { return it }
+        if (digits.length < 7) return null
+        val bucket = suffix[digits.takeLast(7)] ?: return null
+        for (candidate in bucket) {
+            if (numbersMatch(digits, candidate.savedDigits)) return candidate
+        }
+        return null
+    }
+
     private fun numbersMatch(a: String, b: String): Boolean {
         if (a.isBlank() || b.isBlank()) return false
         if (a == b) return true
@@ -646,91 +796,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (android.telephony.PhoneNumberUtils.compare(a, b)) return true
         } catch (_: Exception) {}
 
-        fun normDigits(s: String): String {
-            val d = s.filter { it.isDigit() }
-            return when {
-                d.length > 10 && d.startsWith("91") -> d.substring(2)
-                d.length > 10 && d.startsWith("1") -> d.substring(1)
-                d.length > 10 && d.startsWith("00") -> d.substring(2)
-                d.length > 10 && d.startsWith("0") -> d.substring(1)
-                d.startsWith("0") -> d.substring(1)
-                else -> d
-            }
-        }
-
-        val rawA = a.filter { it.isDigit() }
-        val rawB = b.filter { it.isDigit() }
-        if (rawA.isEmpty() || rawB.isEmpty()) return false
-        if (rawA == rawB || rawA.endsWith(rawB) || rawB.endsWith(rawA)) return true
-
-        val da = normDigits(a)
-        val db = normDigits(b)
+        val da = a.filter { it.isDigit() }
+        val db = b.filter { it.isDigit() }
         if (da.isEmpty() || db.isEmpty()) return false
-        if (da == db || da.endsWith(db) || db.endsWith(da)) return true
+        if (da == db) return true
 
-        val minLen = minOf(da.length, db.length)
-        if (minLen >= 7) {
-            val checkLen = minOf(minLen, 10)
-            for (len in checkLen downTo 7) {
-                if (da.takeLast(len) == db.takeLast(len)) return true
-            }
+        val shorterLen = minOf(da.length, db.length)
+        if (shorterLen < 7) return false
+        if (da.endsWith(db) || db.endsWith(da)) return true
+
+        val matchLen = minOf(shorterLen, 10)
+        for (len in matchLen downTo 7) {
+            if (da.takeLast(len) == db.takeLast(len)) return true
         }
         return false
     }
 
     private fun resolveContactName(context: Context, phoneNumber: String): String? {
-        return try {
-            val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
-            if (normalized.isBlank()) return null
-            val lookupUri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(normalized)
-            )
-            val directMatch = context.contentResolver.query(
-                lookupUri,
-                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.NUMBER),
-                null, null, null
-            )?.use { cursor ->
-                var matchedName: String? = null
-                while (cursor.moveToNext()) {
-                    val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull() ?: ""
-                    if (numbersMatch(phoneNumber, matchedNumber)) {
-                        matchedName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
-                        break
-                    }
-                }
-                matchedName
-            }
-            directMatch ?: fallbackScanContactName(context, phoneNumber)
-        } catch (_: Exception) { null }
-    }
-
-    /** Fallback for [resolveContactName]: PhoneLookup's built-in fuzzy matching can return
-     *  zero rows at all when a contact is saved WITH a country code but the recording's number
-     *  is WITHOUT one (or vice versa), especially when it disagrees with the device's detected
-     *  region — row-walking above can't help then since there's nothing to walk. Recover by
-     *  scanning every saved phone number directly with the same plausibility check. */
-    private fun fallbackScanContactName(context: Context, queryNumber: String): String? {
-        if (queryNumber.isBlank()) return null
-        return try {
-            context.contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY, ContactsContract.CommonDataKinds.Phone.NUMBER),
-                null, null, null
-            )?.use { cursor ->
-                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
-                val numberIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                var matchedName: String? = null
-                while (cursor.moveToNext()) {
-                    val savedNumber = cursor.getString(numberIdx) ?: continue
-                    if (numbersMatch(queryNumber, savedNumber)) {
-                        matchedName = cursor.getString(nameIdx)
-                        break
-                    }
-                }
-                matchedName
-            }
-        } catch (_: Exception) { null }
+        if (phoneNumber.isBlank() || phoneNumber == "Unknown") return null
+        val fromIndex = resolveContactFromIndex(phoneNumber, cachedExactIndex, cachedSuffixIndex)
+        if (fromIndex?.name != null) return fromIndex.name
+        val (exact, suffix) = buildContactIndex(context)
+        return resolveContactFromIndex(phoneNumber, exact, suffix)?.name
     }
 
     private fun resolveAudioDuration(context: Context, uri: Uri, fileSizeBytes: Long): Long {
@@ -825,42 +912,57 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun loadContactPhoto(context: Context, phoneNumber: String): ImageBitmap? =
         withContext(Dispatchers.IO) {
             try {
-                // See resolveContactName() for why the number must be normalized and
-                // encoded before being appended to the PhoneLookup URI — otherwise a
-                // recording can end up showing a different contact's photo.
-                val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
-                if (normalized.isBlank()) return@withContext null
-                val lookupUri = Uri.withAppendedPath(
-                    ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(normalized)
-                )
-                val queryDigits = normalized.filter { it.isDigit() }
-                var photoUriStr: String? = context.contentResolver.query(
-                    lookupUri,
-                    arrayOf(ContactsContract.PhoneLookup.PHOTO_URI, ContactsContract.PhoneLookup.NUMBER),
-                    null, null, null
-                )?.use { cursor ->
-                    // Same multi-row fix as resolveContactName(): a contact with several saved
-                    // numbers can produce multiple rows, so walk all of them for a genuine match
-                    // instead of giving up after an unrelated first row.
-                    var matched: String? = null
-                    while (cursor.moveToNext()) {
-                        val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
-                        val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
-                        val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
-                            (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
-                        if (!isPlausibleMatch) continue
-                        matched = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.PHOTO_URI))
-                        if (matched != null) break
+                if (phoneNumber.isBlank() || phoneNumber == "Unknown") return@withContext null
+
+                // 1. Check in-memory photo cache populated during fetchRecordings
+                var photoUriStr = phonePhotoCache[phoneNumber]
+
+                // 2. If not cached, check against contact index
+                if (photoUriStr == null) {
+                    var exact = cachedExactIndex
+                    var suffix = cachedSuffixIndex
+                    if (exact.isEmpty() && suffix.isEmpty()) {
+                        val (e, s) = buildContactIndex(context)
+                        exact = e
+                        suffix = s
+                        cachedExactIndex = e
+                        cachedSuffixIndex = s
                     }
-                    matched
+                    val match = resolveContactFromIndex(phoneNumber, exact, suffix)
+                    photoUriStr = match?.photoUri
+                    if (photoUriStr != null) {
+                        phonePhotoCache[phoneNumber] = photoUriStr
+                    }
                 }
 
-                // Same fallback rationale as resolveContactName(): PhoneLookup can return zero
-                // rows at all for a country-code-mismatched number, so if nothing matched
-                // above, fall back to a manual scan of every saved phone number.
+                // 3. Fallback to PhoneLookup if still null
                 if (photoUriStr == null) {
-                    photoUriStr = fallbackScanContactPhotoUri(context, queryDigits)
+                    val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
+                    if (normalized.isNotBlank()) {
+                        val lookupUri = Uri.withAppendedPath(
+                            ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(normalized)
+                        )
+                        val queryDigits = normalized.filter { it.isDigit() }
+                        photoUriStr = context.contentResolver.query(
+                            lookupUri,
+                            arrayOf(ContactsContract.PhoneLookup.PHOTO_URI, ContactsContract.PhoneLookup.NUMBER),
+                            null, null, null
+                        )?.use { cursor ->
+                            var matched: String? = null
+                            while (cursor.moveToNext()) {
+                                val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull()
+                                val matchedDigits = matchedNumber?.filter { it.isDigit() }.orEmpty()
+                                val isPlausibleMatch = matchedDigits.isNotEmpty() && queryDigits.isNotEmpty() &&
+                                    (matchedDigits.endsWith(queryDigits.takeLast(7)) || queryDigits.endsWith(matchedDigits.takeLast(7)))
+                                if (!isPlausibleMatch) continue
+                                matched = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.PHOTO_URI))
+                                if (matched != null) break
+                            }
+                            matched
+                        } ?: fallbackScanContactPhotoUri(context, queryDigits)
+                    }
                 }
+
                 if (photoUriStr == null) return@withContext null
 
                 val stream = context.contentResolver.openInputStream(Uri.parse(photoUriStr))

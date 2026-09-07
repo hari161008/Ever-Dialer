@@ -44,6 +44,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
+import com.coolappstore.everdialer.by.svhp.controller.util.formatCallLogDate
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
@@ -167,7 +168,10 @@ fun CallLogTile(
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
-    val showTotalCallsMade = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false) }
+    val groupCallsByLatest = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false) }
+    val showTotalCallsMade = remember(settingsVer) {
+        groupCallsByLatest || prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
+    }
     val isNumberBlocked = remember(settingsVer, log.number) { BlockedNumbersManager.isBlocked(context, prefs, log.number) }
     var showFakeCallSheet by remember { mutableStateOf(false) }
     var showCallChatViaPicker by remember { mutableStateOf(false) }
@@ -241,7 +245,7 @@ fun CallLogTile(
         RivoListItem(
             headline = buildString {
                 append(displayName)
-                if (log.count > 1) append(" (${log.count})")
+                if (log.count > 1 && !showTotalCallsMade) append(" (${log.count})")
             },
             supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,
@@ -252,8 +256,16 @@ fun CallLogTile(
             supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
             trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
-            trailingSubText = if (isMissed && log.duration > 0) "${log.duration}s" else null,
-            trailingSubTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
+            trailingSubText = if (groupCallsByLatest) {
+                formatCallLogDate(log.date)
+            } else {
+                if (isMissed && log.duration > 0) "${log.duration}s" else null
+            },
+            trailingSubTextColor = if (groupCallsByLatest) {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            } else {
+                if (isMissed) MaterialTheme.colorScheme.error else null
+            },
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
                 CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived

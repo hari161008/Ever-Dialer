@@ -144,6 +144,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
+    var groupCallsByLatest  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)) }
     var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())) }
     var showTotalCallsMade  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)) }
     var hideDuplicateNumbersInContact by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)) }
@@ -1643,6 +1644,24 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         pillNav = it
                                         prefs.setBoolean(PreferenceManager.KEY_PILL_NAV, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Group numbers in call logs based on latest calls",
+                                    supporting = "Sort call logs by latest calls made and group numbers, showing total call count",
+                                    leadingIcon = Icons.Outlined.Layers,
+                                    iconContainerColor = ColorBlue,
+                                    checked = groupCallsByLatest,
+                                    modifier = Modifier.settingsSearchHighlight("group_calls_by_latest", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        groupCallsByLatest = it
+                                        prefs.setBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, it)
+                                        if (it) {
+                                            showTotalCallsMade = true
+                                            prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, true)
+                                        }
                                     }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),

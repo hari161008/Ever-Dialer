@@ -58,14 +58,21 @@ fun ContactsHiderScreen(navigator: DestinationsNavigator) {
 
     var hideNames by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)) }
     var hideMenu  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_MENU, false)) }
+    var hideEverywhere by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                PreferenceManager.KEY_CONTACTS_HIDER_HIDE_EVERYWHERE,
+                prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_IN_CONTACTS, false)
+            )
+        )
+    }
 
     var showContactPicker by remember { mutableStateOf(false) }
     var contactSearch by remember { mutableStateOf("") }
 
     fun saveHiddenIds(ids: Set<String>) {
         hiddenIdsState = ids
-        prefs.setString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, ids.joinToString(","))
-        
+        contactsVM.updateHiddenContacts(ids)
     }
 
     Scaffold(
@@ -196,7 +203,7 @@ fun ContactsHiderScreen(navigator: DestinationsNavigator) {
                                 }
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    "Add contacts to hide them from the contact list",
+                                    "Add contacts to hide them from call logs, contacts, and favourites",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -295,6 +302,45 @@ fun ContactsHiderScreen(navigator: DestinationsNavigator) {
                                     hideNames = v
                                     prefs.setBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, v)
                                     
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.PersonOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Hide contacts everywhere",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    "Hides contacts from the phone book section. They will be unhidden only from this feature",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = hideEverywhere,
+                                onCheckedChange = { v ->
+                                    hideEverywhere = v
+                                    contactsVM.setHideEverywhere(v)
                                 }
                             )
                         }

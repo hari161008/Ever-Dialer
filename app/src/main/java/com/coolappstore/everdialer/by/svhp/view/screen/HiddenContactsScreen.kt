@@ -40,9 +40,11 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
     val allContacts by contactsVM.allContacts.collectAsState()
     val context = LocalContext.current
 
-    val hiddenIds = remember {
-        val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-        if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+    val hiddenIds by remember(prefs) {
+        derivedStateOf {
+            val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        }
     }
 
     val hiddenContacts = remember(allContacts, hiddenIds) {
@@ -147,6 +149,9 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
                                 makeCall(context, num)
                             }
                         },
+                        onUnhideClick = {
+                            contactsVM.unhideContact(contact.id)
+                        },
                         onViewClick = {
                             navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
                         }
@@ -161,6 +166,7 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
 private fun HiddenContactCard(
     contact: Contact,
     onCallClick: (String) -> Unit,
+    onUnhideClick: () -> Unit,
     onViewClick: () -> Unit
 ) {
     Surface(
@@ -189,6 +195,13 @@ private fun HiddenContactCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+            IconButton(onClick = onUnhideClick) {
+                Icon(
+                    Icons.Default.Visibility,
+                    contentDescription = "Unhide",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

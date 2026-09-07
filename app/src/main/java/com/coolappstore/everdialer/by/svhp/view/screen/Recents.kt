@@ -48,6 +48,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
+import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
@@ -553,37 +554,23 @@ fun CallLogFullContent(
 
         // Selection mode state - hoisted to parent
 
-        if (showSelectionDeleteConfirm) {
-            AlertDialog(
-                onDismissRequest = { onShowSelectionDeleteConfirmChange(false) },
-                title = { Text("Delete ${selectedLogs.size} entries?") },
-                text = { Text("This will permanently delete the selected call log entries.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onShowSelectionDeleteConfirmChange(false)
-                            viewModel.deleteCallLogsByKeys(selectedLogs)
-                            onSelectedLogsChange(emptySet())
-                            onSelectionModeChange(false)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) { Text("Delete") }
-                },
-                dismissButton = { TextButton(onClick = { onShowSelectionDeleteConfirmChange(false) }) { Text("Cancel") } }
-            )
-        }
-
         // Track previous filter index for slide direction
         val filterEntries = CallLogFilter.entries
         var previousFilterIndex by remember { mutableIntStateOf(filterEntries.indexOf(selectedFilter)) }
 
-        val filteredLogs = remember(logs, selectedFilter) {
+        val hiddenIds = remember(settingsVersion) {
+            val raw = prefs.getString(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        }
+
+        val filteredLogs = remember(logs, selectedFilter, hiddenIds) {
+            val base = if (hiddenIds.isEmpty()) logs else logs.filter { it.contactId == null || it.contactId !in hiddenIds }
             when (selectedFilter) {
-                CallLogFilter.All -> logs
-                CallLogFilter.Missed -> logs.filter { it.type == CallLog.Calls.MISSED_TYPE }
-                CallLogFilter.Incoming -> logs.filter { it.type == CallLog.Calls.INCOMING_TYPE }
-                CallLogFilter.Outgoing -> logs.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
-                CallLogFilter.Contacts -> logs.filter { it.name != null && it.name != it.number }
+                CallLogFilter.All -> base
+                CallLogFilter.Missed -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
+                CallLogFilter.Incoming -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
+                CallLogFilter.Outgoing -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number }
             }
         }
         val totalCallsMap = remember(logs) {
@@ -594,7 +581,60 @@ fun CallLogFullContent(
             }
             map
         }
-        val groupedLogs = remember(filteredLogs) { filteredLogs.groupBy { formatDateHeader(it.date) } }
+        val groupCallsByLatest = remember(settingsVersion) {
+            prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)
+        }
+        val groupedLogs: Map<String, List<CallLogEntry>> = remember(filteredLogs, groupCallsByLatest) {
+            if (groupCallsByLatest) {
+                val groupedByNumber = LinkedHashMap<String, MutableList<CallLogEntry>>()
+                for (entry in filteredLogs) {
+                    val key = entry.contactId?.takeIf { it.isNotBlank() }
+                        ?: entry.number.filter { it.isDigit() }.ifEmpty { null }
+                        ?: "unknown_${entry.date}_${entry.number}"
+                    groupedByNumber.getOrPut(key) { mutableListOf() }.add(entry)
+                }
+                val mergedList = groupedByNumber.values.map { list ->
+                    val first = list.first()
+                    if (list.size == 1) {
+                        first
+                    } else {
+                        first.copy(
+                            types = list.flatMap { it.types },
+                            callIds = list.flatMap { it.callIds },
+                            dates = list.flatMap { it.dates }
+                        )
+                    }
+                }
+                mapOf("" to mergedList)
+            } else {
+                filteredLogs.groupBy { formatDateHeader(it.date) }
+            }
+        }
+
+        if (showSelectionDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { onShowSelectionDeleteConfirmChange(false) },
+                title = { Text("Delete ${selectedLogs.size} entries?") },
+                text = { Text("This will permanently delete the selected call log entries.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onShowSelectionDeleteConfirmChange(false)
+                            val entriesToDelete = groupedLogs.values.flatten().filter { "${it.number}|${it.date}" in selectedLogs }
+                            if (entriesToDelete.isNotEmpty()) {
+                                viewModel.deleteCallLogs(entriesToDelete)
+                            } else {
+                                viewModel.deleteCallLogsByKeys(selectedLogs)
+                            }
+                            onSelectedLogsChange(emptySet())
+                            onSelectionModeChange(false)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = { onShowSelectionDeleteConfirmChange(false) }) { Text("Cancel") } }
+            )
+        }
 
         // Bug fix: a new call (e.g. the first call of a new day, when the last entry in the list
         // was from yesterday) gets correctly prepended to the top of `logs` the moment it's
@@ -890,9 +930,15 @@ fun CallLogFullContent(
                         val directCall = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
                         currentGroupedLogs.forEach { (header, logsInGroup) ->
                             // Section header as its own item
-                            item(key = "header_$header", contentType = "sectionHeader") {
-                                RivoScrollAnimatedItem {
-                                    RivoSectionHeader(title = header)
+                            if (header.isNotBlank()) {
+                                item(key = "header_$header", contentType = "sectionHeader") {
+                                    RivoScrollAnimatedItem {
+                                        RivoSectionHeader(title = header)
+                                    }
+                                }
+                            } else {
+                                item(key = "header_top_spacer") {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                 }
                             }
                             // Individual items per log entry with per-item rounded corners

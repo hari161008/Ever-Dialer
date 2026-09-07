@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.coolappstore.everdialer.by.svhp.controller.util.ContactsCache
+import com.coolappstore.everdialer.by.svhp.controller.util.ContactsHiderManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import androidx.lifecycle.AndroidViewModel
@@ -328,11 +329,8 @@ class ContactsViewModel(
                 } else {
                     contactsRepo.getContacts(enabledKeys)
                 }
-                // Filter out hidden contacts from the main list
-                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
-                               else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
-                if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
+                val backedUp = ContactsHiderManager.getBackedUpContacts(prefs).values.toList()
+                (raw + backedUp).distinctBy { it.id }
             }.onSuccess { contacts ->
                 hasLoadedFromCache = true
                 _allContacts.value = contacts
@@ -348,21 +346,66 @@ class ContactsViewModel(
     private fun updateDisplayedContacts(baseContacts: List<Contact> = _allContacts.value) {
         val groupId = _selectedGroupId.value
         val sessionKey = _selectedAccountKey.value
+        val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
+
         if (groupId != null) {
             val group = _contactGroups.value.find { it.id == groupId } ?: prefs.getContactGroups().find { it.id == groupId }
             val groupContactIds = group?.contactIds?.toSet() ?: emptySet()
-            _displayedContacts.value = baseContacts.filter { it.id in groupContactIds }
+            _displayedContacts.value = baseContacts.filter { it.id in groupContactIds && (hiddenIds.isEmpty() || it.id !in hiddenIds) }
         } else if (sessionKey != null) {
             viewModelScope.launch(Dispatchers.IO) {
                 val raw = contactsRepo.getContacts(setOf(sessionKey))
-                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
-                               else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
-                val filtered = if (hiddenIds.isEmpty()) raw else raw.filter { it.id !in hiddenIds }
+                val backedUp = ContactsHiderManager.getBackedUpContacts(prefs).values.toList()
+                val merged = (raw + backedUp).distinctBy { it.id }
+                val filtered = if (hiddenIds.isEmpty()) merged else merged.filter { it.id !in hiddenIds }
                 _displayedContacts.value = filtered
             }
         } else {
-            _displayedContacts.value = baseContacts
+            _displayedContacts.value = if (hiddenIds.isEmpty()) baseContacts else baseContacts.filter { it.id !in hiddenIds }
+        }
+    }
+
+    fun updateHiddenContacts(newHiddenIds: Set<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val hideEverywhere = ContactsHiderManager.isHideEverywhereEnabled(prefs)
+            val updated = ContactsHiderManager.syncPhonebookState(
+                context = getApplication(),
+                prefs = prefs,
+                contactsRepo = contactsRepo,
+                allContacts = _allContacts.value,
+                hiddenIds = newHiddenIds,
+                hideEverywhere = hideEverywhere
+            )
+            prefs.setString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, updated.joinToString(","))
+            fetchContacts()
+        }
+    }
+
+    fun setHideEverywhere(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            prefs.setBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_EVERYWHERE, enabled)
+            prefs.setBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_IN_CONTACTS, enabled)
+            val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
+            val updated = ContactsHiderManager.syncPhonebookState(
+                context = getApplication(),
+                prefs = prefs,
+                contactsRepo = contactsRepo,
+                allContacts = _allContacts.value,
+                hiddenIds = hiddenIds,
+                hideEverywhere = enabled
+            )
+            prefs.setString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, updated.joinToString(","))
+            fetchContacts()
+        }
+    }
+
+    fun unhideContact(contactId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentHidden = ContactsHiderManager.getHiddenIds(prefs).toMutableSet()
+            currentHidden.remove(contactId)
+            ContactsHiderManager.restoreToPhonebook(getApplication(), prefs, contactsRepo, contactId)
+            prefs.setString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, currentHidden.joinToString(","))
+            fetchContacts()
         }
     }
 
@@ -371,9 +414,7 @@ class ContactsViewModel(
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) return
         viewModelScope.launch(Dispatchers.IO) {
-            val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-            val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet()
-                           else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+            val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
             runCatching { contactsRepo.getAvailableAccounts(hiddenIds) }
                 .onSuccess { _availableAccounts.value = it }
         }

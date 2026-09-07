@@ -376,6 +376,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_PILL_NAV              = "pill_style_nav"
+        const val KEY_GROUP_CALLS_BY_LATEST = "group_calls_by_latest"
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
         const val KEY_SHOW_TOTAL_CALLS_MADE = "show_total_calls_made"
         // Dialpad Memory — on by default. When on, whatever digits are typed into the Dialpad
@@ -505,10 +506,13 @@ class PreferenceManager(context: Context) {
         const val KEY_DEFAULT_MESSAGE_APP = "default_message_app"
         const val KEY_APP_NAME_PRESET = "app_name_preset"
 
-        const val KEY_CONTACTS_HIDER_CODE         = "contacts_hider_code"          // numeric secret code string
-        const val KEY_CONTACTS_HIDER_IDS          = "contacts_hider_ids"           // comma-separated contact IDs
-        const val KEY_CONTACTS_HIDER_HIDE_NAMES   = "contacts_hider_hide_names"    // bool
-        const val KEY_CONTACTS_HIDER_HIDE_MENU    = "contacts_hider_hide_menu"     // bool
+        const val KEY_CONTACTS_HIDER_CODE             = "contacts_hider_code"              // numeric secret code string
+        const val KEY_CONTACTS_HIDER_IDS              = "contacts_hider_ids"               // comma-separated contact IDs
+        const val KEY_CONTACTS_HIDER_HIDE_NAMES       = "contacts_hider_hide_names"        // bool
+        const val KEY_CONTACTS_HIDER_HIDE_MENU        = "contacts_hider_hide_menu"         // bool
+        const val KEY_CONTACTS_HIDER_HIDE_IN_CONTACTS = "contacts_hider_hide_in_contacts" // bool, default false
+        const val KEY_CONTACTS_HIDER_HIDE_EVERYWHERE  = "contacts_hider_hide_everywhere"  // bool, default false
+        const val KEY_CONTACTS_HIDER_BACKED_UP_DATA   = "contacts_hider_backed_up_data"   // json map of backed-up contacts
 
         // Search filter (Dialpad / Calls / Contacts / Favourites search bars) — the "Filter"
         // button beside the search bar. All four default to true (checked) so search behaves

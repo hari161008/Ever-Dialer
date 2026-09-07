@@ -610,20 +610,26 @@ fun DialPadContent(
             val q = searchQuery.trim()
             val n = number
             if (!searchFilterState.contacts) emptyList()
-            else when {
-                q.isNotEmpty() -> allContacts.filter { c ->
-                    c.name.contains(q, ignoreCase = true) ||
-                    c.phoneNumbers.any { it.contains(q) }
-                }.take(5)
-                n.isNotEmpty() -> allContacts.filter { contact ->
-                    val matchesNumber = contact.phoneNumbers.any { it.replace(" ", "").contains(n) }
-                    val matchesName = if (t9Enabled) {
-                        val t9Name = T9Matcher.convertNameToT9(contact.name)
-                        t9Name.contains(n)
-                    } else false
-                    matchesNumber || matchesName
-                }.take(3)
-                else -> emptyList()
+            else {
+                val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+                val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+                val contactsToSearch = if (hiddenIds.isEmpty()) allContacts else allContacts.filter { it.id !in hiddenIds }
+
+                when {
+                    q.isNotEmpty() -> contactsToSearch.filter { c ->
+                        c.name.contains(q, ignoreCase = true) ||
+                        c.phoneNumbers.any { it.contains(q) }
+                    }.take(5)
+                    n.isNotEmpty() -> contactsToSearch.filter { contact ->
+                        val matchesNumber = contact.phoneNumbers.any { it.replace(" ", "").contains(n) }
+                        val matchesName = if (t9Enabled) {
+                            val t9Name = T9Matcher.convertNameToT9(contact.name)
+                            t9Name.contains(n)
+                        } else false
+                        matchesNumber || matchesName
+                    }.take(3)
+                    else -> emptyList()
+                }
             }
         }
     }

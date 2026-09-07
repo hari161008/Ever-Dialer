@@ -167,75 +167,71 @@ object RecordingFileNameFormatter {
     // Made non-private (was `private fun`) so RecordingNotificationHelper can reuse the same
     // normalize-then-verify contact lookup to show the caller's name in the post-call
     // notification, instead of duplicating this logic there.
-    private fun numbersMatch(a: String, b: String): Boolean {
+    fun numbersLikelyMatch(a: String, b: String): Boolean {
         if (a.isBlank() || b.isBlank()) return false
         if (a == b) return true
         try {
             if (android.telephony.PhoneNumberUtils.compare(a, b)) return true
         } catch (_: Exception) {}
 
-        fun normDigits(s: String): String {
-            val d = s.filter { it.isDigit() }
-            return when {
-                d.length > 10 && d.startsWith("91") -> d.substring(2)
-                d.length > 10 && d.startsWith("1") -> d.substring(1)
-                d.length > 10 && d.startsWith("00") -> d.substring(2)
-                d.length > 10 && d.startsWith("0") -> d.substring(1)
-                d.startsWith("0") -> d.substring(1)
-                else -> d
-            }
-        }
-
-        val rawA = a.filter { it.isDigit() }
-        val rawB = b.filter { it.isDigit() }
-        if (rawA.isEmpty() || rawB.isEmpty()) return false
-        if (rawA == rawB || rawA.endsWith(rawB) || rawB.endsWith(rawA)) return true
-
-        val da = normDigits(a)
-        val db = normDigits(b)
+        val da = a.filter { it.isDigit() }
+        val db = b.filter { it.isDigit() }
         if (da.isEmpty() || db.isEmpty()) return false
-        if (da == db || da.endsWith(db) || db.endsWith(da)) return true
+        if (da == db) return true
 
-        val minLen = minOf(da.length, db.length)
-        if (minLen >= 7) {
-            val checkLen = minOf(minLen, 10)
-            for (len in checkLen downTo 7) {
-                if (da.takeLast(len) == db.takeLast(len)) return true
-            }
+        val shorterLen = minOf(da.length, db.length)
+        if (shorterLen < 7) return false
+        if (da.endsWith(db) || db.endsWith(da)) return true
+
+        val matchLen = minOf(shorterLen, 10)
+        for (len in matchLen downTo 7) {
+            if (da.takeLast(len) == db.takeLast(len)) return true
         }
         return false
     }
 
     fun getContactName(context: Context, phoneNumber: String): String? {
         if (!PermissionChecks.hasContactsPermission(context)) return null
+        if (phoneNumber.isBlank() || phoneNumber == "Unknown") return null
 
-        val normalized = com.coolappstore.evercallrecorder.by.svhp.utils.PhoneNumberManager.normalisePhoneNumber(phoneNumber)
-        if (normalized.isBlank()) return null
+        // Scan ContactsContract.CommonDataKinds.Phone to support contacts with multiple phone numbers
+        return try {
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            val queryDigits = phoneNumber.filter { it.isDigit() }
+            val selection = if (queryDigits.length >= 7) {
+                "${ContactsContract.CommonDataKinds.Phone.NUMBER} LIKE '%${queryDigits.takeLast(7)}%'"
+            } else null
 
-        val lookupUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(normalized))
-        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.NUMBER)
-
-        val directMatch = context.contentResolver.query(lookupUri, projection, null, null, null)?.use { cursor ->
-            val nameIndex = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
-            var matchedName: String? = null
-            while (cursor.moveToNext()) {
-                val matchedNumber = runCatching { cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER)) }.getOrNull() ?: ""
-                if (numbersMatch(phoneNumber, matchedNumber)) {
-                    matchedName = if (nameIndex != -1) cursor.getString(nameIndex) else null
-                    break
+            val matchFromPhone = context.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                selection,
+                null,
+                null
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                var found: String? = null
+                while (cursor.moveToNext()) {
+                    val savedNumber = cursor.getString(numberIndex) ?: continue
+                    if (numbersLikelyMatch(phoneNumber, savedNumber)) {
+                        found = if (nameIndex != -1) cursor.getString(nameIndex) else null
+                        break
+                    }
                 }
+                found
             }
-            matchedName
+
+            matchFromPhone ?: fallbackFullScanContactName(context, phoneNumber)
+        } catch (_: Exception) {
+            null
         }
-        return directMatch ?: fallbackScanContactName(context, phoneNumber)
     }
 
-    /** Fallback for [getContactName]: PhoneLookup's own fuzzy matching can return zero rows at
-     *  all when a contact is saved WITH a country code but the call number is WITHOUT one (or
-     *  vice versa), especially when it disagrees with the device's detected region — row
-     *  walking above can't help then since there's nothing to walk. Recover by scanning every
-     *  saved phone number directly with the same plausibility check. */
-    private fun fallbackScanContactName(context: Context, queryNumber: String): String? {
+    private fun fallbackFullScanContactName(context: Context, queryNumber: String): String? {
         if (queryNumber.isBlank()) return null
         return try {
             context.contentResolver.query(
@@ -248,7 +244,7 @@ object RecordingFileNameFormatter {
                 var matchedName: String? = null
                 while (cursor.moveToNext()) {
                     val savedNumber = cursor.getString(numberIndex) ?: continue
-                    if (numbersMatch(queryNumber, savedNumber)) {
+                    if (numbersLikelyMatch(queryNumber, savedNumber)) {
                         matchedName = if (nameIndex != -1) cursor.getString(nameIndex) else null
                         break
                     }

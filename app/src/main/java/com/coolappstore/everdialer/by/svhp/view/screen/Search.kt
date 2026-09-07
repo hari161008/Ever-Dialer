@@ -136,7 +136,7 @@ fun ContactSearchContent(
     // recording notes; it manages its own loading/refresh lifecycle independently.
     val recordingsVM: HomeViewModel = viewModel()
 
-    val contacts by contactsVM.allContacts.collectAsState()
+    val contacts by contactsVM.displayedContacts.collectAsState()
     val callLogs by callLogVM.allCallLogs.collectAsState()
     val recordings by recordingsVM.allRecordings.collectAsState()
 

@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telephony.SubscriptionManager
+import com.coolappstore.everdialer.by.svhp.controller.util.ContactsHiderManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.normalizeNumberDigits
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
@@ -137,9 +138,15 @@ class CallLogRepository(
         val rawCalls = readRawCallLogRows()
         val dedupedCalls = dedupeDuplicateProviderRows(rawCalls)
 
+        val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
+
         val callLogs = mutableListOf<CallLogEntry>()
         for (raw in dedupedCalls) {
             val match = resolveContact(raw.digits, exactIndex, suffixIndex)
+            val contactIdStr = match?.contactId?.toString()
+            if (hiddenIds.isNotEmpty() && contactIdStr != null && contactIdStr in hiddenIds) {
+                continue
+            }
             val displayName = match?.name ?: raw.cachedName ?: raw.number
             val isCallerIdName = match == null && raw.cachedName != null
 
@@ -355,6 +362,27 @@ class CallLogRepository(
             }
         } catch (_: Exception) {
             // READ_CONTACTS not granted, or provider unavailable - resolve nothing, fail safe.
+        }
+
+        // Also index backed up contacts so calls with them resolve to their contactId/name
+        val backedUpMap = ContactsHiderManager.getBackedUpContacts(prefs)
+        for ((idStr, contact) in backedUpMap) {
+            val contactId = idStr.toLongOrNull() ?: 0L
+            for (number in contact.phoneNumbers) {
+                val digits = normalizeNumberDigits(number).filter { it.isDigit() }
+                if (digits.isEmpty()) continue
+                val match = ContactMatch(
+                    contactId = contactId,
+                    name = contact.name,
+                    photoUri = contact.photoUri,
+                    savedDigits = digits
+                )
+                exact.putIfAbsent(digits, match)
+                if (digits.length >= suffixBucketLen) {
+                    val key = digits.takeLast(suffixBucketLen)
+                    suffix.getOrPut(key) { mutableListOf() }.add(match)
+                }
+            }
         }
 
         return exact to suffix

@@ -60,6 +60,18 @@ fun formatTimeOnly(timestamp: Long, use24Hour: Boolean = false): String {
     return SimpleDateFormat(timePattern, Locale.getDefault()).format(Date(timestamp))
 }
 
+/**
+ * Formats just the date portion of a call log entry when grouped by latest calls.
+ * Displays "Today", "Yesterday", "MMM d" (current year), or "MMM d, yyyy" (other years).
+ */
+fun formatCallLogDate(timestamp: Long): String {
+    val relative = getRelativeDay(timestamp)
+    if (relative != null) return relative
+
+    val pattern = if (isSameYear(timestamp, System.currentTimeMillis())) "MMM d" else "MMM d, yyyy"
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+}
+
 fun formatDuration(durationSeconds: Long): String {
     return DateUtils.formatElapsedTime(durationSeconds)
 }

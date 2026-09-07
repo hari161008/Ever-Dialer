@@ -109,9 +109,15 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
-    val favorites = remember(allContacts) { allContacts.filter { it.isFavorite } }
-    val scope = rememberCoroutineScope()
     val prefs = koinInject<PreferenceManager>()
+    val hiddenIds by remember(prefs) {
+        derivedStateOf {
+            val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        }
+    }
+    val favorites = remember(allContacts, hiddenIds) { allContacts.filter { it.isFavorite && it.id !in hiddenIds } }
+    val scope = rememberCoroutineScope()
 
     // Drag-to-reorder state — declared first so LaunchedEffect can reference draggedContactId
     var draggedContactId       by remember { mutableStateOf<String?>(null) }

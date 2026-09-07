@@ -55,9 +55,9 @@ class RecordingForegroundService : Service() {
          * between the call actually starting and the recording pipeline spinning up, but tight
          * enough to reject an unrelated call landing in the log around the same time.
          */
-        private const val MATCH_TOLERANCE_MS = 90_000L
+        private const val MATCH_TOLERANCE_MS = 300_000L
         /** Safety cap on how many newest-first CallLog rows we'll scan looking for a time match. */
-        private const val MAX_CANDIDATE_ROWS = 10
+        private const val MAX_CANDIDATE_ROWS = 25
 
         // -- Intent action for controlling and initializing the service lifecycle. --
 
@@ -456,7 +456,7 @@ class RecordingForegroundService : Service() {
             else -> null
         }
         // Try multiples times with a delay in case the OS didn't write the call log entry yet (only written after the call ended).
-        for (i in 1..4) {
+        for (i in 1..8) {
             try {
                 val cursor = context.contentResolver.query(
                     CallLog.Calls.CONTENT_URI,
@@ -487,7 +487,7 @@ class RecordingForegroundService : Service() {
             } catch (e: Exception) {
                 AppLogger.w(TAG, "Failed to query call log for fallback number", e)
             }
-            if (i < 4) delay(400)
+            if (i < 8) delay(500)
         }
         return null
     }
