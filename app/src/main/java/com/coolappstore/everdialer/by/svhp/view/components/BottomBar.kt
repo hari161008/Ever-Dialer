@@ -164,7 +164,8 @@ fun BottomBar(navController: NavController) {
     val isOnHiddenTab = TAB_ROUTES.any { currentRoute.contains(it, ignoreCase = true) } &&
         visibleTabRoutes.none { currentRoute.contains(it, ignoreCase = true) } &&
         !NavBarVisibilityState.hideForSettingsEntry &&
-        !NavBarVisibilityState.hideForSearchResult
+        !NavBarVisibilityState.hideForSearchResult &&
+        !currentRoute.contains(GroupsScreenDestination.route, ignoreCase = true)
     fun routeForTabKey(key: String): String? = when (key) {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route

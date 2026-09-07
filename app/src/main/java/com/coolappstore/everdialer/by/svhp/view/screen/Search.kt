@@ -84,6 +84,12 @@ fun SearchScreen(navController: NavController, navigator: DestinationsNavigator)
     val scope = rememberCoroutineScope()
     val showButton by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            NavBarVisibilityState.hideForSettingsEntry = false
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface
@@ -760,7 +766,6 @@ fun ContactSearchContent(
                                         trailingIcon = Icons.Default.ChevronRight,
                                         onClick = {
                                             keyboardController?.hide()
-                                            NavBarVisibilityState.hideForSettingsEntry = true
                                             entry.navigateTo(navigator)
                                         }
                                     )

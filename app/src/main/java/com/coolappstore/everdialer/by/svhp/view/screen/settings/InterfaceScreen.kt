@@ -187,6 +187,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var callUIShowOutgoing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)) }
     var callUIShowCallTime by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true)) }
     var callUIShowContacts by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CONTACTS, false)) }
+    var callUIShowGroups   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_GROUPS, false)) }
 
     data class CallUIOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val callUIOptions = listOf(
@@ -194,7 +195,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         CallUIOption("missed",    "Missed",    Icons.AutoMirrored.Filled.CallMissed),
         CallUIOption("outgoing",  "Outgoing",  Icons.AutoMirrored.Filled.CallMade),
         CallUIOption("call_time", "Call Time", Icons.Default.Timer),
-        CallUIOption("contacts",  "Contacts",  Icons.Default.People)
+        CallUIOption("contacts",  "Contacts",  Icons.Default.People),
+        CallUIOption("groups",    "Groups",    Icons.Default.Group)
     )
 
     val callUIOrder = remember {
@@ -217,6 +219,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         callUIShowOutgoing = true;  prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)
         callUIShowCallTime = true;  prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true)
         callUIShowContacts = false; prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CONTACTS,  false)
+        callUIShowGroups   = false; prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_GROUPS,    false)
     }
 
     // Default Tab dialog
@@ -406,6 +409,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             "outgoing"  -> callUIShowOutgoing
             "call_time" -> callUIShowCallTime
             "contacts"  -> callUIShowContacts
+            "groups"    -> callUIShowGroups
             else        -> true
         }
         fun setCallUIChecked(key: String, value: Boolean) {
@@ -415,6 +419,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 "outgoing"  -> { callUIShowOutgoing = value; prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, value) }
                 "call_time" -> { callUIShowCallTime = value; prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, value) }
                 "contacts"  -> { callUIShowContacts = value; prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_CONTACTS,  value) }
+                "groups"    -> { callUIShowGroups = value;   prefs.setBoolean(PreferenceManager.KEY_CALL_UI_SHOW_GROUPS,    value) }
             }
         }
 
@@ -1764,7 +1769,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoListItem(
                                     headline = "Calls Section Elements",
-                                    supporting = "Toggle and drag to reorder Today, Missed, Outgoing, Call Time, Contacts cards",
+                                    supporting = "Toggle and drag to reorder Today, Missed, Outgoing, Call Time, Contacts, Groups cards",
                                     leadingIcon = Icons.Default.Dashboard,
                                     iconContainerColor = ColorOrange,
                                     trailingIcon = Icons.Default.ChevronRight,

@@ -59,6 +59,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDestination
 import androidx.activity.compose.PredictiveBackHandler
 import kotlinx.coroutines.CancellationException
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
@@ -714,6 +715,7 @@ fun CallLogFullContent(
                 val showOutgoing = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true) }
                 val showCallTime = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true) }
                 val showContacts = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CONTACTS, false) }
+                val showGroups   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_GROUPS, false) }
                 val callUIOrder  = remember(settingsVersion) {
                     com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.parseCallUIOrder(
                         prefs.getString(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_ORDER, null)
@@ -722,8 +724,10 @@ fun CallLogFullContent(
                 val contactsVM: ContactsViewModel = koinActivityViewModel()
                 val contactsList by contactsVM.allContacts.collectAsState()
                 val contactsCount = contactsList.size
+                val contactGroups by contactsVM.contactGroups.collectAsState()
+                val groupsCount = contactGroups.size
 
-                val visibleStatCards = remember(callUIOrder, showToday, showMissed, showOutgoing, showCallTime, showContacts) {
+                val visibleStatCards = remember(callUIOrder, showToday, showMissed, showOutgoing, showCallTime, showContacts, showGroups) {
                     callUIOrder.filter { key ->
                         when (key) {
                             "today"     -> showToday
@@ -731,6 +735,7 @@ fun CallLogFullContent(
                             "outgoing"  -> showOutgoing
                             "call_time" -> showCallTime
                             "contacts"  -> showContacts
+                            "groups"    -> showGroups
                             else        -> false
                         }
                     }
@@ -745,7 +750,20 @@ fun CallLogFullContent(
                         ) { viewModel.setFilter(CallLogFilter.Missed) }
                         "outgoing" -> AnimatedStatCard(delayMs, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) }
                         "call_time" -> AnimatedStatCard(delayMs, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) }
-                        "contacts" -> AnimatedStatCard(delayMs, "Contacts", if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) { navigator.navigate(ContactScreenDestination) }
+                        "contacts" -> AnimatedStatCard(delayMs, "Contacts", if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) {
+                            navController.navigate(ContactScreenDestination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                        "groups" -> AnimatedStatCard(delayMs, "Groups", if (groupsCount > 0) groupsCount.toString() else "Open", Icons.Default.Group, Color(0xFF00897B), Modifier.size(110.dp)) {
+                            navController.navigate(GroupsScreenDestination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     }
                 }
 

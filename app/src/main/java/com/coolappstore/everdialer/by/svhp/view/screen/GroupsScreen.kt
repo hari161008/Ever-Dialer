@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -53,6 +54,7 @@ fun GroupsScreen(
     val enabledAccountKeys by contactsVM.enabledAccountKeys.collectAsState()
     val settingsVersion by prefs.settingsChanged.collectAsState()
     val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
+    val showGroupsTab = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false) }
 
     var showAddGroupDialog by remember { mutableStateOf(false) }
     var groupToEdit by remember { mutableStateOf<ContactGroup?>(null) }
@@ -112,12 +114,24 @@ fun GroupsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Groups",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!showGroupsTab && navController.previousBackStackEntry != null) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = "Groups",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         var showCleanDialog by remember { mutableStateOf(false) }
                         if (contactGroups.size > 5) {
