@@ -287,6 +287,20 @@ class PreferenceManager(context: Context) {
             return merged.filter { it in fallback }
         }
 
+        const val DEFAULT_CALL_UI_ORDER = "today,missed,outgoing,call_time,contacts"
+        const val KEY_CALL_UI_ORDER = "call_ui_order"
+
+        /** Parses a raw comma-separated call-ui element order preference string into an ordered list
+         *  of valid card keys, falling back to [DEFAULT_CALL_UI_ORDER]. */
+        fun parseCallUIOrder(raw: String?): List<String> {
+            val fallback = DEFAULT_CALL_UI_ORDER.split(",")
+            if (raw.isNullOrBlank()) return fallback
+            val parsed = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val merged = parsed.toMutableList()
+            fallback.forEach { key -> if (key !in merged) merged.add(key) }
+            return merged.filter { it in fallback }
+        }
+
         const val KEY_DEFAULT_SIM           = "default_sim"
         // Contact Info → "Choose Sim" — per-contact override of which SIM is used to call that
         // specific contact. Key is prefixed per contact (id for saved contacts, raw phone number
@@ -380,6 +394,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_MISSED   = "call_ui_show_missed"
         const val KEY_CALL_UI_SHOW_OUTGOING = "call_ui_show_outgoing"
         const val KEY_CALL_UI_SHOW_CALL_TIME = "call_ui_show_call_time"
+        const val KEY_CALL_UI_SHOW_CONTACTS  = "call_ui_show_contacts"
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_PILL_NAV              = "pill_style_nav"
         const val KEY_GROUP_CALLS_BY_LATEST = "group_calls_by_latest"

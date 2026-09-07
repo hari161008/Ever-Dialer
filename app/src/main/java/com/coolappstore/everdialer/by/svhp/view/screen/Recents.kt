@@ -68,6 +68,8 @@ import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinActivityViewModel
+import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import android.os.Build
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
@@ -82,6 +84,7 @@ private val ColorBlue   = Color(0xFF2196F3)
 private val ColorRed    = Color(0xFFE91E63)
 private val ColorGreen  = Color(0xFF4CAF50)
 private val ColorOrange = Color(0xFFFF9800)
+private val ColorPurple = Color(0xFF9C27B0)
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(start = true, style = TabTransitionStyle::class)
@@ -705,27 +708,58 @@ fun CallLogFullContent(
 
             Column(modifier = Modifier.fillMaxSize()) {
 
-                // Stat cards – visibility controlled by Call UI settings
+                // Stat cards – visibility and order controlled by Call UI settings
                 val showToday    = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true) }
                 val showMissed   = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true) }
                 val showOutgoing = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true) }
                 val showCallTime = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CALL_TIME, true) }
+                val showContacts = remember(settingsVersion) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_SHOW_CONTACTS, false) }
+                val callUIOrder  = remember(settingsVersion) {
+                    com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.parseCallUIOrder(
+                        prefs.getString(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_UI_ORDER, null)
+                    )
+                }
+                val contactsVM: ContactsViewModel = koinActivityViewModel()
+                val contactsList by contactsVM.allContacts.collectAsState()
+                val contactsCount = contactsList.size
+
+                val visibleStatCards = remember(callUIOrder, showToday, showMissed, showOutgoing, showCallTime, showContacts) {
+                    callUIOrder.filter { key ->
+                        when (key) {
+                            "today"     -> showToday
+                            "missed"    -> showMissed
+                            "outgoing"  -> showOutgoing
+                            "call_time" -> showCallTime
+                            "contacts"  -> showContacts
+                            else        -> false
+                        }
+                    }
+                }
+
+                @Composable
+                fun StatCardItem(cardKey: String, delayMs: Long) {
+                    when (cardKey) {
+                        "today" -> AnimatedStatCard(delayMs, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) }
+                        "missed" -> AnimatedStatCard(delayMs, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.size(110.dp),
+                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
+                        ) { viewModel.setFilter(CallLogFilter.Missed) }
+                        "outgoing" -> AnimatedStatCard(delayMs, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) }
+                        "call_time" -> AnimatedStatCard(delayMs, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) }
+                        "contacts" -> AnimatedStatCard(delayMs, "Contacts", if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) { navigator.navigate(ContactScreenDestination) }
+                    }
+                }
 
                 // In portrait, render stat cards and pills above the list (sticky)
                 // In landscape, they go inside the LazyColumn so they scroll with content
                 if (!isLandscape) {
-                    if (showToday || showMissed || showOutgoing || showCallTime) {
+                    if (visibleStatCards.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
-                            if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.size(110.dp),
-                                if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
-                            ) { viewModel.setFilter(CallLogFilter.Missed) } }
-                            if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
-                            if (showCallTime) {
-                                item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                            items(visibleStatCards, key = { it }) { cardKey ->
+                                val idx = visibleStatCards.indexOf(cardKey)
+                                StatCardItem(cardKey, (idx * 60).toLong())
                             }
                         }
                     }
@@ -850,19 +884,15 @@ fun CallLogFullContent(
                                         .padding(horizontal = 16.dp, vertical = 8.dp)
                                 )
                             }
-                            if (showToday || showMissed || showOutgoing || showCallTime) {
+                            if (visibleStatCards.isNotEmpty()) {
                                 item(key = "stat_cards", contentType = "statCards") {
                                     LazyRow(
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        if (showToday) item { AnimatedStatCard(0L, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) } }
-                                        if (showMissed) item { AnimatedStatCard(60L, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.size(110.dp),
-                                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
-                                        ) { viewModel.setFilter(CallLogFilter.Missed) } }
-                                        if (showOutgoing) item { AnimatedStatCard(120L, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) } }
-                                        if (showCallTime) {
-                                            item { AnimatedStatCard(180L, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) } }
+                                        items(visibleStatCards, key = { it }) { cardKey ->
+                                            val idx = visibleStatCards.indexOf(cardKey)
+                                            StatCardItem(cardKey, (idx * 60).toLong())
                                         }
                                     }
                                 }

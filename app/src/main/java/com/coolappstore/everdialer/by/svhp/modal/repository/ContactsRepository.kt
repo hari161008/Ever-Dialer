@@ -1665,23 +1665,38 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             ContactsContract.Groups.ACCOUNT_NAME
         )
         try {
-            contentResolver.query(
-                ContactsContract.Groups.CONTENT_URI,
-                groupProjection,
-                "${ContactsContract.Groups.DELETED} = 0",
-                null,
-                "${ContactsContract.Groups.TITLE} ASC"
-            )?.use { cursor ->
-                val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
-                val titleIdx = cursor.getColumnIndex(ContactsContract.Groups.TITLE)
-                val typeIdx = cursor.getColumnIndex(ContactsContract.Groups.ACCOUNT_TYPE)
-                val nameIdx = cursor.getColumnIndex(ContactsContract.Groups.ACCOUNT_NAME)
+            val cursor = try {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    groupProjection,
+                    "(${ContactsContract.Groups.DELETED} = 0 OR ${ContactsContract.Groups.DELETED} IS NULL)",
+                    null,
+                    "${ContactsContract.Groups.TITLE} ASC"
+                )
+            } catch (_: Exception) {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    groupProjection,
+                    null,
+                    null,
+                    "${ContactsContract.Groups.TITLE} ASC"
+                )
+            }
+            cursor?.use { c ->
+                val idIdx = c.getColumnIndex(ContactsContract.Groups._ID)
+                val titleIdx = c.getColumnIndex(ContactsContract.Groups.TITLE)
+                val typeIdx = c.getColumnIndex(ContactsContract.Groups.ACCOUNT_TYPE)
+                val nameIdx = c.getColumnIndex(ContactsContract.Groups.ACCOUNT_NAME)
+                val deletedIdx = c.getColumnIndex(ContactsContract.Groups.DELETED)
 
-                while (cursor.moveToNext()) {
-                    val rowId = if (idIdx >= 0) cursor.getLong(idIdx) else continue
-                    val title = if (titleIdx >= 0) cursor.getString(titleIdx) ?: "" else ""
-                    val accType = if (typeIdx >= 0) cursor.getString(typeIdx) else null
-                    val accName = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+                while (c.moveToNext()) {
+                    if (deletedIdx >= 0 && !c.isNull(deletedIdx) && c.getInt(deletedIdx) != 0) {
+                        continue
+                    }
+                    val rowId = if (idIdx >= 0) c.getLong(idIdx) else continue
+                    val title = if (titleIdx >= 0) c.getString(titleIdx) ?: "" else ""
+                    val accType = if (typeIdx >= 0) c.getString(typeIdx) else null
+                    val accName = if (nameIdx >= 0) c.getString(nameIdx) else null
 
                     if (title.isNotBlank()) {
                         val g = com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
@@ -1771,17 +1786,32 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         val activeIds = mutableSetOf<Long>()
         val inClause = groupRowIds.joinToString(",") { it.toString() }
         try {
-            contentResolver.query(
-                ContactsContract.Groups.CONTENT_URI,
-                arrayOf(ContactsContract.Groups._ID),
-                "${ContactsContract.Groups._ID} IN ($inClause) AND ${ContactsContract.Groups.DELETED} = 0",
-                null,
-                null
-            )?.use { cursor ->
-                val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
-                while (cursor.moveToNext()) {
+            val cursor = try {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    arrayOf(ContactsContract.Groups._ID, ContactsContract.Groups.DELETED),
+                    "${ContactsContract.Groups._ID} IN ($inClause) AND (${ContactsContract.Groups.DELETED} = 0 OR ${ContactsContract.Groups.DELETED} IS NULL)",
+                    null,
+                    null
+                )
+            } catch (_: Exception) {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    arrayOf(ContactsContract.Groups._ID),
+                    "${ContactsContract.Groups._ID} IN ($inClause)",
+                    null,
+                    null
+                )
+            }
+            cursor?.use { c ->
+                val idIdx = c.getColumnIndex(ContactsContract.Groups._ID)
+                val delIdx = c.getColumnIndex(ContactsContract.Groups.DELETED)
+                while (c.moveToNext()) {
+                    if (delIdx >= 0 && !c.isNull(delIdx) && c.getInt(delIdx) != 0) {
+                        continue
+                    }
                     if (idIdx >= 0) {
-                        activeIds.add(cursor.getLong(idIdx))
+                        activeIds.add(c.getLong(idIdx))
                     }
                 }
             }
@@ -1793,7 +1823,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
     override fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long? {
         val projection = arrayOf(ContactsContract.Groups._ID)
-        val selection = StringBuilder("${ContactsContract.Groups.TITLE} = ? AND ${ContactsContract.Groups.DELETED} = 0")
+        val selection = StringBuilder("${ContactsContract.Groups.TITLE} = ? AND (${ContactsContract.Groups.DELETED} = 0 OR ${ContactsContract.Groups.DELETED} IS NULL)")
         val args = mutableListOf(groupName)
         if (!accountType.isNullOrBlank()) {
             selection.append(" AND ${ContactsContract.Groups.ACCOUNT_TYPE} = ?")
@@ -1804,16 +1834,27 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             args.add(accountName)
         }
         return try {
-            contentResolver.query(
-                ContactsContract.Groups.CONTENT_URI,
-                projection,
-                selection.toString(),
-                args.toTypedArray(),
-                null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
-                    if (idIdx >= 0) cursor.getLong(idIdx) else null
+            val cursor = try {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    projection,
+                    selection.toString(),
+                    args.toTypedArray(),
+                    null
+                )
+            } catch (_: Exception) {
+                contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    projection,
+                    "${ContactsContract.Groups.TITLE} = ?",
+                    arrayOf(groupName),
+                    null
+                )
+            }
+            cursor?.use { c ->
+                if (c.moveToFirst()) {
+                    val idIdx = c.getColumnIndex(ContactsContract.Groups._ID)
+                    if (idIdx >= 0) c.getLong(idIdx) else null
                 } else null
             }
         } catch (_: Exception) {

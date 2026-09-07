@@ -45,33 +45,41 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 fun isGroupMatchingAccountFilter(group: ContactGroup, enabledAccountKeys: Set<String>?): Boolean {
-    if (enabledAccountKeys == null) return true
-    if (enabledAccountKeys.isEmpty()) return false
+    if (enabledAccountKeys.isNullOrEmpty()) return true
     val accType = group.accountType ?: ""
     val accName = group.accountName ?: ""
     if (accType.isBlank() && accName.isBlank()) return true
 
+    val isLocalGroup = accType.isBlank() ||
+        accType.equals("com.android.local", true) ||
+        accType.equals("com.android.contacts", true) ||
+        accType.equals("phone", true) ||
+        accType.equals("device", true) ||
+        accType.contains("default", true)
+
     val groupKey = when {
         accType.contains("google", ignoreCase = true) -> "google_$accName"
         accType.contains("whatsapp", ignoreCase = true) -> if (accName.isNotBlank() && !accName.equals("WhatsApp", ignoreCase = true)) "whatsapp_$accName" else "whatsapp"
-        accType.isBlank() || accType.equals("com.android.local", true) || accType.equals("com.android.contacts", true) || accType.equals("phone", true) || accType.equals("device", true) -> "sim_0"
+        isLocalGroup -> "sim_0"
         else -> "acc:$accType:$accName"
     }
 
     if (groupKey in enabledAccountKeys) return true
     if ("$accType:$accName" in enabledAccountKeys) return true
+    if (isLocalGroup && ("sim_0" in enabledAccountKeys || enabledAccountKeys.any { it.startsWith("sim_") })) return true
 
     return enabledAccountKeys.any { targetKey ->
         when {
             targetKey == groupKey -> true
             targetKey == "$accType:$accName" -> true
-            targetKey == "sim_0" && (groupKey == "sim_0" || accType.isBlank() || accType.equals("com.android.local", true) || accType.equals("com.android.contacts", true)) -> true
+            targetKey == "sim_0" && (groupKey == "sim_0" || isLocalGroup) -> true
+            targetKey.startsWith("sim_") && isLocalGroup -> true
             targetKey.startsWith("google_") && (accType.contains("google", ignoreCase = true) && accName.equals(targetKey.removePrefix("google_"), ignoreCase = true)) -> true
             targetKey.startsWith("whatsapp") && (accType.contains("whatsapp", ignoreCase = true) || accName.contains("whatsapp", ignoreCase = true)) -> true
             targetKey.startsWith("acc:") -> {
                 val parts = targetKey.removePrefix("acc:").split(":", limit = 2)
                 if (parts.size == 2) {
-                    accType.equals(parts[0], ignoreCase = true) && accName.equals(parts[1], ignoreCase = true)
+                    accType.equals(parts[0], ignoreCase = true) && (parts[1].isBlank() || accName.equals(parts[1], ignoreCase = true))
                 } else false
             }
             else -> false

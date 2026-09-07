@@ -85,18 +85,35 @@ class ContactsViewModel(
             val rawLocalGroups = prefs.getContactGroups()
             val order = prefs.getContactsDisplayOrder()
 
-            // 1. Cleanup runaway auto-imported system groups while strictly preserving user-created groups:
-            // - Any group created in Ever Dialer locally (!id.startsWith("sys_group_"))
-            // - Any group created in Ever Dialer via UI ("group_${id}" in order)
-            // - Any user-created group from Gmail/Google with contacts (not internal Android system labels)
-            val cleanGroups = rawLocalGroups.filter { group ->
+            // 1. Fetch system groups from ContactsContract (Google, OEM accounts, etc.)
+            val sysGroups = runCatching { contactsRepo.getSystemContactGroups() }.getOrDefault(emptyList())
+
+            // Merge system groups into local groups if not already present
+            val localGroupMap = rawLocalGroups.associateBy { it.id }.toMutableMap()
+            for (sg in sysGroups) {
+                if (isSystemGroupEligible(sg)) {
+                    val existing = localGroupMap[sg.id]
+                    if (existing == null) {
+                        localGroupMap[sg.id] = sg
+                    } else {
+                        // Update account info or contacts if changed
+                        localGroupMap[sg.id] = existing.copy(
+                            accountType = sg.accountType ?: existing.accountType,
+                            accountName = sg.accountName ?: existing.accountName,
+                            targetLabel = sg.targetLabel ?: existing.targetLabel,
+                            contactIds = if (existing.contactIds.isEmpty() && sg.contactIds.isNotEmpty()) sg.contactIds else existing.contactIds
+                        )
+                    }
+                }
+            }
+            val mergedRawGroups = localGroupMap.values.toList()
+
+            // 2. Filter groups
+            val cleanGroups = mergedRawGroups.filter { group ->
                 isLegitimateUserGroup(group, order)
             }
 
             if (cleanGroups.isEmpty()) {
-                if (rawLocalGroups.isNotEmpty()) {
-                    prefs.saveContactGroups(emptyList())
-                }
                 withContext(Dispatchers.Main) {
                     _contactGroups.value = emptyList()
                     if (_selectedGroupId.value != null) {
@@ -107,7 +124,7 @@ class ContactsViewModel(
                 return@launch
             }
 
-            // 2. Identify system-backed groups (e.g. Gmail / Google Contacts)
+            // 3. Identify system-backed groups (e.g. Gmail / Google Contacts)
             val groupToRowIdMap = mutableMapOf<String, Long>()
             val systemBackedGroupIds = mutableSetOf<String>()
 
@@ -126,25 +143,28 @@ class ContactsViewModel(
                 }
             }
 
-            // 3. Query which system groups still exist (DELETED = 0). If a group was deleted in Google Contacts, it will not be active!
+            // 4. Query which system groups still exist (DELETED = 0)
             val activeSystemRowIds = if (groupToRowIdMap.isNotEmpty()) {
                 runCatching { contactsRepo.getActiveSystemGroupIds(groupToRowIdMap.values.toSet()) }.getOrDefault(emptySet())
             } else {
                 emptySet()
             }
 
-            // 4. Filter out any system-backed group that was deleted in Google Contacts / system provider
+            // 5. Filter out any system-backed group that was deleted in Google Contacts / system provider
+            // If activeSystemRowIds check returned empty (e.g. OEM query limitation), do not aggressively delete
             val survivingGroups = cleanGroups.filter { g ->
                 if (g.id in systemBackedGroupIds) {
                     val rowId = groupToRowIdMap[g.id]
-                    rowId != null && rowId in activeSystemRowIds
+                    if (rowId == null) true
+                    else if (activeSystemRowIds.isNotEmpty()) rowId in activeSystemRowIds
+                    else true // Keep if activeSystemRowIds query was empty to prevent accidental wiping
                 } else {
                     // Local-only group is independent of system provider
                     true
                 }
             }
 
-            // Remove any externally deleted groups from prefs and display order
+            // Remove any confirmed externally deleted groups from prefs and display order
             val deletedGroupIds = cleanGroups.map { it.id }.toSet() - survivingGroups.map { it.id }.toSet()
             for (delId in deletedGroupIds) {
                 prefs.deleteContactGroup(delId)
@@ -161,7 +181,7 @@ class ContactsViewModel(
                 return@launch
             }
 
-            // 5. Query system group memberships ONLY for surviving groups
+            // 6. Query system group memberships ONLY for surviving groups
             val survivingRowIds = survivingGroups.mapNotNull { groupToRowIdMap[it.id] }.toSet()
             val memberMap = if (survivingRowIds.isNotEmpty()) {
                 runCatching { contactsRepo.getSystemGroupMembers(survivingRowIds) }.getOrDefault(emptyMap())
@@ -169,12 +189,12 @@ class ContactsViewModel(
                 emptyMap()
             }
 
-            // 6. Update contact memberships if any contact was added or removed
+            // 7. Update contact memberships if any contact was added or removed
             var anyChanged = (survivingGroups.size != rawLocalGroups.size)
             val updatedList = survivingGroups.map { g ->
                 val sysRowId = groupToRowIdMap[g.id]
                 if (sysRowId != null && (memberMap.containsKey(sysRowId) || g.id.startsWith("sys_group_"))) {
-                    val latestMemberIds = memberMap[sysRowId]?.distinct() ?: emptyList()
+                    val latestMemberIds = memberMap[sysRowId]?.distinct() ?: g.contactIds
                     if (latestMemberIds.toSet() != g.contactIds.toSet()) {
                         anyChanged = true
                         g.copy(contactIds = latestMemberIds)
@@ -202,16 +222,22 @@ class ContactsViewModel(
         }
     }
 
+    private fun isSystemGroupEligible(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup): Boolean {
+        val name = group.name.trim()
+        if (name.isBlank()) return false
+        if (name.startsWith("System Group:", ignoreCase = true)) return false
+        if (name.equals("Starred in Android", ignoreCase = true)) return false
+        if (name.equals("My Contacts", ignoreCase = true)) return false
+        return true
+    }
+
     private fun isLegitimateUserGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup, order: List<String>): Boolean {
         // 1. All groups created in Ever Dialer locally have UUID IDs (never start with sys_group_)
         if (!group.id.startsWith("sys_group_")) return true
         // 2. Groups created via Ever Dialer UI are tracked in display order
         if ("group_${group.id}" in order) return true
-        // 3. Keep user groups from Gmail/Google Contacts if they have contacts and are not Android internal auto-labels
-        val isInternalSystemGroup = group.name.startsWith("System Group:", ignoreCase = true) ||
-                group.name.equals("Starred in Android", ignoreCase = true) ||
-                group.name.equals("My Contacts", ignoreCase = true)
-        return group.contactIds.isNotEmpty() && !isInternalSystemGroup
+        // 3. Keep user groups from Gmail/Google Contacts or OEM system provider if eligible
+        return isSystemGroupEligible(group)
     }
 
     fun cleanupAutoImportedGroups() {

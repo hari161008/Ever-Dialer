@@ -54,8 +54,8 @@ const val SETTINGS_SCALE_EXIT_TO = 1.12f
  * modeled after the Windows Phone 7/8 animation physics and MangoTile's implementation.
  */
 val MetroSlideInEasing = CubicBezierEasing(0.22f, 0f, 0.05f, 1f)
-const val SETTINGS_WP_ANIM_DURATION_ENTER = 380
-const val SETTINGS_WP_ANIM_DURATION_EXIT = 320
+const val SETTINGS_WP_ANIM_DURATION_ENTER = 750
+const val SETTINGS_WP_ANIM_DURATION_EXIT = 650
 
 fun isWindowsPhoneAnimation(): Boolean {
     return try {

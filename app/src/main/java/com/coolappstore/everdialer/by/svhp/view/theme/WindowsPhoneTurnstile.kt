@@ -84,9 +84,9 @@ fun Modifier.wpTurnstile(
 
     val delayMs = customDelayMs ?: when (role) {
         is TurnstileRole.Header -> 0
-        is TurnstileRole.Control -> 35
-        is TurnstileRole.Card -> 65 + (role.order * 25).coerceAtMost(150)
-        is TurnstileRole.ListItem -> (45 + role.index * 26).coerceAtMost(220)
+        is TurnstileRole.Control -> 60
+        is TurnstileRole.Card -> 110 + (role.order * 45).coerceAtMost(260)
+        is TurnstileRole.ListItem -> (80 + role.index * 45).coerceAtMost(360)
     }
 
     val initialRotationY = if (!isBack) {
