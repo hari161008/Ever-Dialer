@@ -49,3 +49,17 @@ data class ContactSaveTarget(
     val isSim: Boolean = false,
     val simSlotIndex: Int = 0
 )
+
+/**
+ * Details of a specific account/storage location an existing contact is stored in.
+ */
+@Serializable
+data class ContactAccountInfo(
+    val rawContactId: Long,
+    val accountType: String?,
+    val accountName: String?,
+    val displayName: String,
+    val isReadOnly: Boolean,
+    val isSim: Boolean,
+    val simSlotIndex: Int = -1
+)

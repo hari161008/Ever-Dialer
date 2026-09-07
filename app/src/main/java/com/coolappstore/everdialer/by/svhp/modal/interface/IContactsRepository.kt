@@ -2,6 +2,7 @@ package com.coolappstore.everdialer.by.svhp.modal.`interface`
 
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget
 
 interface IContactsRepository {
@@ -10,7 +11,14 @@ interface IContactsRepository {
     fun getContactById(contactId: String): Contact?
     fun getContactByNumber(number: String): Contact?
     fun toggleFavorite(contactId: String, isFavorite: Boolean)
-    fun saveContact(contact: Contact, accountType: String? = null, accountName: String? = null)
+    fun saveContact(
+        contact: Contact,
+        accountType: String? = null,
+        accountName: String? = null,
+        updateAllAccounts: Boolean = false,
+        originalContact: Contact? = null
+    )
+    fun getContactAccounts(contactId: String): List<ContactAccountInfo>
     fun updateContactNote(contactId: String, note: String?)
     fun deleteContact(contactId: String)
     fun getAvailableAccounts(excludedContactIds: Set<String> = emptySet()): List<ContactAccount>

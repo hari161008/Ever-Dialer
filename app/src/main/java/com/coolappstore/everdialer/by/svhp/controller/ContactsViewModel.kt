@@ -262,7 +262,13 @@ class ContactsViewModel(
         }
     }
 
-    fun saveContact(contact: Contact, accountType: String? = null, accountName: String? = null) {
+    fun saveContact(
+        contact: Contact,
+        accountType: String? = null,
+        accountName: String? = null,
+        updateAllAccounts: Boolean = false,
+        originalContact: Contact? = null
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             // Optimistically update memory and cache for instant UI feedback
             if (contact.id.isNotEmpty() && contact.id != "0") {
@@ -272,10 +278,13 @@ class ContactsViewModel(
                 updateDisplayedContacts(updated)
                 ContactsCache.write(getApplication(), updated)
             }
-            contactsRepo.saveContact(contact, accountType, accountName)
+            contactsRepo.saveContact(contact, accountType, accountName, updateAllAccounts, originalContact)
             fetchContacts()
         }
     }
+
+    fun getContactAccounts(contactId: String): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo> =
+        contactsRepo.getContactAccounts(contactId)
 
     fun updateContactNote(contactId: String, note: String?) {
         viewModelScope.launch(Dispatchers.IO) {
