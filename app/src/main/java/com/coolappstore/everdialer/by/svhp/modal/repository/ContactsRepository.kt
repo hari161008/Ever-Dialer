@@ -1766,6 +1766,31 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         return result
     }
 
+    override fun getActiveSystemGroupIds(groupRowIds: Set<Long>): Set<Long> {
+        if (groupRowIds.isEmpty()) return emptySet()
+        val activeIds = mutableSetOf<Long>()
+        val inClause = groupRowIds.joinToString(",") { it.toString() }
+        try {
+            contentResolver.query(
+                ContactsContract.Groups.CONTENT_URI,
+                arrayOf(ContactsContract.Groups._ID),
+                "${ContactsContract.Groups._ID} IN ($inClause) AND ${ContactsContract.Groups.DELETED} = 0",
+                null,
+                null
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
+                while (cursor.moveToNext()) {
+                    if (idIdx >= 0) {
+                        activeIds.add(cursor.getLong(idIdx))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error checking active system group IDs", e)
+        }
+        return activeIds
+    }
+
     override fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long? {
         val projection = arrayOf(ContactsContract.Groups._ID)
         val selection = StringBuilder("${ContactsContract.Groups.TITLE} = ? AND ${ContactsContract.Groups.DELETED} = 0")

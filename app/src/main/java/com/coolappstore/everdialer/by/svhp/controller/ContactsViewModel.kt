@@ -92,28 +92,32 @@ class ContactsViewModel(
                 isLegitimateUserGroup(group, order)
             }
 
-            if (cleanGroups.size != rawLocalGroups.size) {
-                prefs.saveContactGroups(cleanGroups)
-            }
-
             if (cleanGroups.isEmpty()) {
+                if (rawLocalGroups.isNotEmpty()) {
+                    prefs.saveContactGroups(emptyList())
+                }
                 withContext(Dispatchers.Main) {
                     _contactGroups.value = emptyList()
                     if (_selectedGroupId.value != null) {
+                        _selectedGroupId.value = null
                         updateDisplayedContacts()
                     }
                 }
                 return@launch
             }
 
-            // 2. Resolve system group IDs for any system-backed groups
+            // 2. Identify system-backed groups (e.g. Gmail / Google Contacts)
             val groupToRowIdMap = mutableMapOf<String, Long>()
+            val systemBackedGroupIds = mutableSetOf<String>()
+
             for (g in cleanGroups) {
                 if (g.id.startsWith("sys_group_")) {
+                    systemBackedGroupIds.add(g.id)
                     g.id.removePrefix("sys_group_").toLongOrNull()?.let {
                         groupToRowIdMap[g.id] = it
                     }
                 } else if (!g.accountType.isNullOrBlank() || !g.accountName.isNullOrBlank()) {
+                    systemBackedGroupIds.add(g.id)
                     val rowId = runCatching { contactsRepo.findSystemGroupId(g.name, g.accountType, g.accountName) }.getOrNull()
                     if (rowId != null) {
                         groupToRowIdMap[g.id] = rowId
@@ -121,16 +125,52 @@ class ContactsViewModel(
                 }
             }
 
-            // 3. Query system group memberships ONLY for these groups (do NOT create or import any new groups!)
-            val memberMap = if (groupToRowIdMap.isNotEmpty()) {
-                runCatching { contactsRepo.getSystemGroupMembers(groupToRowIdMap.values.toSet()) }.getOrDefault(emptyMap())
+            // 3. Query which system groups still exist (DELETED = 0). If a group was deleted in Google Contacts, it will not be active!
+            val activeSystemRowIds = if (groupToRowIdMap.isNotEmpty()) {
+                runCatching { contactsRepo.getActiveSystemGroupIds(groupToRowIdMap.values.toSet()) }.getOrDefault(emptySet())
+            } else {
+                emptySet()
+            }
+
+            // 4. Filter out any system-backed group that was deleted in Google Contacts / system provider
+            val survivingGroups = cleanGroups.filter { g ->
+                if (g.id in systemBackedGroupIds) {
+                    val rowId = groupToRowIdMap[g.id]
+                    rowId != null && rowId in activeSystemRowIds
+                } else {
+                    // Local-only group is independent of system provider
+                    true
+                }
+            }
+
+            // Remove any externally deleted groups from prefs and display order
+            val deletedGroupIds = cleanGroups.map { it.id }.toSet() - survivingGroups.map { it.id }.toSet()
+            for (delId in deletedGroupIds) {
+                prefs.deleteContactGroup(delId)
+            }
+
+            if (survivingGroups.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _contactGroups.value = emptyList()
+                    if (_selectedGroupId.value != null) {
+                        _selectedGroupId.value = null
+                        updateDisplayedContacts()
+                    }
+                }
+                return@launch
+            }
+
+            // 5. Query system group memberships ONLY for surviving groups
+            val survivingRowIds = survivingGroups.mapNotNull { groupToRowIdMap[it.id] }.toSet()
+            val memberMap = if (survivingRowIds.isNotEmpty()) {
+                runCatching { contactsRepo.getSystemGroupMembers(survivingRowIds) }.getOrDefault(emptyMap())
             } else {
                 emptyMap()
             }
 
-            // 4. Update contact memberships if any contact was added or removed
-            var anyChanged = false
-            val updatedList = cleanGroups.map { g ->
+            // 6. Update contact memberships if any contact was added or removed
+            var anyChanged = (survivingGroups.size != rawLocalGroups.size)
+            val updatedList = survivingGroups.map { g ->
                 val sysRowId = groupToRowIdMap[g.id]
                 if (sysRowId != null && (memberMap.containsKey(sysRowId) || g.id.startsWith("sys_group_"))) {
                     val latestMemberIds = memberMap[sysRowId]?.distinct() ?: emptyList()
@@ -151,7 +191,10 @@ class ContactsViewModel(
 
             withContext(Dispatchers.Main) {
                 _contactGroups.value = updatedList
-                if (_selectedGroupId.value != null) {
+                if (_selectedGroupId.value in deletedGroupIds) {
+                    _selectedGroupId.value = null
+                    updateDisplayedContacts()
+                } else if (_selectedGroupId.value != null) {
                     updateDisplayedContacts()
                 }
             }

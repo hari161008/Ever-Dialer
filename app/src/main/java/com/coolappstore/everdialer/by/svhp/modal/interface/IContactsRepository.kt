@@ -35,6 +35,8 @@ interface IContactsRepository {
     fun getSystemContactGroups(): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>
     /** Retrieves the member contact IDs for the specified system group row IDs without importing all groups */
     fun getSystemGroupMembers(groupRowIds: Set<Long>): Map<Long, List<String>>
+    /** Returns the subset of groupRowIds that currently exist and are not deleted (DELETED = 0) in ContactsContract.Groups */
+    fun getActiveSystemGroupIds(groupRowIds: Set<Long>): Set<Long>
     /** Finds the system group row ID for a group title and optional account */
     fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long?
     /** Creates or updates a contact group/label in the system Contacts provider with members */
