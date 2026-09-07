@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -17,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
@@ -69,21 +72,23 @@ private fun LaunchDialogSurface(
         label = "ldAlpha"
     )
 
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 8.dp,
-            modifier = Modifier.fillMaxWidth().scale(scale).alpha(alpha)
+    ProvideScaledDensity {
+        Dialog(
+            onDismissRequest = onDismissRequest,
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                content = content
-            )
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().scale(scale).alpha(alpha)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    content = content
+                )
+            }
         }
     }
 }
@@ -562,4 +567,94 @@ fun DonateDialog(
         }
     }
 }
+
+@Composable
+fun DonateOptionDialog(
+    title: String = "Donate",
+    description: String = "Choose how you'd like to open the donation page:",
+    icon: ImageVector = Icons.Default.Favorite,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    onDismiss: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onOpenInApp: () -> Unit
+) {
+    ProvideScaledDensity {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            icon = {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            RivoListItem(
+                                headline = "Open in Phone Browser",
+                                supporting = "Use Chrome, Firefox or default browser",
+                                leadingIcon = Icons.Outlined.OpenInBrowser,
+                                iconContainerColor = Color(0xFF2196F3),
+                                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                                onClick = onOpenBrowser
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                            )
+                            RivoListItem(
+                                headline = "Open in App",
+                                supporting = "In-app web view with floating controls",
+                                leadingIcon = Icons.Outlined.PhoneAndroid,
+                                iconContainerColor = Color(0xFF673AB7),
+                                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                                onClick = onOpenInApp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
+}
+
 

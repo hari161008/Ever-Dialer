@@ -190,16 +190,10 @@ fun BottomBar(navController: NavController) {
         }
     }
 
-    // ── Slide-in animation — slower, re-triggers every time pill re-enters ───
+    // ── Slide-in animation — re-triggers smoothly when pill re-enters ───
     var pillVisible by remember { mutableStateOf(false) }
     LaunchedEffect(isOnTabScreen) {
-        if (isOnTabScreen) {
-            pillVisible = false
-            delay(16) // one frame — lets Compose commit the hidden state
-            pillVisible = true
-        } else {
-            pillVisible = false
-        }
+        pillVisible = isOnTabScreen
     }
     val pillOffsetY by animateFloatAsState(
         targetValue   = if (pillVisible) 0f else 220f,

@@ -725,7 +725,14 @@ fun CallLogFullContent(
                 val contactsList by contactsVM.allContacts.collectAsState()
                 val contactsCount = contactsList.size
                 val contactGroups by contactsVM.contactGroups.collectAsState()
-                val groupsCount = contactGroups.size
+                val hiddenGroupIds = remember(settingsVersion) { prefs.getHiddenContactGroupIds() }
+                val enabledAccountKeys by contactsVM.enabledAccountKeys.collectAsState()
+                val visibleContactGroups = remember(contactGroups, hiddenGroupIds, enabledAccountKeys) {
+                    contactGroups.filter { it.id !in hiddenGroupIds }.filter { group ->
+                        isGroupMatchingAccountFilter(group, enabledAccountKeys)
+                    }
+                }
+                val groupsCount = visibleContactGroups.size
 
                 val visibleStatCards = remember(callUIOrder, showToday, showMissed, showOutgoing, showCallTime, showContacts, showGroups) {
                     callUIOrder.filter { key ->

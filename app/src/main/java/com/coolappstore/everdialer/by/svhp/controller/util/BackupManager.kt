@@ -88,13 +88,18 @@ object BackupManager {
                 key == PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER
     }
 
+    fun isContactGroupKey(key: String): Boolean {
+        return key == PreferenceManager.KEY_CONTACT_GROUPS ||
+                key == PreferenceManager.KEY_HIDDEN_CONTACT_GROUPS
+    }
+
     fun writeBackup(
         context: Context,
         outputStream: OutputStream,
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
-        backupContactGroups: Boolean = true,
+        backupContactGroups: Boolean = false,
         backupRecordings: Boolean = true,
         backupContacts: Boolean = false,
         backupCallLogs: Boolean = false
@@ -118,7 +123,11 @@ object BackupManager {
                     prefsToBackup.forEach { prefName ->
                         val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
                         if (prefs.all.isNotEmpty() || prefName == PREFS_RIVO) {
-                            val prefsJson = prefsToJson(prefs)
+                            val prefsJson = if (prefName == PREFS_RIVO && !backupContactGroups) {
+                                prefsToJsonFiltered(prefs) { key -> !isContactGroupKey(key) }
+                            } else {
+                                prefsToJson(prefs)
+                            }
                             zip.putNextEntry(ZipEntry("prefs/$prefName.json"))
                             zip.write(prefsJson.toByteArray(Charsets.UTF_8))
                             zip.closeEntry()
@@ -209,13 +218,17 @@ object BackupManager {
                     }
                 }
 
-                // 5.5. Backup contact groups (names and shown contact references)
+                // 5.5. Backup contact groups (names, accounts, memberships, hidden state, and display order)
                 if (backupContactGroups) {
                     try {
                         val prefs = PreferenceManager(context)
                         val groups = prefs.getContactGroups()
-                        if (groups.isNotEmpty()) {
-                            val jsonArray = JSONArray()
+                        val hiddenGroups = prefs.getHiddenContactGroupIds()
+                        val displayOrder = prefs.getContactsDisplayOrder().filter { it.startsWith("group_") }
+
+                        if (groups.isNotEmpty() || hiddenGroups.isNotEmpty() || displayOrder.isNotEmpty()) {
+                            val rootObj = JSONObject()
+                            val groupsArr = JSONArray()
                             for (g in groups) {
                                 val obj = JSONObject()
                                 obj.put("id", g.id)
@@ -226,10 +239,20 @@ object BackupManager {
                                 val contactsArr = JSONArray()
                                 g.contactIds.forEach { contactsArr.put(it) }
                                 obj.put("contactIds", contactsArr)
-                                jsonArray.put(obj)
+                                groupsArr.put(obj)
                             }
+                            rootObj.put("groups", groupsArr)
+
+                            val hiddenArr = JSONArray()
+                            hiddenGroups.forEach { hiddenArr.put(it) }
+                            rootObj.put("hiddenGroups", hiddenArr)
+
+                            val orderArr = JSONArray()
+                            displayOrder.forEach { orderArr.put(it) }
+                            rootObj.put("displayOrder", orderArr)
+
                             zip.putNextEntry(ZipEntry("contact_groups.json"))
-                            zip.write(jsonArray.toString().toByteArray(Charsets.UTF_8))
+                            zip.write(rootObj.toString().toByteArray(Charsets.UTF_8))
                             zip.closeEntry()
                         }
                     } catch (_: Exception) {}
@@ -390,7 +413,7 @@ object BackupManager {
         backupSettings: Boolean = true,
         backupCallingCards: Boolean = true,
         backupNotes: Boolean = true,
-        backupContactGroups: Boolean = true,
+        backupContactGroups: Boolean = false,
         backupRecordings: Boolean = true,
         backupContacts: Boolean = false,
         backupCallLogs: Boolean = false
@@ -493,13 +516,13 @@ object BackupManager {
                             val prefName = name.removePrefix("prefs/").removeSuffix(".json")
                             val json = zip.readBytes().toString(Charsets.UTF_8)
                             if (restoreSettings) {
-                                restorePrefs(context, prefName, json, onlyCallingCardKeys = false)
+                                restorePrefs(context, prefName, json, onlyCallingCardKeys = false, restoreContactGroups = restoreContactGroups)
                                 if (prefName == PREFS_RIVO) {
                                     restoredRivoFromPrefsDir = true
                                 }
                                 restoredAny = true
                             } else if (restoreCallingCards && prefName == PREFS_RIVO) {
-                                restorePrefs(context, prefName, json, onlyCallingCardKeys = true)
+                                restorePrefs(context, prefName, json, onlyCallingCardKeys = true, restoreContactGroups = false)
                                 restoredRivoFromPrefsDir = true
                                 restoredAny = true
                             }
@@ -508,10 +531,10 @@ object BackupManager {
                             val json = zip.readBytes().toString(Charsets.UTF_8)
                             if (!restoredRivoFromPrefsDir) {
                                 if (restoreSettings) {
-                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = false)
+                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = false, restoreContactGroups = restoreContactGroups)
                                     restoredAny = true
                                 } else if (restoreCallingCards) {
-                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = true)
+                                    restorePrefs(context, PREFS_RIVO, json, onlyCallingCardKeys = true, restoreContactGroups = false)
                                     restoredAny = true
                                 }
                             }
@@ -563,10 +586,11 @@ object BackupManager {
                             if (restoreContactGroups) {
                                 try {
                                     val json = zip.readBytes().toString(Charsets.UTF_8)
-                                    val jsonArray = JSONArray(json)
                                     val list = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
-                                    for (i in 0 until jsonArray.length()) {
-                                        val obj = jsonArray.getJSONObject(i)
+                                    val restoredHiddenGroups = mutableSetOf<String>()
+                                    val restoredOrder = mutableListOf<String>()
+
+                                    fun parseGroupObj(obj: JSONObject): com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup? {
                                         val id = obj.optString("id", java.util.UUID.randomUUID().toString())
                                         val gName = obj.optString("name", "")
                                         val accountType = if (obj.has("accountType")) obj.optString("accountType").ifBlank { null } else null
@@ -579,21 +603,102 @@ object BackupManager {
                                                 contactIds.add(arr.getString(j))
                                             }
                                         }
-                                        if (gName.isNotBlank()) {
-                                            list.add(
-                                                com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
-                                                    id = id,
-                                                    name = gName,
-                                                    contactIds = contactIds,
-                                                    accountType = accountType,
-                                                    accountName = accountName,
-                                                    targetLabel = targetLabel
-                                                )
+                                        return if (gName.isNotBlank()) {
+                                            com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup(
+                                                id = id,
+                                                name = gName,
+                                                contactIds = contactIds,
+                                                accountType = accountType,
+                                                accountName = accountName,
+                                                targetLabel = targetLabel
                                             )
+                                        } else null
+                                    }
+
+                                    val trimmed = json.trim()
+                                    if (trimmed.startsWith("[")) {
+                                        val jsonArray = JSONArray(trimmed)
+                                        for (i in 0 until jsonArray.length()) {
+                                            parseGroupObj(jsonArray.getJSONObject(i))?.let { list.add(it) }
+                                        }
+                                    } else {
+                                        val root = JSONObject(trimmed)
+                                        val groupsArr = root.optJSONArray("groups")
+                                        if (groupsArr != null) {
+                                            for (i in 0 until groupsArr.length()) {
+                                                parseGroupObj(groupsArr.getJSONObject(i))?.let { list.add(it) }
+                                            }
+                                        }
+                                        val hiddenArr = root.optJSONArray("hiddenGroups")
+                                        if (hiddenArr != null) {
+                                            for (i in 0 until hiddenArr.length()) {
+                                                restoredHiddenGroups.add(hiddenArr.getString(i))
+                                            }
+                                        }
+                                        val orderArr = root.optJSONArray("displayOrder")
+                                        if (orderArr != null) {
+                                            for (i in 0 until orderArr.length()) {
+                                                restoredOrder.add(orderArr.getString(i))
+                                            }
                                         }
                                     }
+
+                                    val contactsRepo = GlobalContext.get().getOrNull<IContactsRepository>()
+                                        ?: ContactsRepository(context.contentResolver, context)
+
+                                    // Resolve system group IDs on this device so groups aren't wiped as stale/deleted
+                                    val resolvedList = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
+                                    for (g in list) {
+                                        var targetGroup = g
+                                        if (!g.accountType.isNullOrBlank() || !g.accountName.isNullOrBlank() || g.id.startsWith("sys_group_")) {
+                                            val existingSysId = runCatching {
+                                                contactsRepo.findSystemGroupId(g.name, g.accountType, g.accountName)
+                                            }.getOrNull()
+
+                                            if (existingSysId != null) {
+                                                targetGroup = g.copy(id = "sys_group_$existingSysId")
+                                            } else {
+                                                val savedSysId = runCatching { contactsRepo.saveSystemContactGroup(g) }.getOrNull()
+                                                if (savedSysId != null) {
+                                                    targetGroup = g.copy(id = savedSysId)
+                                                } else if (g.id.startsWith("sys_group_")) {
+                                                    // Fallback to local UUID so it won't be deleted by ContactsViewModel check
+                                                    targetGroup = g.copy(id = java.util.UUID.randomUUID().toString())
+                                                }
+                                            }
+                                        }
+                                        resolvedList.add(targetGroup)
+                                    }
+
                                     val prefs = PreferenceManager(context)
-                                    prefs.saveContactGroups(list)
+                                    prefs.saveContactGroups(resolvedList)
+
+                                    // Restore hidden groups state
+                                    if (restoredHiddenGroups.isNotEmpty()) {
+                                        val currentHidden = prefs.getHiddenContactGroupIds().toMutableSet()
+                                        currentHidden.addAll(restoredHiddenGroups)
+                                        prefs.setString(PreferenceManager.KEY_HIDDEN_CONTACT_GROUPS, currentHidden.joinToString(","))
+                                    }
+
+                                    // Update display order so restored groups show up
+                                    val currentOrder = prefs.getContactsDisplayOrder().toMutableList()
+                                    if (restoredOrder.isNotEmpty()) {
+                                        for (key in restoredOrder) {
+                                            if (key !in currentOrder) currentOrder.add(key)
+                                        }
+                                    }
+                                    for (rg in resolvedList) {
+                                        val gKey = "group_${rg.id}"
+                                        if (gKey !in currentOrder) {
+                                            currentOrder.add(gKey)
+                                        }
+                                    }
+                                    prefs.setContactsDisplayOrder(currentOrder)
+
+                                    try {
+                                        GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel>()?.fetchContactGroups()
+                                    } catch (_: Throwable) {}
+
                                     restoredAny = true
                                 } catch (_: Exception) {}
                             }
@@ -865,6 +970,47 @@ object BackupManager {
         return wrapper.toString()
     }
 
+    private fun prefsToJsonFiltered(prefs: SharedPreferences, predicate: (String) -> Boolean): String {
+        val json = JSONObject()
+        val meta = JSONObject()
+        prefs.all.forEach { (key, value) ->
+            if (predicate(key)) {
+                when (value) {
+                    is Boolean -> {
+                        json.put(key, value)
+                        meta.put(key, "boolean")
+                    }
+                    is Int -> {
+                        json.put(key, value)
+                        meta.put(key, "int")
+                    }
+                    is Long -> {
+                        json.put(key, value)
+                        meta.put(key, "long")
+                    }
+                    is Float -> {
+                        json.put(key, value.toDouble())
+                        meta.put(key, "float")
+                    }
+                    is String -> {
+                        json.put(key, value)
+                        meta.put(key, "string")
+                    }
+                    is Set<*> -> {
+                        val arr = JSONArray()
+                        value.forEach { item -> if (item != null) arr.put(item.toString()) }
+                        json.put(key, arr)
+                        meta.put(key, "string_set")
+                    }
+                }
+            }
+        }
+        val wrapper = JSONObject()
+        wrapper.put("data", json)
+        wrapper.put("meta", meta)
+        return wrapper.toString()
+    }
+
     private fun prefsToJson(prefs: SharedPreferences): String {
         val json = JSONObject()
         val meta = JSONObject() // store type hints for unambiguous restore
@@ -904,7 +1050,13 @@ object BackupManager {
         return wrapper.toString()
     }
 
-    private fun restorePrefs(context: Context, prefName: String, json: String, onlyCallingCardKeys: Boolean = false) {
+    private fun restorePrefs(
+        context: Context,
+        prefName: String,
+        json: String,
+        onlyCallingCardKeys: Boolean = false,
+        restoreContactGroups: Boolean = true
+    ) {
         try {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
             val editor = prefs.edit()
@@ -935,6 +1087,18 @@ object BackupManager {
 
             jsonObj.keys().forEach { key ->
                 if (onlyCallingCardKeys && !isCallingCardKey(key)) {
+                    return@forEach
+                }
+                if (!restoreContactGroups && isContactGroupKey(key)) {
+                    return@forEach
+                }
+                if (!restoreContactGroups && key == PreferenceManager.KEY_CONTACTS_DISPLAY_ORDER) {
+                    val incoming = jsonObj.optString(key, "")
+                        .split(",").filter { !it.startsWith("group_") && it.isNotBlank() }
+                    val currentGroupKeys = prefs.getString(PreferenceManager.KEY_CONTACTS_DISPLAY_ORDER, "")
+                        ?.split(",")?.filter { it.startsWith("group_") && it.isNotBlank() } ?: emptyList()
+                    val merged = (incoming + currentGroupKeys).distinct()
+                    editor.putString(key, merged.joinToString(","))
                     return@forEach
                 }
                 val typeHint = meta.optString(key, "")

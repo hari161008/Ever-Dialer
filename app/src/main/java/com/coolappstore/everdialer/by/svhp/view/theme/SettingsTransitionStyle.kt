@@ -43,11 +43,11 @@ val SettingsSmoothEase = FastOutSlowInEasing
 val SettingsSmoothEaseIn = FastOutLinearInEasing
 val SettingsSmoothEaseOut = LinearOutSlowInEasing
 
-const val SETTINGS_ANIM_DURATION_ENTER = 500
-const val SETTINGS_ANIM_DURATION_EXIT = 420
+const val SETTINGS_ANIM_DURATION_ENTER = 400
+const val SETTINGS_ANIM_DURATION_EXIT = 400
 
-const val SETTINGS_SCALE_ENTER_FROM = 0.78f
-const val SETTINGS_SCALE_EXIT_TO = 1.12f
+const val SETTINGS_SCALE_ENTER_FROM = 0.92f
+const val SETTINGS_SCALE_EXIT_TO = 0.96f
 
 /**
  * Windows Phone Metro-style turnstile page transition specifications,
@@ -142,7 +142,7 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
                 animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
                 initialScale = SETTINGS_SCALE_ENTER_FROM,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
         }
     }
 
@@ -154,7 +154,7 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
                 animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
                 targetScale = SETTINGS_SCALE_EXIT_TO,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
         }
     }
 
@@ -167,7 +167,7 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
                 animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
                 initialScale = SETTINGS_SCALE_EXIT_TO,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
         }
     }
 
@@ -182,7 +182,7 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
                 animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
                 targetScale = SETTINGS_SCALE_ENTER_FROM,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
         }
     }
 }

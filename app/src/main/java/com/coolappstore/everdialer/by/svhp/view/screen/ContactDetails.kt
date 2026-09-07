@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -240,6 +241,7 @@ fun ContactDetailsScreen(
     // picker once set). Same keying as contactSimKey, so it travels with the same contact.
     val contactDefaultNumber = remember(settingsVer, contactSimKey) { prefs.getContactDefaultNumber(contactSimKey) }
         .takeIf { number -> contact != null && number != null && contact.phoneNumbers.contains(number) }
+    var selectedNumberForMenu by remember { mutableStateOf<String?>(null) }
 
     // Contact Info → "Ringtone" — per-contact custom ringtone, read straight from Contacts
     // provider so it always reflects reality (including changes made from the system Contacts
@@ -727,16 +729,15 @@ fun ContactDetailsScreen(
                     RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
                         if (contact != null) {
                             contactPhoneNumbers.forEachIndexed { index, number ->
+                                val isPrimary = contactDefaultNumber == number
                                 RivoListItem(
                                     headline = number,
-                                    supporting = "Mobile",
+                                    supporting = if (isPrimary) "Mobile • Primary" else "Mobile",
                                     leadingIcon = Icons.Default.Phone,
                                     compact = contactPhoneNumbers.size > 1,
                                     onClick = { initiateCall(number) },
                                     onLongClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", number))
-                                        android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                                        selectedNumberForMenu = number
                                     }
                                 )
                                 if (index < contactPhoneNumbers.size - 1 || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
@@ -766,11 +767,57 @@ fun ContactDetailsScreen(
                                 leadingIcon = Icons.Default.Phone,
                                 onClick = { initiateCall(phoneNumber) },
                                 onLongClick = {
+                                    selectedNumberForMenu = phoneNumber
+                                }
+                            )
+                        }
+
+                        RivoDropdownMenu(
+                            expanded = selectedNumberForMenu != null,
+                            onDismissRequest = { selectedNumberForMenu = null }
+                        ) {
+                            val menuNum = selectedNumberForMenu ?: return@RivoDropdownMenu
+                            val isPrimaryNum = contactDefaultNumber == menuNum
+                            RivoDropdownMenuItem(
+                                text = "Copy",
+                                icon = Icons.Default.ContentCopy,
+                                iconTint = Color(0xFF2196F3),
+                                onClick = {
+                                    selectedNumberForMenu = null
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", phoneNumber))
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", menuNum))
                                     android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
+                            if (contact != null) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                if (isPrimaryNum) {
+                                    RivoDropdownMenuItem(
+                                        text = "Unset as primary",
+                                        icon = Icons.Outlined.StarOutline,
+                                        iconTint = Color(0xFFFF9800),
+                                        onClick = {
+                                            selectedNumberForMenu = null
+                                            prefs.setContactDefaultNumber(contactSimKey, null)
+                                            android.widget.Toast.makeText(context, "Unset as primary number", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                } else {
+                                    RivoDropdownMenuItem(
+                                        text = "Set as primary",
+                                        icon = Icons.Default.Star,
+                                        iconTint = Color(0xFFFF9800),
+                                        onClick = {
+                                            selectedNumberForMenu = null
+                                            prefs.setContactDefaultNumber(contactSimKey, menuNum)
+                                            android.widget.Toast.makeText(context, "Set as primary number", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                }
+                            }
                         }
 
                         // Copy / Share / Move / Delete — the same actions available from the

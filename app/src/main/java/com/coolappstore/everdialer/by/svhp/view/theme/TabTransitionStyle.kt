@@ -81,7 +81,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                         animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
                         initialScale = SETTINGS_SCALE_ENTER_FROM,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
                 }
             }
             fromSettings -> {
@@ -93,7 +93,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                         animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
                         initialScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -130,7 +130,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                         animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
                         targetScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -174,7 +174,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                         animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
                         initialScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -214,7 +214,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                         animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
                         targetScale = SETTINGS_SCALE_ENTER_FROM,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {

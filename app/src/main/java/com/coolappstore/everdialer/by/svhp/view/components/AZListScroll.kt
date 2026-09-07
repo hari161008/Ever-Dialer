@@ -426,9 +426,13 @@ fun ContactListItem(
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-                if (!contact.phoneNumbers.firstOrNull().isNullOrEmpty()) {
+                val primaryNumber = remember(settingsVer, contact.id, contact.phoneNumbers) {
+                    prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                }
+                val numberToDisplay = primaryNumber ?: contact.phoneNumbers.firstOrNull()
+                if (!numberToDisplay.isNullOrEmpty()) {
                     Text(
-                        text = contact.phoneNumbers.first(),
+                        text = numberToDisplay,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -533,7 +537,9 @@ fun ContactListItem(
                         onClick  = {
                             showMenu = false
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", contact.phoneNumbers.first()))
+                            val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                            val numToCopy = primaryNum ?: contact.phoneNumbers.firstOrNull() ?: ""
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", numToCopy))
                             Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
                         }
                     )

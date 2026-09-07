@@ -172,7 +172,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var pendingBackupSettings by remember { mutableStateOf(true) }
     var pendingBackupCallingCards by remember { mutableStateOf(true) }
     var pendingBackupNotes by remember { mutableStateOf(true) }
-    var pendingBackupContactGroups by remember { mutableStateOf(true) }
+    var pendingBackupContactGroups by remember { mutableStateOf(false) }
     var pendingBackupRecordings by remember { mutableStateOf(true) }
     var pendingBackupContacts by remember { mutableStateOf(false) }
     var pendingBackupCallLogs by remember { mutableStateOf(false) }
@@ -180,6 +180,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var showRestoreDialog by remember { mutableStateOf(false) }
     var pendingRestoreFile by remember { mutableStateOf<File?>(null) }
     var pendingRestoreContents by remember { mutableStateOf<BackupManager.BackupContents?>(null) }
+    var showDonateDialog by remember { mutableStateOf(false) }
 
     // Save backup file picker
     val saveBackupLauncher = rememberLauncherForActivityResult(
@@ -259,7 +260,22 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
 
-    // Ever Call Recorder is now bundled directly inside this app (no separate install needed).
+    if (showDonateDialog) {
+        com.coolappstore.everdialer.by.svhp.view.components.DonateOptionDialog(
+            onDismiss = { showDonateDialog = false },
+            onOpenBrowser = {
+                showDonateDialog = false
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hariprabhu.com/Ever-Dialer/#donate")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            },
+            onOpenInApp = {
+                showDonateDialog = false
+                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
+            }
+        )
+    }
 
     // ── Haptics Dialog ────────────────────────────────────────────────────────
     if (showHapticsDialog) {
@@ -1758,12 +1774,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 iconContainerColor = ColorRed,
                                 trailingIcon = Icons.Default.OpenInNew,
                                 modifier = Modifier.settingsSearchHighlight("donate", highlightedSettingKey) { highlightedSettingKey = null },
-                                onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hariprabhu.com/Ever-Dialer/#donate")).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                }
+                                onClick = { showDonateDialog = true }
                             )
                         }
                     }
@@ -2316,7 +2327,7 @@ private fun CreateBackupDialog(
     var backupSettings by remember { mutableStateOf(true) }
     var backupCallingCards by remember { mutableStateOf(true) }
     var backupNotes by remember { mutableStateOf(true) }
-    var backupContactGroups by remember { mutableStateOf(true) }
+    var backupContactGroups by remember { mutableStateOf(false) }
     var backupRecordings by remember { mutableStateOf(true) }
     var backupContacts by remember { mutableStateOf(false) }
     var backupCallLogs by remember { mutableStateOf(false) }
