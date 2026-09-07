@@ -1208,6 +1208,11 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             val uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contactId)
             contentResolver.delete(uri, null, null)
             clearNumberLookupCache()
+            try {
+                contentResolver.notifyChange(ContactsContract.Contacts.CONTENT_URI, null)
+                contentResolver.notifyChange(ContactsContract.RawContacts.CONTENT_URI, null)
+                contentResolver.notifyChange(ContactsContract.Data.CONTENT_URI, null)
+            } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 
@@ -1381,12 +1386,18 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         getRawContactIdsForContact(contactId).forEach { deleteRawContact(it) }
     }
 
-    private fun deleteRawContact(rawContactId: Long) {
+    override fun deleteRawContact(rawContactId: Long) {
         try {
             val uri = ContactsContract.RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(rawContactId.toString())
                 .build()
             contentResolver.delete(uri, null, null)
+            clearNumberLookupCache()
+            try {
+                contentResolver.notifyChange(ContactsContract.Contacts.CONTENT_URI, null)
+                contentResolver.notifyChange(ContactsContract.RawContacts.CONTENT_URI, null)
+                contentResolver.notifyChange(ContactsContract.Data.CONTENT_URI, null)
+            } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 
@@ -1724,6 +1735,67 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         return groups
     }
 
+    override fun getSystemGroupMembers(groupRowIds: Set<Long>): Map<Long, List<String>> {
+        if (groupRowIds.isEmpty()) return emptyMap()
+        val result = mutableMapOf<Long, MutableList<String>>()
+        val inClause = groupRowIds.joinToString(",") { it.toString() }
+        try {
+            contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.Data.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID
+                ),
+                "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID} IN ($inClause)",
+                arrayOf(ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE),
+                null
+            )?.use { cursor ->
+                val contactIdIdx = cursor.getColumnIndex(ContactsContract.Data.CONTACT_ID)
+                val groupRowIdIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID)
+                while (cursor.moveToNext()) {
+                    val contactId = if (contactIdIdx >= 0) cursor.getString(contactIdIdx) else null
+                    val rowId = if (groupRowIdIdx >= 0) cursor.getLong(groupRowIdIdx) else null
+                    if (contactId != null && rowId != null) {
+                        result.getOrPut(rowId) { mutableListOf() }.add(contactId)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error querying group members", e)
+        }
+        return result
+    }
+
+    override fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long? {
+        val projection = arrayOf(ContactsContract.Groups._ID)
+        val selection = StringBuilder("${ContactsContract.Groups.TITLE} = ? AND ${ContactsContract.Groups.DELETED} = 0")
+        val args = mutableListOf(groupName)
+        if (!accountType.isNullOrBlank()) {
+            selection.append(" AND ${ContactsContract.Groups.ACCOUNT_TYPE} = ?")
+            args.add(accountType)
+        }
+        if (!accountName.isNullOrBlank()) {
+            selection.append(" AND ${ContactsContract.Groups.ACCOUNT_NAME} = ?")
+            args.add(accountName)
+        }
+        return try {
+            contentResolver.query(
+                ContactsContract.Groups.CONTENT_URI,
+                projection,
+                selection.toString(),
+                args.toTypedArray(),
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idIdx = cursor.getColumnIndex(ContactsContract.Groups._ID)
+                    if (idIdx >= 0) cursor.getLong(idIdx) else null
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override fun saveSystemContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup): String? {
         val ops = ArrayList<ContentProviderOperation>()
         var targetGroupId: Long? = null
@@ -1799,6 +1871,11 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
                 }
 
+                try {
+                    contentResolver.notifyChange(ContactsContract.Groups.CONTENT_URI, null)
+                    contentResolver.notifyChange(ContactsContract.Data.CONTENT_URI, null)
+                } catch (_: Exception) {}
+
                 return "sys_group_$targetGroupId"
             }
         } catch (e: Exception) {
@@ -1830,6 +1907,10 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 "${ContactsContract.Groups._ID} = ?",
                 arrayOf(targetId.toString())
             )
+            try {
+                contentResolver.notifyChange(ContactsContract.Groups.CONTENT_URI, null)
+                contentResolver.notifyChange(ContactsContract.Data.CONTENT_URI, null)
+            } catch (_: Exception) {}
             deletedRows > 0
         } catch (e: Exception) {
             android.util.Log.e("ContactsRepo", "Error deleting system contact group", e)

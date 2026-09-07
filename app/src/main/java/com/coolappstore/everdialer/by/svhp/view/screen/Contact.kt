@@ -109,19 +109,42 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
     BackHandler(enabled = selectionMode) { selectionMode = false; selectedContacts = emptySet() }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete ${selectedContacts.size} contact${if (selectedContacts.size != 1) "s" else ""}?") },
-            text  = { Text("This will permanently delete the selected contacts.") },
-            confirmButton = {
-                Button(onClick = {
+        if (selectedContacts.size == 1) {
+            val singleId = selectedContacts.first()
+            val singleContact = displayedContacts2.find { it.id == singleId }
+            val singleName = singleContact?.name?.ifBlank { null }
+                ?: singleContact?.phoneNumbers?.firstOrNull()
+                ?: "Contact"
+            DeleteContactDialog(
+                contactName = singleName,
+                contactId = singleId,
+                contactsViewModel = contactsVM2,
+                onDeleted = {
                     showDeleteConfirm = false
-                    selectedContacts.forEach { contactsVM2.deleteContact(it) }
-                    selectedContacts = emptySet(); selectionMode = false
-                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
-        )
+                    selectedContacts = emptySet()
+                    selectionMode = false
+                },
+                onDismiss = { showDeleteConfirm = false }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete ${selectedContacts.size} contacts?") },
+                text = { Text("This will permanently delete the selected contacts from everywhere.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDeleteConfirm = false
+                            selectedContacts.forEach { contactsVM2.deleteContact(it) }
+                            selectedContacts = emptySet()
+                            selectionMode = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Delete everywhere") }
+                },
+                dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
+            )
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

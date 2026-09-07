@@ -322,29 +322,14 @@ fun ContactListItem(
 
     // Delete confirmation dialog
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFFF44336)) },
-            title = { Text("Delete Contact") },
-            text = {
-                Text(
-                    "Are you sure you want to permanently delete \"$headline\"? This action cannot be undone.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+        DeleteContactDialog(
+            contactName = headline,
+            contactId = contact.id,
+            contactsViewModel = contactsVM,
+            onDeleted = {
+                showDeleteConfirm = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        contactsVM.deleteContact(contact.id)
-                    }
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
-            }
+            onDismiss = { showDeleteConfirm = false }
         )
     }
 

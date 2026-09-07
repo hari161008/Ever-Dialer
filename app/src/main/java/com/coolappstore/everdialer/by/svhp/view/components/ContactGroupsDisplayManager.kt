@@ -218,7 +218,7 @@ fun ContactsToDisplaySheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         "MANAGE CONTACT GROUPS",
                         style = MaterialTheme.typography.labelMedium,
@@ -231,6 +231,54 @@ fun ContactsToDisplaySheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (groupsList.size > 5) {
+                    var showCleanConfirm by remember { mutableStateOf(false) }
+                    TextButton(
+                        onClick = { showCleanConfirm = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.DeleteSweep,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Clean up", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                    if (showCleanConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showCleanConfirm = false },
+                            title = { Text("Clean Up Groups") },
+                            text = { Text("Remove auto-imported system groups and keep only your groups, or clear all groups?") },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        contactsVM.cleanupAutoImportedGroups()
+                                        showCleanConfirm = false
+                                    }
+                                ) {
+                                    Text("Remove Imported")
+                                }
+                            },
+                            dismissButton = {
+                                Row {
+                                    TextButton(
+                                        onClick = {
+                                            contactsVM.clearAllContactGroups()
+                                            showCleanConfirm = false
+                                        }
+                                    ) {
+                                        Text("Clear All", color = MaterialTheme.colorScheme.error)
+                                    }
+                                    TextButton(onClick = { showCleanConfirm = false }) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -682,6 +730,16 @@ fun AddContactGroupDialog(
     var selectedContactIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showTargetPicker by remember { mutableStateOf(false) }
 
+    val availableTargets = remember { contactsVM.getSaveTargets().filter { !it.isSim } }
+    var selectedTarget by remember {
+        mutableStateOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget?>(
+            availableTargets.firstOrNull { it.accountType?.contains("google", ignoreCase = true) == true }
+                ?: availableTargets.firstOrNull { it.accountType == null }
+                ?: availableTargets.firstOrNull()
+                ?: com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget(label = "Local", subLabel = "This phone only")
+        )
+    }
+
     val filteredContacts = remember(allContacts, searchQuery) {
         if (searchQuery.isBlank()) allContacts
         else allContacts.filter {
@@ -693,17 +751,10 @@ fun AddContactGroupDialog(
     if (showTargetPicker) {
         SelectGroupSaveTargetDialog(
             groupName = groupName.trim(),
-            targets = contactsVM.getSaveTargets(),
+            targets = availableTargets,
             onSelect = { target ->
-                val newGroup = ContactGroup(
-                    name = groupName.trim(),
-                    contactIds = selectedContactIds.toList(),
-                    accountType = target.accountType,
-                    accountName = target.accountName,
-                    targetLabel = target.label + (if (target.subLabel != null) " (${target.subLabel})" else "")
-                )
+                selectedTarget = target
                 showTargetPicker = false
-                onSave(newGroup)
             },
             onDismiss = { showTargetPicker = false }
         )
@@ -785,6 +836,74 @@ fun AddContactGroupDialog(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Save Destination Picker Card (Gmail, Local, etc.)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showTargetPicker = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val currentTarget = selectedTarget
+                        val (icon, tint) = when {
+                            currentTarget?.accountType?.contains("google", ignoreCase = true) == true ->
+                                Icons.Default.Email to Color(0xFFE53935)
+                            currentTarget?.accountType?.contains("exchange", ignoreCase = true) == true ||
+                            currentTarget?.accountType?.contains("outlook", ignoreCase = true) == true ->
+                                Icons.Default.Business to Color(0xFF0078D4)
+                            currentTarget?.accountType == null ->
+                                Icons.Default.PhoneAndroid to Color(0xFF607D8B)
+                            else ->
+                                Icons.Default.AccountCircle to MaterialTheme.colorScheme.primary
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = tint.copy(alpha = 0.14f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Save group to",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val targetTitle = when {
+                                currentTarget?.accountType?.contains("google", ignoreCase = true) == true ->
+                                    if (currentTarget.accountName?.contains("@") == true) "Gmail (${currentTarget.accountName})"
+                                    else "Gmail / Google"
+                                currentTarget?.accountType == null -> "Local (This phone only)"
+                                else -> currentTarget.label
+                            }
+                            Text(
+                                text = targetTitle,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { showTargetPicker = true },
+                            shape = RoundedCornerShape(18.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                        ) {
+                            Text("Change", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -942,7 +1061,20 @@ fun AddContactGroupDialog(
                     Button(
                         onClick = {
                             if (groupName.isNotBlank()) {
-                                showTargetPicker = true
+                                val target = selectedTarget ?: com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget(label = "Local", subLabel = "This phone only")
+                                val newGroup = ContactGroup(
+                                    name = groupName.trim(),
+                                    contactIds = selectedContactIds.toList(),
+                                    accountType = target.accountType,
+                                    accountName = target.accountName,
+                                    targetLabel = when {
+                                        target.accountType?.contains("google", ignoreCase = true) == true ->
+                                            if (target.accountName?.contains("@") == true) "Gmail (${target.accountName})" else "Gmail"
+                                        target.accountType == null -> "Local"
+                                        else -> target.label + (if (target.subLabel != null) " (${target.subLabel})" else "")
+                                    }
+                                )
+                                onSave(newGroup)
                             }
                         },
                         enabled = groupName.isNotBlank(),
@@ -1614,10 +1746,20 @@ fun SelectGroupSaveTargetDialog(
                                 }
                                 Spacer(Modifier.width(16.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(target.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                    if (target.subLabel != null) {
+                                    val (title, sub) = when {
+                                        target.accountType?.contains("google", ignoreCase = true) == true -> {
+                                            val t = if (target.accountName?.contains("@") == true) "Gmail (${target.accountName})" else "Gmail / Google"
+                                            t to (target.subLabel ?: "Google Account")
+                                        }
+                                        target.accountType == null -> {
+                                            "Local (Device Storage)" to "This phone only"
+                                        }
+                                        else -> target.label to target.subLabel
+                                    }
+                                    Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                    if (sub != null) {
                                         Text(
-                                            target.subLabel,
+                                            sub,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )

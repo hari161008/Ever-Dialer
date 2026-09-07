@@ -8,10 +8,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -84,18 +87,9 @@ fun ContactEditScreen(
                 contactsVM.getContactAccounts(contactId)
             }
             currentAccounts = accounts
-            val writable = accounts.filter { !it.isReadOnly }
-            if (writable.size == 1) {
-                val acc = writable[0]
-                selectedTarget = ContactSaveTarget(
-                    label = acc.displayName,
-                    subLabel = acc.accountName,
-                    accountType = acc.accountType,
-                    accountName = acc.accountName,
-                    isSim = acc.isSim,
-                    simSlotIndex = acc.simSlotIndex
-                )
-            }
+            // By default, editing an existing contact should update all linked accounts
+            updateAllLinkedAccounts = true
+            selectedTarget = null
 
             if (contact != null) {
                 resolvedContact = contact
@@ -291,10 +285,10 @@ fun ContactEditScreen(
 
             
             item {
-                val writableAccounts = currentAccounts.filter { !it.isReadOnly }
+                val allPresentAccounts = currentAccounts
                 val (storageTitle, storageSubtitle, storageIcon) = remember(
                     isNewContact,
-                    currentAccounts,
+                    allPresentAccounts,
                     selectedTarget,
                     updateAllLinkedAccounts
                 ) {
@@ -309,76 +303,116 @@ fun ContactEditScreen(
                         }
                         Triple("Saving to", if (sub != null) "$label ($sub)" else label, icon)
                     } else {
-                        when {
-                            writableAccounts.isEmpty() -> {
-                                val label = selectedTarget?.label ?: "Device Storage"
-                                Triple("Saving to", "$label (Linked to read-only app)", Icons.Default.PhoneAndroid)
-                            }
-                            writableAccounts.size > 1 && updateAllLinkedAccounts -> {
-                                val names = writableAccounts.joinToString(", ") { it.displayName }
-                                Triple("Saved in ${writableAccounts.size} accounts", "$names (Unified & Synced)", Icons.Default.Storage)
-                            }
-                            selectedTarget != null -> {
-                                val icon = when {
-                                    selectedTarget?.isSim == true -> Icons.Default.SimCard
-                                    selectedTarget?.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
-                                    selectedTarget?.accountType != null -> Icons.Default.Sync
-                                    else -> Icons.Default.PhoneAndroid
-                                }
-                                val sub = selectedTarget?.subLabel
-                                Triple("Saving to", if (sub != null) "${selectedTarget?.label} ($sub)" else (selectedTarget?.label ?: ""), icon)
-                            }
-                            else -> {
-                                val names = currentAccounts.joinToString(", ") { it.displayName }
-                                Triple("Saved in", names.ifBlank { "Device Storage" }, Icons.Default.Storage)
-                            }
+                        val locationNames = allPresentAccounts.map { it.displayName }.distinct()
+                        val allLocationsText = if (locationNames.isNotEmpty()) locationNames.joinToString(", ") else "Device Storage"
+                        if (updateAllLinkedAccounts || selectedTarget == null) {
+                            Triple("Edit Location", "Present in: $allLocationsText", Icons.Default.Storage)
+                        } else {
+                            Triple("Edit Location", "Editing only in: ${selectedTarget?.label ?: ""}", Icons.Default.Edit)
                         }
                     }
                 }
 
-                RivoSectionHeader(title = "Storage Location")
+                RivoSectionHeader(title = if (isNewContact) "Storage Location" else "Edit Location")
                 RivoExpressiveCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showAccountPickerDialog = true }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
                             modifier = Modifier
-                                .size(42.dp)
-                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .clickable { showAccountPickerDialog = true }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                storageIcon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    storageIcon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = storageTitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = storageSubtitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { showAccountPickerDialog = true },
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text("Change", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
-                        Spacer(Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+
+                        // Badges for all locations wherever this contact is present (Gmail, WhatsApp, Meet, Device, SIM, etc.)
+                        if (!isNewContact && allPresentAccounts.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                text = storageTitle,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                "Present across ${allPresentAccounts.size} location${if (allPresentAccounts.size != 1) "s" else ""} (edits all by default):",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 6.dp)
                             )
-                            Text(
-                                text = storageSubtitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = { showAccountPickerDialog = true },
-                            shape = RoundedCornerShape(20.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                        ) {
-                            Text("Change", style = MaterialTheme.typography.labelMedium)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                allPresentAccounts.forEach { acc ->
+                                    val (badgeIcon, badgeColor) = when {
+                                        acc.accountType?.contains("google", ignoreCase = true) == true ->
+                                            Icons.Default.Email to Color(0xFFE53935)
+                                        acc.accountType?.contains("whatsapp", ignoreCase = true) == true ->
+                                            Icons.Default.Chat to Color(0xFF25D366)
+                                        acc.accountType?.contains("meet", ignoreCase = true) == true ->
+                                            Icons.Default.VideoCall to Color(0xFF00897B)
+                                        acc.accountType?.contains("telegram", ignoreCase = true) == true ->
+                                            Icons.Default.Send to Color(0xFF0088CC)
+                                        acc.isSim ->
+                                            Icons.Default.SimCard to Color(0xFFFB8C00)
+                                        else ->
+                                            Icons.Default.PhoneAndroid to Color(0xFF607D8B)
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = badgeColor.copy(alpha = 0.12f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(badgeIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(
+                                                acc.displayName,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -528,13 +562,13 @@ fun ContactEditScreen(
             ) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     Text(
-                        if (isNewContact) "Save contact to" else "Select save location",
+                        if (isNewContact) "Save contact to" else "Edit location",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                     )
 
-                    if (!isNewContact && writableAccounts.size > 1) {
+                    if (!isNewContact && currentAccounts.isNotEmpty()) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -550,12 +584,12 @@ fun ContactEditScreen(
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "All linked accounts (${writableAccounts.size})",
+                                    "All locations (${currentAccounts.size})",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Keep unified across all accounts (Recommended)",
+                                    "Edit across all accounts by default (Recommended)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -621,6 +655,46 @@ fun ContactEditScreen(
                             }
                             if (isSelected) {
                                 Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+
+                    val readOnlyAccounts = currentAccounts.filter { it.isReadOnly }
+                    if (!isNewContact && readOnlyAccounts.isNotEmpty()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            "Synced app accounts (auto-updated):",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                        )
+                        readOnlyAccounts.forEach { acc ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val roIcon = when {
+                                    acc.accountType?.contains("whatsapp", true) == true -> Icons.Default.Chat
+                                    acc.accountType?.contains("meet", true) == true -> Icons.Default.VideoCall
+                                    acc.accountType?.contains("telegram", true) == true -> Icons.Default.Send
+                                    else -> Icons.Default.Sync
+                                }
+                                Icon(
+                                    roIcon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Column {
+                                    Text(acc.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("Synced via ${acc.accountType ?: "app"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                }
                             }
                         }
                     }

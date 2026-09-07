@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.*
@@ -117,12 +118,56 @@ fun GroupsScreen(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    IconButton(onClick = { showAddGroupDialog = true }) {
-                        Icon(
-                            Icons.Filled.GroupAdd,
-                            contentDescription = "Add Group",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        var showCleanDialog by remember { mutableStateOf(false) }
+                        if (contactGroups.size > 5) {
+                            IconButton(onClick = { showCleanDialog = true }) {
+                                Icon(
+                                    Icons.Outlined.DeleteSweep,
+                                    contentDescription = "Clean Up Groups",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        if (showCleanDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showCleanDialog = false },
+                                title = { Text("Clean Up Groups") },
+                                text = { Text("Do you want to remove all auto-imported system groups and keep only your groups, or clear all groups?") },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            contactsVM.cleanupAutoImportedGroups()
+                                            showCleanDialog = false
+                                        }
+                                    ) {
+                                        Text("Remove Imported")
+                                    }
+                                },
+                                dismissButton = {
+                                    Row {
+                                        TextButton(
+                                            onClick = {
+                                                contactsVM.clearAllContactGroups()
+                                                showCleanDialog = false
+                                            }
+                                        ) {
+                                            Text("Clear All", color = MaterialTheme.colorScheme.error)
+                                        }
+                                        TextButton(onClick = { showCleanDialog = false }) {
+                                            Text("Cancel")
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        IconButton(onClick = { showAddGroupDialog = true }) {
+                            Icon(
+                                Icons.Filled.GroupAdd,
+                                contentDescription = "Add Group",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             },

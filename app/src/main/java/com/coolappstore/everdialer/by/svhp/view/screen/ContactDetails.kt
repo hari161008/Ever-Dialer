@@ -482,22 +482,16 @@ fun ContactDetailsScreen(
         )
     }
     if (showDeleteConfirm && contact != null) {
-        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
-                icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFFF44336)) },
-                title = { Text("Delete Contact") },
-                text = { Text("Are you sure you want to permanently delete \"$displayName\"? This action cannot be undone.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showDeleteConfirm = false
-                        contactsViewModel.deleteContact(contact.id)
-                        navigator.navigateUp()
-                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                },
-                dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
-            )
-        }
+        DeleteContactDialog(
+            contactName = displayName,
+            contactId = contact.id,
+            contactsViewModel = contactsViewModel,
+            onDeleted = {
+                showDeleteConfirm = false
+                navigator.navigateUp()
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
     }
     if (showBlockConfirm) {
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {

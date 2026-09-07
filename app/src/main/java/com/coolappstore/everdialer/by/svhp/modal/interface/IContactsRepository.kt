@@ -21,6 +21,7 @@ interface IContactsRepository {
     fun getContactAccounts(contactId: String): List<ContactAccountInfo>
     fun updateContactNote(contactId: String, note: String?)
     fun deleteContact(contactId: String)
+    fun deleteRawContact(rawContactId: Long)
     fun getAvailableAccounts(excludedContactIds: Set<String> = emptySet()): List<ContactAccount>
     /** Destinations the user can save a brand-new contact to (Device, Google accounts, SIM cards, etc). */
     fun getSaveTargets(): List<ContactSaveTarget>
@@ -32,6 +33,10 @@ interface IContactsRepository {
     fun moveContact(contact: Contact, target: ContactSaveTarget): Boolean
     /** Retrieves contact groups/labels from the system Contacts provider (Gmail, Exchange, etc.) */
     fun getSystemContactGroups(): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>
+    /** Retrieves the member contact IDs for the specified system group row IDs without importing all groups */
+    fun getSystemGroupMembers(groupRowIds: Set<Long>): Map<Long, List<String>>
+    /** Finds the system group row ID for a group title and optional account */
+    fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long?
     /** Creates or updates a contact group/label in the system Contacts provider with members */
     fun saveSystemContactGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup): String?
     /** Deletes a contact group/label and its memberships from the system Contacts provider */

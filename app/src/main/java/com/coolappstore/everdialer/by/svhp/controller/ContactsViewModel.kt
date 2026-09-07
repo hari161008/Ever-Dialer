@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ContactsViewModel(
     application: Application,
@@ -49,32 +50,149 @@ class ContactsViewModel(
     val enabledAccountKeys: StateFlow<Set<String>?> = _enabledAccountKeys.asStateFlow()
 
     private var fetchJob: Job? = null
+    private var observerJob: Job? = null
     private var hasLoadedFromCache = false
+
+    private val contactsContentObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
+            observerJob?.cancel()
+            observerJob = viewModelScope.launch(Dispatchers.IO) {
+                kotlinx.coroutines.delay(300)
+                fetchContacts()
+                fetchContactGroups()
+                fetchAvailableAccounts()
+            }
+        }
+    }
 
     init {
         _enabledAccountKeys.value = getEnabledAccountKeys()
         fetchContactGroups()
         loadCachedContactsThenRefresh()
         fetchAvailableAccounts()
+
+        try {
+            val resolver = getApplication<Application>().contentResolver
+            resolver.registerContentObserver(android.provider.ContactsContract.Contacts.CONTENT_URI, true, contactsContentObserver)
+            resolver.registerContentObserver(android.provider.ContactsContract.Groups.CONTENT_URI, true, contactsContentObserver)
+            resolver.registerContentObserver(android.provider.ContactsContract.Data.CONTENT_URI, true, contactsContentObserver)
+        } catch (_: Exception) {}
     }
 
     fun fetchContactGroups() {
         viewModelScope.launch(Dispatchers.IO) {
-            val localGroups = prefs.getContactGroups()
-            val systemGroups = runCatching { contactsRepo.getSystemContactGroups() }.getOrDefault(emptyList())
+            val rawLocalGroups = prefs.getContactGroups()
+            val order = prefs.getContactsDisplayOrder()
 
-            val merged = mutableListOf<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>()
-            merged.addAll(localGroups)
+            // 1. Cleanup runaway auto-imported system groups while strictly preserving user-created groups:
+            // - Any group created in Ever Dialer locally (!id.startsWith("sys_group_"))
+            // - Any group created in Ever Dialer via UI ("group_${id}" in order)
+            // - Any user-created group from Gmail/Google with contacts (not internal Android system labels)
+            val cleanGroups = rawLocalGroups.filter { group ->
+                isLegitimateUserGroup(group, order)
+            }
 
-            // Add system groups that are not already present
-            for (sg in systemGroups) {
-                if (merged.none { it.name.equals(sg.name, ignoreCase = true) && it.accountType == sg.accountType && it.accountName == sg.accountName }) {
-                    merged.add(sg)
+            if (cleanGroups.size != rawLocalGroups.size) {
+                prefs.saveContactGroups(cleanGroups)
+            }
+
+            if (cleanGroups.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _contactGroups.value = emptyList()
+                    if (_selectedGroupId.value != null) {
+                        updateDisplayedContacts()
+                    }
+                }
+                return@launch
+            }
+
+            // 2. Resolve system group IDs for any system-backed groups
+            val groupToRowIdMap = mutableMapOf<String, Long>()
+            for (g in cleanGroups) {
+                if (g.id.startsWith("sys_group_")) {
+                    g.id.removePrefix("sys_group_").toLongOrNull()?.let {
+                        groupToRowIdMap[g.id] = it
+                    }
+                } else if (!g.accountType.isNullOrBlank() || !g.accountName.isNullOrBlank()) {
+                    val rowId = runCatching { contactsRepo.findSystemGroupId(g.name, g.accountType, g.accountName) }.getOrNull()
+                    if (rowId != null) {
+                        groupToRowIdMap[g.id] = rowId
+                    }
                 }
             }
 
-            kotlinx.coroutines.withContext(Dispatchers.Main) {
-                _contactGroups.value = merged
+            // 3. Query system group memberships ONLY for these groups (do NOT create or import any new groups!)
+            val memberMap = if (groupToRowIdMap.isNotEmpty()) {
+                runCatching { contactsRepo.getSystemGroupMembers(groupToRowIdMap.values.toSet()) }.getOrDefault(emptyMap())
+            } else {
+                emptyMap()
+            }
+
+            // 4. Update contact memberships if any contact was added or removed
+            var anyChanged = false
+            val updatedList = cleanGroups.map { g ->
+                val sysRowId = groupToRowIdMap[g.id]
+                if (sysRowId != null && (memberMap.containsKey(sysRowId) || g.id.startsWith("sys_group_"))) {
+                    val latestMemberIds = memberMap[sysRowId]?.distinct() ?: emptyList()
+                    if (latestMemberIds.toSet() != g.contactIds.toSet()) {
+                        anyChanged = true
+                        g.copy(contactIds = latestMemberIds)
+                    } else {
+                        g
+                    }
+                } else {
+                    g
+                }
+            }
+
+            if (anyChanged) {
+                prefs.saveContactGroups(updatedList)
+            }
+
+            withContext(Dispatchers.Main) {
+                _contactGroups.value = updatedList
+                if (_selectedGroupId.value != null) {
+                    updateDisplayedContacts()
+                }
+            }
+        }
+    }
+
+    private fun isLegitimateUserGroup(group: com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup, order: List<String>): Boolean {
+        // 1. All groups created in Ever Dialer locally have UUID IDs (never start with sys_group_)
+        if (!group.id.startsWith("sys_group_")) return true
+        // 2. Groups created via Ever Dialer UI are tracked in display order
+        if ("group_${group.id}" in order) return true
+        // 3. Keep user groups from Gmail/Google Contacts if they have contacts and are not Android internal auto-labels
+        val isInternalSystemGroup = group.name.startsWith("System Group:", ignoreCase = true) ||
+                group.name.equals("Starred in Android", ignoreCase = true) ||
+                group.name.equals("My Contacts", ignoreCase = true)
+        return group.contactIds.isNotEmpty() && !isInternalSystemGroup
+    }
+
+    fun cleanupAutoImportedGroups() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val raw = prefs.getContactGroups()
+            val order = prefs.getContactsDisplayOrder()
+            val clean = raw.filter { group ->
+                isLegitimateUserGroup(group, order)
+            }
+            prefs.saveContactGroups(clean)
+            fetchContactGroups()
+        }
+    }
+
+    fun clearAllContactGroups() {
+        viewModelScope.launch(Dispatchers.IO) {
+            prefs.saveContactGroups(emptyList())
+            val order = prefs.getContactsDisplayOrder().filterNot { it.startsWith("group_") }
+            prefs.setContactsDisplayOrder(order)
+            withContext(Dispatchers.Main) {
+                _contactGroups.value = emptyList()
+                if (_selectedGroupId.value != null) {
+                    _selectedGroupId.value = null
+                    updateDisplayedContacts()
+                }
             }
         }
     }
@@ -321,10 +439,30 @@ class ContactsViewModel(
 
     fun getContactById(contactId: String): Contact? = contactsRepo.getContactById(contactId)
 
-    fun deleteContact(contactId: String) {
+    fun deleteContact(contactId: String, onComplete: () -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
             contactsRepo.deleteContact(contactId)
             fetchContacts()
+            withContext(Dispatchers.Main) {
+                onComplete()
+            }
         }
+    }
+
+    fun deleteRawContact(rawContactId: Long, onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            contactsRepo.deleteRawContact(rawContactId)
+            fetchContacts()
+            withContext(Dispatchers.Main) {
+                onComplete()
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            getApplication<Application>().contentResolver.unregisterContentObserver(contactsContentObserver)
+        } catch (_: Exception) {}
     }
 }
