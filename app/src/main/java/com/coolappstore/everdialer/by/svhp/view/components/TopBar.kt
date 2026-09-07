@@ -35,6 +35,7 @@ import com.ramcosta.composedestinations.generated.destinations.SearchScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
+import com.coolappstore.everdialer.by.svhp.view.theme.wpTurnstileHeader
 
 /** The pill-shaped, non-editable "Search in Ever Dialer" bar — tapping it opens the single
  *  unified [SearchScreenDestination] (contacts, non-contacts, contact notes, recording notes).
@@ -233,7 +234,7 @@ fun SettingsPillTopAppBar(
         contentAlignment = Alignment.CenterStart
     ) {
         Surface(
-            modifier = Modifier.wrapContentSize(),
+            modifier = Modifier.wrapContentSize().wpTurnstileHeader(),
             shape = RoundedCornerShape(36.dp),
             color = pillBackground,
             tonalElevation = 0.dp,

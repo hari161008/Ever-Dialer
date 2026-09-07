@@ -32,6 +32,10 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 import org.koin.compose.koinInject
 
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import org.koin.core.context.GlobalContext
+
 /**
  * Ultra-smooth expressive easing curves for slow, luxurious zoom motion.
  */
@@ -44,6 +48,23 @@ const val SETTINGS_ANIM_DURATION_EXIT = 420
 
 const val SETTINGS_SCALE_ENTER_FROM = 0.78f
 const val SETTINGS_SCALE_EXIT_TO = 1.12f
+
+/**
+ * Windows Phone Metro-style turnstile page transition specifications,
+ * modeled after the Windows Phone 7/8 animation physics and MangoTile's implementation.
+ */
+val MetroSlideInEasing = CubicBezierEasing(0.22f, 0f, 0.05f, 1f)
+const val SETTINGS_WP_ANIM_DURATION_ENTER = 380
+const val SETTINGS_WP_ANIM_DURATION_EXIT = 320
+
+fun isWindowsPhoneAnimation(): Boolean {
+    return try {
+        val prefs = GlobalContext.getOrNull()?.getOrNull<PreferenceManager>()
+        prefs?.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) == PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE
+    } catch (_: Throwable) {
+        false
+    }
+}
 
 /**
  * Tracks the last tap/click location so zoom-in originates directly from where the user clicked.
@@ -105,41 +126,64 @@ fun isSettingsRoute(route: String?): Boolean {
 }
 
 /**
- * Destination style providing slow, smooth zoom-in when opening and zoom-out when closing/popping,
- * fully compatible with Predictive Back gestures in Android.
+ * Destination style providing dynamic transition styles:
+ * - Windows Phone: Classic WP7/WP8 turnstile slide-in with scale and subtle fade
+ * - Zoom (in/out): Slow, smooth zoom-in when opening and zoom-out when closing/popping
+ * Fully compatible with Predictive Back gestures in Android.
  */
 object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        scaleIn(
-            animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
-            initialScale = SETTINGS_SCALE_ENTER_FROM,
-            transformOrigin = TransformOrigin.Center
-        ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+        if (isWindowsPhoneAnimation()) {
+            TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
+            fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+        } else {
+            scaleIn(
+                animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                initialScale = SETTINGS_SCALE_ENTER_FROM,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+        }
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        scaleOut(
-            animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
-            targetScale = SETTINGS_SCALE_EXIT_TO,
-            transformOrigin = TransformOrigin.Center
-        ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+        if (isWindowsPhoneAnimation()) {
+            fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+        } else {
+            scaleOut(
+                animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                targetScale = SETTINGS_SCALE_EXIT_TO,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+        }
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        scaleIn(
-            animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
-            initialScale = SETTINGS_SCALE_EXIT_TO,
-            transformOrigin = TransformOrigin.Center
-        ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+        if (isWindowsPhoneAnimation()) {
+            TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
+            fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+        } else {
+            scaleIn(
+                animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                initialScale = SETTINGS_SCALE_EXIT_TO,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER - 120, easing = SettingsSmoothEaseOut))
+        }
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        scaleOut(
-            animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
-            targetScale = SETTINGS_SCALE_ENTER_FROM,
-            transformOrigin = TransformOrigin.Center
-        ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+        if (isWindowsPhoneAnimation()) {
+            slideOutHorizontally(
+                animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
+                targetOffsetX = { full -> full / 6 }
+            ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+        } else {
+            scaleOut(
+                animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                targetScale = SETTINGS_SCALE_ENTER_FROM,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT - 100, easing = SettingsSmoothEaseIn))
+        }
     }
 }
 

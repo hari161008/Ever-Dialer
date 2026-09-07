@@ -87,6 +87,8 @@ import kotlin.math.roundToInt
 
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+import com.coolappstore.everdialer.by.svhp.view.theme.wpTurnstileControl
+import com.coolappstore.everdialer.by.svhp.view.theme.wpTurnstileItem
 
 private val ColorPurple  = Color(0xFF9C27B0)
 private val ColorOrange  = Color(0xFFFF9800)
@@ -1501,7 +1503,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
             item {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().wpTurnstileControl(delayMs = 30),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Feature count pill badge above search bar
@@ -1594,7 +1596,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         key = { _, entry -> "settings_search_${entry.key}" }
                     ) { index, entry ->
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().wpTurnstileItem(index),
                             shape = groupedRowShape(index, filteredSettingsResults.size),
                             color = MaterialTheme.colorScheme.surfaceContainerLow
                         ) {

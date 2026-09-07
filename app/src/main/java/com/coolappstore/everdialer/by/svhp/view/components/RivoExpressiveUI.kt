@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.view.theme.isWindowsPhoneAnimation
+import com.coolappstore.everdialer.by.svhp.view.theme.wpTurnstileCard
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import androidx.compose.ui.draw.blur
@@ -245,6 +247,13 @@ fun RivoAnimatedSection(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    if (isWindowsPhoneAnimation()) {
+        Box(modifier = modifier.wpTurnstileCard(delayMs = delayMs.toInt())) {
+            content()
+        }
+        return
+    }
+
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (delayMs > 0L) delay(delayMs)

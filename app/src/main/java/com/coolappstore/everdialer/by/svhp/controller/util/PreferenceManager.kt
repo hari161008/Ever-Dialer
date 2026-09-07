@@ -118,6 +118,12 @@ class PreferenceManager(context: Context) {
      *  settings never gets out of sync with the slide-animation direction on the main screen. */
     fun getTabOrder(): List<String> = parseTabOrder(getString(KEY_TAB_ORDER, null))
 
+    fun getAnimationStyle(): String =
+        getString(KEY_ANIMATION_STYLE, ANIMATION_STYLE_ZOOM) ?: ANIMATION_STYLE_ZOOM
+
+    fun setAnimationStyle(style: String) =
+        setString(KEY_ANIMATION_STYLE, style)
+
     fun getSaturatedModesSet(): Set<String> {
         val raw = getString(KEY_SATURATED_MODES, DEFAULT_SATURATED_MODES) ?: DEFAULT_SATURATED_MODES
         return raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
@@ -424,6 +430,9 @@ class PreferenceManager(context: Context) {
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
         const val KEY_TELEGRAM_SHOWN        = "telegram_shown"
+        const val KEY_ANIMATION_STYLE       = "animation_style"
+        const val ANIMATION_STYLE_ZOOM      = "zoom"
+        const val ANIMATION_STYLE_WINDOWS_PHONE = "windows_phone"
         const val KEY_MOTION_BLUR_ANIMATION = "motion_blur_animation_enabled"
         const val KEY_PREDICTIVE_BACK_GESTURE = "predictive_back_gesture_enabled"
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"

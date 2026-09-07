@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.Animation
+import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Backup
@@ -302,6 +304,8 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Context Menu Elements", "Choose what shows in long-press menus", "context_menu_elements", Icons.Outlined.Palette, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "context_menu_elements")) },
         GlobalSettingsSearchEntry("Tab Sections", "Choose which bottom tabs are visible", "tab_sections", Icons.Outlined.Palette, GsColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "tab_sections")) },
         GlobalSettingsSearchEntry("Default Tab Section", "Which tab opens when you launch the app", "default_tab_section", Icons.Outlined.Palette, GsColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "default_tab_section")) },
+        GlobalSettingsSearchEntry("Animation Style", "Zoom (in/out) or Windows Phone transition", "animation_style", Icons.Outlined.Animation, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "animation_style")) },
+        GlobalSettingsSearchEntry("Motion Blur in Animation", "Apply dynamic motion blur during page transitions", "motion_blur_animation", Icons.Outlined.BlurOn, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "motion_blur_animation")) },
         GlobalSettingsSearchEntry("Scroll Animation", "Animate list scrolling", "scroll_animation", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "scroll_animation")) },
         GlobalSettingsSearchEntry("Pill Style Navigation", "Pill-shaped bottom navigation bar", "pill_style_nav", Icons.Outlined.Palette, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "pill_style_nav")) },
         GlobalSettingsSearchEntry("Group numbers in call logs based on latest calls", "Group call logs by number and sort by latest calls", "group_calls_by_latest", Icons.Outlined.Palette, GsColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "group_calls_by_latest")) },

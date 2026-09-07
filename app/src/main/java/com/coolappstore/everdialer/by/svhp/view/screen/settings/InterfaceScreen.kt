@@ -166,6 +166,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         prefs.getBoolean(PreferenceManager.KEY_RATE_REVIEW_HIDDEN_SECRET, false)
     }
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
+    var animationStyle      by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) ?: PreferenceManager.ANIMATION_STYLE_ZOOM) }
+    var showAnimationStyleDialog by remember { mutableStateOf(false) }
     var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
     var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
     var blurEffects         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false)) }
@@ -416,6 +418,70 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             },
             confirmButton = {
                 TextButton(onClick = { showCallUIDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
+    // ── Animation Style Dialog ───────────────────────────────────────────────
+    if (showAnimationStyleDialog) {
+        AlertDialog(
+            onDismissRequest = { showAnimationStyleDialog = false },
+            icon = { Icon(Icons.Outlined.Animation, null, tint = ColorTeal) },
+            title = { Text("Animation Style") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Choose the page transition animation style used when navigating between screens.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    listOf(
+                        PreferenceManager.ANIMATION_STYLE_ZOOM to "Zoom (in/out)",
+                        PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE to "Windows Phone"
+                    ).forEach { (key, label) ->
+                        val isSelected = animationStyle == key
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        animationStyle = key
+                                        prefs.setString(PreferenceManager.KEY_ANIMATION_STYLE, key)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurface
+                                )
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        animationStyle = key
+                                        prefs.setString(PreferenceManager.KEY_ANIMATION_STYLE, key)
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary,
+                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAnimationStyleDialog = false }) { Text("Done") }
             }
         )
     }
@@ -1497,6 +1563,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onClick = {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
                                     }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "Animation Style",
+                                    supporting = if (animationStyle == PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE) "Windows Phone" else "Zoom (in/out)",
+                                    leadingIcon = Icons.Outlined.Animation,
+                                    iconContainerColor = ColorTeal,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("animation_style", highlightedKey) { highlightedKey = null },
+                                    onClick = { showAnimationStyleDialog = true }
                                 )
                             }
                             Spacer(Modifier.height(12.dp))
