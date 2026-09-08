@@ -31,7 +31,9 @@ import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactPhone
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget
+import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
@@ -42,6 +44,12 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.viewmodel.koinActivityViewModel
 
 private data class EditableField(val id: Long, val value: String)
+private data class EditablePhoneField(
+    val id: Long,
+    val value: String,
+    val type: Int = ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE,
+    val customLabel: String? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
@@ -62,8 +70,8 @@ fun ContactEditScreen(
     var name by remember { mutableStateOf(initialName ?: "") }
     var photoUri by remember { mutableStateOf<String?>(null) }
     val phoneFields = remember { 
-        mutableStateListOf<EditableField>().apply { 
-            add(EditableField(1L, initialPhone ?: "")) 
+        mutableStateListOf<EditablePhoneField>().apply { 
+            add(EditablePhoneField(1L, initialPhone ?: "")) 
         } 
     }
     val emailFields = remember { mutableStateListOf<EditableField>().apply { add(EditableField(2L, "")) } }
@@ -97,10 +105,16 @@ fun ContactEditScreen(
                 photoUri = contact.photoUri
                 
                 phoneFields.clear()
-                if (contact.phoneNumbers.isNotEmpty()) {
-                    contact.phoneNumbers.forEach { phoneFields.add(EditableField(nextFieldId++, it)) }
+                if (contact.phones.isNotEmpty()) {
+                    contact.phones.forEach { 
+                        phoneFields.add(EditablePhoneField(nextFieldId++, it.number, it.type, it.label)) 
+                    }
+                } else if (contact.phoneNumbers.isNotEmpty()) {
+                    contact.phoneNumbers.forEach { 
+                        phoneFields.add(EditablePhoneField(nextFieldId++, it, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE, null)) 
+                    }
                 } else {
-                    phoneFields.add(EditableField(nextFieldId++, ""))
+                    phoneFields.add(EditablePhoneField(nextFieldId++, ""))
                 }
 
                 emailFields.clear()
@@ -135,13 +149,23 @@ fun ContactEditScreen(
         onResult = { uri -> if (uri != null) photoUri = uri.toString() }
     )
 
+    var phoneTypePickerIndex by remember { mutableStateOf<Int?>(null) }
+    var showCustomPhoneLabelDialog by remember { mutableStateOf(false) }
+    var customPhoneLabelIndex by remember { mutableStateOf<Int?>(null) }
+    var customPhoneLabelInput by remember { mutableStateOf("") }
+
     val performSave: (ContactSaveTarget?, Boolean) -> Unit = { target, allAccounts ->
-        val validPhones = phoneFields.map { it.value.trim() }.filter { it.isNotBlank() }
+        val validPhoneFields = phoneFields.filter { it.value.trim().isNotBlank() }
+        val validPhones = validPhoneFields.map { it.value.trim() }
+        val contactPhones = validPhoneFields.map { 
+            ContactPhone(number = it.value.trim(), type = it.type, label = it.customLabel)
+        }
         val finalContactId = if (isNewContact) "0" else contactId
         val contactToSave = Contact(
             id = finalContactId,
             name = name.trim(),
             phoneNumbers = validPhones,
+            phones = contactPhones,
             emails = emailFields.map { it.value.trim() }.filter { it.isNotBlank() },
             addresses = addressFields.map { it.value.trim() }.filter { it.isNotBlank() },
             photoUri = photoUri,
@@ -440,22 +464,45 @@ fun ContactEditScreen(
             item {
                 RivoSectionHeader(title = "Phone Numbers")
                 RivoExpressiveCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         phoneFields.forEachIndexed { index, field ->
                             key(field.id) {
-                                EditField(
-                                    value = field.value,
-                                    onValueChange = { newValue ->
-                                        phoneFields[index] = field.copy(value = newValue)
-                                    },
-                                    label = "Phone",
-                                    icon = Icons.Default.Phone,
-                                    onDelete = if (phoneFields.size > 1) { { phoneFields.removeAt(index) } } else null
-                                )
+                                val currentTypeLabel = getPhoneTypeLabel(field.type, field.customLabel)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clickable { phoneTypePickerIndex = index }
+                                            .padding(vertical = 2.dp, horizontal = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = currentTypeLabel,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = "Select phone type",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    EditField(
+                                        value = field.value,
+                                        onValueChange = { newValue ->
+                                            phoneFields[index] = field.copy(value = newValue)
+                                        },
+                                        label = "Phone",
+                                        icon = Icons.Default.Phone,
+                                        onDelete = if (phoneFields.size > 1) { { phoneFields.removeAt(index) } } else null
+                                    )
+                                }
                             }
                         }
                         TextButton(
-                            onClick = { phoneFields.add(EditableField(nextFieldId++, "")) },
+                            onClick = { phoneFields.add(EditablePhoneField(nextFieldId++, "")) },
                             modifier = Modifier.align(Alignment.Start)
                         ) {
                             Icon(Icons.Default.Add, null)
@@ -803,6 +850,133 @@ fun ContactEditScreen(
                 }
             }
         }
+    }
+
+    // Phone Type Selection Dialog
+    phoneTypePickerIndex?.let { fieldIndex ->
+        if (fieldIndex in phoneFields.indices) {
+            val phoneTypes = listOf(
+                ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE to "Mobile",
+                ContactsContract.CommonDataKinds.Phone.TYPE_WORK to "Work",
+                ContactsContract.CommonDataKinds.Phone.TYPE_HOME to "Home",
+                ContactsContract.CommonDataKinds.Phone.TYPE_MAIN to "Main",
+                ContactsContract.CommonDataKinds.Phone.TYPE_OTHER to "Other",
+                ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM to "Custom"
+            )
+
+            AlertDialog(
+                onDismissRequest = { phoneTypePickerIndex = null },
+                title = {
+                    Text(
+                        text = "Phone",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        phoneTypes.forEach { (typeVal, typeName) ->
+                            val isSelected = if (typeVal == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM) {
+                                phoneFields[fieldIndex].type == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM
+                            } else {
+                                phoneFields[fieldIndex].type == typeVal
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        phoneTypePickerIndex = null
+                                        if (typeVal == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM) {
+                                            customPhoneLabelIndex = fieldIndex
+                                            customPhoneLabelInput = phoneFields[fieldIndex].customLabel ?: ""
+                                            showCustomPhoneLabelDialog = true
+                                        } else {
+                                            phoneFields[fieldIndex] = phoneFields[fieldIndex].copy(
+                                                type = typeVal,
+                                                customLabel = null
+                                            )
+                                        }
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = typeName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { phoneTypePickerIndex = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+
+    // Custom Phone Label Input Dialog
+    if (showCustomPhoneLabelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomPhoneLabelDialog = false },
+            title = {
+                Text(
+                    text = "Custom label",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = customPhoneLabelInput,
+                    onValueChange = { customPhoneLabelInput = it },
+                    label = { Text("Label name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idx = customPhoneLabelIndex
+                        if (idx != null && idx in phoneFields.indices) {
+                            val trimmed = customPhoneLabelInput.trim()
+                            if (trimmed.isNotBlank()) {
+                                phoneFields[idx] = phoneFields[idx].copy(
+                                    type = ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM,
+                                    customLabel = trimmed
+                                )
+                            }
+                        }
+                        showCustomPhoneLabelDialog = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomPhoneLabelDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

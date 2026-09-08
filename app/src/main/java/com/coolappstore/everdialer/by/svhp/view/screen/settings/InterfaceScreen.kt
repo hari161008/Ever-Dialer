@@ -233,6 +233,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var tabShowGroups     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)) }
     var tabShowRecordings by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)) }
     var tabShowNotes      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)) }
+    var tabShowDialpad    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)) }
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val tabOptions = listOf(
         TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
@@ -240,7 +241,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
         TabOption("groups",     "Groups",     Icons.Outlined.Group),
         TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
-        TabOption("notes",      "Note",       Icons.Outlined.Note)
+        TabOption("notes",      "Note",       Icons.Outlined.Note),
+        TabOption("dialpad",    "Dialpad",    Icons.Outlined.Dialpad)
     )
 
     // Custom order of tab keys, persisted as a comma-separated string. Any tab keys
@@ -268,6 +270,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         tabShowGroups     = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)
         tabShowRecordings = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
         tabShowNotes      = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)
+        tabShowDialpad    = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)
     }
 
     // ── Context Menu Elements ──────────────────────────────────────────────
@@ -608,7 +611,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    tabOptions.forEach { option ->
+                    tabOptions.filter { it.key != "dialpad" }.forEach { option ->
                         val isSelected = defaultTab == option.key
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -678,6 +681,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             "groups"     -> tabShowGroups
             "recordings" -> tabShowRecordings
             "notes"      -> tabShowNotes
+            "dialpad"    -> tabShowDialpad
             else         -> true
         }
         fun setTabChecked(key: String, value: Boolean) {
@@ -688,6 +692,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 "groups"     -> { tabShowGroups = value;     prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     value) }
                 "recordings" -> { tabShowRecordings = value; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, value) }
                 "notes"      -> { tabShowNotes = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      value) }
+                "dialpad"    -> { tabShowDialpad = value;    prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    value) }
             }
         }
 

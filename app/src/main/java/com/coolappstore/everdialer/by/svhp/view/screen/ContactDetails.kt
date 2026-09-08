@@ -14,14 +14,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.ClickableText
@@ -730,9 +734,11 @@ fun ContactDetailsScreen(
                         if (contact != null) {
                             contactPhoneNumbers.forEachIndexed { index, number ->
                                 val isPrimary = contactDefaultNumber == number
+                                val phoneEntry = contact.phones.firstOrNull { it.number == number || numbersLikelyMatch(it.number, number) }
+                                val typeLabel = if (phoneEntry != null) getPhoneTypeLabel(phoneEntry.type, phoneEntry.label) else "Mobile"
                                 RivoListItem(
                                     headline = number,
-                                    supporting = if (isPrimary) "Mobile • Primary" else "Mobile",
+                                    supporting = if (isPrimary) "$typeLabel • Primary" else typeLabel,
                                     leadingIcon = Icons.Default.Phone,
                                     compact = contactPhoneNumbers.size > 1,
                                     onClick = { initiateCall(number) },
@@ -1003,36 +1009,77 @@ fun ContactDetailsScreen(
                         val meetIcon = remember(context) { getGoogleMeetIcon(context) }
                         val truecallerIcon = remember(context) { getTruecallerIcon(context) }
                         RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                if (whatsAppInstalled) {
-                                    RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                        chooseSocialApp("whatsapp")
-                                    })
+                            val socialScrollState = rememberScrollState()
+                            val isScrollable = socialScrollState.maxValue > 0
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(socialScrollState)
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (whatsAppInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.width(76.dp),
+                                            icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("whatsapp")
+                                            }
+                                        )
+                                    }
+                                    if (whatsAppBusinessInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.width(76.dp),
+                                            icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("whatsapp_business")
+                                            }
+                                        )
+                                    }
+                                    if (telegramInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.width(76.dp),
+                                            icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("telegram")
+                                            }
+                                        )
+                                    }
+                                    if (meetInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.width(76.dp),
+                                            icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("googlemeet")
+                                            }
+                                        )
+                                    }
+                                    if (truecallerInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.width(76.dp),
+                                            icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("truecaller")
+                                            }
+                                        )
+                                    }
                                 }
-                                if (whatsAppBusinessInstalled) {
-                                    RivoExpressiveButton(icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                        chooseSocialApp("whatsapp_business")
-                                    })
-                                }
-                                if (telegramInstalled) {
-                                    RivoExpressiveButton(icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                        chooseSocialApp("telegram")
-                                    })
-                                }
-                                if (meetInstalled) {
-                                    RivoExpressiveButton(icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                        chooseSocialApp("googlemeet")
-                                    })
-                                }
-                                if (truecallerInstalled) {
-                                    RivoExpressiveButton(icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                        chooseSocialApp("truecaller")
-                                    })
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isScrollable && socialScrollState.canScrollForward,
+                                    enter = fadeIn(),
+                                    exit = fadeOut(),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 4.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shadowElevation = 3.dp,
+                                        modifier = Modifier.size(7.dp)
+                                    ) {}
                                 }
                             }
                         }

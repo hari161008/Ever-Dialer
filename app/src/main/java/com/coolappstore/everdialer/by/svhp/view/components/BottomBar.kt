@@ -23,12 +23,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Group
@@ -56,6 +58,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
@@ -122,6 +125,7 @@ fun BottomBar(navController: NavController) {
     val showGroupsTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false) }
     val showRecordingsTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
     val showNotesTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true) }
+    val showDialpadTab    = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false) }
     val tabOrder          = remember(settingsState) { parseTabOrder(prefs.getString(PreferenceManager.KEY_TAB_ORDER, null)) }
     val labelStyle: TextStyle = MaterialTheme.typography.labelMedium
 
@@ -135,9 +139,10 @@ fun BottomBar(navController: NavController) {
     val isGroupsSelected     = currentDestination?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true
     val isRecordingsSelected = currentDestination?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true
     val isNotesSelected      = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
+    val isDialpadSelected    = currentDestination?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true
 
     // Build visible tab routes dynamically based on prefs
-    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab) {
+    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab) {
         buildSet {
             if (showFavoritesTab)  add(FavoritesScreenDestination.route)
             if (showCallsTab)      add(RecentScreenDestination.route)
@@ -145,6 +150,7 @@ fun BottomBar(navController: NavController) {
             if (showGroupsTab)     add(GroupsScreenDestination.route)
             if (showRecordingsTab) add(RecordingsScreenDestination.route)
             if (showNotesTab)      add(NotesScreenDestination.route)
+            if (showDialpadTab)    add(DialPadScreenDestination.route)
         }
     }
 
@@ -173,6 +179,7 @@ fun BottomBar(navController: NavController) {
         "groups"     -> GroupsScreenDestination.route
         "recordings" -> RecordingsScreenDestination.route
         "notes"      -> NotesScreenDestination.route
+        "dialpad"    -> DialPadScreenDestination.route
         else         -> null
     }
 
@@ -235,8 +242,8 @@ fun BottomBar(navController: NavController) {
     }
 
     val orderedTabs: List<TabSpec> = remember(
-        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab,
-        isFavoritesSelected, isRecentsSelected, isContactsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected
+        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab,
+        isFavoritesSelected, isRecentsSelected, isContactsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected, isDialpadSelected
     ) {
         tabOrder.mapNotNull { key ->
             when (key) {
@@ -275,6 +282,18 @@ fun BottomBar(navController: NavController) {
                     selectedIcon = Icons.Filled.Note, unselectedIcon = Icons.Outlined.Note,
                     selected = isNotesSelected,
                     onClick = { doHaptic(); navigate(NotesScreenDestination.route) }
+                ) else null
+                "dialpad" -> if (showDialpadTab) TabSpec(
+                    key = key, route = DialPadScreenDestination.route, label = "Dialpad",
+                    selectedIcon = Icons.Filled.Dialpad, unselectedIcon = Icons.Outlined.Dialpad,
+                    selected = isDialpadSelected,
+                    onClick = {
+                        doHaptic()
+                        if (isDialpadSelected) return@TabSpec
+                        navController.navigate(DialPadScreenDestination().route) {
+                            launchSingleTop = true
+                        }
+                    }
                 ) else null
                 else -> null
             }

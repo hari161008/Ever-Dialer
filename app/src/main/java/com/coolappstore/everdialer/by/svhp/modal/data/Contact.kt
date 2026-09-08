@@ -10,10 +10,44 @@ data class ContactEvent(
 )
 
 @Serializable
+data class ContactPhone(
+    val number: String,
+    val type: Int = android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE,
+    val label: String? = null
+)
+
+fun getPhoneTypeLabel(type: Int, customLabel: String? = null): String {
+    return when (type) {
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_HOME -> "Home"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE -> "Mobile"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_WORK -> "Work"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MAIN -> "Main"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_OTHER -> "Other"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM -> customLabel?.ifBlank { "Custom" } ?: "Custom"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_FAX_WORK -> "Work Fax"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_FAX_HOME -> "Home Fax"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_PAGER -> "Pager"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_CALLBACK -> "Callback"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_CAR -> "Car"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_COMPANY_MAIN -> "Company Main"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_ISDN -> "ISDN"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_RADIO -> "Radio"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_TELEX -> "Telex"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_TTY_TDD -> "TTY/TDD"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_WORK_MOBILE -> "Work Mobile"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_WORK_PAGER -> "Work Pager"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_ASSISTANT -> "Assistant"
+        android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MMS -> "MMS"
+        else -> customLabel?.ifBlank { "Phone" } ?: "Phone"
+    }
+}
+
+@Serializable
 data class Contact(
     val id: String,
     val name: String,
     val phoneNumbers: List<String> = emptyList(),
+    val phones: List<ContactPhone> = emptyList(),
     val emails: List<String> = emptyList(),
     val addresses: List<String> = emptyList(),
     val events: List<ContactEvent> = emptyList(),

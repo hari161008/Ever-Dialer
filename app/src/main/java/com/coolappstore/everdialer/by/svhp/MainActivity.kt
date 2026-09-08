@@ -26,10 +26,12 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -567,6 +569,7 @@ class MainActivity : FragmentActivity() {
                                         val showCallsRail     = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
                                         val showContactsRail  = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
                                         val showGroupsRail    = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
+                                        val showDialpadRail   = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false)
                                         val railTabOrder = remember(settingsVer) {
                                             PreferenceManager.parseTabOrder(prefs2.getString(PreferenceManager.KEY_TAB_ORDER, null))
                                         }
@@ -621,6 +624,19 @@ class MainActivity : FragmentActivity() {
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
                                                         onClick = { navTo(NotesScreenDestination.route) }
+                                                    )
+                                                    "dialpad" -> if (showDialpadRail) RailItem(
+                                                        selected = currentDest?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true,
+                                                        icon = { sel -> Icon(if (sel) Icons.Filled.Dialpad else Icons.Outlined.Dialpad, "Dialpad", modifier = Modifier.size(24.dp)) },
+                                                        label = "Dialpad",
+                                                        paddingStart = railPaddingStart,
+                                                        paddingEnd = railPaddingEnd,
+                                                        onClick = {
+                                                            if (currentDest?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true) return@RailItem
+                                                            navController.navigate(DialPadScreenDestination().route) {
+                                                                launchSingleTop = true
+                                                            }
+                                                        }
                                                     )
                                                 }
                                             }

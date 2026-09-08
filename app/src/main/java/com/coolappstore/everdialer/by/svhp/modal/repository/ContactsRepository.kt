@@ -9,6 +9,7 @@ import android.provider.ContactsContract
 import android.telephony.SubscriptionManager
 import androidx.annotation.RequiresApi
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactPhone
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccount
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactEvent
@@ -148,7 +149,13 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
                 when {
                     mimeType == ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
-                        contactsMap[id] = contact.copy(phoneNumbers = (contact.phoneNumbers + data1).distinct())
+                        val type = cursor.getInt(data2Idx)
+                        val label = cursor.getString(data3Idx)
+                        val phone = ContactPhone(data1, type, label)
+                        contactsMap[id] = contact.copy(
+                            phoneNumbers = (contact.phoneNumbers + data1).distinct(),
+                            phones = (contact.phones + phone).distinctBy { it.number }
+                        )
                     }
                     mimeType == ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
                         contactsMap[id] = contact.copy(emails = (contact.emails + data1).distinct())
@@ -291,7 +298,13 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
                 contact = when (mimeType) {
                     ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
-                        currentContact.copy(phoneNumbers = (currentContact.phoneNumbers + data1).distinct())
+                        val type = cursor.getInt(data2Idx)
+                        val label = cursor.getString(data3Idx)
+                        val phone = ContactPhone(data1, type, label)
+                        currentContact.copy(
+                            phoneNumbers = (currentContact.phoneNumbers + data1).distinct(),
+                            phones = (currentContact.phones + phone).distinctBy { it.number }
+                        )
                     }
                     ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
                         currentContact.copy(emails = (currentContact.emails + data1).distinct())
@@ -565,15 +578,21 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
     }
 
     private fun updatePhoneNumbers(ops: ArrayList<ContentProviderOperation>, rawId: Long, phoneNumbers: List<String>) {
-        val cleanNumbers = phoneNumbers.filter { it.isNotBlank() }.map { it.trim() }.distinct()
-        val existingRows = mutableListOf<ExistingDataRow>()
+        updatePhoneNumbersWithPhones(ops, rawId, phoneNumbers.map { ContactPhone(it, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) })
+    }
+
+    private fun updatePhoneNumbersWithPhones(ops: ArrayList<ContentProviderOperation>, rawId: Long, phones: List<ContactPhone>) {
+        val cleanPhones = phones.filter { it.number.isNotBlank() }.distinctBy { it.number.trim() }
+        data class ExistingPhoneRow(val id: Long, val number: String?, val type: Int?, val label: String?)
+        val existingRows = mutableListOf<ExistingPhoneRow>()
         try {
             contentResolver.query(
                 ContactsContract.Data.CONTENT_URI,
                 arrayOf(
                     ContactsContract.Data._ID,
                     ContactsContract.CommonDataKinds.Phone.NUMBER,
-                    ContactsContract.CommonDataKinds.Phone.TYPE
+                    ContactsContract.CommonDataKinds.Phone.TYPE,
+                    ContactsContract.CommonDataKinds.Phone.LABEL
                 ),
                 "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
                 arrayOf(rawId.toString(), ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE),
@@ -582,13 +601,15 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
                 val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 val typeIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.TYPE)
+                val labelIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LABEL)
                 while (cursor.moveToNext()) {
                     if (idIdx >= 0) {
                         existingRows.add(
-                            ExistingDataRow(
+                            ExistingPhoneRow(
                                 id = cursor.getLong(idIdx),
-                                value1 = if (numIdx >= 0) cursor.getString(numIdx) else null,
-                                type = if (typeIdx >= 0) cursor.getInt(typeIdx) else null
+                                number = if (numIdx >= 0) cursor.getString(numIdx) else null,
+                                type = if (typeIdx >= 0) cursor.getInt(typeIdx) else null,
+                                label = if (labelIdx >= 0) cursor.getString(labelIdx) else null
                             )
                         )
                     }
@@ -598,36 +619,42 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             android.util.Log.e("ContactsRepo", "Error querying phone numbers for rawId $rawId", e)
         }
 
-        val minCount = minOf(existingRows.size, cleanNumbers.size)
+        val minCount = minOf(existingRows.size, cleanPhones.size)
         for (i in 0 until minCount) {
             val existing = existingRows[i]
-            val newNum = cleanNumbers[i]
-            if (existing.value1?.trim() != newNum) {
+            val newPhone = cleanPhones[i]
+            val numChanged = existing.number?.trim() != newPhone.number.trim()
+            val typeChanged = existing.type != newPhone.type
+            val labelChanged = existing.label != newPhone.label
+            if (numChanged || typeChanged || labelChanged) {
                 ops.add(
                     ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
                         .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existing.id.toString()))
-                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, newNum)
-                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, newPhone.number.trim())
+                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, newPhone.type)
+                        .withValue(ContactsContract.CommonDataKinds.Phone.LABEL, if (newPhone.type == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM) newPhone.label else null)
                         .build()
                 )
             }
         }
 
-        if (cleanNumbers.size > existingRows.size) {
-            for (i in existingRows.size until cleanNumbers.size) {
+        if (cleanPhones.size > existingRows.size) {
+            for (i in existingRows.size until cleanPhones.size) {
+                val newPhone = cleanPhones[i]
                 ops.add(
                     ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
                         .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, cleanNumbers[i])
-                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, newPhone.number.trim())
+                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, newPhone.type)
+                        .withValue(ContactsContract.CommonDataKinds.Phone.LABEL, if (newPhone.type == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM) newPhone.label else null)
                         .build()
                 )
             }
         }
 
-        if (existingRows.size > cleanNumbers.size) {
-            for (i in cleanNumbers.size until existingRows.size) {
+        if (existingRows.size > cleanPhones.size) {
+            for (i in cleanPhones.size until existingRows.size) {
                 ops.add(
                     ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
                         .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingRows[i].id.toString()))
@@ -941,12 +968,22 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.name)
                 .build())
 
-            contact.phoneNumbers.filter { it.isNotBlank() }.distinct().forEach { number ->
+            val phonesToInsert = if (contact.phones.isNotEmpty()) {
+                contact.phones.filter { it.number.isNotBlank() }.distinctBy { it.number.trim() }
+            } else {
+                contact.phoneNumbers.filter { it.isNotBlank() }.distinct().map { ContactPhone(it.trim(), ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) }
+            }
+            phonesToInsert.forEach { phone ->
                 ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                     .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
                     .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                    .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, number.trim())
-                    .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                    .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone.number.trim())
+                    .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, phone.type)
+                    .apply {
+                        if (phone.type == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM && !phone.label.isNullOrBlank()) {
+                            withValue(ContactsContract.CommonDataKinds.Phone.LABEL, phone.label)
+                        }
+                    }
                     .build())
             }
 
@@ -1021,12 +1058,22 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.name)
                     .build())
 
-                contact.phoneNumbers.filter { it.isNotBlank() }.distinct().forEach { number ->
+                val fallbackPhones = if (contact.phones.isNotEmpty()) {
+                    contact.phones.filter { it.number.isNotBlank() }.distinctBy { it.number.trim() }
+                } else {
+                    contact.phoneNumbers.filter { it.isNotBlank() }.distinct().map { ContactPhone(it.trim(), ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) }
+                }
+                fallbackPhones.forEach { phone ->
                     ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
                         .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, number.trim())
-                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone.number.trim())
+                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, phone.type)
+                        .apply {
+                            if (phone.type == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM && !phone.label.isNullOrBlank()) {
+                                withValue(ContactsContract.CommonDataKinds.Phone.LABEL, phone.label)
+                            }
+                        }
                         .build())
                 }
 
@@ -1110,7 +1157,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     }
 
                     // In-place phone update preserves Data._ID for WhatsApp / sync adapters
-                    updatePhoneNumbers(ops, rawId, contact.phoneNumbers)
+                    val phonesToUpdate = if (contact.phones.isNotEmpty()) contact.phones else contact.phoneNumbers.map { ContactPhone(it, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) }
+                    updatePhoneNumbersWithPhones(ops, rawId, phonesToUpdate)
 
                     // SIM records only store name and phone number; only non-SIM stores emails, addresses, and notes
                     if (!isSim) {
