@@ -30,17 +30,17 @@ fun SimPickerDialog(
     onSimSelected: (PhoneAccountHandle) -> Unit
 ) {
     val context = LocalContext.current
-    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
     
     val phoneAccounts = remember {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+        if (telecomManager != null && ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
             try {
                 val raw = telecomManager.callCapablePhoneAccounts
                 val seen = HashSet<String>()
                 raw.filter { handle ->
                     val info = try {
                         telecomManager.getPhoneAccount(handle)
-                    } catch (e: Exception) {
+                    } catch (_: Throwable) {
                         null
                     }
                     val isSimAccount = info != null &&
@@ -48,10 +48,10 @@ fun SimPickerDialog(
                         info.hasCapabilities(PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION)
                     if (!isSimAccount) return@filter false
 
-                    val key = info!!.label?.toString().orEmpty() + "|" + info.address?.toString().orEmpty()
+                    val key = info.label?.toString().orEmpty() + "|" + info.address?.toString().orEmpty()
                     seen.add(key)
                 }
-            } catch (e: SecurityException) {
+            } catch (_: Throwable) {
                 emptyList()
             }
         } else emptyList()
@@ -88,7 +88,7 @@ fun SimPickerDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(phoneAccounts) { handle ->
-                                val info = telecomManager.getPhoneAccount(handle)
+                                val info = try { telecomManager?.getPhoneAccount(handle) } catch (_: Throwable) { null }
                                 val label = info?.label?.toString() ?: "SIM"
                                 val isSim1 = label.contains("1") || phoneAccounts.indexOf(handle) == 0
                                 

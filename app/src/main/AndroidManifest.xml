@@ -230,6 +230,17 @@
             android:taskAffinity=""
             android:theme="@style/Theme.BiometricCallFloat" />
 
+        <activity
+            android:name=".view.screen.ConfirmCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showForAllUsers="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.BiometricCallFloat" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

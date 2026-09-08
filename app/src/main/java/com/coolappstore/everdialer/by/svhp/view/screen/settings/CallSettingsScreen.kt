@@ -74,6 +74,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
+import com.coolappstore.everdialer.by.svhp.view.components.SimColorsCustomizationDialog
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -97,6 +98,7 @@ private val ColorAmber   = Color(0xFFFFC107)
 private val ColorBlue    = Color(0xFF2196F3)
 private val ColorPink    = Color(0xFFE91E63)
 private val ColorOrange  = Color(0xFFFF9800)
+private val ColorIndigo  = Color(0xFF3F51B5)
 
 private sealed class DlState {
     object Idle : DlState()
@@ -320,6 +322,20 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
     var defaultSim by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())) }
     var showSimDialog by remember { mutableStateOf(false) }
+    val activeSimCount = remember { prefs.getActiveSimCount() }
+    val hasTwoSims = remember {
+        activeSimCount >= 2 || run {
+            val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+            try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+        }
+    }
+    var showSimButtonsInDialpad by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false))
+    }
+    var confirmPlacingCall by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
+    }
+    var showSimColorDialog by remember { mutableStateOf(false) }
 
     // ── Volume DND State ──────────────────────────────────────────────
     var volumeDndEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_VOLUME_DND_ENABLED, false)) }
@@ -483,6 +499,12 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
         )
     }
 
+    if (showSimColorDialog) {
+        SimColorsCustomizationDialog(
+            onDismissRequest = { showSimColorDialog = false }
+        )
+    }
+
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -524,6 +546,53 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 modifier = Modifier.settingsSearchHighlight("default_sim", highlightedKey) { highlightedKey = null },
                                 onClick = { showSimDialog = true }
                             )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Confirm placing a call",
+                                supporting = "Ask for confirmation before placing any outgoing call",
+                                leadingIcon = Icons.Outlined.CheckCircle,
+                                iconContainerColor = ColorIndigo,
+                                checked = confirmPlacingCall,
+                                modifier = Modifier.settingsSearchHighlight("confirm_placing_call", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = {
+                                    confirmPlacingCall = it
+                                    prefs.setBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, it)
+                                }
+                            )
+                            if (hasTwoSims) {
+                                HorizontalDivider(
+                                    Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Show SIM buttons instead of dial button",
+                                    supporting = "Shows SIM 1 and SIM 2 buttons in place of the call button on the dialpad. Useful when a default SIM is set to easily place calls from either SIM without changing defaults.",
+                                    leadingIcon = Icons.Outlined.Dialpad,
+                                    iconContainerColor = ColorTeal,
+                                    checked = showSimButtonsInDialpad,
+                                    modifier = Modifier.settingsSearchHighlight("show_sim_buttons_in_dialpad", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        showSimButtonsInDialpad = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, it)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoListItem(
+                                    headline = "Customize SIM Colors",
+                                    supporting = "Choose custom colors for SIM 1 and SIM 2",
+                                    leadingIcon = Icons.Outlined.Palette,
+                                    iconContainerColor = ColorAmber,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("customize_sim_colors", highlightedKey) { highlightedKey = null },
+                                    onClick = { showSimColorDialog = true }
+                                )
+                            }
                             HorizontalDivider(
                                 Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)

@@ -54,6 +54,8 @@ import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.roundToInt
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import android.os.Build
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
@@ -401,9 +403,10 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     // ── Call UI Dialog ────────────────────────────────────────────────────────
     if (showCallUIDialog) {
         val density = LocalDensity.current
+        val haptic = LocalHapticFeedback.current
         val rowHeightDp = 52.dp
         val rowHeightPx = with(density) { rowHeightDp.toPx() }
-        var draggedIndex by remember { mutableStateOf(-1) }
+        var draggedKey by remember { mutableStateOf<String?>(null) }
         var dragOffsetY by remember { mutableStateOf(0f) }
 
         fun callUIChecked(key: String): Boolean = when (key) {
@@ -439,18 +442,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                     )
                     Spacer(Modifier.height(8.dp))
                     Column {
-                        callUIOrder.forEachIndexed { index, itemKey ->
-                            val option = callUIOptions.firstOrNull { it.key == itemKey } ?: return@forEachIndexed
-                            val isDragging = draggedIndex == index
+                        callUIOrder.forEach { itemKey ->
+                            val option = callUIOptions.firstOrNull { it.key == itemKey } ?: return@forEach
+                            val isDragging = draggedKey == itemKey
                             key(itemKey) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                    tonalElevation = if (isDragging) 4.dp else 0.dp,
+                                    tonalElevation = if (isDragging) 6.dp else 0.dp,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 2.dp)
-                                        .zIndex(if (isDragging) 1f else 0f)
+                                        .zIndex(if (isDragging) 2f else 0f)
                                         .graphicsLayer {
                                             translationY = if (isDragging) dragOffsetY else 0f
                                         }
@@ -488,29 +491,34 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                 .pointerInput(itemKey) {
                                                     detectDragGestures(
                                                         onDragStart = {
-                                                            draggedIndex = index
+                                                            draggedKey = itemKey
                                                             dragOffsetY = 0f
                                                         },
                                                         onDragEnd = {
-                                                            draggedIndex = -1
+                                                            draggedKey = null
                                                             dragOffsetY = 0f
                                                             persistCallUIOrder()
                                                         },
                                                         onDragCancel = {
-                                                            draggedIndex = -1
+                                                            draggedKey = null
                                                             dragOffsetY = 0f
                                                         },
                                                         onDrag = { change, dragAmount ->
                                                             change.consume()
                                                             dragOffsetY += dragAmount.y
-                                                            val moveBy = (dragOffsetY / rowHeightPx).roundToInt()
-                                                            if (moveBy != 0 && draggedIndex >= 0) {
-                                                                val newIndex = (draggedIndex + moveBy).coerceIn(0, callUIOrder.lastIndex)
-                                                                if (newIndex != draggedIndex) {
-                                                                    val moving = callUIOrder.removeAt(draggedIndex)
-                                                                    callUIOrder.add(newIndex, moving)
-                                                                    dragOffsetY -= moveBy * rowHeightPx
-                                                                    draggedIndex = newIndex
+                                                            val currentIdx = callUIOrder.indexOf(itemKey)
+                                                            if (currentIdx != -1) {
+                                                                val threshold = rowHeightPx * 0.6f
+                                                                if (dragOffsetY > threshold && currentIdx < callUIOrder.lastIndex) {
+                                                                    val item = callUIOrder.removeAt(currentIdx)
+                                                                    callUIOrder.add(currentIdx + 1, item)
+                                                                    dragOffsetY -= rowHeightPx
+                                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                } else if (dragOffsetY < -threshold && currentIdx > 0) {
+                                                                    val item = callUIOrder.removeAt(currentIdx)
+                                                                    callUIOrder.add(currentIdx - 1, item)
+                                                                    dragOffsetY += rowHeightPx
+                                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                                 }
                                                             }
                                                         }
@@ -669,9 +677,10 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     // ── Tab Sections Dialog ──────────────────────────────────────────────────
     if (showTabSectionsDialog) {
         val density = LocalDensity.current
+        val haptic = LocalHapticFeedback.current
         val rowHeightDp = 52.dp
         val rowHeightPx = with(density) { rowHeightDp.toPx() }
-        var draggedIndex by remember { mutableStateOf(-1) }
+        var draggedKey by remember { mutableStateOf<String?>(null) }
         var dragOffsetY by remember { mutableStateOf(0f) }
 
         fun tabChecked(key: String): Boolean = when (key) {
@@ -709,18 +718,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                     )
                     Spacer(Modifier.height(8.dp))
                     Column {
-                        tabOrder.forEachIndexed { index, tabKey ->
-                            val option = tabOptions.firstOrNull { it.key == tabKey } ?: return@forEachIndexed
-                            val isDragging = draggedIndex == index
+                        tabOrder.forEach { tabKey ->
+                            val option = tabOptions.firstOrNull { it.key == tabKey } ?: return@forEach
+                            val isDragging = draggedKey == tabKey
                             key(tabKey) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = if (isDragging) 4.dp else 0.dp,
+                                tonalElevation = if (isDragging) 6.dp else 0.dp,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 2.dp)
-                                    .zIndex(if (isDragging) 1f else 0f)
+                                    .zIndex(if (isDragging) 2f else 0f)
                                     .graphicsLayer {
                                         translationY = if (isDragging) dragOffsetY else 0f
                                     }
@@ -758,29 +767,34 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             .pointerInput(tabKey) {
                                                 detectDragGestures(
                                                     onDragStart = {
-                                                        draggedIndex = index
+                                                        draggedKey = tabKey
                                                         dragOffsetY = 0f
                                                     },
                                                     onDragEnd = {
-                                                        draggedIndex = -1
+                                                        draggedKey = null
                                                         dragOffsetY = 0f
                                                         persistTabOrder()
                                                     },
                                                     onDragCancel = {
-                                                        draggedIndex = -1
+                                                        draggedKey = null
                                                         dragOffsetY = 0f
                                                     },
                                                     onDrag = { change, dragAmount ->
                                                         change.consume()
                                                         dragOffsetY += dragAmount.y
-                                                        val moveBy = (dragOffsetY / rowHeightPx).roundToInt()
-                                                        if (moveBy != 0 && draggedIndex >= 0) {
-                                                            val newIndex = (draggedIndex + moveBy).coerceIn(0, tabOrder.lastIndex)
-                                                            if (newIndex != draggedIndex) {
-                                                                val moving = tabOrder.removeAt(draggedIndex)
-                                                                tabOrder.add(newIndex, moving)
-                                                                dragOffsetY -= moveBy * rowHeightPx
-                                                                draggedIndex = newIndex
+                                                        val currentIdx = tabOrder.indexOf(tabKey)
+                                                        if (currentIdx != -1) {
+                                                            val threshold = rowHeightPx * 0.6f
+                                                            if (dragOffsetY > threshold && currentIdx < tabOrder.lastIndex) {
+                                                                val item = tabOrder.removeAt(currentIdx)
+                                                                tabOrder.add(currentIdx + 1, item)
+                                                                dragOffsetY -= rowHeightPx
+                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            } else if (dragOffsetY < -threshold && currentIdx > 0) {
+                                                                val item = tabOrder.removeAt(currentIdx)
+                                                                tabOrder.add(currentIdx - 1, item)
+                                                                dragOffsetY += rowHeightPx
+                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                             }
                                                         }
                                                     }
@@ -870,9 +884,10 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
 
         if (section != null && sectionOrder != null) {
             val density = LocalDensity.current
+            val haptic = LocalHapticFeedback.current
             val rowHeightDp = 52.dp
             val rowHeightPx = with(density) { rowHeightDp.toPx() }
-            var draggedIndex by remember(sectionKey) { mutableStateOf(-1) }
+            var draggedKey by remember(sectionKey) { mutableStateOf<String?>(null) }
             var dragOffsetY by remember(sectionKey) { mutableStateOf(0f) }
 
             fun itemChecked(itemKey: String) = prefs.getBoolean(contextMenuShowKey(sectionKey, itemKey), true)
@@ -893,18 +908,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         )
                         Spacer(Modifier.height(8.dp))
                         Column {
-                            sectionOrder.forEachIndexed { index, itemKey ->
-                                val option = sectionItems.firstOrNull { it.key == itemKey } ?: return@forEachIndexed
-                                val isDragging = draggedIndex == index
+                            sectionOrder.forEach { itemKey ->
+                                val option = sectionItems.firstOrNull { it.key == itemKey } ?: return@forEach
+                                val isDragging = draggedKey == itemKey
                                 key(itemKey) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                    tonalElevation = if (isDragging) 4.dp else 0.dp,
+                                    tonalElevation = if (isDragging) 6.dp else 0.dp,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 2.dp)
-                                        .zIndex(if (isDragging) 1f else 0f)
+                                        .zIndex(if (isDragging) 2f else 0f)
                                         .graphicsLayer {
                                             translationY = if (isDragging) dragOffsetY else 0f
                                         }
@@ -942,29 +957,34 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                 .pointerInput(itemKey) {
                                                     detectDragGestures(
                                                         onDragStart = {
-                                                            draggedIndex = index
+                                                            draggedKey = itemKey
                                                             dragOffsetY = 0f
                                                         },
                                                         onDragEnd = {
-                                                            draggedIndex = -1
+                                                            draggedKey = null
                                                             dragOffsetY = 0f
                                                             persistContextMenuOrder(sectionKey)
                                                         },
                                                         onDragCancel = {
-                                                            draggedIndex = -1
+                                                            draggedKey = null
                                                             dragOffsetY = 0f
                                                         },
                                                         onDrag = { change, dragAmount ->
                                                             change.consume()
                                                             dragOffsetY += dragAmount.y
-                                                            val moveBy = (dragOffsetY / rowHeightPx).roundToInt()
-                                                            if (moveBy != 0 && draggedIndex >= 0) {
-                                                                val newIndex = (draggedIndex + moveBy).coerceIn(0, sectionOrder.lastIndex)
-                                                                if (newIndex != draggedIndex) {
-                                                                    val moving = sectionOrder.removeAt(draggedIndex)
-                                                                    sectionOrder.add(newIndex, moving)
-                                                                    dragOffsetY -= moveBy * rowHeightPx
-                                                                    draggedIndex = newIndex
+                                                            val currentIdx = sectionOrder.indexOf(itemKey)
+                                                            if (currentIdx != -1) {
+                                                                val threshold = rowHeightPx * 0.6f
+                                                                if (dragOffsetY > threshold && currentIdx < sectionOrder.lastIndex) {
+                                                                    val item = sectionOrder.removeAt(currentIdx)
+                                                                    sectionOrder.add(currentIdx + 1, item)
+                                                                    dragOffsetY -= rowHeightPx
+                                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                } else if (dragOffsetY < -threshold && currentIdx > 0) {
+                                                                    val item = sectionOrder.removeAt(currentIdx)
+                                                                    sectionOrder.add(currentIdx - 1, item)
+                                                                    dragOffsetY += rowHeightPx
+                                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                                 }
                                                             }
                                                         }

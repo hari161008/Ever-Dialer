@@ -120,14 +120,39 @@ fun getSimSlotForAccountHandle(context: Context, accountHandle: PhoneAccountHand
     } catch (_: Exception) { -1 }
 }
 
-fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null) {
+fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null, skipConfirm: Boolean = false) {
     val sanitized = number.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     if (sanitized.isEmpty()) {
         android.util.Log.w("EverDialerCall", "makeCall: empty number after sanitizing '$number', aborting")
         return
     }
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+
+    if (!skipConfirm) {
+        val prefs = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false)) {
+            val intent = Intent(context, com.coolappstore.everdialer.by.svhp.view.screen.ConfirmCallActivity::class.java).apply {
+                putExtra(com.coolappstore.everdialer.by.svhp.view.screen.ConfirmCallActivity.EXTRA_NUMBER, sanitized)
+                if (accountHandle != null) {
+                    putExtra(com.coolappstore.everdialer.by.svhp.view.screen.ConfirmCallActivity.EXTRA_ACCOUNT_HANDLE, accountHandle)
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            try {
+                context.startActivity(intent)
+                return
+            } catch (e: Throwable) {
+                android.util.Log.e("EverDialerCall", "Failed to start ConfirmCallActivity", e)
+            }
+        }
+    }
+
     val uri = Uri.fromParts("tel", sanitized, null)
+    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+    if (telecomManager == null) {
+        val intent = Intent(Intent.ACTION_DIAL, uri).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+        try { context.startActivity(intent) } catch (_: Throwable) {}
+        return
+    }
     val extras = Bundle()
     if (accountHandle != null) {
         extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accountHandle)
@@ -137,23 +162,16 @@ fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle
         try {
             android.util.Log.d("EverDialerCall", "placeCall uri=$uri account=$accountHandle")
             telecomManager.placeCall(uri, extras)
-        } catch (e: SecurityException) {
-            // placeCall() can still throw even after the permission check above — e.g. Telecom
-            // enforces it can't always be reasoned about purely from PackageManager's granted
-            // state (appops, per-user restrictions, or a stale/invalid accountHandle passed for
-            // a SIM that's since been removed/disabled). Don't fail silently: fall back to the
-            // system dialer with the number pre-filled so the user still gets *something*
-            // actionable instead of a dead tap.
-            android.util.Log.e("EverDialerCall", "placeCall threw SecurityException, falling back to ACTION_DIAL", e)
-            val intent = Intent(Intent.ACTION_DIAL, uri)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(intent)
+        } catch (e: Throwable) {
+            // placeCall() can throw if appops, per-user restrictions, or stale handle occurs
+            android.util.Log.e("EverDialerCall", "placeCall threw exception, falling back to ACTION_DIAL", e)
+            val intent = Intent(Intent.ACTION_DIAL, uri).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            try { context.startActivity(intent) } catch (_: Throwable) {}
         }
     } else {
         android.util.Log.w("EverDialerCall", "makeCall: CALL_PHONE not granted, falling back to ACTION_DIAL")
-        val intent = Intent(Intent.ACTION_DIAL, uri)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(intent)
+        val intent = Intent(Intent.ACTION_DIAL, uri).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+        try { context.startActivity(intent) } catch (_: Throwable) {}
     }
 }
 
@@ -164,13 +182,14 @@ private fun rememberLastUsedSim(context: Context, telecomManager: TelecomManager
     try {
         val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         if (!hasPhoneState) return
-        val idx = telecomManager.callCapablePhoneAccounts.indexOf(accountHandle)
+        val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
+        val idx = accounts.indexOf(accountHandle)
         if (idx >= 0) {
             context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE).edit()
                 .putInt(PreferenceManager.KEY_LAST_USED_SIM_GLOBAL, idx + 1)
                 .apply()
         }
-    } catch (_: Exception) { /* best-effort only */ }
+    } catch (_: Throwable) { /* best-effort only */ }
 }
 
 /**
@@ -184,10 +203,10 @@ fun placeCallWithSimPreference(
     simPref: Int,
     onShowSimPicker: () -> Unit
 ) {
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
     val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-    if (hasPhoneState) {
-        val accounts = telecomManager.callCapablePhoneAccounts
+    if (hasPhoneState && telecomManager != null) {
+        val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
         if (accounts.size > 1) {
             when {
                 simPref == 1 && accounts.isNotEmpty() -> makeCall(context, number, accounts[0])
@@ -259,11 +278,11 @@ fun placeCallWithContactSimPreference(
     recentSimSlotForContact: Int?,
     onShowSimPicker: () -> Unit
 ) {
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
     val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-    if (!hasPhoneState) { makeCall(context, number); return }
+    if (!hasPhoneState || telecomManager == null) { makeCall(context, number); return }
 
-    val accounts = telecomManager.callCapablePhoneAccounts
+    val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
     if (accounts.size <= 1) { makeCall(context, number, accounts.firstOrNull()); return }
 
     when (contactSimChoice) {

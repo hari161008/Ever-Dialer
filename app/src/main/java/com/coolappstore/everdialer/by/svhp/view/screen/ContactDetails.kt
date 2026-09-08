@@ -29,6 +29,11 @@ import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
@@ -145,7 +150,7 @@ fun ContactDetailsScreen(
     val displayPhone = phoneNumber ?: contact?.phoneNumbers?.firstOrNull() ?: "Unknown"
     val displayName = contact?.name ?: phoneNumber ?: "Unknown"
     val context = LocalContext.current
-    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
     val prefs = koinInject<PreferenceManager>()
     val simPref = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
@@ -893,25 +898,133 @@ fun ContactDetailsScreen(
                     }
                 }
 
+                // Social — contact through WhatsApp / WA Business / Telegram / Meet / Truecaller. Only displayed when at least
+                // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
+                if (hasAnySocialApp) {
+                    item {
+                        val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
+                        val whatsAppBusinessIcon = remember(context) { getWhatsAppBusinessIcon(context) }
+                        val telegramIcon = remember(context) { getTelegramIcon(context) }
+                        val meetIcon = remember(context) { getGoogleMeetIcon(context) }
+                        val truecallerIcon = remember(context) { getTruecallerIcon(context) }
+                        RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
+                            val socialScrollState = rememberScrollState()
+                            val isScrollable = socialScrollState.maxValue > 0
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(socialScrollState)
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (whatsAppInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.widthIn(min = 76.dp),
+                                            icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("whatsapp")
+                                            }
+                                        )
+                                    }
+                                    if (whatsAppBusinessInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.widthIn(min = 76.dp),
+                                            icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("whatsapp_business")
+                                            }
+                                        )
+                                    }
+                                    if (telegramInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.widthIn(min = 76.dp),
+                                            icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("telegram")
+                                            }
+                                        )
+                                    }
+                                    if (meetInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.widthIn(min = 76.dp),
+                                            icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("googlemeet")
+                                            }
+                                        )
+                                    }
+                                    if (truecallerInstalled) {
+                                        RivoExpressiveButton(
+                                            modifier = Modifier.widthIn(min = 76.dp),
+                                            icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                chooseSocialApp("truecaller")
+                                            }
+                                        )
+                                    }
+                                }
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isScrollable && socialScrollState.canScrollForward,
+                                    enter = fadeIn(),
+                                    exit = fadeOut(),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 4.dp)
+                                 ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shadowElevation = 3.dp,
+                                        modifier = Modifier.size(7.dp)
+                                    ) {}
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Description section (synced with Microsoft Exchange / Gmail contact notes via ContactsContract)
                 item {
                     val currentDescription = contact?.note ?: ""
+                    var isDescriptionExpanded by remember(currentDescription) { mutableStateOf(false) }
+                    var hasDescriptionMoreThan5Lines by remember(currentDescription) {
+                        mutableStateOf(currentDescription.lines().size > 5)
+                    }
 
                     RivoExpressiveCard(title = "Description", icon = Icons.Default.Description) {
                         if (currentDescription.isNotBlank()) {
-                            // Inline preview with clickable links
+                            // Inline preview with selectable text and clickable links
                             val annotated = buildClickableAnnotatedString(currentDescription)
-                            ClickableText(
-                                text = annotated,
-                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                                onClick = { offset ->
-                                    annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
-                                        val url = if (ann.item.startsWith("http")) ann.item else "https://${ann.item}"
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            SelectionContainer {
+                                Text(
+                                    text = annotated,
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
+                                    overflow = TextOverflow.Ellipsis,
+                                    onTextLayout = { textLayoutResult ->
+                                        if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
+                                            hasDescriptionMoreThan5Lines = true
+                                        }
                                     }
+                                )
+                            }
+                            if (hasDescriptionMoreThan5Lines) {
+                                TextButton(
+                                    onClick = { isDescriptionExpanded = !isDescriptionExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        if (isDescriptionExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (isDescriptionExpanded) "Show less" else "Show more")
                                 }
-                            )
+                            }
                             HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
 
@@ -943,22 +1056,43 @@ fun ContactDetailsScreen(
                     LaunchedEffect(showNoteEditor) {
                         if (!showNoteEditor) currentNote = NoteManager.readNote(context, displayName, displayPhone)
                     }
+                    var isNoteExpanded by remember(currentNote) { mutableStateOf(false) }
+                    var hasNoteMoreThan5Lines by remember(currentNote) {
+                        mutableStateOf(currentNote.lines().size > 5)
+                    }
 
                     RivoExpressiveCard(title = "Notes", icon = Icons.Default.Note) {
                         if (currentNote.isNotBlank()) {
-                            // Inline preview with clickable links
+                            // Inline preview with selectable text and clickable links
                             val annotated = buildClickableAnnotatedString(currentNote)
-                            ClickableText(
-                                text = annotated,
-                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                                onClick = { offset ->
-                                    annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
-                                        val url = if (ann.item.startsWith("http")) ann.item else "https://${ann.item}"
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            SelectionContainer {
+                                Text(
+                                    text = annotated,
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                    maxLines = if (isNoteExpanded) Int.MAX_VALUE else 5,
+                                    overflow = TextOverflow.Ellipsis,
+                                    onTextLayout = { textLayoutResult ->
+                                        if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
+                                            hasNoteMoreThan5Lines = true
+                                        }
                                     }
+                                )
+                            }
+                            if (hasNoteMoreThan5Lines) {
+                                TextButton(
+                                    onClick = { isNoteExpanded = !isNoteExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        if (isNoteExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (isNoteExpanded) "Show less" else "Show more")
                                 }
-                            )
+                            }
                             HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                         TextButton(
@@ -994,93 +1128,6 @@ fun ContactDetailsScreen(
                                 Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                                 Spacer(Modifier.width(6.dp))
                                 Text("View call recording notes for this contact")
-                            }
-                        }
-                    }
-                }
-
-                // Social — contact through WhatsApp / WA Business / Telegram / Meet / Truecaller. Only displayed when at least
-                // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
-                if (hasAnySocialApp) {
-                    item {
-                        val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
-                        val whatsAppBusinessIcon = remember(context) { getWhatsAppBusinessIcon(context) }
-                        val telegramIcon = remember(context) { getTelegramIcon(context) }
-                        val meetIcon = remember(context) { getGoogleMeetIcon(context) }
-                        val truecallerIcon = remember(context) { getTruecallerIcon(context) }
-                        RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
-                            val socialScrollState = rememberScrollState()
-                            val isScrollable = socialScrollState.maxValue > 0
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(socialScrollState)
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (whatsAppInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.width(76.dp),
-                                            icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("whatsapp")
-                                            }
-                                        )
-                                    }
-                                    if (whatsAppBusinessInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.width(76.dp),
-                                            icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("whatsapp_business")
-                                            }
-                                        )
-                                    }
-                                    if (telegramInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.width(76.dp),
-                                            icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("telegram")
-                                            }
-                                        )
-                                    }
-                                    if (meetInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.width(76.dp),
-                                            icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("googlemeet")
-                                            }
-                                        )
-                                    }
-                                    if (truecallerInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.width(76.dp),
-                                            icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("truecaller")
-                                            }
-                                        )
-                                    }
-                                }
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = isScrollable && socialScrollState.canScrollForward,
-                                    enter = fadeIn(),
-                                    exit = fadeOut(),
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .padding(end = 4.dp)
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shadowElevation = 3.dp,
-                                        modifier = Modifier.size(7.dp)
-                                    ) {}
-                                }
                             }
                         }
                     }
@@ -1360,11 +1407,20 @@ private fun buildClickableAnnotatedString(text: String): AnnotatedString {
             val start = matcher.start()
             val end = matcher.end()
             append(text.substring(lastIdx, start))
-            pushStringAnnotation("URL", matcher.group())
-            withStyle(SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF1E88E5), textDecoration = TextDecoration.Underline)) {
-                append(text.substring(start, end))
+            val rawUrl = matcher.group()
+            val fullUrl = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) rawUrl else "https://$rawUrl"
+            val link = LinkAnnotation.Url(
+                url = fullUrl,
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = Color(0xFF1E88E5),
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+            )
+            withLink(link) {
+                append(rawUrl)
             }
-            pop()
             lastIdx = end
         }
         append(text.substring(lastIdx))

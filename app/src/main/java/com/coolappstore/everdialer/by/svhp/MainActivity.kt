@@ -51,6 +51,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.coolappstore.everdialer.by.svhp.controller.CallService
+import com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
@@ -115,7 +116,12 @@ class MainActivity : FragmentActivity() {
 
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> /* permissions result; dialer popup now shown after welcome */ }
+    ) { _ ->
+        // When permission prompt dismisses, prompt for default dialer if not already held
+        if (!DefaultDialerManager.isDefaultDialer(this)) {
+            requestDefaultDialer()
+        }
+    }
 
     // If a third-party direct-call shortcut hands us ACTION_CALL before CALL_PHONE happens to be
     // granted yet (e.g. very first run, right as the default-dialer role prompt from
@@ -160,9 +166,15 @@ class MainActivity : FragmentActivity() {
         // Edge-to-edge is set via theme XML instead (windowDrawsSystemBarBackgrounds etc).
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        requestRequiredPermissions()
-        // On first launch, show default dialer prompt first; welcome dialog appears after.
-        requestDefaultDialer()
+        val hasBasicPermissions = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasBasicPermissions) {
+            requestRequiredPermissions()
+        } else if (!DefaultDialerManager.isDefaultDialer(this)) {
+            requestDefaultDialer()
+        }
 
         // Auto refresh system wallpaper if enabled
         try {
@@ -1086,21 +1098,8 @@ class MainActivity : FragmentActivity() {
     }
 
     fun requestDefaultDialer() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = getSystemService(android.app.role.RoleManager::class.java)
-            if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER)) {
-                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
-                requestRoleLauncher.launch(intent)
-            }
-        } else {
-            // API 26-28: use TelecomManager ACTION_CHANGE_DEFAULT_DIALER
-            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-            @Suppress("DEPRECATION")
-            if (telecomManager.defaultDialerPackage != packageName) {
-                val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-                    .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
-                requestRoleLauncher.launch(intent)
-            }
+        if (!DefaultDialerManager.isDefaultDialer(this)) {
+            DefaultDialerManager.requestDefaultDialer(requestRoleLauncher, this)
         }
     }
 
@@ -1128,7 +1127,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(this)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED) {
+            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(this)
+        }
     }
 }
 

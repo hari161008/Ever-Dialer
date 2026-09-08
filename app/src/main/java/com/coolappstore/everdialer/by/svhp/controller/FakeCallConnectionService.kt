@@ -69,14 +69,14 @@ class FakeCallConnectionService : ConnectionService() {
         /** Registers the self-managed PhoneAccount used to power Fake Call. Safe to call repeatedly. */
         fun ensureRegistered(context: Context) {
             try {
-                val tm = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return
                 val handle = phoneAccountHandle(context)
                 val account = PhoneAccount.builder(handle, "Ever Dialer Fake Call")
                     .setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
                     .setShortDescription("Used to simulate incoming calls")
                     .build()
                 tm.registerPhoneAccount(account)
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
         }
 
         /**
@@ -88,7 +88,7 @@ class FakeCallConnectionService : ConnectionService() {
         fun placeFakeIncomingCall(context: Context, id: String, displayName: String, number: String) {
             ensureRegistered(context)
             try {
-                val tm = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return
                 val handle = phoneAccountHandle(context)
                 val extras = Bundle().apply {
                     putParcelable(TelecomManager.EXTRA_INCOMING_CALL_ADDRESS, Uri.fromParts("tel", number, null))
@@ -96,7 +96,7 @@ class FakeCallConnectionService : ConnectionService() {
                     putString(EXTRA_FAKE_ID, id)
                 }
                 tm.addNewIncomingCall(handle, extras)
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
         }
     }
 }

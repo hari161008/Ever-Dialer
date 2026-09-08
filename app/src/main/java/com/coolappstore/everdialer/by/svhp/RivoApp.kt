@@ -23,17 +23,19 @@ class RivoApp : ShizuApplication() {
 
     private fun initMissedCallBadgeObserver() {
         try {
-            contentResolver.registerContentObserver(
-                android.provider.CallLog.Calls.CONTENT_URI,
-                true,
-                object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
-                    override fun onChange(selfChange: Boolean) {
-                        com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this@RivoApp)
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CALL_LOG) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                contentResolver.registerContentObserver(
+                    android.provider.CallLog.Calls.CONTENT_URI,
+                    true,
+                    object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                        override fun onChange(selfChange: Boolean) {
+                            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this@RivoApp)
+                        }
                     }
-                }
-            )
-            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this)
-        } catch (_: Exception) {}
+                )
+                com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this)
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun restoreSavedAppIcon() {

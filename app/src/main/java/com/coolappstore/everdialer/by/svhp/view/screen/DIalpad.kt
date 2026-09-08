@@ -17,9 +17,15 @@ import kotlinx.coroutines.launch
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -563,7 +569,6 @@ fun DialPadContent(
 
     val t9Enabled = prefs.getBoolean(PreferenceManager.KEY_T9_DIALING, true)
     var showSimPicker by remember { mutableStateOf(false) }
-    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
     var pendingSearchCallNumber by remember { mutableStateOf<String?>(null) }
 
     // "Fake Call" entry in the long-press context menu (toggled from the Fake Call screen)
@@ -584,6 +589,19 @@ fun DialPadContent(
         }
         if (placed) forgetNumberIfMemoryDisabled()
     }
+
+    val showSimButtonsSetting = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false)
+    }
+    val hasTwoSims = remember(settingsState) {
+        prefs.getActiveSimCount() >= 2 || run {
+            val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+        }
+    }
+    val showSimButtons = showSimButtonsSetting && hasTwoSims
+    val sim1Color = remember(settingsState) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+    val sim2Color = remember(settingsState) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
 
     val clipText = remember {
         clipboard.getText()?.text?.filter { it.isDigit() || it == '+' || it == '*' || it == '#' } ?: ""
@@ -799,6 +817,31 @@ fun DialPadContent(
         }
     }
 
+    fun initiateCallWithSim(num: String, simSlotIndex: Int) {
+        val cleanNum = num.trim()
+        if (cleanNum.isEmpty() || cleanNum == "Unknown") return
+        val secretCode = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_CODE, "") ?: ""
+        if (secretCode.isNotEmpty() && cleanNum == secretCode) {
+            replaceNumber("")
+            navigator?.navigate(HiddenContactsScreenDestination)
+            return
+        }
+        if (processSecretCodeIfNeeded(cleanNum)) {
+            replaceNumber("")
+            return
+        }
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val accounts = try { telecomManager?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+        val targetAccount = if (accounts.size > simSlotIndex) accounts[simSlotIndex] else accounts.firstOrNull()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            makeCall(context, cleanNum, targetAccount)
+            forgetNumberIfMemoryDisabled()
+        } else {
+            pendingSearchCallNumber = cleanNum
+            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
+        }
+    }
+
     if (showSimPicker) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
@@ -949,16 +992,27 @@ fun DialPadContent(
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             searchResults.forEach { contact ->
+                                val contactNum = contact.phoneNumbers.firstOrNull()
                                 SingleTile(
                                     title    = contact.name,
-                                    subtitle = contact.phoneNumbers.firstOrNull(),
+                                    subtitle = contactNum,
                                     photoUri = contact.photoUri,
                                     onAvatarClick = {
-                                        navigateToContact(contactId = contact.id)
+                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                            replaceNumber(contactNum)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else {
+                                            navigateToContact(contactId = contact.id)
+                                        }
                                     },
                                     onClick  = {
-                                        if (directCallOnTap) {
-                                            val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
+                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                            replaceNumber(contactNum)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else if (directCallOnTap) {
+                                            val num = contactNum ?: return@SingleTile
                                             initiateCall(num)
                                         } else {
                                             navigateToContact(contactId = contact.id)
@@ -970,10 +1024,24 @@ fun DialPadContent(
                                 DialpadExtraResultTile(
                                     result = extra,
                                     onCallNumber = { num ->
-                                        if (directCallOnTap) initiateCall(num) else navigateToContact(phoneNumber = num)
+                                        if (showSimButtons) {
+                                            replaceNumber(num)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else if (directCallOnTap) {
+                                            initiateCall(num)
+                                        } else {
+                                            navigateToContact(phoneNumber = num)
+                                        }
                                     },
                                     onOpenContactInfo = { num ->
-                                        navigateToContact(phoneNumber = num)
+                                        if (showSimButtons) {
+                                            replaceNumber(num)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else {
+                                            navigateToContact(phoneNumber = num)
+                                        }
                                     }
                                 )
                             }
@@ -1025,35 +1093,88 @@ fun DialPadContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        FadeScaleBox(visible = number.isNotEmpty()) {
-                            DialerActionExpressive(
-                                onClick = {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
-                                        type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
-                                        putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, number)
-                                    }
-                                    context.startActivity(intent)
-                                },
-                                icon = Icons.Default.PersonAdd,
-                                contentDescription = "Add Contact",
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        }
                         DialerActionExpressive(
                             onClick = {
-                                if (number.isNotEmpty()) {
-                                    initiateCall(number)
+                                val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
+                                    type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
+                                    if (number.isNotEmpty()) {
+                                        putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, number)
+                                    }
                                 }
+                                context.startActivity(intent)
                             },
-                            onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
-                            icon = Icons.Default.Call,
-                            contentDescription = "Call",
-                            containerColor = Color(0xFF34A853),
-                            contentColor = Color.White,
-                            modifier = Modifier.width(96.dp).height(64.dp),
-                            isLarge = true,
-                            isCallButton = true
+                            icon = Icons.Default.PersonAdd,
+                            contentDescription = "Add Contact",
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         )
+                        if (showSimButtons) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                DialerActionExpressive(
+                                    onClick = {
+                                        if (number.isNotEmpty()) {
+                                            initiateCallWithSim(number, 0)
+                                        } else {
+                                            val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                            if (latestCall != null) replaceNumber(latestCall.number)
+                                        }
+                                    },
+                                    onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                                    icon = Icons.Default.SimCard,
+                                    simSlotNumber = "1",
+                                    contentDescription = "Call with SIM 1",
+                                    containerColor = sim1Color,
+                                    customColor = sim1Color,
+                                    contentColor = Color.White,
+                                    modifier = Modifier.width(72.dp).height(64.dp),
+                                    isLarge = true,
+                                    isCallButton = true
+                                )
+                                DialerActionExpressive(
+                                    onClick = {
+                                        if (number.isNotEmpty()) {
+                                            initiateCallWithSim(number, 1)
+                                        } else {
+                                            val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                            if (latestCall != null) replaceNumber(latestCall.number)
+                                        }
+                                    },
+                                    onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                                    icon = Icons.Default.SimCard,
+                                    simSlotNumber = "2",
+                                    contentDescription = "Call with SIM 2",
+                                    containerColor = sim2Color,
+                                    customColor = sim2Color,
+                                    contentColor = Color.White,
+                                    modifier = Modifier.width(72.dp).height(64.dp),
+                                    isLarge = true,
+                                    isCallButton = true
+                                )
+                            }
+                        } else {
+                            DialerActionExpressive(
+                                onClick = {
+                                    if (number.isNotEmpty()) {
+                                        initiateCall(number)
+                                    } else {
+                                        val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                        if (latestCall != null) {
+                                            replaceNumber(latestCall.number)
+                                        }
+                                    }
+                                },
+                                onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                                icon = Icons.Default.Call,
+                                contentDescription = "Call",
+                                containerColor = Color(0xFF34A853),
+                                contentColor = Color.White,
+                                modifier = Modifier.width(96.dp).height(64.dp),
+                                isLarge = true,
+                                isCallButton = true
+                            )
+                        }
                         BackspaceActionButton(
                             number = number,
                             onBackspace = { backspaceAtCursor() },
@@ -1186,16 +1307,27 @@ fun DialPadContent(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         searchResults.forEach { contact ->
+                            val contactNum = contact.phoneNumbers.firstOrNull()
                             SingleTile(
                                 title    = contact.name,
-                                subtitle = contact.phoneNumbers.firstOrNull(),
+                                subtitle = contactNum,
                                 photoUri = contact.photoUri,
                                 onAvatarClick = {
-                                    navigateToContact(contactId = contact.id)
+                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                        replaceNumber(contactNum)
+                                        searchQuery = ""
+                                        focusManager.clearFocus()
+                                    } else {
+                                        navigateToContact(contactId = contact.id)
+                                    }
                                 },
                                 onClick  = {
-                                    if (directCallOnTap) {
-                                        val num = contact.phoneNumbers.firstOrNull() ?: return@SingleTile
+                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                        replaceNumber(contactNum)
+                                        searchQuery = ""
+                                        focusManager.clearFocus()
+                                    } else if (directCallOnTap) {
+                                        val num = contactNum ?: return@SingleTile
                                         initiateCall(num)
                                     } else {
                                         navigateToContact(contactId = contact.id)
@@ -1207,10 +1339,24 @@ fun DialPadContent(
                             DialpadExtraResultTile(
                                     result = extra,
                                     onCallNumber = { num ->
-                                        if (directCallOnTap) initiateCall(num) else navigateToContact(phoneNumber = num)
+                                        if (showSimButtons) {
+                                            replaceNumber(num)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else if (directCallOnTap) {
+                                            initiateCall(num)
+                                        } else {
+                                            navigateToContact(phoneNumber = num)
+                                        }
                                     },
                                     onOpenContactInfo = { num ->
-                                        navigateToContact(phoneNumber = num)
+                                        if (showSimButtons) {
+                                            replaceNumber(num)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else {
+                                            navigateToContact(phoneNumber = num)
+                                        }
                                     }
                                 )
                         }
@@ -1445,6 +1591,21 @@ fun DialPadContent(
                                     }
                                 )
                             }
+                            RivoDropdownMenuItem(
+                                text     = "Add Contact",
+                                icon     = Icons.Default.PersonAdd,
+                                iconTint = MaterialTheme.colorScheme.primary,
+                                onClick  = {
+                                    showOverflowMenu = false
+                                    val intent = Intent(Intent.ACTION_INSERT).apply {
+                                        type = ContactsContract.RawContacts.CONTENT_TYPE
+                                        if (number.isNotEmpty()) {
+                                            putExtra(ContactsContract.Intents.Insert.PHONE, number)
+                                        }
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
 
                         }
                     }
@@ -1481,21 +1642,21 @@ fun DialPadContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    FadeScaleBox(visible = number.isNotEmpty()) {
-                        DialerActionExpressive(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_INSERT).apply {
-                                    type = ContactsContract.RawContacts.CONTENT_TYPE
+                    DialerActionExpressive(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_INSERT).apply {
+                                type = ContactsContract.RawContacts.CONTENT_TYPE
+                                if (number.isNotEmpty()) {
                                     putExtra(ContactsContract.Intents.Insert.PHONE, number)
                                 }
-                                context.startActivity(intent)
-                            },
-                            icon = Icons.Default.PersonAdd,
-                            contentDescription = "Add Contact",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.size(actionSize)
-                        )
-                    }
+                            }
+                            context.startActivity(intent)
+                        },
+                        icon = Icons.Default.PersonAdd,
+                        contentDescription = "Add Contact",
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.size(actionSize)
+                    )
 
                     val lgBackdrop = LocalLiquidGlassBackdrop.current
                     val lgDialpadEnabled = remember(settingsState) {
@@ -1507,29 +1668,88 @@ fun DialPadContent(
                         prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, false) &&
                         !lgDialpadEnabled
                     }
-                    DialerActionExpressive(
-                        onClick = {
-                            if (number.isNotEmpty()) {
-                                initiateCall(number)
-                            } else {
-                                val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
-                                if (latestCall != null) {
-                                    replaceNumber(latestCall.number)
+                    if (showSimButtons) {
+                        val simBtnW = (70 * scaleFactor).dp
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy((8 * scaleFactor).dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DialerActionExpressive(
+                                onClick = {
+                                    if (number.isNotEmpty()) {
+                                        initiateCallWithSim(number, 0)
+                                    } else {
+                                        val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                        if (latestCall != null) {
+                                            replaceNumber(latestCall.number)
+                                        }
+                                    }
+                                },
+                                onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                                icon = Icons.Default.SimCard,
+                                simSlotNumber = "1",
+                                contentDescription = "Call with SIM 1",
+                                containerColor = sim1Color,
+                                customColor = sim1Color,
+                                contentColor = Color.White,
+                                modifier = Modifier.width(simBtnW).height(callH),
+                                isLarge = true,
+                                liquidGlassBackdrop = lgBackdrop,
+                                liquidGlassEnabled = lgDialpadEnabled,
+                                blurEnabled = blurDialpadEnabled,
+                                isCallButton = true
+                            )
+                            DialerActionExpressive(
+                                onClick = {
+                                    if (number.isNotEmpty()) {
+                                        initiateCallWithSim(number, 1)
+                                    } else {
+                                        val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                        if (latestCall != null) {
+                                            replaceNumber(latestCall.number)
+                                        }
+                                    }
+                                },
+                                onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                                icon = Icons.Default.SimCard,
+                                simSlotNumber = "2",
+                                contentDescription = "Call with SIM 2",
+                                containerColor = sim2Color,
+                                customColor = sim2Color,
+                                contentColor = Color.White,
+                                modifier = Modifier.width(simBtnW).height(callH),
+                                isLarge = true,
+                                liquidGlassBackdrop = lgBackdrop,
+                                liquidGlassEnabled = lgDialpadEnabled,
+                                blurEnabled = blurDialpadEnabled,
+                                isCallButton = true
+                            )
+                        }
+                    } else {
+                        DialerActionExpressive(
+                            onClick = {
+                                if (number.isNotEmpty()) {
+                                    initiateCall(number)
+                                } else {
+                                    val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                    if (latestCall != null) {
+                                        replaceNumber(latestCall.number)
+                                    }
                                 }
-                            }
-                        },
-                        onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
-                        icon = Icons.Default.Call,
-                        contentDescription = "Call",
-                        containerColor = Color(0xFF34A853),
-                        contentColor = Color.White,
-                        modifier = Modifier.width(callW).height(callH),
-                        isLarge = true,
-                        liquidGlassBackdrop = lgBackdrop,
-                        liquidGlassEnabled = lgDialpadEnabled,
-                        blurEnabled = blurDialpadEnabled,
-                        isCallButton = true
-                    )
+                            },
+                            onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                            icon = Icons.Default.Call,
+                            contentDescription = "Call",
+                            containerColor = Color(0xFF34A853),
+                            contentColor = Color.White,
+                            modifier = Modifier.width(callW).height(callH),
+                            isLarge = true,
+                            liquidGlassBackdrop = lgBackdrop,
+                            liquidGlassEnabled = lgDialpadEnabled,
+                            blurEnabled = blurDialpadEnabled,
+                            isCallButton = true
+                        )
+                    }
 
                     BackspaceActionButton(
                         number = number,
@@ -1551,6 +1771,75 @@ fun DialPadContent(
 }
 }
 
+@Composable
+fun SimCardIconWithNumber(
+    simSlotNumber: String,
+    tint: Color,
+    isLarge: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val iconWidth = if (isLarge) 32.dp else 24.dp
+    val iconHeight = if (isLarge) 40.dp else 30.dp
+    val fontSize = if (isLarge) 20.sp else 15.sp
+
+    Box(
+        modifier = modifier.size(width = iconWidth, height = iconHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = (if (isLarge) 2.6.dp else 2.0.dp).toPx()
+            val cut = (if (isLarge) 10.dp else 7.dp).toPx()
+            val r = (if (isLarge) 5.dp else 4.dp).toPx()
+            val inset = strokeWidth / 2f
+            val w = size.width - inset
+            val h = size.height - inset
+
+            val path = Path().apply {
+                // Top-left cut corner notch
+                moveTo(inset, cut)
+                lineTo(cut, inset)
+                // Top edge to top-right corner
+                lineTo(w - r, inset)
+                quadraticTo(w, inset, w, inset + r)
+                // Right edge to bottom-right corner
+                lineTo(w, h - r)
+                quadraticTo(w, h, w - r, h)
+                // Bottom edge to bottom-left corner
+                lineTo(inset + r, h)
+                quadraticTo(inset, h, inset, h - r)
+                // Left edge back to cut
+                lineTo(inset, cut)
+                close()
+            }
+
+            // Subtle inner tint
+            drawPath(
+                path = path,
+                color = tint.copy(alpha = 0.15f),
+                style = Fill
+            )
+            // Crisp, bold outer SIM border
+            drawPath(
+                path = path,
+                color = tint,
+                style = Stroke(
+                    width = strokeWidth,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+        }
+
+        Text(
+            text = simSlotNumber,
+            fontWeight = FontWeight.Black,
+            fontSize = fontSize,
+            color = tint,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DialerActionExpressive(
@@ -1565,7 +1854,9 @@ fun DialerActionExpressive(
     liquidGlassBackdrop: com.coolappstore.everdialer.by.svhp.liquidglass.Backdrop? = null,
     liquidGlassEnabled: Boolean = false,
     blurEnabled: Boolean = false,
-    isCallButton: Boolean = false
+    isCallButton: Boolean = false,
+    customColor: Color? = null,
+    simSlotNumber: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1614,26 +1905,42 @@ fun DialerActionExpressive(
     )
 
     val restingBgColor = when {
+        customColor != null -> customColor
         isCallButton -> if (isSaturatedActive) MaterialTheme.colorScheme.primary else Color(0xFF34A853)
         isSaturatedActive -> androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.35f)
         else -> MaterialTheme.colorScheme.primaryContainer
     }
-    val targetBgColor = if (isVisuallyPressed) MaterialTheme.colorScheme.primary else restingBgColor
+    val targetBgColor = if (isVisuallyPressed) (customColor?.let { it.copy(alpha = 0.85f) } ?: MaterialTheme.colorScheme.primary) else restingBgColor
     val animatedBgColor by animateColorAsState(targetBgColor, spring(stiffness = Spring.StiffnessMedium), "ActionBtnBgColor")
 
     val restingContentColor = when {
+        customColor != null -> Color.White
         isCallButton -> Color.White
         isSaturatedActive -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
     val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
     val pressedContentColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
-    val targetContentColor = if (isVisuallyPressed) pressedContentColor else restingContentColor
+    val targetContentColor = if (isVisuallyPressed) (if (customColor != null) Color.White else pressedContentColor) else restingContentColor
     val animatedContentColor by animateColorAsState(targetContentColor, spring(stiffness = Spring.StiffnessMedium), "ActionBtnContentColor")
 
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val buttonShape = RoundedCornerShape(cornerRadius)
     val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    val actionContent = @Composable {
+        Box(contentAlignment = Alignment.Center) {
+            if (simSlotNumber != null) {
+                SimCardIconWithNumber(
+                    simSlotNumber = simSlotNumber,
+                    tint = animatedContentColor,
+                    isLarge = isLarge
+                )
+            } else {
+                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+            }
+        }
+    }
 
     if (useLiquidGlass && liquidGlassBackdrop != null) {
         Box(
@@ -1663,9 +1970,7 @@ fun DialerActionExpressive(
                 contentColor = animatedContentColor,
                 modifier = Modifier.matchParentSize()
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
-                }
+                actionContent()
             }
         }
     } else if (useBackdropBlur && liquidGlassBackdrop != null) {
@@ -1687,9 +1992,7 @@ fun DialerActionExpressive(
             color = animatedBgColor.copy(alpha = 0.72f),
             contentColor = animatedContentColor
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
-            }
+            actionContent()
         }
     } else {
         Surface(
@@ -1700,9 +2003,7 @@ fun DialerActionExpressive(
             color = animatedBgColor,
             contentColor = animatedContentColor
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
-            }
+            actionContent()
         }
     }
 }

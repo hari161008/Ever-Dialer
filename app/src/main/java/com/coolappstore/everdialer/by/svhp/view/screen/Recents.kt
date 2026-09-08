@@ -551,7 +551,7 @@ fun CallLogFullContent(
         val logs by viewModel.allCallLogs.collectAsState()
         val selectedFilter by viewModel.selectedFilter.collectAsState()
         val context = LocalContext.current
-        val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+        val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
 
         var showSimPicker by remember { mutableStateOf(false) }
         var pendingNumber by remember { mutableStateOf<String?>(null) }

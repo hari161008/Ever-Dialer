@@ -201,7 +201,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     }
 
     if (showSimPicker && pendingCallNumber != null) {
-        val telecomManager = remember { context.getSystemService(android.content.Context.TELECOM_SERVICE) as TelecomManager }
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
             onSimSelected = { handle ->

@@ -63,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
+import com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
@@ -244,17 +245,16 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     }
 
     // Default dialer
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
-    var isDefaultDialer by remember { mutableStateOf(telecomManager.defaultDialerPackage == context.packageName) }
+    var isDefaultDialer by remember { mutableStateOf(DefaultDialerManager.isDefaultDialer(context)) }
     val defaultDialerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        isDefaultDialer = telecomManager.defaultDialerPackage == context.packageName
+        isDefaultDialer = DefaultDialerManager.isDefaultDialer(context)
     }
     val activity = context as? Activity
     DisposableEffect(activity) {
         val lifecycleOwner = activity as? androidx.lifecycle.LifecycleOwner
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME)
-                isDefaultDialer = telecomManager.defaultDialerPackage == context.packageName
+                isDefaultDialer = DefaultDialerManager.isDefaultDialer(context)
         }
         lifecycleOwner?.lifecycle?.addObserver(observer)
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
@@ -1652,15 +1652,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoAnimatedSection(delayMs = 0L) {
                         Surface(
                             onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
-                                    val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
-                                    defaultDialerLauncher.launch(intent)
-                                } else {
-                                    val intent = Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-                                        .putExtra(android.telecom.TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, context.packageName)
-                                    defaultDialerLauncher.launch(intent)
-                                }
+                                DefaultDialerManager.requestDefaultDialer(defaultDialerLauncher, context)
                             },
                             shape = RoundedCornerShape(20.dp),
                             color = Color(0xFFD32F2F),
@@ -2161,6 +2153,9 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
 
         // ── Call Settings screen ─────────────────────────────────────────────
         SettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, ColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "default_sim")) },
+        SettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, ColorIndigo) { it.navigate(CallSettingsScreenDestination(highlightKey = "confirm_placing_call")) },
+        SettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, ColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
+        SettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, ColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "customize_sim_colors")) },
         SettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "contacts_to_display")) },
         SettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, ColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
         SettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },

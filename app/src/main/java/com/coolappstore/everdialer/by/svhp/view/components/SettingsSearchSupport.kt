@@ -22,9 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMissed
-import androidx.compose.material.icons.outlined.Widgets
-import androidx.compose.material.icons.outlined.Animation
-import androidx.compose.material.icons.outlined.BlurOn
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Backup
@@ -231,6 +229,9 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
 
         // ── Call Settings screen ─────────────────────────────────────────────────
         GlobalSettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, GsColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "default_sim")) },
+        GlobalSettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, Color(0xFF3F51B5)) { it.navigate(CallSettingsScreenDestination(highlightKey = "confirm_placing_call")) },
+        GlobalSettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, GsColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
+        GlobalSettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "customize_sim_colors")) },
         GlobalSettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, GsColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "contacts_to_display")) },
         GlobalSettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, GsColorPink) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
         GlobalSettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, GsColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },

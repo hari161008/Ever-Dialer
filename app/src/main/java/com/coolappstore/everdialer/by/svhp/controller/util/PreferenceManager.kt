@@ -648,6 +648,16 @@ class PreferenceManager(context: Context) {
         const val DEFAULT_MISSED_CALL_REPLY_1      = "Call me back?"
         const val DEFAULT_MISSED_CALL_REPLY_2      = "Sorry I'm busy"
         const val DEFAULT_MISSED_CALL_REPLY_3      = "I'll call you later"
+
+        // Show SIM buttons instead of dial button in dialpad
+        const val KEY_SHOW_SIM_BUTTONS_IN_DIALPAD  = "show_sim_buttons_in_dialpad"
+        const val KEY_SIM1_COLOR                   = "sim1_color"
+        const val KEY_SIM2_COLOR                   = "sim2_color"
+        const val DEFAULT_SIM1_COLOR               = 0xFF2E7D32.toInt() // Green
+        const val DEFAULT_SIM2_COLOR               = 0xFFC62828.toInt() // Red
+
+        // Confirm placing a call
+        const val KEY_CONFIRM_PLACING_CALL         = "confirm_placing_call"
     }
 }
 

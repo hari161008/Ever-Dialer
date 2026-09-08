@@ -71,7 +71,11 @@ private val SimCardNotchShape = GenericShape { size, _ ->
 
 @Composable
 fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier, shape: Shape = SimCardNotchShape) {
-    val color = if (slot == 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+    val prefs = org.koin.compose.koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val sim1Color = remember(settingsVer) { Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM1_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM1_COLOR)) }
+    val sim2Color = remember(settingsVer) { Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM2_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM2_COLOR)) }
+    val color = if (slot == 0) sim1Color else sim2Color
     BoxWithConstraints(
         modifier = modifier
             .size(width = 18.dp, height = 21.dp) // fallback size, only applies if `modifier` didn't already set one

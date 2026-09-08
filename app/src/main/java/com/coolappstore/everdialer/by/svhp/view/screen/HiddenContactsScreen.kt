@@ -53,7 +53,6 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
 
     var showSimPicker by remember { mutableStateOf(false) }
     var callNumber by remember { mutableStateOf("") }
-    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
 
     if (showSimPicker) {
         SimPickerDialog(
@@ -141,7 +140,8 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
                     HiddenContactCard(
                         contact = contact,
                         onCallClick = { num ->
-                            val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Exception) { emptyList() }
+                            val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                            val accounts = try { tm?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
                             if (accounts.size > 1) {
                                 callNumber = num
                                 showSimPicker = true

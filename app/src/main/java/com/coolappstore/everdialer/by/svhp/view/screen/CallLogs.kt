@@ -61,7 +61,7 @@ fun CallLogFullScreen(
     val showButton by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 2 }
     }
-    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
     val prefs = koinInject<PreferenceManager>()
 
     var showSimPicker by remember { mutableStateOf(false) }

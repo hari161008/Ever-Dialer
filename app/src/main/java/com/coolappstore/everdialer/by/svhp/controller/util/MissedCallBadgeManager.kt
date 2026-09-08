@@ -63,79 +63,88 @@ object MissedCallBadgeManager {
     }
 
     fun updateBadge(context: Context, explicitCount: Int? = null) {
-        val count = explicitCount ?: getUnreadMissedCallsCount(context)
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_MISSED_CALLS_ID,
-                "Missed Calls",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Notifications and home screen badges for missed calls"
-                setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-            nm.createNotificationChannel(channel)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            return
         }
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
-        if (count > 0) {
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("NAV_TO_RECENTS", true)
+        try {
+            val count = explicitCount ?: getUnreadMissedCallsCount(context)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_MISSED_CALLS_ID,
+                    "Missed Calls",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notifications and home screen badges for missed calls"
+                    setShowBadge(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+                nm.createNotificationChannel(channel)
             }
-            val openPendingIntent = PendingIntent.getActivity(
-                context,
-                9901,
-                openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
 
-            val dismissIntent = Intent(context, MissedCallDismissReceiver::class.java)
-            val dismissPendingIntent = PendingIntent.getBroadcast(
-                context,
-                9902,
-                dismissIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            if (count > 0) {
+                val openIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("NAV_TO_RECENTS", true)
+                }
+                val openPendingIntent = PendingIntent.getActivity(
+                    context,
+                    9901,
+                    openIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
 
-            val latestInfo = getLatestMissedCallInfo(context)
-            val caller = latestInfo?.first?.ifBlank { "Unknown" } ?: "Unknown"
-            val title = if (count == 1) "Missed call from $caller" else "$count Missed Calls"
-            val contentText = if (count == 1) "Tap to view call history" else "Latest missed call from $caller"
+                val dismissIntent = Intent(context, MissedCallDismissReceiver::class.java)
+                val dismissPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    9902,
+                    dismissIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
 
-            val builder = NotificationCompat.Builder(context, CHANNEL_MISSED_CALLS_ID)
-                .setSmallIcon(android.R.drawable.stat_notify_missed_call)
-                .setContentTitle(title)
-                .setContentText(contentText)
-                .setNumber(count) // Tells launcher to display badge number on home screen app icon
-                .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
-                .setAutoCancel(true)
-                .setContentIntent(openPendingIntent)
-                .setDeleteIntent(dismissPendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                val latestInfo = getLatestMissedCallInfo(context)
+                val caller = latestInfo?.first?.ifBlank { "Unknown" } ?: "Unknown"
+                val title = if (count == 1) "Missed call from $caller" else "$count Missed Calls"
+                val contentText = if (count == 1) "Tap to view call history" else "Latest missed call from $caller"
 
-            val notification = builder.build()
+                val builder = NotificationCompat.Builder(context, CHANNEL_MISSED_CALLS_ID)
+                    .setSmallIcon(android.R.drawable.stat_notify_missed_call)
+                    .setContentTitle(title)
+                    .setContentText(contentText)
+                    .setNumber(count) // Tells launcher to display badge number on home screen app icon
+                    .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(openPendingIntent)
+                    .setDeleteIntent(dismissPendingIntent)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
 
-            // Xiaomi MIUI badge reflection
-            try {
-                val extraNotificationField = notification.javaClass.getDeclaredField("extraNotification")
-                val extraNotification = extraNotificationField.get(notification)
-                val setMessageCountMethod = extraNotification.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType)
-                setMessageCountMethod.invoke(extraNotification, count)
-            } catch (_: Throwable) {}
+                val notification = builder.build()
 
-            nm.notify(MISSED_CALLS_NOTIF_ID, notification)
-            applyOemBadges(context, count)
-        } else {
-            nm.cancel(MISSED_CALLS_NOTIF_ID)
-            applyOemBadges(context, 0)
-        }
+                // Xiaomi MIUI badge reflection
+                try {
+                    val extraNotificationField = notification.javaClass.getDeclaredField("extraNotification")
+                    val extraNotification = extraNotificationField.get(notification)
+                    val setMessageCountMethod = extraNotification.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType)
+                    setMessageCountMethod.invoke(extraNotification, count)
+                } catch (_: Throwable) {}
+
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    nm.notify(MISSED_CALLS_NOTIF_ID, notification)
+                }
+                applyOemBadges(context, count)
+            } else {
+                nm.cancel(MISSED_CALLS_NOTIF_ID)
+                applyOemBadges(context, 0)
+            }
+        } catch (_: Throwable) {}
     }
 
     fun markMissedCallsAsRead(context: Context) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            updateBadge(context, 0)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         try {

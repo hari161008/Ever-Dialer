@@ -72,19 +72,31 @@ class CallLogViewModel(
 
     init {
         try {
-            getApplication<Application>().contentResolver.registerContentObserver(
-                CallLog.Calls.CONTENT_URI,
-                true,
-                callLogObserver
-            )
-        } catch (_: Exception) {}
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    getApplication(),
+                    android.Manifest.permission.READ_CALL_LOG
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                getApplication<Application>().contentResolver.registerContentObserver(
+                    CallLog.Calls.CONTENT_URI,
+                    true,
+                    callLogObserver
+                )
+            }
+        } catch (_: Throwable) {}
         try {
-            getApplication<Application>().contentResolver.registerContentObserver(
-                ContactsContract.Contacts.CONTENT_URI,
-                true,
-                contactsObserver
-            )
-        } catch (_: Exception) {}
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    getApplication(),
+                    android.Manifest.permission.READ_CONTACTS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                getApplication<Application>().contentResolver.registerContentObserver(
+                    ContactsContract.Contacts.CONTENT_URI,
+                    true,
+                    contactsObserver
+                )
+            }
+        } catch (_: Throwable) {}
         // Step 1: serve disk cache immediately so UI is instant
         viewModelScope.launch(Dispatchers.IO) {
             val diskCache = loadFromDisk()
@@ -235,7 +247,15 @@ class CallLogViewModel(
                     _allCallLogs.value = result
                 }
             }
-            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(getApplication())
+            try {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                        getApplication(),
+                        android.Manifest.permission.READ_CALL_LOG
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(getApplication())
+                }
+            } catch (_: Throwable) {}
         } finally {
             isFetching = false
         }
