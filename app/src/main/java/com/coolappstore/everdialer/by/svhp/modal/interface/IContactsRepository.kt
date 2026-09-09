@@ -22,6 +22,7 @@ interface IContactsRepository {
     fun updateContactNote(contactId: String, note: String?)
     fun deleteContact(contactId: String)
     fun deleteRawContact(rawContactId: Long)
+    fun deletePhoneNumberFromContact(contactId: String, phoneNumber: String): Boolean
     fun getAvailableAccounts(excludedContactIds: Set<String> = emptySet()): List<ContactAccount>
     /** Destinations the user can save a brand-new contact to (Device, Google accounts, SIM cards, etc). */
     fun getSaveTargets(): List<ContactSaveTarget>

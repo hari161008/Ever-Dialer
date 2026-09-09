@@ -1264,6 +1264,54 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         } catch (_: Exception) {}
     }
 
+    override fun deletePhoneNumberFromContact(contactId: String, phoneNumber: String): Boolean {
+        return try {
+            val uri = ContactsContract.Data.CONTENT_URI
+            val projection = arrayOf(
+                ContactsContract.Data._ID,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
+            val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+            val cleanTarget = phoneNumber.trim()
+
+            val rowsToDelete = mutableListOf<Long>()
+            contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
+                val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    val num = if (numIdx >= 0) cursor.getString(numIdx) else null
+                    val id = if (idIdx >= 0) cursor.getLong(idIdx) else -1L
+                    if (id > 0 && num != null && numbersLikelyMatch(num, cleanTarget)) {
+                        rowsToDelete.add(id)
+                    }
+                }
+            }
+
+            var deletedCount = 0
+            for (rowId in rowsToDelete) {
+                deletedCount += contentResolver.delete(
+                    ContactsContract.Data.CONTENT_URI,
+                    "${ContactsContract.Data._ID} = ?",
+                    arrayOf(rowId.toString())
+                )
+            }
+            if (deletedCount > 0) {
+                clearNumberLookupCache()
+                try {
+                    contentResolver.notifyChange(ContactsContract.Contacts.CONTENT_URI, null)
+                    contentResolver.notifyChange(ContactsContract.Data.CONTENT_URI, null)
+                } catch (_: Exception) {}
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error deleting phone number $phoneNumber from contact $contactId", e)
+            false
+        }
+    }
+
     override fun getAvailableAccounts(excludedContactIds: Set<String>): List<ContactAccount> = try {
         getAvailableAccountsInternal(excludedContactIds)
     } catch (_: Exception) {

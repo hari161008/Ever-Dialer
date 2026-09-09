@@ -27,6 +27,22 @@ object ContextMenuPrefs {
         val ordered = mutableListOf<String>()
         ordered.addAll(savedKeys.filter { it in defaultOrder })
         defaultOrder.forEach { key -> if (key !in ordered) ordered.add(key) }
+        if (section == SECTION_CALL_LOGS && "share" in ordered) {
+            val copyIndex = ordered.indexOf("copy_number")
+            val shareIndex = ordered.indexOf("share")
+            val deleteIndex = ordered.indexOf("delete_call_log")
+            if (deleteIndex != -1 && shareIndex > deleteIndex) {
+                ordered.removeAt(shareIndex)
+                val targetIndex = if (copyIndex != -1) ordered.indexOf("copy_number") + 1 else deleteIndex
+                ordered.add(targetIndex, "share")
+                prefs.setString(orderKey(section), ordered.joinToString(","))
+            } else if (copyIndex != -1 && shareIndex != copyIndex + 1 && (deleteIndex == -1 || copyIndex < deleteIndex)) {
+                ordered.removeAt(shareIndex)
+                val newCopyIndex = ordered.indexOf("copy_number")
+                ordered.add(newCopyIndex + 1, "share")
+                prefs.setString(orderKey(section), ordered.joinToString(","))
+            }
+        }
         return ordered.filter { prefs.getBoolean(showKey(section, it), true) }
     }
 }

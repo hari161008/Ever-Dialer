@@ -294,7 +294,7 @@ fun CallLogTile(
             com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                 prefs,
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
-                listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
+                listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "share", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
             ).filter { key ->
                 when (key) {
                     "add_to_contacts" -> !isContact
@@ -376,6 +376,25 @@ fun CallLogTile(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
                             Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    "share" -> RivoDropdownMenuItem(
+                        text     = "Share",
+                        icon     = Icons.Default.Share,
+                        iconTint = Color(0xFFFF9800),
+                        onClick  = {
+                            showMenu = false
+                            val primaryNum = log.contactId?.let { prefs.getContactDefaultNumber(it) } ?: log.number
+                            val shareText = if (!log.name.isNullOrBlank() && log.name != log.number) {
+                                "${log.name}\n$primaryNum"
+                            } else {
+                                primaryNum
+                            }
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share contact"))
                         }
                     )
                     "add_to_contacts" -> RivoDropdownMenuItem(

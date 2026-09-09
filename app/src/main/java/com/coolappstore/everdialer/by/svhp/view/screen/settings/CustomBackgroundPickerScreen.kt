@@ -121,6 +121,9 @@ fun CustomBackgroundPickerScreen(
         else prefs.getBoolean(PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER, true)
     }
     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
+    val currentAnswerStyle = remember(settingsVersion) {
+        prefs.getString(PreferenceManager.KEY_INCOMING_ANSWER_STYLE, PreferenceManager.ANSWER_STYLE_MODERN) ?: PreferenceManager.ANSWER_STYLE_MODERN
+    }
 
     val defaultPfpType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_TYPE, "none") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_TYPE, "none")
     val defaultPfpPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "")
@@ -753,55 +756,109 @@ fun CustomBackgroundPickerScreen(
                                             }
                                         }
 
-                                        // Real Swipe To Answer Section (matching NewSwipeToAnswer)
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.padding(bottom = 6.dp)
-                                        ) {
-                                            // Message quick-reply pill
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = previewElemBg,
-                                                modifier = Modifier.height(26.dp).width(86.dp)
+                                        // Real Swipe To Answer Section (matching selected answer style)
+                                        if (currentAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier.padding(bottom = 6.dp)
                                             ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.Center
-                                                ) {
-                                                    Icon(Icons.Default.ChatBubble, null, tint = previewElemFg, modifier = Modifier.size(11.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text("Message", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold))
-                                                }
-                                            }
-
-                                            // Real Swipe Pill
-                                            Box(
-                                                modifier = Modifier
-                                                    .height(48.dp)
-                                                    .fillMaxWidth(0.95f)
-                                                    .clip(CircleShape)
-                                                    .background(previewElemBg),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text("Decline", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                                                    Text("Answer", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                                                }
-
-                                                // Draggable Phone Handle in Center
+                                                // Message quick-reply pill
                                                 Surface(
                                                     shape = CircleShape,
-                                                    color = previewHandleBg,
-                                                    shadowElevation = 3.dp,
-                                                    modifier = Modifier.size(36.dp)
+                                                    color = previewElemBg,
+                                                    modifier = Modifier.height(24.dp).width(80.dp)
                                                 ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Icon(Icons.Default.ChatBubble, null, tint = previewElemFg, modifier = Modifier.size(10.dp))
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Text("Message", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.Bold))
+                                                    }
+                                                }
+
+                                                // Vertical swipe area
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    // Swipe up hint
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Icon(Icons.Default.KeyboardArrowUp, null, tint = previewElemFg, modifier = Modifier.size(13.dp))
+                                                        Text("Swipe up to answer", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp, fontWeight = FontWeight.SemiBold))
+                                                    }
+
+                                                    // Center Puck
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = previewHandleBg,
+                                                        shadowElevation = 3.dp,
+                                                        modifier = Modifier.size(38.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                                        }
+                                                    }
+
+                                                    // Swipe down hint
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("Swipe down to decline", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp, fontWeight = FontWeight.SemiBold))
+                                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = previewElemFg, modifier = Modifier.size(13.dp))
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.padding(bottom = 6.dp)
+                                            ) {
+                                                // Message quick-reply pill
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = previewElemBg,
+                                                    modifier = Modifier.height(26.dp).width(86.dp)
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Icon(Icons.Default.ChatBubble, null, tint = previewElemFg, modifier = Modifier.size(11.dp))
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Text("Message", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold))
+                                                    }
+                                                }
+
+                                                // Real Swipe Pill
+                                                Box(
+                                                    modifier = Modifier
+                                                        .height(48.dp)
+                                                        .fillMaxWidth(0.95f)
+                                                        .clip(CircleShape)
+                                                        .background(previewElemBg),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text("Decline", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                                                        Text("Answer", color = previewElemFg, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                                                    }
+
+                                                    // Draggable Phone Handle in Center
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = previewHandleBg,
+                                                        shadowElevation = 3.dp,
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                                        }
                                                     }
                                                 }
                                             }

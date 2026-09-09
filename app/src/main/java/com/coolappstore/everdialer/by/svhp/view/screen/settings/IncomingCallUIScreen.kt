@@ -145,6 +145,25 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                         modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                     )
                     RivoExpressiveCard {
+                        val currentAnswerStyle = remember(settingsVersion) {
+                            prefs.getString(PreferenceManager.KEY_INCOMING_ANSWER_STYLE, PreferenceManager.ANSWER_STYLE_MODERN)
+                                ?: PreferenceManager.ANSWER_STYLE_MODERN
+                        }
+                        val answerStyleLabel = if (currentAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) "Google classic" else "Google modern style"
+
+                        RivoListItem(
+                            headline = "Answer style",
+                            supporting = "Currently: $answerStyleLabel",
+                            leadingIcon = Icons.Outlined.SwipeVertical,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("incoming_answer_style", highlightedKey) { highlightedKey = null },
+                            onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.AnswerStyleScreenDestination) }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
                         RivoListItem(
                             headline = "Choose Custom Background",
                             supporting = "Currently: $bgLabel",

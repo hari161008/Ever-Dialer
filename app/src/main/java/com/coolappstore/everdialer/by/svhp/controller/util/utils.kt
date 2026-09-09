@@ -208,6 +208,15 @@ fun placeCallWithSimPreference(
     if (hasPhoneState && telecomManager != null) {
         val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
         if (accounts.size > 1) {
+            val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+                .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
+            if (useSimFromCallLog) {
+                val slot = queryRecentSimSlot(context, number)
+                if (slot != null && slot in accounts.indices) {
+                    makeCall(context, number, accounts[slot])
+                    return
+                }
+            }
             when {
                 simPref == 1 && accounts.isNotEmpty() -> makeCall(context, number, accounts[0])
                 simPref == 2 && accounts.size >= 2 -> makeCall(context, number, accounts[1])
@@ -284,6 +293,16 @@ fun placeCallWithContactSimPreference(
 
     val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
     if (accounts.size <= 1) { makeCall(context, number, accounts.firstOrNull()); return }
+
+    val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+        .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
+    if (useSimFromCallLog) {
+        val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
+        if (slot != null && slot in accounts.indices) {
+            makeCall(context, number, accounts[slot])
+            return
+        }
+    }
 
     when (contactSimChoice) {
         PreferenceManager.SIM_CHOICE_ASK -> onShowSimPicker()

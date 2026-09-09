@@ -332,6 +332,9 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var showSimButtonsInDialpad by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false))
     }
+    var useSimFromCallLog by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false))
+    }
     var confirmPlacingCall by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
     }
@@ -577,6 +580,22 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                     onCheckedChange = {
                                         showSimButtonsInDialpad = it
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, it)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Use SIM based on call logs history on any call",
+                                    supporting = "Automatically selects the same SIM that was used in the call log history for this number on any call.",
+                                    leadingIcon = Icons.Outlined.History,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = useSimFromCallLog,
+                                    modifier = Modifier.settingsSearchHighlight("use_sim_from_call_log", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        useSimFromCallLog = it
+                                        prefs.setBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, it)
                                     }
                                 )
                                 HorizontalDivider(

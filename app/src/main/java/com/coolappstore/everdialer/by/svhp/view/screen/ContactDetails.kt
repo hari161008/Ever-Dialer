@@ -17,7 +17,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -180,6 +182,16 @@ fun ContactDetailsScreen(
     // Respect Settings → Appearance → "Context Menu Elements" (Contacts section) customization
     // so the actions shown here always match what's configured for the contact's context menu.
     val settingsVer by prefs.settingsChanged.collectAsState()
+    val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+    val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+    val hasTwoSims = remember(settingsVer) {
+        prefs.getActiveSimCount() >= 2 || run {
+            val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+        }
+    }
+    var showCallLongPressMenu by remember { mutableStateOf(false) }
+    var pendingSimSlotToCall by remember { mutableStateOf<Int?>(null) }
     val hideDuplicateNumbers = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
     }
@@ -330,6 +342,40 @@ fun ContactDetailsScreen(
         ) {
             pendingNumber = number; showSimPicker = true
         }
+    }
+
+    val callWithSimSlot: (Int) -> Unit = { slot ->
+        val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+        val targetAccount = if (accounts.size > slot) accounts[slot] else accounts.firstOrNull()
+
+        val targetNumber = when {
+            contactDefaultNumber != null -> contactDefaultNumber
+            contact != null && contactPhoneNumbers.size == 1 -> contactPhoneNumbers.first()
+            contact != null && contactPhoneNumbers.size > 1 -> null
+            displayPhone != "Unknown" -> displayPhone
+            else -> null
+        }
+        if (targetNumber != null) {
+            makeCall(context, targetNumber, targetAccount)
+        } else if (contact != null && contactPhoneNumbers.size > 1) {
+            pendingSimSlotToCall = slot
+        }
+    }
+
+    if (pendingSimSlotToCall != null && contact != null) {
+        NumberPickerDialog(
+            numbers = contactPhoneNumbers,
+            onDismissRequest = { pendingSimSlotToCall = null },
+            onNumberSelected = { num ->
+                val slot = pendingSimSlotToCall!!
+                pendingSimSlotToCall = null
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+                val targetAccount = if (accounts.size > slot) accounts[slot] else accounts.firstOrNull()
+                makeCall(context, num, targetAccount)
+            }
+        )
     }
 
     if (showNumberPicker && contact != null) {
@@ -687,28 +733,107 @@ fun ContactDetailsScreen(
                             .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Surface(
-                            onClick = {
-                                if (contact != null && contactPhoneNumbers.size > 1) {
-                                    if (contactDefaultNumber != null) initiateCall(contactDefaultNumber)
-                                    else showNumberPicker = true
-                                }
-                                else if (contact != null && contactPhoneNumbers.isNotEmpty()) initiateCall(contactPhoneNumbers.first())
-                                else if (displayPhone != "Unknown") initiateCall(displayPhone)
-                            },
-                            modifier = Modifier.weight(1f).height(64.dp),
-                            shape = RoundedCornerShape(50),
-                            color = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                        Box(modifier = Modifier.weight(1f)) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (contact != null && contactPhoneNumbers.size > 1) {
+                                                if (contactDefaultNumber != null) initiateCall(contactDefaultNumber)
+                                                else showNumberPicker = true
+                                            }
+                                            else if (contact != null && contactPhoneNumbers.isNotEmpty()) initiateCall(contactPhoneNumbers.first())
+                                            else if (displayPhone != "Unknown") initiateCall(displayPhone)
+                                        },
+                                        onLongClick = {
+                                            showCallLongPressMenu = true
+                                        }
+                                    ),
+                                shape = RoundedCornerShape(50),
+                                color = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
                             ) {
-                                Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(26.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Call", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(26.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text("Call", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                }
+                            }
+
+                            RivoDropdownMenu(
+                                expanded = showCallLongPressMenu,
+                                onDismissRequest = { showCallLongPressMenu = false }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        onClick = {
+                                            showCallLongPressMenu = false
+                                            callWithSimSlot(0)
+                                        },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = sim1Color,
+                                        contentColor = Color.White
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.SimCard, contentDescription = "SIM 1", modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("SIM 1", fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    if (hasTwoSims) {
+                                        Surface(
+                                            onClick = {
+                                                showCallLongPressMenu = false
+                                                callWithSimSlot(1)
+                                            },
+                                            modifier = Modifier.weight(1f).height(48.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = sim2Color,
+                                            contentColor = Color.White
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxSize(),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.SimCard, contentDescription = "SIM 2", modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("SIM 2", fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
+                                if (whatsAppInstalled) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                    RivoDropdownMenuItem(
+                                        text = "Call via WhatsApp",
+                                        iconBitmap = remember(context) { getWhatsAppIcon(context) },
+                                        onClick = {
+                                            showCallLongPressMenu = false
+                                            chooseSocialApp("whatsapp")
+                                        }
+                                    )
+                                }
                             }
                         }
                         Surface(
@@ -800,6 +925,37 @@ fun ContactDetailsScreen(
                                     android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
+                            RivoDropdownMenuItem(
+                                text = "Edit contact",
+                                icon = Icons.Default.Edit,
+                                iconTint = Color(0xFF9C27B0),
+                                onClick = {
+                                    selectedNumberForMenu = null
+                                    if (contact != null) {
+                                        navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                                    } else {
+                                        navigator.navigate(ContactEditScreenDestination(initialPhone = menuNum))
+                                    }
+                                }
+                            )
+                            RivoDropdownMenuItem(
+                                text = "Share",
+                                icon = Icons.Default.Share,
+                                iconTint = Color(0xFFFF9800),
+                                onClick = {
+                                    selectedNumberForMenu = null
+                                    val shareText = if (contact != null && displayName.isNotBlank() && displayName != "Unknown") {
+                                        "$displayName\n$menuNum"
+                                    } else {
+                                        menuNum
+                                    }
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                }
+                            )
                             if (contact != null) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -828,6 +984,28 @@ fun ContactDetailsScreen(
                                         }
                                     )
                                 }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoDropdownMenuItem(
+                                    text = "Delete number",
+                                    icon = Icons.Default.Delete,
+                                    isDestructive = true,
+                                    onClick = {
+                                        selectedNumberForMenu = null
+                                        if (isPrimaryNum) {
+                                            prefs.setContactDefaultNumber(contactSimKey, null)
+                                        }
+                                        contactsViewModel.deletePhoneNumber(contact.id, menuNum) { success ->
+                                            if (success) {
+                                                android.widget.Toast.makeText(context, "Number deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Failed to delete number", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                )
                             }
                         }
 

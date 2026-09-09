@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -28,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.material3.*
@@ -469,13 +471,14 @@ fun ContactListItem(
             com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                 prefs,
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
-                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
+                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
             ).filter { key ->
                 when (key) {
                     "copy_number" -> hasNumber
                     "block_contact" -> hasNumber
                     "fake_call" -> fakeCallInContextMenu
                     "call_chat_via" -> hasNumber && hasAnySocialApp
+                    "send_text" -> hasNumber
                     else -> true
                 }
             }
@@ -487,7 +490,7 @@ fun ContactListItem(
         ) {
             fun groupOf(key: String) = when (key) {
                 "select" -> 0
-                "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via" -> 1
+                "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text" -> 1
                 "move_contact", "toggle_favorite", "block_contact", "fake_call" -> 2
                 "delete_contact" -> 3
                 else -> 1
@@ -550,6 +553,20 @@ fun ContactListItem(
                         onClick  = {
                             showMenu = false
                             showCallChatViaPicker = true
+                        }
+                    )
+                    "send_text" -> RivoDropdownMenuItem(
+                        text     = "Send text",
+                        icon     = Icons.AutoMirrored.Filled.Message,
+                        iconTint = Color(0xFF009688),
+                        onClick  = {
+                            showMenu = false
+                            val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                            val numToSend = primaryNum ?: contact.phoneNumbers.firstOrNull() ?: ""
+                            if (numToSend.isNotBlank()) {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$numToSend"))
+                                context.startActivity(intent)
+                            }
                         }
                     )
                     "share_contact" -> RivoDropdownMenuItem(

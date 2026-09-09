@@ -580,6 +580,9 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_FONT_SIZE_SCALE  = "incoming_font_size_scale" // Float, default 1.0f (0.7f..1.5f)
         const val KEY_INCOMING_ELEMENTS_THEME   = "incoming_elements_theme"  // "auto" | "light" | "dark"
         const val KEY_INCOMING_AUTO_REFRESH_WALLPAPER = "incoming_auto_refresh_wallpaper"
+        const val KEY_INCOMING_ANSWER_STYLE    = "incoming_answer_style"   // "google_modern" | "google_classic"
+        const val ANSWER_STYLE_MODERN           = "google_modern"
+        const val ANSWER_STYLE_CLASSIC          = "google_classic"
 
         const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"
@@ -655,6 +658,9 @@ class PreferenceManager(context: Context) {
         const val KEY_SIM2_COLOR                   = "sim2_color"
         const val DEFAULT_SIM1_COLOR               = 0xFF2E7D32.toInt() // Green
         const val DEFAULT_SIM2_COLOR               = 0xFFC62828.toInt() // Red
+
+        // Use SIM based on call logs history on any call
+        const val KEY_USE_SIM_FROM_CALL_LOG       = "use_sim_from_call_log"
 
         // Confirm placing a call
         const val KEY_CONFIRM_PLACING_CALL         = "confirm_placing_call"

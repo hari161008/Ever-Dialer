@@ -1,11 +1,14 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
@@ -196,6 +199,15 @@ fun CallChatViaOverlay(
             }
             return
         }
+        if (app == "send_text") {
+            if (allNumbers.size > 1) {
+                pendingAppForNumberPick = "send_text"
+            } else {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:${allNumbers.first()}"))
+                context.startActivity(intent)
+            }
+            return
+        }
         if (allNumbers.size > 1) {
             pendingAppForNumberPick = app
         } else {
@@ -210,7 +222,7 @@ fun CallChatViaOverlay(
         val hasTelegram = remember(context) { isTelegramInstalled(context) }
         val hasGoogleMeet = remember(context, showGoogleMeet) { showGoogleMeet && isGoogleMeetInstalled(context) }
         val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
-        val hasAnyApp = hasWhatsApp || hasWhatsAppBusiness || hasTelegram || hasGoogleMeet || hasTruecaller || (showFakeCall && onFakeCall != null)
+        val hasAnyApp = true
 
         if (hasAnyApp) {
             RivoDropdownMenu(expanded = showPicker, onDismissRequest = onPickerDismiss) {
@@ -258,6 +270,11 @@ fun CallChatViaOverlay(
                         onClick = { onPickerDismiss(); onFakeCall() }
                     )
                 }
+                RivoDropdownMenuItem(
+                    text = "Send text",
+                    icon = Icons.AutoMirrored.Filled.Message,
+                    onClick = { onPickerDismiss(); chooseApp("send_text") }
+                )
             }
         } else {
             LaunchedEffect(showPicker) {
@@ -276,6 +293,9 @@ fun CallChatViaOverlay(
                 pendingAppForNumberPick = null
                 if (app == "truecaller") {
                     openTruecaller(context, number)
+                } else if (app == "send_text") {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$number"))
+                    context.startActivity(intent)
                 } else {
                     selectedNumber = number
                     showAppQuickActions = app

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.PhoneCallback
 import androidx.compose.material.icons.automirrored.filled.PhoneForwarded
 import androidx.compose.material.icons.filled.*
 import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
+import com.coolappstore.everdialer.by.svhp.view.components.ClassicSwipeToAnswer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1213,6 +1214,9 @@ fun ExpressiveCallScreen(
     val showContactPfp = currentBgConfig.showContactPfp
     val showPhoneNumber = currentBgConfig.showPhoneNumber
     val showIncomingMuteButton = remember(settingsVersion) { prefs?.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_MUTE_BUTTON, false) ?: false }
+    val incomingAnswerStyle = remember(settingsVersion) {
+        prefs?.getString(PreferenceManager.KEY_INCOMING_ANSWER_STYLE, PreferenceManager.ANSWER_STYLE_MODERN) ?: PreferenceManager.ANSWER_STYLE_MODERN
+    }
 
     val isIncomingElementsDark = when (incomingBgConfig.elementsTheme) {
         "light" -> false
@@ -1704,44 +1708,85 @@ fun ExpressiveCallScreen(
                         }
                     } else {
                         Column(modifier = Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            NewSwipeToAnswer(
-                                onAnswer = {
-                                    if (!isPocketBlocked()) {
-                                        if (callBiometricUnlocked) {
-                                            try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                            if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                (context as? Activity)?.finishAndRemoveTask()
-                                            }
-                                        } else {
-                                            pendingAction = {
+                            if (incomingAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) {
+                                ClassicSwipeToAnswer(
+                                    onAnswer = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
                                                 if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
                                                     (context as? Activity)?.finishAndRemoveTask()
                                                 }
+                                            } else {
+                                                pendingAction = {
+                                                    try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                        (context as? Activity)?.finishAndRemoveTask()
+                                                    }
+                                                }
+                                                showCallBiometricUnlock = true
                                             }
-                                            showCallBiometricUnlock = true
                                         }
-                                    }
-                                },
-                                onDecline = {
-                                    if (!isPocketBlocked()) {
-                                        if (callBiometricUnlocked) {
-                                            try { call.disconnect() } catch (_: Exception) {}
-                                        } else {
-                                            pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
-                                            showCallBiometricUnlock = true
+                                    },
+                                    onDecline = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.disconnect() } catch (_: Exception) {}
+                                            } else {
+                                                pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                                showCallBiometricUnlock = true
+                                            }
                                         }
-                                    }
-                                },
-                                onMessage = onMessageButtonClick,
-                                onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
-                                showMuteButton = showIncomingMuteButton,
-                                labelColor = incomingElemFgColor,
-                                bgColor = incomingElemBgColor,
-                                isPocketBlocked = isPocketBlocked,
-                                isDark = isIncomingElementsDark,
-                                handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
-                            )
+                                    },
+                                    onMessage = onMessageButtonClick,
+                                    onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                    showMuteButton = showIncomingMuteButton,
+                                    labelColor = incomingElemFgColor,
+                                    bgColor = incomingElemBgColor,
+                                    isPocketBlocked = isPocketBlocked,
+                                    isDark = isIncomingElementsDark,
+                                    handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
+                                )
+                            } else {
+                                NewSwipeToAnswer(
+                                    onAnswer = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                    (context as? Activity)?.finishAndRemoveTask()
+                                                }
+                                            } else {
+                                                pendingAction = {
+                                                    try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                        (context as? Activity)?.finishAndRemoveTask()
+                                                    }
+                                                }
+                                                showCallBiometricUnlock = true
+                                            }
+                                        }
+                                    },
+                                    onDecline = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.disconnect() } catch (_: Exception) {}
+                                            } else {
+                                                pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                                showCallBiometricUnlock = true
+                                            }
+                                        }
+                                    },
+                                    onMessage = onMessageButtonClick,
+                                    onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                    showMuteButton = showIncomingMuteButton,
+                                    labelColor = incomingElemFgColor,
+                                    bgColor = incomingElemBgColor,
+                                    isPocketBlocked = isPocketBlocked,
+                                    isDark = isIncomingElementsDark,
+                                    handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
+                                )
+                            }
                         }
                     }
                 }
@@ -2005,44 +2050,85 @@ fun ExpressiveCallScreen(
                                 .fillMaxWidth()
                                 .align(Alignment.BottomCenter)
                         ) {
-                            NewSwipeToAnswer(
-                                onAnswer = {
-                                    if (!isPocketBlocked()) {
-                                        if (callBiometricUnlocked) {
-                                            try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                            if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                (context as? Activity)?.finishAndRemoveTask()
-                                            }
-                                        } else {
-                                            pendingAction = {
+                            if (incomingAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) {
+                                ClassicSwipeToAnswer(
+                                    onAnswer = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
                                                 if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
                                                     (context as? Activity)?.finishAndRemoveTask()
                                                 }
+                                            } else {
+                                                pendingAction = {
+                                                    try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                        (context as? Activity)?.finishAndRemoveTask()
+                                                    }
+                                                }
+                                                showCallBiometricUnlock = true
                                             }
-                                            showCallBiometricUnlock = true
                                         }
-                                    }
-                                },
-                                onDecline = {
-                                    if (!isPocketBlocked()) {
-                                        if (callBiometricUnlocked) {
-                                            try { call.disconnect() } catch (_: Exception) {}
-                                        } else {
-                                            pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
-                                            showCallBiometricUnlock = true
+                                    },
+                                    onDecline = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.disconnect() } catch (_: Exception) {}
+                                            } else {
+                                                pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                                showCallBiometricUnlock = true
+                                            }
                                         }
-                                    }
-                                },
-                                onMessage = onMessageButtonClick,
-                                onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
-                                showMuteButton = showIncomingMuteButton,
-                                labelColor = incomingElemFgColor,
-                                bgColor = incomingElemBgColor,
-                                isPocketBlocked = isPocketBlocked,
-                                isDark = isIncomingElementsDark,
-                                handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
-                            )
+                                    },
+                                    onMessage = onMessageButtonClick,
+                                    onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                    showMuteButton = showIncomingMuteButton,
+                                    labelColor = incomingElemFgColor,
+                                    bgColor = incomingElemBgColor,
+                                    isPocketBlocked = isPocketBlocked,
+                                    isDark = isIncomingElementsDark,
+                                    handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
+                                )
+                            } else {
+                                NewSwipeToAnswer(
+                                    onAnswer = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                    (context as? Activity)?.finishAndRemoveTask()
+                                                }
+                                            } else {
+                                                pendingAction = {
+                                                    try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
+                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
+                                                        (context as? Activity)?.finishAndRemoveTask()
+                                                    }
+                                                }
+                                                showCallBiometricUnlock = true
+                                            }
+                                        }
+                                    },
+                                    onDecline = {
+                                        if (!isPocketBlocked()) {
+                                            if (callBiometricUnlocked) {
+                                                try { call.disconnect() } catch (_: Exception) {}
+                                            } else {
+                                                pendingAction = { try { call.disconnect() } catch (_: Exception) {} }
+                                                showCallBiometricUnlock = true
+                                            }
+                                        }
+                                    },
+                                    onMessage = onMessageButtonClick,
+                                    onMute = { com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context) },
+                                    showMuteButton = showIncomingMuteButton,
+                                    labelColor = incomingElemFgColor,
+                                    bgColor = incomingElemBgColor,
+                                    isPocketBlocked = isPocketBlocked,
+                                    isDark = isIncomingElementsDark,
+                                    handleColor = if (isSaturatedSolidBrightDark) Color.Black else null
+                                )
+                            }
                         }
                     }
 

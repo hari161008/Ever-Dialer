@@ -569,6 +569,18 @@ class ContactsViewModel(
         }
     }
 
+    fun deletePhoneNumber(contactId: String, phoneNumber: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = contactsRepo.deletePhoneNumberFromContact(contactId, phoneNumber)
+            if (success) {
+                fetchContacts()
+            }
+            withContext(Dispatchers.Main) {
+                onComplete(success)
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         try {

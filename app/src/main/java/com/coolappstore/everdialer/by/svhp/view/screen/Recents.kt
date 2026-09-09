@@ -1049,7 +1049,8 @@ fun CallLogFullContent(
                                                                 val key = "${log.number}|${log.date}"
                                                                 onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
                                                             } else if (directCall) {
-                                                                placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number) {
+                                                                val recentSlot = if (log.simSlot in 0..1) log.simSlot else null
+                                                                placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number, recentSlot) {
                                                                     pendingNumber = log.number; showSimPicker = true
                                                                 }
                                                             } else {
@@ -1060,7 +1061,8 @@ fun CallLogFullContent(
                                                             navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
                                                         },
                                                         onButtonClick = { log ->
-                                                            placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number) {
+                                                            val recentSlot = if (log.simSlot in 0..1) log.simSlot else null
+                                                            placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number, recentSlot) {
                                                                 pendingNumber = log.number; showSimPicker = true
                                                             }
                                                         },

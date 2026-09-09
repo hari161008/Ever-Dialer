@@ -307,6 +307,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             ContextMenuItemOption("call_chat_via",     "Call/Chat Via",             Icons.AutoMirrored.Filled.Chat),
             ContextMenuItemOption("search_truecaller", "Search Truecaller",         Icons.Default.Search),
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
+            ContextMenuItemOption("share",             "Share",                     Icons.Default.Share),
             ContextMenuItemOption("add_to_contacts",   "Add to contacts",           Icons.Default.PersonAdd),
             ContextMenuItemOption("block_number",      "Block/Unblock number",      Icons.Default.Block),
             ContextMenuItemOption("fake_call",         "Fake Call",                 Icons.Outlined.PhoneCallback),
@@ -319,6 +320,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
             ContextMenuItemOption("share_contact",     "Share contact",             Icons.Default.Share),
             ContextMenuItemOption("call_chat_via",     "Call/Chat Via",             Icons.AutoMirrored.Filled.Chat),
+            ContextMenuItemOption("send_text",         "Send text",                 Icons.AutoMirrored.Filled.Message),
             ContextMenuItemOption("move_contact",      "Move contact",              Icons.Default.DriveFileMove),
             ContextMenuItemOption("toggle_favorite",   "Add/Remove Favourites",     Icons.Default.Favorite),
             ContextMenuItemOption("block_contact",     "Block/Unblock contact",     Icons.Default.Block),
@@ -341,6 +343,22 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 val list = mutableStateListOf<String>()
                 list.addAll(savedKeys.filter { it in validKeys })
                 validKeys.forEach { key -> if (key !in list) list.add(key) }
+                if (section.key == "call_logs" && "share" in list) {
+                    val copyIdx = list.indexOf("copy_number")
+                    val shareIdx = list.indexOf("share")
+                    val deleteIdx = list.indexOf("delete_call_log")
+                    if (deleteIdx != -1 && shareIdx > deleteIdx) {
+                        list.removeAt(shareIdx)
+                        val targetIdx = if (copyIdx != -1) list.indexOf("copy_number") + 1 else deleteIdx
+                        list.add(targetIdx, "share")
+                        prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
+                    } else if (copyIdx != -1 && shareIdx != copyIdx + 1 && (deleteIdx == -1 || copyIdx < deleteIdx)) {
+                        list.removeAt(shareIdx)
+                        val newCopyIdx = list.indexOf("copy_number")
+                        list.add(newCopyIdx + 1, "share")
+                        prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
+                    }
+                }
                 this[section.key] = list
             }
         }
