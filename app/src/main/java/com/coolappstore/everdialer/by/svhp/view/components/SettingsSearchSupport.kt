@@ -102,7 +102,6 @@ import androidx.compose.material.icons.outlined.Notifications
 import com.ramcosta.composedestinations.generated.destinations.AboutAppScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AppSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.BiometricScreenDestination
-import com.ramcosta.composedestinations.generated.destinations.CallSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CallerUIScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.IncomingCallUIScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.InterfaceScreenDestination
@@ -112,6 +111,7 @@ import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenD
 import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SimAndCallPlacementScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.VolumeDndScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 
@@ -223,13 +223,14 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, GsColorBluGrey) { it.navigate(SettingsScreenDestination(highlightKey = "about_app")) },
 
         // ── App Settings screen ──────────────────────────────────────────────────
-        GlobalSettingsSearchEntry("Call Settings", "SIM, contacts to display, call behavior", "nav_call_settings", Icons.Outlined.Call, GsColorTeal) { it.navigate(AppSettingsScreenDestination(highlightKey = "nav_call_settings")) },
+        GlobalSettingsSearchEntry("Interesting Settings !", "Call features, Volume DND, network switcher, notes", "app_settings", Icons.Outlined.Tune, GsColorTeal) { it.navigate(AppSettingsScreenDestination()) },
         GlobalSettingsSearchEntry("4G/5G Switcher", "Quickly switch network mode per app", "network_switcher", Icons.Outlined.NetworkCell, GsColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
         GlobalSettingsSearchEntry("Integrate Notes Section", "Show notes alongside call recordings", "integrate_notes", Icons.Outlined.Notes, GsColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "integrate_notes")) },
         GlobalSettingsSearchEntry("Delete Notes With Recording", "Remove the note when its recording is deleted", "delete_notes_with_recording", Icons.Outlined.NoteAlt, GsColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "delete_notes_with_recording")) },
 
         // ── Sim And Call Placement screen ──────────────────────────────────────
         GlobalSettingsSearchEntry("Sim And Call Placement", "Default SIM, SIM colors, confirm calls, contacts", "sim_and_call_placement", Icons.Outlined.SimCard, GsColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "sim_and_call_placement")) },
+        GlobalSettingsSearchEntry("Sound & Vibration", "Ringtones and dialpad tones", "sound_vibration_link", Icons.Outlined.VolumeUp, GsColorBlue) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "sound_vibration_link")) },
         GlobalSettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, GsColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "default_sim")) },
         GlobalSettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, Color(0xFF3F51B5)) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "confirm_placing_call")) },
         GlobalSettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, GsColorTeal) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
@@ -238,18 +239,18 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, GsColorBlue) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "contacts_to_display")) },
         GlobalSettingsSearchEntry("Missed Call Notification", "Show missed call notifications through Ever Dialer", "missed_call_notification", Icons.AutoMirrored.Filled.CallMissed, GsColorRed) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "missed_call_notification")) },
 
-        // ── Call Settings screen ─────────────────────────────────────────────────
-        GlobalSettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, GsColorPink) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
-        GlobalSettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, GsColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
-        GlobalSettingsSearchEntry("Pocket Mode Prevention", "Block accidental answer/decline when phone is in pocket", "pocket_mode_prevention", Icons.Outlined.Sensors, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "pocket_mode_prevention")) },
-        GlobalSettingsSearchEntry("Floating Ongoing Call", "Draggable floating bubble during calls", "floating_ongoing_call", Icons.Outlined.Sensors, GsColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "floating_ongoing_call")) },
-        GlobalSettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, GsColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
-        GlobalSettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, GsColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_speaker")) },
+        // ── Call Features & Behavior ─────────────────────────────────────────────
+        GlobalSettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, GsColorPink) { it.navigate(AppSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
+        GlobalSettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, GsColorTeal) { it.navigate(AppSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
+        GlobalSettingsSearchEntry("Pocket Mode Prevention", "Block accidental answer/decline when phone is in pocket", "pocket_mode_prevention", Icons.Outlined.Sensors, GsColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "pocket_mode_prevention")) },
+        GlobalSettingsSearchEntry("Floating Ongoing Call", "Draggable floating bubble during calls", "floating_ongoing_call", Icons.Outlined.Sensors, GsColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "floating_ongoing_call")) },
+        GlobalSettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, GsColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
+        GlobalSettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, GsColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "auto_speaker")) },
         GlobalSettingsSearchEntry("Rain Mode", "Answer/decline calls by shaking your device", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
-        GlobalSettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, GsColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "auto_redial")) },
-        GlobalSettingsSearchEntry("Missed Call Popup", "Show interactive popup over other apps on missed calls", "missed_call_popup", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_popup")) },
-        GlobalSettingsSearchEntry("Always Show Popup After Every Call Ends", "Show popup after every call ends with only custom response", "always_show_after_call_ends", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_popup")) },
-        GlobalSettingsSearchEntry("Volume DND", "Toggle Do Not Disturb using volume button combination", "volume_dnd", Icons.Outlined.VolumeUp, GsColorPurple) { it.navigate(CallSettingsScreenDestination(highlightKey = "volume_dnd")) },
+        GlobalSettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, GsColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "auto_redial")) },
+        GlobalSettingsSearchEntry("Missed Call Popup", "Show interactive popup over other apps on missed calls", "missed_call_popup", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "missed_call_popup")) },
+        GlobalSettingsSearchEntry("Always Show Popup After Every Call Ends", "Show popup after every call ends with only custom response", "always_show_after_call_ends", Icons.AutoMirrored.Filled.CallMissed, GsColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "missed_call_popup")) },
+        GlobalSettingsSearchEntry("Volume DND", "Toggle Do Not Disturb using volume button combination", "volume_dnd", Icons.Outlined.VolumeUp, GsColorPurple) { it.navigate(VolumeDndScreenDestination(highlightKey = "volume_dnd")) },
 
         // ── Rain Mode screen ─────────────────────────────────────────────────────
         GlobalSettingsSearchEntry("Enable Rain Mode", "Answer or decline calls by shaking device", "enable_rain_mode", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination(highlightKey = "enable_rain_mode")) },

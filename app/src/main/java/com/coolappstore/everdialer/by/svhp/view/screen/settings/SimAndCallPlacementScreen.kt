@@ -33,6 +33,7 @@ import com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -306,6 +307,23 @@ fun SimAndCallPlacementScreen(
                                     )
                                 }
                             }
+                        )
+                    }
+                }
+            }
+
+            RivoAnimatedSection(delayMs = 30L) {
+                Column {
+                    SimCallSectionLabel("Sound & Vibration")
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "Sound & Vibration",
+                            supporting = "Ringtones and dialpad tones",
+                            leadingIcon = Icons.Outlined.VolumeUp,
+                            iconContainerColor = ColorBlue,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("sound_vibration_link", highlightedKey) { highlightedKey = null },
+                            onClick = { navigator.navigate(SoundVibrationScreenDestination()) }
                         )
                     }
                 }
