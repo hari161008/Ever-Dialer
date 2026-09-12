@@ -210,7 +210,7 @@ fun placeCallWithSimPreference(
         if (accounts.size > 1) {
             val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
                 .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
-            if (useSimFromCallLog) {
+            if (useSimFromCallLog || simPref == 3) {
                 val slot = queryRecentSimSlot(context, number)
                 if (slot != null && slot in accounts.indices) {
                     makeCall(context, number, accounts[slot])
@@ -296,7 +296,7 @@ fun placeCallWithContactSimPreference(
 
     val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
         .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
-    if (useSimFromCallLog) {
+    if (useSimFromCallLog || globalSimPref == 3) {
         val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
         if (slot != null && slot in accounts.indices) {
             makeCall(context, number, accounts[slot])

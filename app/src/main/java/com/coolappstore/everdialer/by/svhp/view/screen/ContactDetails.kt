@@ -213,7 +213,7 @@ fun ContactDetailsScreen(
     var showCallLongPressMenu by remember { mutableStateOf(false) }
     var pendingSimSlotToCall by remember { mutableStateOf<Int?>(null) }
     val hideDuplicateNumbers = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
+        prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true)
     }
     val contactSimKey = contact?.id ?: phoneNumber ?: displayPhone
     val contactSimChoice = remember(settingsVer, contactSimKey) { prefs.getContactSimChoice(contactSimKey) }

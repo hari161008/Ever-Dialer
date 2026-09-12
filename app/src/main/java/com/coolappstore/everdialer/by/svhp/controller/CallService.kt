@@ -774,6 +774,10 @@ class CallService : InCallService() {
                     when (globalSimPref) {
                         1 -> accounts.getOrNull(0)
                         2 -> accounts.getOrNull(1)
+                        3 -> {
+                            val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)
+                            if (slot != null && slot in accounts.indices) accounts[slot] else null
+                        }
                         else -> null
                     }
                 }

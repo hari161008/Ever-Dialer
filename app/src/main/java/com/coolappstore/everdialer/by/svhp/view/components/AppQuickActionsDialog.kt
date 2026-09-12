@@ -177,7 +177,7 @@ fun CallChatViaOverlay(
     phoneNumbers: List<String> = phoneNumber?.let { listOf(it) } ?: emptyList()
 ) {
     val prefs = koinInject<PreferenceManager>()
-    val hideDuplicates = remember { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false) }
+    val hideDuplicates = remember { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true) }
     val allNumbers = remember(phoneNumbers, hideDuplicates) {
         val raw = phoneNumbers.filter { it.isNotBlank() }.distinct()
         if (hideDuplicates) deduplicatePhoneNumbers(raw) else raw

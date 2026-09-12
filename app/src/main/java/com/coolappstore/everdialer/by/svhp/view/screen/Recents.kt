@@ -573,7 +573,7 @@ fun CallLogFullContent(
             val base = if (hiddenIds.isEmpty()) logs else logs.filter { it.contactId == null || it.contactId !in hiddenIds }
             when (selectedFilter) {
                 CallLogFilter.All -> base
-                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number }
+                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
                 CallLogFilter.Favourites -> {
                     val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
                     val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
@@ -582,6 +582,7 @@ fun CallLogFullContent(
                         log.number in favoritePhoneNumbers
                     }
                 }
+                CallLogFilter.Unknown -> base.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
                 CallLogFilter.Missed -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
                 CallLogFilter.Incoming -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                 CallLogFilter.Outgoing -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }

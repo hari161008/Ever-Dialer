@@ -180,7 +180,7 @@ fun CallLogFullScreen(
                     val finalLogs = remember(filteredLogsByContact, selectedFilter) {
                         when (selectedFilter) {
                             CallLogFilter.All -> filteredLogsByContact
-                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number }
+                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
                             CallLogFilter.Favourites -> {
                                 val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
                                 val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
@@ -189,6 +189,7 @@ fun CallLogFullScreen(
                                     log.number in favoritePhoneNumbers
                                 }
                             }
+                            CallLogFilter.Unknown -> filteredLogsByContact.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
                             CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
                             CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                             CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }

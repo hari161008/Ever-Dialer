@@ -575,7 +575,7 @@ fun ContactListItem(
                         iconTint = Color(0xFFFF9800),
                         onClick  = {
                             showMenu = false
-                            val hideDuplicates = prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
+                            val hideDuplicates = prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true)
                             val numbersToShare = if (hideDuplicates) deduplicatePhoneNumbers(contact.phoneNumbers) else contact.phoneNumbers
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -645,7 +645,7 @@ fun ContactListItem(
         }
     }
 
-    val hideDuplicatesInContact = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false) }
+    val hideDuplicatesInContact = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true) }
     val displayContactNumbers = remember(contact.phoneNumbers, hideDuplicatesInContact) {
         val raw = contact.phoneNumbers.filter { it.isNotBlank() }
         if (hideDuplicatesInContact) deduplicatePhoneNumbers(raw) else raw

@@ -321,7 +321,10 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     var directCallOnTap by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)) }
     var autoSpeaker by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_SPEAKER, false)) }
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
-    var defaultSim by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())) }
+    var defaultSim by remember {
+        val saved = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
+        mutableStateOf(if (saved == 0 && prefs.getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)) 3 else saved)
+    }
     var showSimDialog by remember { mutableStateOf(false) }
     val activeSimCount = remember { prefs.getActiveSimCount() }
     val hasTwoSims = remember {
@@ -332,9 +335,6 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     }
     var showSimButtonsInDialpad by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false))
-    }
-    var useSimFromCallLog by remember {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false))
     }
     var confirmPlacingCall by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
@@ -469,12 +469,22 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
     }
 
     if (showSimDialog) {
+        val simOptions = remember(hasTwoSims) {
+            buildList {
+                add(0 to "Ask every time")
+                add(1 to "SIM 1")
+                if (hasTwoSims) {
+                    add(2 to "SIM 2")
+                    add(3 to "Use SIM based on call logs")
+                }
+            }
+        }
         AlertDialog(
             onDismissRequest = { showSimDialog = false },
             title = { Text("Default SIM") },
             text = {
                 Column {
-                    listOf("Ask every time", "SIM 1", "SIM 2").forEachIndexed { index, label ->
+                    simOptions.forEach { (index, label) ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -486,6 +496,7 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 onClick = {
                                     defaultSim = index
                                     prefs.setInt(PreferenceManager.KEY_DEFAULT_SIM, index)
+                                    prefs.setBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, index == 3)
                                     showSimDialog = false
                                 }
                             )
@@ -545,12 +556,16 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                     0 -> "Ask every time"
                                     1 -> "SIM 1"
                                     2 -> "SIM 2"
+                                    3 -> "Use SIM based on call logs"
                                     else -> "Ask every time"
                                 },
                                 leadingIcon = Icons.Outlined.SimCard,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
-                                modifier = Modifier.settingsSearchHighlight("default_sim", highlightedKey) { highlightedKey = null },
+                                modifier = Modifier.settingsSearchHighlight(
+                                    if (highlightedKey == "use_sim_from_call_log") "use_sim_from_call_log" else "default_sim",
+                                    highlightedKey
+                                ) { highlightedKey = null },
                                 onClick = { showSimDialog = true }
                             )
                             HorizontalDivider(
@@ -584,22 +599,6 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                     onCheckedChange = {
                                         showSimButtonsInDialpad = it
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, it)
-                                    }
-                                )
-                                HorizontalDivider(
-                                    Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                                RivoSwitchListItem(
-                                    headline = "Use SIM based on call logs history on any call",
-                                    supporting = "Automatically selects the same SIM that was used in the call log history for this number on any call.",
-                                    leadingIcon = Icons.Outlined.History,
-                                    iconContainerColor = ColorIndigo,
-                                    checked = useSimFromCallLog,
-                                    modifier = Modifier.settingsSearchHighlight("use_sim_from_call_log", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        useSimFromCallLog = it
-                                        prefs.setBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, it)
                                     }
                                 )
                                 HorizontalDivider(
