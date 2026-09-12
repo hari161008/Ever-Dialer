@@ -514,7 +514,12 @@ class ContactsViewModel(
     fun getContactAccounts(contactId: String): List<com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo> =
         contactsRepo.getContactAccounts(contactId)
 
-    fun updateContactNote(contactId: String, note: String?) {
+    fun updateContactNote(
+        contactId: String,
+        note: String?,
+        targetRawContactId: Long? = null,
+        updateAllAccounts: Boolean = false
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             // Optimistically update memory and cache
             val current = _allContacts.value
@@ -523,7 +528,7 @@ class ContactsViewModel(
             updateDisplayedContacts(updated)
             ContactsCache.write(getApplication(), updated)
             
-            contactsRepo.updateContactNote(contactId, note)
+            contactsRepo.updateContactNote(contactId, note, targetRawContactId, updateAllAccounts)
             fetchContacts()
         }
     }

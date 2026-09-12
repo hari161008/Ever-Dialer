@@ -1453,10 +1453,11 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var settingsSearchQuery by remember { mutableStateOf("") }
     val settingsSearchEntries = settingsSearchEntriesList
     val filteredSettingsResults = remember(settingsSearchQuery) {
-        val q = settingsSearchQuery.trim().lowercase()
+        val q = settingsSearchQuery.trim()
         if (q.isBlank()) emptyList()
         else settingsSearchEntries.filter {
-            it.titleLower.contains(q) || it.subtitleLower.contains(q)
+            com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(it.title, q) ||
+                    com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(it.subtitle, q)
         }
     }
     // The key of the setting row that should scroll into view and flash, most recently
@@ -2158,6 +2159,7 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Use SIM based on call logs history on any call", "Automatically select the same SIM from call log history", "use_sim_from_call_log", Icons.Outlined.History, ColorIndigo) { it.navigate(CallSettingsScreenDestination(highlightKey = "use_sim_from_call_log")) },
         SettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, ColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "customize_sim_colors")) },
         SettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "contacts_to_display")) },
+        SettingsSearchEntry("Missed Call Notification", "Show missed call notifications through Ever Dialer", "missed_call_notification", Icons.AutoMirrored.Filled.CallMissed, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_notification")) },
         SettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, ColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
         SettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
         SettingsSearchEntry("Pocket Mode Prevention", "Block accidental answer/decline when phone is in pocket", "pocket_mode_prevention", Icons.Outlined.Sensors, ColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "pocket_mode_prevention")) },
@@ -2237,6 +2239,7 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Auto Delete Unknown No in call log", "Automatically clean up unknown-number entries", "auto_delete_unknown_calllog", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "auto_delete_unknown_calllog")) },
 
         SettingsSearchEntry("Call Time Format in call logs", "12-hour or 24-hour time format", "call_time_format", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "call_time_format")) },
+        SettingsSearchEntry("Talk time in call logs", "Show call duration for non-missed calls", "talk_time_in_call_logs", Icons.Outlined.Timer, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "talk_time_in_call_logs")) },
         SettingsSearchEntry("Icon-Only Bottom Bar", "Hide labels on the bottom navigation bar", "icon_only_bottom_bar", Icons.Outlined.Palette, ColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "icon_only_bottom_bar")) },
         SettingsSearchEntry("Open Dialpad by Default", "Launch straight into the dialpad", "open_dialpad_default", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "open_dialpad_default")) },
         SettingsSearchEntry("Show favourites in list", "Display favourites in a vertical list instead of grid", "favorites_in_list", Icons.Outlined.Palette, Color(0xFFE91E63)) { it.navigate(InterfaceScreenDestination(highlightKey = "favorites_in_list")) },
@@ -2258,7 +2261,8 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, ColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
 
         // ── Ongoing Call UI screen ────────────────────────────────────────────
-        SettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, ColorBlue) { it.navigate(CallerUIScreenDestination()) },
+        SettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, ColorBlue) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_when_answered")) },
+        SettingsSearchEntry("Show ongoing call UI screen in lockscreen when the call is answered", "Display in-call screen on lockscreen after answering", "show_ongoing_call_ui_on_lockscreen_when_answered", Icons.Outlined.Lock, ColorIndigo) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_on_lockscreen_when_answered")) },
         SettingsSearchEntry("Contact PFP Customisation (Ongoing)", "Customize avatar photo for ongoing in-call screen", "ongoing_contact_pfp_customisation", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_contact_pfp_customisation")) },
         SettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
         SettingsSearchEntry("Show PFP for Non-Contacts (Ongoing)", "Display avatar on ongoing call screen for callers without photo", "ongoing_custom_pfp_show_for_no_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_custom_pfp_show_for_no_pfp")) },

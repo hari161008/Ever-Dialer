@@ -9,6 +9,8 @@ import android.os.*
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.DisconnectCause
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.view.KeyEvent
 import androidx.activity.compose.setContent
@@ -182,7 +184,15 @@ class CallActivity : FragmentActivity() {
         }
 
         val answeredFromNotif = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
-        if (answeredFromNotif && !prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val isLocked = km?.isKeyguardLocked == true
+        val showOnLock = prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true)
+        val showOngoing = prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+        if (answeredFromNotif && (!showOngoing || (isLocked && !showOnLock))) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(false)
+            }
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
             finishAndRemoveTask()
             return
         }
@@ -343,6 +353,40 @@ class CallActivity : FragmentActivity() {
                         simSlot = simSlot,
                         showSimBadge = isDualSim
                     )
+
+                    if (callState == Call.STATE_SELECT_PHONE_ACCOUNT) {
+                        val telecomManager = remember { this@CallActivity.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+                        val availableAccounts = remember(call) {
+                            val fromIntent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                call.details?.intentExtras?.getParcelableArrayList<PhoneAccountHandle>(Call.AVAILABLE_PHONE_ACCOUNTS)
+                            } else null
+                            fromIntent?.takeIf { it.isNotEmpty() }
+                                ?: (try { telecomManager?.callCapablePhoneAccounts } catch (_: Throwable) { null })
+                                ?: emptyList()
+                        }
+
+                        if (availableAccounts.size == 1) {
+                            LaunchedEffect(call) {
+                                try {
+                                    call.phoneAccountSelected(availableAccounts[0], false)
+                                } catch (_: Throwable) {}
+                            }
+                        } else {
+                            com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog(
+                                title = "Call via",
+                                availableAccounts = availableAccounts,
+                                onDismissRequest = {
+                                    try { call.disconnect() } catch (_: Throwable) {}
+                                    finishAndRemoveTask()
+                                },
+                                onSimSelected = { handle ->
+                                    try {
+                                        call.phoneAccountSelected(handle, false)
+                                    } catch (_: Throwable) {}
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -397,6 +441,30 @@ class CallActivity : FragmentActivity() {
 }
 
 private fun sanitizedPhoneForChatApps(number: String): String = number.filter { it.isDigit() || it == '+' }
+
+private fun handleOngoingUiAfterAnswer(context: Context, prefs: PreferenceManager?) {
+    val showOngoingUI = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) ?: true
+    val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+    val isLocked = km?.isKeyguardLocked == true
+    val showOnLock = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true) ?: true
+    val act = context as? Activity
+    if (!showOngoingUI || (isLocked && !showOnLock)) {
+        act?.let {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                it.setShowWhenLocked(false)
+            }
+            it.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+            it.finishAndRemoveTask()
+        }
+    } else if (!showOnLock) {
+        act?.let {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                it.setShowWhenLocked(false)
+            }
+            it.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+        }
+    }
+}
 
 private fun openSmsApp(context: Context, number: String) {
     try {
@@ -994,10 +1062,7 @@ fun ExpressiveCallScreen(
         }
         if (callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) isDisconnecting = true
         if (callState == Call.STATE_ACTIVE && wasRinging) {
-            val showOngoingUI = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) ?: true
-            if (!showOngoingUI) {
-                (context as? Activity)?.finishAndRemoveTask()
-            }
+            handleOngoingUiAfterAnswer(context, prefs)
         }
     }
 
@@ -1586,7 +1651,7 @@ fun ExpressiveCallScreen(
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))
                             }
-                            Box(modifier = Modifier.fillMaxWidth().height(44.dp * currentBgConfig.fontSizeScale.coerceAtLeast(0.85f)), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp * currentBgConfig.fontSizeScale.coerceAtLeast(0.85f)).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                                 val lsBaseNameStyle = MaterialTheme.typography.headlineMedium.copy(
                                     fontWeight = FontWeight.Medium,
                                     shadow = textShadow
@@ -1595,7 +1660,8 @@ fun ExpressiveCallScreen(
                                     text = contactName.ifEmpty { "" },
                                     style = lsBaseNameStyle.copy(fontSize = lsBaseNameStyle.fontSize * currentBgConfig.fontSizeScale),
                                     color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                    maxLines = 2,
+                                    maxLines = 3,
+                                    softWrap = true,
                                     overflow = TextOverflow.Ellipsis,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
@@ -1608,6 +1674,7 @@ fun ExpressiveCallScreen(
                                 Text(
                                     text = when {
                                         isOnHold -> "On Hold"
+                                        callState == Call.STATE_SELECT_PHONE_ACCOUNT -> "Choose account"
                                         callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
                                         callState == Call.STATE_DIALING -> "Calling"
                                         callState == Call.STATE_RINGING -> "Incoming"
@@ -1714,15 +1781,11 @@ fun ExpressiveCallScreen(
                                         if (!isPocketBlocked()) {
                                             if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                    (context as? Activity)?.finishAndRemoveTask()
-                                                }
+                                                handleOngoingUiAfterAnswer(context, prefs)
                                             } else {
                                                 pendingAction = {
                                                     try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                        (context as? Activity)?.finishAndRemoveTask()
-                                                    }
+                                                    handleOngoingUiAfterAnswer(context, prefs)
                                                 }
                                                 showCallBiometricUnlock = true
                                             }
@@ -1753,15 +1816,11 @@ fun ExpressiveCallScreen(
                                         if (!isPocketBlocked()) {
                                             if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                    (context as? Activity)?.finishAndRemoveTask()
-                                                }
+                                                handleOngoingUiAfterAnswer(context, prefs)
                                             } else {
                                                 pendingAction = {
                                                     try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                        (context as? Activity)?.finishAndRemoveTask()
-                                                    }
+                                                    handleOngoingUiAfterAnswer(context, prefs)
                                                 }
                                                 showCallBiometricUnlock = true
                                             }
@@ -1878,7 +1937,8 @@ fun ExpressiveCallScreen(
                                             text = contactName.ifEmpty { "" },
                                             style = callNameStyle.copy(shadow = textShadow),
                                             color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                            maxLines = 1,
+                                            maxLines = 3,
+                                            softWrap = true,
                                             overflow = TextOverflow.Ellipsis,
                                             textAlign = if (isCircleShape) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                                         )
@@ -1904,6 +1964,7 @@ fun ExpressiveCallScreen(
                                             Text(
                                                 text = when {
                                                     isOnHold -> "On Hold"
+                                                    callState == Call.STATE_SELECT_PHONE_ACCOUNT -> "Choose account"
                                                     callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
                                                     callState == Call.STATE_DIALING -> "Calling"
                                                     callState == Call.STATE_RINGING -> "Incoming"
@@ -1927,14 +1988,21 @@ fun ExpressiveCallScreen(
                         }
 
                         if (!isPfpLarge || !shouldShowAvatar) {
-                            // Fixed height box so layout never shifts when name loads
-                            Box(modifier = Modifier.fillMaxWidth().height(callNameBoxHeight), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = callNameBoxHeight)
+                                    .padding(horizontal = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
                                     text = contactName.ifEmpty { "" },
                                     style = callNameStyle.copy(shadow = textShadow),
                                     color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 3,
+                                    softWrap = true,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
 
@@ -1948,7 +2016,8 @@ fun ExpressiveCallScreen(
                                     style = phoneStyle,
                                     color = onBgColor.copy(alpha = if (contactName.isEmpty()) 0f else 1f),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
                                 )
                             }
 
@@ -1959,6 +2028,7 @@ fun ExpressiveCallScreen(
                                 Text(
                                     text = when {
                                         isOnHold -> "On Hold"
+                                        callState == Call.STATE_SELECT_PHONE_ACCOUNT -> "Choose account"
                                         callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
                                         callState == Call.STATE_DIALING -> "Calling"
                                         callState == Call.STATE_RINGING -> "Incoming"
@@ -2056,15 +2126,11 @@ fun ExpressiveCallScreen(
                                         if (!isPocketBlocked()) {
                                             if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                    (context as? Activity)?.finishAndRemoveTask()
-                                                }
+                                                handleOngoingUiAfterAnswer(context, prefs)
                                             } else {
                                                 pendingAction = {
                                                     try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                        (context as? Activity)?.finishAndRemoveTask()
-                                                    }
+                                                    handleOngoingUiAfterAnswer(context, prefs)
                                                 }
                                                 showCallBiometricUnlock = true
                                             }
@@ -2095,15 +2161,11 @@ fun ExpressiveCallScreen(
                                         if (!isPocketBlocked()) {
                                             if (callBiometricUnlocked) {
                                                 try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                    (context as? Activity)?.finishAndRemoveTask()
-                                                }
+                                                handleOngoingUiAfterAnswer(context, prefs)
                                             } else {
                                                 pendingAction = {
                                                     try { call.answer(VideoProfile.STATE_AUDIO_ONLY) } catch (_: Exception) {}
-                                                    if (prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true) == false) {
-                                                        (context as? Activity)?.finishAndRemoveTask()
-                                                    }
+                                                    handleOngoingUiAfterAnswer(context, prefs)
                                                 }
                                                 showCallBiometricUnlock = true
                                             }

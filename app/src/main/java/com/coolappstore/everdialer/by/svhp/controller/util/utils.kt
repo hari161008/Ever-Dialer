@@ -422,3 +422,93 @@ fun deduplicatePhoneNumbers(numbers: List<String>): List<String> {
     }
     return result
 }
+
+fun levenshteinDistance(s1: String, s2: String): Int {
+    if (s1 == s2) return 0
+    if (s1.isEmpty()) return s2.length
+    if (s2.isEmpty()) return s1.length
+
+    val d = Array(s1.length + 1) { IntArray(s2.length + 1) }
+    for (i in 0..s1.length) d[i][0] = i
+    for (j in 0..s2.length) d[0][j] = j
+
+    for (i in 1..s1.length) {
+        for (j in 1..s2.length) {
+            val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+            d[i][j] = minOf(
+                d[i - 1][j] + 1,       // deletion
+                d[i][j - 1] + 1,       // insertion
+                d[i - 1][j - 1] + cost // substitution
+            )
+        }
+    }
+    return d[s1.length][s2.length]
+}
+
+/**
+ * Typo-tolerant, whitespace-insensitive, case-insensitive string matcher.
+ * Handles:
+ * 1. Case-insensitivity (lowercase)
+ * 2. Unintentional extra/missing spaces (comparing space-stripped and whitespace-normalized forms)
+ * 3. Substring matching
+ * 4. Spelling mistakes / typo tolerance via Levenshtein edit distance on words or tokens
+ */
+fun matchesFuzzySearch(target: String, query: String): Boolean {
+    if (query.isBlank()) return true
+    if (target.isBlank()) return false
+
+    val tLower = target.lowercase()
+    val qLower = query.trim().lowercase()
+
+    // 1. Direct contains (case insensitive)
+    if (tLower.contains(qLower)) return true
+
+    // 2. Ignore all spaces (handles unintentional spaces, e.g. "ever dialer" vs "everdialer" or "ap p" vs "app")
+    val tNoSpaces = tLower.replace(" ", "")
+    val qNoSpaces = qLower.replace(" ", "")
+    if (qNoSpaces.isNotEmpty() && tNoSpaces.contains(qNoSpaces)) return true
+
+    // 3. Typo-tolerant matching (Levenshtein distance)
+    // Check if query is close to any sub-sequence or word of target
+    val qTokens = qLower.split("\\s+".toRegex()).filter { it.isNotBlank() }
+    val tTokens = tLower.split("[\\s_\\-•,]+".toRegex()).filter { it.isNotBlank() }
+
+    if (qTokens.isEmpty()) return false
+
+    // If query has tokens, see if every query token fuzzy-matches some target token or substring
+    val allTokensMatch = qTokens.all { qTok ->
+        val maxAllowedDistance = when {
+            qTok.length <= 3 -> 0
+            qTok.length in 4..6 -> 1
+            else -> 2
+        }
+
+        // Direct token substring
+        if (tLower.contains(qTok)) {
+            true
+        } else {
+            // Levenshtein match against any target token
+            tTokens.any { tTok ->
+                if (tTok.contains(qTok)) true
+                else if (maxAllowedDistance > 0 && kotlin.math.abs(tTok.length - qTok.length) <= maxAllowedDistance) {
+                    levenshteinDistance(tTok, qTok) <= maxAllowedDistance
+                } else false
+            }
+        }
+    }
+
+    if (allTokensMatch) return true
+
+    // Also check entire stripped query against entire stripped target for typos if reasonably long
+    val totalMaxDist = when {
+        qNoSpaces.length <= 4 -> 0
+        qNoSpaces.length in 5..8 -> 1
+        else -> 2
+    }
+    if (totalMaxDist > 0 && kotlin.math.abs(tNoSpaces.length - qNoSpaces.length) <= totalMaxDist) {
+        if (levenshteinDistance(tNoSpaces, qNoSpaces) <= totalMaxDist) return true
+    }
+
+    return false
+}
+

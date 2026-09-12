@@ -803,15 +803,89 @@ private fun FavoriteContactCard(
                         onSelectMode?.invoke()
                     }
                 )
-                "call" -> RivoDropdownMenuItem(
-                    text = "Call",
-                    icon = Icons.Default.Call,
-                    iconTint = Color(0xFF4CAF50),
-                    onClick = {
-                        showMenu = false
-                        onClick()
+                "call" -> {
+                    val showSimButtonsInDialpad = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false) }
+                    val hasTwoSims = remember(settingsVer) {
+                        prefs.getActiveSimCount() >= 2 || run {
+                            val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? TelecomManager
+                            try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                        }
                     }
-                )
+                    if (hasTwoSims && showSimButtonsInDialpad && !phoneNumber.isNullOrEmpty()) {
+                        val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+                        val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+                        val tm = remember(context) { context.getSystemService(android.content.Context.TELECOM_SERVICE) as? TelecomManager }
+                        val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+                        val account1 = accounts.getOrNull(0)
+                        val account2 = accounts.getOrNull(1)
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                onClick = {
+                                    showMenu = false
+                                    makeCall(context, phoneNumber, account1)
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = sim1Color,
+                                contentColor = Color.White
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    SimCardIconWithNumber(
+                                        simSlotNumber = "1",
+                                        tint = Color.White,
+                                        isLarge = false
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("SIM 1", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            Surface(
+                                onClick = {
+                                    showMenu = false
+                                    makeCall(context, phoneNumber, account2)
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = sim2Color,
+                                contentColor = Color.White
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    SimCardIconWithNumber(
+                                        simSlotNumber = "2",
+                                        tint = Color.White,
+                                        isLarge = false
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("SIM 2", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    } else {
+                        RivoDropdownMenuItem(
+                            text = "Call",
+                            icon = Icons.Default.Call,
+                            iconTint = Color(0xFF4CAF50),
+                            onClick = {
+                                showMenu = false
+                                onClick()
+                            }
+                        )
+                    }
+                }
                 "send_sms" -> RivoDropdownMenuItem(
                     text = "Send SMS",
                     icon = Icons.Default.Message,

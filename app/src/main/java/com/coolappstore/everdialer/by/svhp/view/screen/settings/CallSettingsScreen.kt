@@ -99,6 +99,7 @@ private val ColorBlue    = Color(0xFF2196F3)
 private val ColorPink    = Color(0xFFE91E63)
 private val ColorOrange  = Color(0xFFFF9800)
 private val ColorIndigo  = Color(0xFF3F51B5)
+private val ColorRed     = Color(0xFFE53935)
 
 private sealed class DlState {
     object Idle : DlState()
@@ -339,6 +340,9 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
     }
     var showSimColorDialog by remember { mutableStateOf(false) }
+    var missedCallNotification by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_NOTIFICATION, false))
+    }
 
     // ── Volume DND State ──────────────────────────────────────────────
     var volumeDndEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_VOLUME_DND_ENABLED, false)) }
@@ -624,6 +628,29 @@ fun CallSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? =
                                 trailingIcon = Icons.Default.ChevronRight,
                                 modifier = Modifier.settingsSearchHighlight("contacts_to_display", highlightedKey) { highlightedKey = null },
                                 onClick = { showContactsToDisplayDialog = true }
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Missed Call Notification",
+                                supporting = if (missedCallNotification) "Showing missed call notifications through Ever Dialer" else "Missed call notifications disabled in Ever Dialer",
+                                leadingIcon = Icons.AutoMirrored.Filled.CallMissed,
+                                iconContainerColor = ColorRed,
+                                checked = missedCallNotification,
+                                modifier = Modifier.settingsSearchHighlight("missed_call_notification", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = {
+                                    missedCallNotification = it
+                                    prefs.setBoolean(PreferenceManager.KEY_MISSED_CALL_NOTIFICATION, it)
+                                    if (it) {
+                                        com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(context)
+                                    } else {
+                                        (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)?.cancel(
+                                            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.MISSED_CALLS_NOTIF_ID
+                                        )
+                                    }
+                                }
                             )
                         }
                     }

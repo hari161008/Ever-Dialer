@@ -19,7 +19,7 @@ interface IContactsRepository {
         originalContact: Contact? = null
     )
     fun getContactAccounts(contactId: String): List<ContactAccountInfo>
-    fun updateContactNote(contactId: String, note: String?)
+    fun updateContactNote(contactId: String, note: String?, targetRawContactId: Long? = null, updateAllAccounts: Boolean = false)
     fun deleteContact(contactId: String)
     fun deleteRawContact(rawContactId: Long)
     fun deletePhoneNumberFromContact(contactId: String, phoneNumber: String): Boolean

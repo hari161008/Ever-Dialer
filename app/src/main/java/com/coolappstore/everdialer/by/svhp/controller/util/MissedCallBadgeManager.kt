@@ -84,7 +84,10 @@ object MissedCallBadgeManager {
                 nm.createNotificationChannel(channel)
             }
 
-            if (count > 0) {
+            val prefs = PreferenceManager(context)
+            val showNotif = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_NOTIFICATION, false)
+
+            if (showNotif && count > 0) {
                 val openIntent = Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     putExtra("NAV_TO_RECENTS", true)
@@ -106,19 +109,57 @@ object MissedCallBadgeManager {
 
                 val latestInfo = getLatestMissedCallInfo(context)
                 val caller = latestInfo?.first?.ifBlank { "Unknown" } ?: "Unknown"
+                val number = latestInfo?.second ?: ""
                 val title = if (count == 1) "Missed call from $caller" else "$count Missed Calls"
-                val contentText = if (count == 1) "Tap to view call history" else "Latest missed call from $caller"
+                val contentText = if (count == 1) {
+                    if (caller != number && number.isNotBlank()) number else "Tap to view call history"
+                } else {
+                    "Latest missed call from $caller"
+                }
 
                 val builder = NotificationCompat.Builder(context, CHANNEL_MISSED_CALLS_ID)
                     .setSmallIcon(android.R.drawable.stat_notify_missed_call)
                     .setContentTitle(title)
                     .setContentText(contentText)
-                    .setNumber(count) // Tells launcher to display badge number on home screen app icon
+                    .setNumber(count)
                     .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
                     .setAutoCancel(true)
                     .setContentIntent(openPendingIntent)
                     .setDeleteIntent(dismissPendingIntent)
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+
+                if (number.isNotBlank()) {
+                    val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
+                        setClass(context, MainActivity::class.java)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val callPendingIntent = PendingIntent.getActivity(
+                        context,
+                        9903,
+                        callIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        android.R.drawable.stat_notify_missed_call,
+                        "Call back",
+                        callPendingIntent
+                    )
+
+                    val msgIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    val msgPendingIntent = PendingIntent.getActivity(
+                        context,
+                        9904,
+                        msgIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        android.R.drawable.sym_action_chat,
+                        "Message",
+                        msgPendingIntent
+                    )
+                }
 
                 val notification = builder.build()
 
@@ -130,15 +171,11 @@ object MissedCallBadgeManager {
                     setMessageCountMethod.invoke(extraNotification, count)
                 } catch (_: Throwable) {}
 
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                    nm.notify(MISSED_CALLS_NOTIF_ID, notification)
-                }
-                applyOemBadges(context, count)
+                nm.notify(MISSED_CALLS_NOTIF_ID, notification)
             } else {
                 nm.cancel(MISSED_CALLS_NOTIF_ID)
-                applyOemBadges(context, 0)
             }
+            applyOemBadges(context, count)
         } catch (_: Throwable) {}
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.ClickableText
@@ -166,6 +168,24 @@ fun ContactDetailsScreen(
     var showShortcutActionPicker by remember { mutableStateOf(false) }
     var pendingShortcutNumber by remember { mutableStateOf<String?>(null) }
     var showDescriptionEditor by remember { mutableStateOf(false) }
+    var editingTargetAccount by remember { mutableStateOf<ContactAccountInfo?>(null) }
+    var editingInitialDescription by remember { mutableStateOf("") }
+    var contactAccounts by remember { mutableStateOf<List<ContactAccountInfo>>(emptyList()) }
+    var accountsRefreshTrigger by remember { mutableStateOf(0) }
+    var selectedVisibilityAccount by remember { mutableStateOf<ContactAccountInfo?>(null) }
+    var showVisibilityDialog by remember { mutableStateOf(false) }
+    var showDescriptionOverflowMenu by remember { mutableStateOf(false) }
+
+    LaunchedEffect(contact?.id, accountsRefreshTrigger) {
+        val cid = contact?.id
+        if (cid != null && cid != "0" && cid != "null") {
+            contactAccounts = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                contactsViewModel.getContactAccounts(cid)
+            }
+        } else {
+            contactAccounts = emptyList()
+        }
+    }
     var showNoteEditor by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -195,9 +215,22 @@ fun ContactDetailsScreen(
     val hideDuplicateNumbers = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, false)
     }
-    val contactPhoneNumbers = remember(contact, hideDuplicateNumbers) {
+    val contactSimKey = contact?.id ?: phoneNumber ?: displayPhone
+    val contactSimChoice = remember(settingsVer, contactSimKey) { prefs.getContactSimChoice(contactSimKey) }
+    // Contact Info → "Choose Default Number" — per-contact override of which saved number the
+    // header call button dials directly, for contacts saved with 2+ numbers (skips the number
+    // picker once set). Same keying as contactSimKey, so it travels with the same contact.
+    val contactDefaultNumber = remember(settingsVer, contactSimKey) { prefs.getContactDefaultNumber(contactSimKey) }
+        .takeIf { number -> contact != null && number != null && contact.phoneNumbers.contains(number) }
+
+    val contactPhoneNumbers = remember(contact, hideDuplicateNumbers, contactDefaultNumber) {
         val raw = contact?.phoneNumbers?.filter { it.isNotBlank() } ?: emptyList()
-        if (hideDuplicateNumbers) deduplicatePhoneNumbers(raw) else raw
+        val list = if (hideDuplicateNumbers) deduplicatePhoneNumbers(raw) else raw
+        if (contactDefaultNumber != null && contactDefaultNumber in list) {
+            listOf(contactDefaultNumber) + (list - contactDefaultNumber)
+        } else {
+            list
+        }
     }
 
     // All this contact's saved numbers, so the Social card can offer a choice when there's more
@@ -251,17 +284,6 @@ fun ContactDetailsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Contact Info → "Choose Sim" — per-contact override of which SIM is used to call this
-    // contact. Keyed by the saved contact's id, or the raw number for an unsaved/unknown one, so
-    // both kinds of contacts remember their own choice independently. Defaults to "According to
-    // settings" (falls back to the app-wide default SIM setting).
-    val contactSimKey = contact?.id ?: phoneNumber ?: displayPhone
-    val contactSimChoice = remember(settingsVer, contactSimKey) { prefs.getContactSimChoice(contactSimKey) }
-    // Contact Info → "Choose Default Number" — per-contact override of which saved number the
-    // header call button dials directly, for contacts saved with 2+ numbers (skips the number
-    // picker once set). Same keying as contactSimKey, so it travels with the same contact.
-    val contactDefaultNumber = remember(settingsVer, contactSimKey) { prefs.getContactDefaultNumber(contactSimKey) }
-        .takeIf { number -> contact != null && number != null && contact.phoneNumbers.contains(number) }
     var selectedNumberForMenu by remember { mutableStateOf<String?>(null) }
 
     // Contact Info → "Ringtone" — per-contact custom ringtone, read straight from Contacts
@@ -505,17 +527,122 @@ fun ContactDetailsScreen(
     if (showDescriptionEditor && contact != null) {
         DescriptionEditorDialog(
             contactName = displayName,
-            initialDescription = contact.note ?: "",
-            onSave = { newNote ->
+            initialDescription = editingInitialDescription,
+            accounts = contactAccounts,
+            initialSelectedAccount = editingTargetAccount,
+            onSave = { newNote, targetAccount, updateAll ->
                 showDescriptionEditor = false
-                contactsViewModel.updateContactNote(contact.id, newNote.ifBlank { null })
+                contactsViewModel.updateContactNote(
+                    contactId = contact.id,
+                    note = newNote.ifBlank { null },
+                    targetRawContactId = targetAccount?.rawContactId,
+                    updateAllAccounts = updateAll
+                )
+                accountsRefreshTrigger++
             },
-            onDelete = {
+            onDelete = { targetAccount, updateAll ->
                 showDescriptionEditor = false
-                contactsViewModel.updateContactNote(contact.id, null)
+                contactsViewModel.updateContactNote(
+                    contactId = contact.id,
+                    note = null,
+                    targetRawContactId = targetAccount?.rawContactId,
+                    updateAllAccounts = updateAll
+                )
+                accountsRefreshTrigger++
             },
             onDismiss = { showDescriptionEditor = false }
         )
+    }
+    if (showVisibilityDialog) {
+        Dialog(onDismissRequest = { showVisibilityDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        "Visibility",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
+
+                    if (contactAccounts.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedVisibilityAccount = null
+                                    showVisibilityDialog = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "All locations (${contactAccounts.size})",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Show across all accounts by default (Recommended)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (selectedVisibilityAccount == null) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    contactAccounts.forEach { acc ->
+                        val isSelected = selectedVisibilityAccount?.rawContactId == acc.rawContactId
+                        val icon: androidx.compose.ui.graphics.vector.ImageVector = when {
+                            acc.isSim -> Icons.Default.SimCard
+                            acc.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
+                            acc.accountType != null -> Icons.Default.Sync
+                            else -> Icons.Default.PhoneAndroid
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedVisibilityAccount = acc
+                                    showVisibilityDialog = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(acc.displayName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                if (!acc.accountName.isNullOrBlank()) {
+                                    Text(
+                                        acc.accountName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
     }
     if (showNoteEditor) {
         NoteEditorDialog(contactName = displayName, phoneNumber = displayPhone, onDismiss = { showNoteEditor = false })
@@ -1165,63 +1292,275 @@ fun ContactDetailsScreen(
 
                 // Description section (synced with Microsoft Exchange / Gmail contact notes via ContactsContract)
                 item {
-                    val currentDescription = contact?.note ?: ""
-                    var isDescriptionExpanded by remember(currentDescription) { mutableStateOf(false) }
-                    var hasDescriptionMoreThan5Lines by remember(currentDescription) {
-                        mutableStateOf(currentDescription.lines().size > 5)
+                    val accountsForDescription = remember(contactAccounts, selectedVisibilityAccount) {
+                        if (selectedVisibilityAccount != null) {
+                            contactAccounts.filter { it.rawContactId == selectedVisibilityAccount?.rawContactId }
+                        } else {
+                            contactAccounts
+                        }
                     }
 
-                    RivoExpressiveCard(title = "Description", icon = Icons.Default.Description) {
-                        if (currentDescription.isNotBlank()) {
-                            // Inline preview with selectable text and clickable links
-                            val annotated = buildClickableAnnotatedString(currentDescription)
-                            SelectionContainer {
-                                Text(
-                                    text = annotated,
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
-                                    overflow = TextOverflow.Ellipsis,
-                                    onTextLayout = { textLayoutResult ->
-                                        if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
-                                            hasDescriptionMoreThan5Lines = true
-                                        }
-                                    }
-                                )
-                            }
-                            if (hasDescriptionMoreThan5Lines) {
-                                TextButton(
-                                    onClick = { isDescriptionExpanded = !isDescriptionExpanded },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        if (isDescriptionExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isDescriptionExpanded) "Show less" else "Show more")
+                    data class UniqueDescItem(
+                        val text: String,
+                        val accounts: List<ContactAccountInfo>,
+                        val primaryAccount: ContactAccountInfo
+                    )
+
+                    val uniqueDescriptions = remember(accountsForDescription, contact?.note) {
+                        val list = mutableListOf<UniqueDescItem>()
+                        for (acc in accountsForDescription) {
+                            val desc = acc.description?.trim()
+                            if (!desc.isNullOrBlank()) {
+                                val existingIndex = list.indexOfFirst { it.text == desc }
+                                if (existingIndex >= 0) {
+                                    val existing = list[existingIndex]
+                                    list[existingIndex] = existing.copy(accounts = existing.accounts + acc)
+                                } else {
+                                    list.add(UniqueDescItem(text = desc, accounts = listOf(acc), primaryAccount = acc))
                                 }
                             }
-                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        }
+                        if (list.isEmpty() && selectedVisibilityAccount == null && !contact?.note.isNullOrBlank()) {
+                            val fallbackAcc = contactAccounts.firstOrNull() ?: ContactAccountInfo(
+                                rawContactId = 0L,
+                                accountType = null,
+                                accountName = null,
+                                displayName = "Device Storage",
+                                isReadOnly = false,
+                                isSim = false
+                            )
+                            list.add(UniqueDescItem(text = contact.note!!.trim(), accounts = listOf(fallbackAcc), primaryAccount = fallbackAcc))
+                        }
+                        list
+                    }
+
+                    RivoExpressiveCard(
+                        title = "Description",
+                        icon = Icons.Default.Description,
+                        trailingContent = {
+                            if (contact != null) {
+                                Box {
+                                    IconButton(
+                                        onClick = { showDescriptionOverflowMenu = true },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MoreVert,
+                                            contentDescription = "Description options",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showDescriptionOverflowMenu,
+                                        onDismissRequest = { showDescriptionOverflowMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Visibility") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Visibility,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showDescriptionOverflowMenu = false
+                                                showVisibilityDialog = true
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        if (selectedVisibilityAccount != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "Visibility: ${selectedVisibilityAccount!!.displayName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { selectedVisibilityAccount = null },
+                                    modifier = Modifier.size(18.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Clear visibility filter",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
                         }
 
-                        if (contact != null) {
-                            TextButton(
-                                onClick = { showDescriptionEditor = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(if (currentDescription.isBlank()) Icons.Default.Add else Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (currentDescription.isBlank()) "Add description..." else "Edit description")
+                        if (uniqueDescriptions.isNotEmpty()) {
+                            uniqueDescriptions.forEachIndexed { index, item ->
+                                var isExpanded by remember(item.text) { mutableStateOf(false) }
+                                var hasMoreThan5Lines by remember(item.text) {
+                                    mutableStateOf(item.text.lines().size > 5)
+                                }
+
+                                if (contactAccounts.size > 1 || selectedVisibilityAccount != null) {
+                                    val locationNames = item.accounts.map { it.displayName }.distinct().joinToString(", ")
+                                    val locationIcon: androidx.compose.ui.graphics.vector.ImageVector = when {
+                                        item.accounts.all { it.isSim } -> Icons.Default.SimCard
+                                        item.accounts.all { it.accountType?.contains("google", ignoreCase = true) == true } -> Icons.Default.AccountCircle
+                                        item.accounts.all { it.accountType != null } -> Icons.Default.Sync
+                                        else -> Icons.Default.PhoneAndroid
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(
+                                            locationIcon,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = locationNames,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                val annotated = buildClickableAnnotatedString(item.text)
+                                SelectionContainer {
+                                    Text(
+                                        text = annotated,
+                                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                        maxLines = if (isExpanded) Int.MAX_VALUE else 5,
+                                        overflow = TextOverflow.Ellipsis,
+                                        onTextLayout = { textLayoutResult ->
+                                            if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
+                                                hasMoreThan5Lines = true
+                                            }
+                                        }
+                                    )
+                                }
+
+                                if (hasMoreThan5Lines) {
+                                    TextButton(
+                                        onClick = { isExpanded = !isExpanded },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(if (isExpanded) "Show less" else "Show more")
+                                    }
+                                }
+
+                                if (contact != null) {
+                                    TextButton(
+                                        onClick = {
+                                            editingTargetAccount = if (item.accounts.size == contactAccounts.size) null else item.primaryAccount
+                                            editingInitialDescription = item.text
+                                            showDescriptionEditor = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        val editLabel = if (uniqueDescriptions.size > 1) {
+                                            val names = item.accounts.map { it.displayName }.distinct().joinToString(", ")
+                                            "Edit description ($names)"
+                                        } else {
+                                            "Edit description"
+                                        }
+                                        Text(editLabel)
+                                    }
+                                }
+
+                                if (index < uniqueDescriptions.size - 1) {
+                                    HorizontalDivider(
+                                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+
+                            if (selectedVisibilityAccount == null && contact != null) {
+                                val accountsWithoutDesc = contactAccounts.filter { it.description.isNullOrBlank() && !it.isReadOnly }
+                                if (accountsWithoutDesc.isNotEmpty()) {
+                                    HorizontalDivider(
+                                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            editingTargetAccount = accountsWithoutDesc.firstOrNull()
+                                            editingInitialDescription = ""
+                                            showDescriptionEditor = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Add description for another location...")
+                                    }
+                                }
                             }
                         } else {
-                            Text(
-                                text = "Save contact to sync description with Google & Exchange",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                            )
+                            if (contact != null) {
+                                if (selectedVisibilityAccount != null) {
+                                    Text(
+                                        text = "No description in ${selectedVisibilityAccount!!.displayName}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        editingTargetAccount = selectedVisibilityAccount
+                                        editingInitialDescription = ""
+                                        showDescriptionEditor = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        if (selectedVisibilityAccount != null) "Add description for ${selectedVisibilityAccount!!.displayName}..."
+                                        else "Add description..."
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Save contact to sync description with Google & Exchange",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1610,15 +1949,25 @@ private fun buildClickableAnnotatedString(text: String): AnnotatedString {
 fun DescriptionEditorDialog(
     contactName: String,
     initialDescription: String,
-    onSave: (String) -> Unit,
-    onDelete: () -> Unit,
+    accounts: List<ContactAccountInfo> = emptyList(),
+    initialSelectedAccount: ContactAccountInfo? = null,
+    onSave: (note: String, targetAccount: ContactAccountInfo?, updateAll: Boolean) -> Unit,
+    onDelete: (targetAccount: ContactAccountInfo?, updateAll: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var text by remember { mutableStateOf(initialDescription) }
+    val writableAccounts = remember(accounts) { accounts.filter { !it.isReadOnly } }
+    var updateAllLinkedAccounts by remember(initialSelectedAccount) {
+        mutableStateOf(initialSelectedAccount == null)
+    }
+    var selectedTarget by remember(initialSelectedAccount) {
+        mutableStateOf(initialSelectedAccount)
+    }
+    var showAccountPickerDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = {
-            onSave(text.trim())
+            onSave(text.trim(), selectedTarget, updateAllLinkedAccounts)
         },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -1650,7 +1999,7 @@ fun DescriptionEditorDialog(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (initialDescription.isNotBlank()) {
-                            IconButton(onClick = onDelete) {
+                            IconButton(onClick = { onDelete(selectedTarget, updateAllLinkedAccounts) }) {
                                 Icon(
                                     Icons.Default.Delete,
                                     contentDescription = "Delete Description",
@@ -1660,11 +2009,75 @@ fun DescriptionEditorDialog(
                             Spacer(Modifier.width(4.dp))
                         }
                         Button(
-                            onClick = { onSave(text.trim()) },
+                            onClick = { onSave(text.trim(), selectedTarget, updateAllLinkedAccounts) },
                             shape = RoundedCornerShape(12.dp)
                         ) { Text("Save") }
                     }
                 }
+
+                if (writableAccounts.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    val (storageTitle, storageSubtitle, storageIcon) = remember(
+                        writableAccounts,
+                        selectedTarget,
+                        updateAllLinkedAccounts
+                    ) {
+                        val locationNames = writableAccounts.map { it.displayName }.distinct()
+                        val allLocationsText = if (locationNames.isNotEmpty()) locationNames.joinToString(", ") else "Device Storage"
+                        if (updateAllLinkedAccounts || selectedTarget == null) {
+                            Triple("Edit Location", "Present in: $allLocationsText", Icons.Default.Storage)
+                        } else {
+                            Triple("Edit Location", "Editing only in: ${selectedTarget?.displayName ?: ""}", Icons.Default.Edit)
+                        }
+                    }
+
+                    RivoExpressiveCard {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAccountPickerDialog = true }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    storageIcon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = storageTitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = storageSubtitle,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { showAccountPickerDialog = true },
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text("Change")
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text,
@@ -1676,6 +2089,103 @@ fun DescriptionEditorDialog(
                     shape = RoundedCornerShape(16.dp),
                     minLines = 6
                 )
+            }
+        }
+    }
+
+    if (showAccountPickerDialog) {
+        Dialog(onDismissRequest = { showAccountPickerDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        "Edit location",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
+
+                    if (writableAccounts.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    updateAllLinkedAccounts = true
+                                    selectedTarget = null
+                                    showAccountPickerDialog = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "All locations (${writableAccounts.size})",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Edit across all accounts by default (Recommended)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (updateAllLinkedAccounts && selectedTarget == null) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    writableAccounts.forEach { acc ->
+                        val isSelected = !updateAllLinkedAccounts && selectedTarget?.rawContactId == acc.rawContactId
+                        val icon: androidx.compose.ui.graphics.vector.ImageVector = when {
+                            acc.isSim -> Icons.Default.SimCard
+                            acc.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
+                            acc.accountType != null -> Icons.Default.Sync
+                            else -> Icons.Default.PhoneAndroid
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedTarget = acc
+                                    updateAllLinkedAccounts = false
+                                    showAccountPickerDialog = false
+                                    if (text.isBlank() && !acc.description.isNullOrBlank()) {
+                                        text = acc.description
+                                    }
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(acc.displayName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                if (!acc.accountName.isNullOrBlank()) {
+                                    Text(
+                                        acc.accountName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
             }
         }
     }

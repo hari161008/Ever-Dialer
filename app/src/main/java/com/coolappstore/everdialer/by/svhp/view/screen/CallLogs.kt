@@ -161,7 +161,7 @@ fun CallLogFullScreen(
                         FilterChip(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
-                            label = { Text(filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }) },
+                            label = { Text(filter.displayName) },
                             shape = RoundedCornerShape(50.dp),
                             border = null,
                             colors = FilterChipDefaults.filterChipColors(
@@ -180,10 +180,18 @@ fun CallLogFullScreen(
                     val finalLogs = remember(filteredLogsByContact, selectedFilter) {
                         when (selectedFilter) {
                             CallLogFilter.All -> filteredLogsByContact
+                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number }
+                            CallLogFilter.Favourites -> {
+                                val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
+                                val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
+                                filteredLogsByContact.filter { log ->
+                                    (log.contactId != null && log.contactId in favoriteContactIds) ||
+                                    log.number in favoritePhoneNumbers
+                                }
+                            }
                             CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
                             CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                             CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
-                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number }
                         }
                     }
 

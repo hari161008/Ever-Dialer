@@ -172,7 +172,9 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     mimeType == ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
                         if (data1.isNotBlank()) {
                             val existingNote = contact.note
-                            val updatedNote = if (existingNote.isNullOrBlank()) data1 else "$existingNote\n$data1"
+                            val trimmed = data1.trim()
+                            val parts = existingNote?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+                            val updatedNote = if (parts.contains(trimmed)) existingNote else if (existingNote.isNullOrBlank()) trimmed else "$existingNote\n$trimmed"
                             contactsMap[id] = contact.copy(note = updatedNote)
                         }
                     }
@@ -321,7 +323,9 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
                         if (data1.isNotBlank()) {
                             val existingNote = currentContact.note
-                            val updatedNote = if (existingNote.isNullOrBlank()) data1 else "$existingNote\n$data1"
+                            val trimmed = data1.trim()
+                            val parts = existingNote?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+                            val updatedNote = if (parts.contains(trimmed)) existingNote else if (existingNote.isNullOrBlank()) trimmed else "$existingNote\n$trimmed"
                             currentContact.copy(note = updatedNote)
                         } else currentContact
                     }
@@ -512,6 +516,57 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
     override fun getContactAccounts(contactId: String): List<ContactAccountInfo> {
         val rawRecords = getRawContactsForContact(contactId)
+        val notesByRawContactId = mutableMapOf<Long, String>()
+        try {
+            contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(ContactsContract.Data.RAW_CONTACT_ID, ContactsContract.CommonDataKinds.Note.NOTE),
+                "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                arrayOf(contactId, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
+                null
+            )?.use { cursor ->
+                val rawIdIdx = cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID)
+                val noteIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
+                while (cursor.moveToNext()) {
+                    val rawId = if (rawIdIdx >= 0) cursor.getLong(rawIdIdx) else continue
+                    val note = if (noteIdx >= 0) cursor.getString(noteIdx) else null
+                    if (!note.isNullOrBlank()) {
+                        notesByRawContactId[rawId] = note.trim()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error fetching notes for contact $contactId", e)
+        }
+
+        if (notesByRawContactId.isEmpty() && rawRecords.isNotEmpty()) {
+            try {
+                val rawIds = rawRecords.map { it.id.toString() }
+                val placeholders = rawIds.joinToString(",") { "?" }
+                val selection = "${ContactsContract.Data.RAW_CONTACT_ID} IN ($placeholders) AND ${ContactsContract.Data.MIMETYPE} = ?"
+                val selectionArgs = (rawIds + ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE).toTypedArray()
+                contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data.RAW_CONTACT_ID, ContactsContract.CommonDataKinds.Note.NOTE),
+                    selection,
+                    selectionArgs,
+                    null
+                )?.use { cursor ->
+                    val rawIdIdx = cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID)
+                    val noteIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
+                    while (cursor.moveToNext()) {
+                        val rawId = if (rawIdIdx >= 0) cursor.getLong(rawIdIdx) else continue
+                        val note = if (noteIdx >= 0) cursor.getString(noteIdx) else null
+                        if (!note.isNullOrBlank()) {
+                            notesByRawContactId[rawId] = note.trim()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ContactsRepo", "Error fallback fetching notes for rawContacts", e)
+            }
+        }
+
         return rawRecords.map { record ->
             val type = record.accountType ?: ""
             val name = record.accountName ?: ""
@@ -523,7 +578,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 displayName = buildAccountDisplayName(type, name),
                 isReadOnly = record.isReadOnly,
                 isSim = simSlot >= 0,
-                simSlotIndex = simSlot
+                simSlotIndex = simSlot,
+                description = notesByRawContactId[record.id]
             )
         }
     }
@@ -1229,13 +1285,28 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         }
     }
 
-    override fun updateContactNote(contactId: String, note: String?) {
+    override fun updateContactNote(
+        contactId: String,
+        note: String?,
+        targetRawContactId: Long?,
+        updateAllAccounts: Boolean
+    ) {
         val ops = ArrayList<ContentProviderOperation>()
         val allRawContacts = getRawContactsForContact(contactId)
         val writableRawContacts = allRawContacts.filter { !it.isReadOnly }
-        val targetRawContactId = writableRawContacts.firstOrNull()?.id ?: return
+        if (writableRawContacts.isEmpty()) return
 
-        updateNote(ops, targetRawContactId, note)
+        if (updateAllAccounts || targetRawContactId == null) {
+            for (raw in writableRawContacts) {
+                updateNote(ops, raw.id, note)
+            }
+        } else {
+            val target = writableRawContacts.firstOrNull { it.id == targetRawContactId }
+                ?: writableRawContacts.firstOrNull()
+            if (target != null) {
+                updateNote(ops, target.id, note)
+            }
+        }
 
         try {
             if (ops.isNotEmpty()) {

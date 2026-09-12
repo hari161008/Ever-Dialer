@@ -548,7 +548,9 @@ fun CallLogFullContent(
 
     if (isGranted) {
         val viewModel: CallLogViewModel = koinActivityViewModel()
+        val contactsViewModel: com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel = koinActivityViewModel()
         val logs by viewModel.allCallLogs.collectAsState()
+        val contacts by contactsViewModel.allContacts.collectAsState()
         val selectedFilter by viewModel.selectedFilter.collectAsState()
         val context = LocalContext.current
         val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
@@ -567,14 +569,22 @@ fun CallLogFullContent(
             if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
         }
 
-        val filteredLogs = remember(logs, selectedFilter, hiddenIds) {
+        val filteredLogs = remember(logs, selectedFilter, hiddenIds, contacts) {
             val base = if (hiddenIds.isEmpty()) logs else logs.filter { it.contactId == null || it.contactId !in hiddenIds }
             when (selectedFilter) {
                 CallLogFilter.All -> base
+                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number }
+                CallLogFilter.Favourites -> {
+                    val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
+                    val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
+                    base.filter { log ->
+                        (log.contactId != null && log.contactId in favoriteContactIds) ||
+                        log.number in favoritePhoneNumbers
+                    }
+                }
                 CallLogFilter.Missed -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
                 CallLogFilter.Incoming -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                 CallLogFilter.Outgoing -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
-                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number }
             }
         }
         val totalCallsMap = remember(logs) {
@@ -830,7 +840,7 @@ fun CallLogFullContent(
                                 },
                                 label = {
                                     Text(
-                                        filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                                        filter.displayName,
                                         color = labelColor
                                     )
                                 },
@@ -963,7 +973,7 @@ fun CallLogFullContent(
                                             },
                                             label = {
                                                 Text(
-                                                    filter.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                                                    filter.displayName,
                                                     color = labelColor
                                                 )
                                             },

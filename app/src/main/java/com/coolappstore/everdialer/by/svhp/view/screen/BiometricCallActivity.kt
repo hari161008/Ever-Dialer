@@ -54,15 +54,7 @@ class BiometricCallActivity : FragmentActivity() {
         if (!prefs.shouldGateCallWithBiometric(callPhoneNumber) || biometricType.isEmpty()) {
             // Lock scope excludes this number — perform action directly
             when (action) {
-                "ANSWER" -> {
-                    CallService.answerCall()
-                    if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
-                        startActivity(Intent(this, CallActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                            putExtra("ANSWERED_FROM_NOTIFICATION", true)
-                        })
-                    }
-                }
+                "ANSWER" -> CallService.answerCall()
                 "DECLINE" -> CallService.declineCall()
             }
             finish()
@@ -79,15 +71,7 @@ class BiometricCallActivity : FragmentActivity() {
                     expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
                     onSuccess = {
                         when (action) {
-                            "ANSWER" -> {
-                                CallService.answerCall()
-                                if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
-                                    startActivity(Intent(activity, CallActivity::class.java).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                                        putExtra("ANSWERED_FROM_NOTIFICATION", true)
-                                    })
-                                }
-                            }
+                            "ANSWER" -> CallService.answerCall()
                             "DECLINE" -> CallService.declineCall()
                         }
                         finish()

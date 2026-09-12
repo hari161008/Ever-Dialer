@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
+import com.coolappstore.everdialer.by.svhp.controller.util.formatDuration
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import org.koin.compose.koinInject
 
@@ -39,6 +40,7 @@ fun CallLogTile(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    val showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
     val nameNonContactsAsUnknown = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true) }
     val displayTitle = displayNameOverride ?: (
         if (!log.name.isNullOrEmpty()) {
@@ -100,7 +102,9 @@ fun CallLogTile(
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = formatDate(log.date, use24HourTime), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val dateStr = formatDate(log.date, use24HourTime)
+                val durationStr = if (showTalkTime && !isMissed) " • ${formatDuration(log.duration)}" else ""
+                Text(text = "$dateStr$durationStr", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         trailingContent = {

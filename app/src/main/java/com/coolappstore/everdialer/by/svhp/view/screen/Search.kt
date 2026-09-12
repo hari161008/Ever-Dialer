@@ -232,7 +232,8 @@ fun ContactSearchContent(
 
         val fc = if (!filterState.contacts) emptyList()
         else contactIndex.filter { entry ->
-            entry.nameLower.contains(qLower) || entry.numbersNormalized.any { it.contains(qDigits) }
+            com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.contact.name, q) ||
+                    entry.numbersNormalized.any { it.contains(qDigits) }
         }.map { it.contact }
 
         // Numbers that show up in the call log but aren't saved as a contact — i.e. what
@@ -250,14 +251,14 @@ fun ContactSearchContent(
                 }
             seen.values.filter { entry ->
                 entry.number.replace(" ", "").contains(qDigits) ||
-                        (entry.isCallerIdName && (entry.name?.contains(q, ignoreCase = true) == true))
+                        (entry.isCallerIdName && entry.name != null && com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.name, q))
             }
         }
 
         // Notes attached to a contact/number (from the call screen or contact info screen).
         val cnr = if (!filterState.contactNotes) emptyList()
         else allNotes.filter { note ->
-            note.contactName.contains(q, ignoreCase = true) ||
+            com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(note.contactName, q) ||
                     note.phoneNumber.contains(q.filter { c -> c.isDigit() || c == '+' }.ifEmpty { q }, ignoreCase = true) ||
                     matchesNoteQuery(note.content, q)
         }
@@ -271,13 +272,16 @@ fun ContactSearchContent(
         // the same recording doesn't show up twice under two different headings.
         val rr = if (!filterState.recordings) emptyList()
         else recordings.filter { rec ->
+            val cName = rec.contactName
             rec !in rnr &&
-                    ((rec.contactName?.contains(q, ignoreCase = true) == true) ||
+                    ((cName != null && com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(cName, q)) ||
                             rec.phoneNumber.replace(" ", "").contains(qDigits))
         }
 
-        val sr = globalSettings.filter { entry ->
-            entry.titleLower.contains(qLower) || entry.subtitleLower.contains(qLower)
+        val sr = if (!filterState.settings) emptyList()
+        else globalSettings.filter { entry ->
+            com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.title, q) ||
+                    com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.subtitle, q)
         }
 
         SearchResults(fc, ncr, cnr, rnr, rr, sr)

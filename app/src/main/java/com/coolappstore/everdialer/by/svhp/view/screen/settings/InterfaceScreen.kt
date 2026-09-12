@@ -156,6 +156,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var autoDeleteUnknownValue   by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1).toString()) }
     var autoDeleteUnknownUnit    by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_UNIT, "days") ?: "days") }
     var callTimeFormat24h   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false)) }
+    var showTalkTimeInCallLogs by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false)) }
     var customPrimaryColor  by remember { mutableStateOf(prefs.getInt("custom_primary_color", Color(0xFF6750A4).toArgb())) }
     var showIncomingCallUI  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_INCOMING_CALL_UI, true)) }
     var showCallerUI        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALLER_UI, true)) }
@@ -2042,6 +2043,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         callTimeFormat24h = it
                                         prefs.setBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Talk time in call logs",
+                                    supporting = if (showTalkTimeInCallLogs) "Showing call duration for answered calls below the time" else "Call duration hidden in call logs",
+                                    leadingIcon = Icons.Outlined.Timer,
+                                    iconContainerColor = ColorGreen,
+                                    checked = showTalkTimeInCallLogs,
+                                    modifier = Modifier.settingsSearchHighlight("talk_time_in_call_logs", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        showTalkTimeInCallLogs = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, it)
                                     }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),

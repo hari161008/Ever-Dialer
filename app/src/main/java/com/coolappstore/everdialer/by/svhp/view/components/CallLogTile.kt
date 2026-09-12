@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -45,10 +47,13 @@ import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.controller.util.formatCallLogDate
+import com.coolappstore.everdialer.by.svhp.controller.util.formatDuration
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import org.koin.compose.koinInject
 
 /**
@@ -172,6 +177,7 @@ fun CallLogTile(
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    val showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
     val groupCallsByLatest = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false) }
     val showTotalCallsMade = remember(settingsVer) {
         groupCallsByLatest || prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
@@ -261,14 +267,24 @@ fun CallLogTile(
             trailingText = formatTimeOnly(log.date, use24HourTime),
             trailingTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
             trailingSubText = if (groupCallsByLatest) {
-                formatCallLogDate(log.date)
+                val dateText = formatCallLogDate(log.date)
+                if (showTalkTime && !isMissed) {
+                    val durationText = formatDuration(log.duration)
+                    "$dateText • $durationText"
+                } else {
+                    dateText
+                }
             } else {
-                if (isMissed && log.duration > 0) "${log.duration}s" else null
+                if (isMissed) {
+                    if (log.duration > 0) "${log.duration}s" else null
+                } else if (showTalkTime) {
+                    formatDuration(log.duration)
+                } else null
             },
             trailingSubTextColor = if (groupCallsByLatest) {
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             } else {
-                if (isMissed) MaterialTheme.colorScheme.error else null
+                if (isMissed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             },
             trailingIcon = when (log.type) {
                 CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
@@ -332,12 +348,86 @@ fun CallLogTile(
                             onSelectMode?.invoke(log)
                         }
                     )
-                    "call_back" -> RivoDropdownMenuItem(
-                        text     = "Call back",
-                        icon     = Icons.Default.Call,
-                        iconTint = Color(0xFF4CAF50),
-                        onClick  = { showMenu = false; onButtonClick(log) }
-                    )
+                    "call_back" -> {
+                        val showSimButtonsInDialpad = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false) }
+                        val hasTwoSims = remember(settingsVer) {
+                            prefs.getActiveSimCount() >= 2 || run {
+                                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                                try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                            }
+                        }
+                        if (hasTwoSims && showSimButtonsInDialpad) {
+                            val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+                            val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+                            val tm = remember(context) { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+                            val accounts: List<PhoneAccountHandle> = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+                            val account1 = accounts.getOrNull(0)
+                            val account2 = accounts.getOrNull(1)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    onClick = {
+                                        showMenu = false
+                                        makeCall(context, log.number, account1)
+                                    },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = sim1Color,
+                                    contentColor = Color.White
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        SimCardIconWithNumber(
+                                            simSlotNumber = "1",
+                                            tint = Color.White,
+                                            isLarge = false
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("SIM 1", fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                                Surface(
+                                    onClick = {
+                                        showMenu = false
+                                        makeCall(context, log.number, account2)
+                                    },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = sim2Color,
+                                    contentColor = Color.White
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        SimCardIconWithNumber(
+                                            simSlotNumber = "2",
+                                            tint = Color.White,
+                                            isLarge = false
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("SIM 2", fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        } else {
+                            RivoDropdownMenuItem(
+                                text     = "Call back",
+                                icon     = Icons.Default.Call,
+                                iconTint = Color(0xFF4CAF50),
+                                onClick  = { showMenu = false; onButtonClick(log) }
+                            )
+                        }
+                    }
                     "call_chat_via" -> {
                         if (hasAnySocialApp) {
                             RivoDropdownMenuItem(

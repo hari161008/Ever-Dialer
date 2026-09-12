@@ -101,6 +101,9 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var showOngoingCallUIWhenAnswered by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true))
     }
+    var showOngoingCallUIOnLockscreenWhenAnswered by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true))
+    }
 
     var hangupWidth by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_HANGUP_WIDTH, 0.5f).coerceIn(0.1f, 1.0f)) }
 
@@ -214,9 +217,26 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 leadingIcon = Icons.Outlined.Call,
                                 iconContainerColor = Color(0xFF2196F3),
                                 checked = showOngoingCallUIWhenAnswered,
+                                modifier = Modifier.settingsSearchHighlight("show_ongoing_call_ui_when_answered", highlightedKey) { highlightedKey = null },
                                 onCheckedChange = {
                                     showOngoingCallUIWhenAnswered = it
                                     prefs.setBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, it)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Show ongoing call UI screen in lockscreen when the call is answered",
+                                supporting = "Display the full screen in-call screen on lock screen after answering",
+                                leadingIcon = Icons.Outlined.Lock,
+                                iconContainerColor = Color(0xFF3F51B5),
+                                checked = showOngoingCallUIOnLockscreenWhenAnswered,
+                                modifier = Modifier.settingsSearchHighlight("show_ongoing_call_ui_on_lockscreen_when_answered", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = {
+                                    showOngoingCallUIOnLockscreenWhenAnswered = it
+                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, it)
                                 }
                             )
                         }

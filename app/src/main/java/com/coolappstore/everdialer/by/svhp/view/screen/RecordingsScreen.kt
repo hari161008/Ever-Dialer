@@ -190,6 +190,7 @@ fun RecordingsScreen(
             else -> {
                 AnimatedContent(
                     targetState = selectedRecording,
+                    modifier = Modifier.fillMaxSize(),
                     transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
                     label = "RecordingsTabContent"
                 ) { recording ->
@@ -204,7 +205,8 @@ fun RecordingsScreen(
                                     highlightQuery = ""
                                 }
                             },
-                            highlightQuery = highlightQuery
+                            highlightQuery = highlightQuery,
+                            modifier = Modifier.fillMaxSize()
                         )
                     } else {
                         HomeScreen(

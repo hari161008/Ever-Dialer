@@ -992,7 +992,8 @@ fun DialPadContent(
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             searchResults.forEach { contact ->
-                                val contactNum = contact.phoneNumbers.firstOrNull()
+                                val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                                val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
                                 SingleTile(
                                     title    = contact.name,
                                     subtitle = contactNum,
@@ -1307,7 +1308,8 @@ fun DialPadContent(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         searchResults.forEach { contact ->
-                            val contactNum = contact.phoneNumbers.firstOrNull()
+                            val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                            val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
                             SingleTile(
                                 title    = contact.name,
                                 subtitle = contactNum,

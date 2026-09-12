@@ -432,8 +432,10 @@ class MainActivity : FragmentActivity() {
 
                 // ── Ongoing Call Banner + Main nav host ───────────────────
                 val callSession by CallService.currentCallSession.collectAsState()
-                val isCallActive = callSession != null
-                val hasOngoingCall = callSession != null && callSession?.state != android.telecom.Call.STATE_RINGING
+                val isCallActive = callSession != null &&
+                    callSession?.state != android.telecom.Call.STATE_SELECT_PHONE_ACCOUNT &&
+                    callSession?.state != android.telecom.Call.STATE_DISCONNECTED
+                val hasOngoingCall = isCallActive && callSession?.state != android.telecom.Call.STATE_RINGING
 
                 // ── Donate Popup Dialog (shows on update or 4th launch; if in call, waits until call ends) ──
                 if (showDonateDialog && !isCallActive && !showWelcomeDialog && !showTelegramDialog && !showFullScreenIntentDialog) {

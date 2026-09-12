@@ -44,8 +44,9 @@ data class SearchFilterState(
     val recordings: Boolean = true,
     val contactNotes: Boolean = true,
     val recordingNotes: Boolean = true,
+    val settings: Boolean = true,
 ) {
-    val isDefault: Boolean get() = contacts && nonContacts && recordings && contactNotes && recordingNotes
+    val isDefault: Boolean get() = contacts && nonContacts && recordings && contactNotes && recordingNotes && settings
 }
 
 fun PreferenceManager.getSearchFilterState(): SearchFilterState = SearchFilterState(
@@ -54,6 +55,7 @@ fun PreferenceManager.getSearchFilterState(): SearchFilterState = SearchFilterSt
     recordings = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_RECORDINGS, true),
     contactNotes = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_CONTACT_NOTES, true),
     recordingNotes = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_RECORDING_NOTES, true),
+    settings = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_SETTINGS, true),
 )
 
 /**
@@ -135,6 +137,11 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
                 label = "Recording notes",
                 checked = state.recordingNotes,
                 onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_RECORDING_NOTES, it) }
+            )
+            SearchFilterCheckRow(
+                label = "Settings",
+                checked = state.settings,
+                onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_SETTINGS, it) }
             )
         }
     }

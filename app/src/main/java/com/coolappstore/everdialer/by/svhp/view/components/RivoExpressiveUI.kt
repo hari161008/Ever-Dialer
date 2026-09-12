@@ -283,6 +283,7 @@ fun RivoExpressiveCard(
     icon: ImageVector? = null,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(28.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    trailingContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -295,10 +296,10 @@ fun RivoExpressiveCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (title != null || icon != null) {
+            if (title != null || icon != null || trailingContent != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
                     if (icon != null) {
                         Icon(
@@ -315,6 +316,10 @@ fun RivoExpressiveCard(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                    if (trailingContent != null) {
+                        Spacer(Modifier.weight(1f))
+                        trailingContent()
                     }
                 }
             }

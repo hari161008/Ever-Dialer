@@ -95,5 +95,6 @@ data class ContactAccountInfo(
     val displayName: String,
     val isReadOnly: Boolean,
     val isSim: Boolean,
-    val simSlotIndex: Int = -1
+    val simSlotIndex: Int = -1,
+    val description: String? = null
 )

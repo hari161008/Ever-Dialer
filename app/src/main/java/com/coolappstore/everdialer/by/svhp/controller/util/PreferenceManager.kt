@@ -372,6 +372,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS = "show_fullscreen_call_ui_on_any_apps"
         const val KEY_INCOMING_SHOW_MUTE_BUTTON             = "incoming_show_mute_button"
         const val KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED    = "show_ongoing_call_ui_when_answered"
+        const val KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED = "show_ongoing_call_ui_on_lockscreen_when_answered"
         const val KEY_SILENCE_UNKNOWN       = "silence_unknown_callers"
         const val KEY_PROXIMITY_BG          = "proximity_sensor_bg"
         /** When enabled, screen-off during calls requires BOTH the proximity sensor reading
@@ -419,6 +420,8 @@ class PreferenceManager(context: Context) {
         const val KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED_AT = "auto_delete_unknown_calls_enabled_at"
         // Call Time Format in call logs — false = 12-hour (default), true = 24-hour
         const val KEY_CALL_TIME_FORMAT_24H  = "call_time_format_24h"
+        // Talk Time in call logs — false = off (default), true = on
+        const val KEY_SHOW_TALK_TIME_IN_CALL_LOGS = "show_talk_time_in_call_logs"
         // Whether the ongoing-call screen smoothly slides away when a call ends. Default true;
         // when false, the call screen should close immediately instead.
         const val KEY_HANGUP_ANIMATION      = "hangup_animation"
@@ -550,6 +553,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SEARCH_FILTER_RECORDINGS      = "search_filter_recordings"
         const val KEY_SEARCH_FILTER_CONTACT_NOTES   = "search_filter_contact_notes"
         const val KEY_SEARCH_FILTER_RECORDING_NOTES = "search_filter_recording_notes"
+        const val KEY_SEARCH_FILTER_SETTINGS        = "search_filter_settings"
 
         const val KEY_APP_OPEN_COUNT                = "app_open_count"
         const val KEY_LAST_APP_VERSION              = "last_app_version"
@@ -639,6 +643,9 @@ class PreferenceManager(context: Context) {
 
         // Favorites display mode (grid vs list)
         const val KEY_FAVORITES_IN_LIST            = "favorites_in_list"
+
+        // Missed Call Notification — false = off (default), true = on
+        const val KEY_MISSED_CALL_NOTIFICATION      = "missed_call_notification"
 
         // Missed Call Popup (display over other apps)
         const val KEY_MISSED_CALL_POPUP_ENABLED    = "missed_call_popup_enabled"

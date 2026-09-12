@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.controller
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,8 @@ import android.os.PowerManager
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -69,6 +72,7 @@ class CallService : InCallService() {
     private val callRingStartTimes = mutableMapOf<Call, Long>()
     private val callAnsweredSet = mutableSetOf<Call>()
     private val handledCallEndedPopups = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Call, Boolean>())
+    private val pendingAccountSelectionCalls = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Call, Boolean>())
 
     private fun recordMissedCallDurationIfNeeded(call: Call) {
         val ringStart = callRingStartTimes.remove(call)
@@ -319,6 +323,16 @@ class CallService : InCallService() {
         fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
         fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
 
+        private fun shouldLaunchOngoingCallUi(context: Context): Boolean {
+            val pm = PreferenceManager(context)
+            val showUi = pm.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+            if (!showUi) return false
+            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            val isLocked = km?.isKeyguardLocked == true
+            val showOnLock = pm.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true)
+            return !isLocked || showOnLock
+        }
+
         fun answerCall() {
             val incoming = _incomingCallSession.value?.call
             if (incoming != null) {
@@ -334,8 +348,7 @@ class CallService : InCallService() {
             } catch (_: Exception) {}
             try {
                 instance?.let { s ->
-                    val showUi = PreferenceManager(s).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
-                    if (showUi) {
+                    if (shouldLaunchOngoingCallUi(s)) {
                         s.launchCallActivity(answeredFromNotification = true)
                     }
                 }
@@ -383,8 +396,7 @@ class CallService : InCallService() {
 
             try {
                 service.updateNotification(incoming)
-                val showUi = PreferenceManager(service).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
-                if (showUi) {
+                if (shouldLaunchOngoingCallUi(service)) {
                     service.launchCallActivity(answeredFromNotification = true)
                 }
             } catch (_: Exception) {}
@@ -408,8 +420,7 @@ class CallService : InCallService() {
 
             try {
                 service.updateNotification(incoming)
-                val showUi = PreferenceManager(service).getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
-                if (showUi) {
+                if (shouldLaunchOngoingCallUi(service)) {
                     service.launchCallActivity(answeredFromNotification = true)
                 }
             } catch (_: Exception) {}
@@ -513,6 +524,16 @@ class CallService : InCallService() {
             when {
                 _currentCallSession.value?.call == call -> _currentCallSession.value = CallSession(call, state)
                 _heldCallSession.value?.call == call   -> _heldCallSession.value   = CallSession(call, state)
+            }
+
+            if (pendingAccountSelectionCalls.contains(call)) {
+                if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
+                    pendingAccountSelectionCalls.remove(call)
+                    updateNotification(call)
+                    launchCallActivity()
+                } else if (state == Call.STATE_DISCONNECTED) {
+                    pendingAccountSelectionCalls.remove(call)
+                }
             }
 
             if (state == Call.STATE_RINGING) {
@@ -630,6 +651,7 @@ class CallService : InCallService() {
         call.unregisterCallback(heldCallCallback)
         call.unregisterCallback(incomingCallCallback)
         callConnectTimes.remove(call)
+        pendingAccountSelectionCalls.remove(call)
 
         if (_incomingCallSession.value?.call == call) {
             _incomingCallSession.value = null
@@ -719,6 +741,58 @@ class CallService : InCallService() {
         else -> "UNKNOWN($state)"
     }
 
+    private fun handleSelectPhoneAccount(call: Call, number: String) {
+        pendingAccountSelectionCalls.add(call)
+        val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val availableAccounts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            call.details?.intentExtras?.getParcelableArrayList<PhoneAccountHandle>(Call.AVAILABLE_PHONE_ACCOUNTS)
+        } else null
+        val accounts = availableAccounts?.takeIf { it.isNotEmpty() }
+            ?: (try { telecomManager?.callCapablePhoneAccounts } catch (_: Throwable) { null })
+            ?: emptyList()
+
+        var autoSelected = false
+        if (accounts.size == 1) {
+            try {
+                call.phoneAccountSelected(accounts[0], false)
+                autoSelected = true
+            } catch (_: Throwable) {}
+        } else if (accounts.size > 1) {
+            val cleanNum = number.trim()
+            val contactKey = try { contactsRepository.getContactByNumber(cleanNum)?.id } catch (_: Exception) { null } ?: cleanNum
+            val contactSimChoice = prefs.getContactSimChoice(contactKey, cleanNum)
+            val globalSimPref = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
+            val targetAccount = when (contactSimChoice) {
+                PreferenceManager.SIM_CHOICE_SIM1 -> accounts.getOrNull(0)
+                PreferenceManager.SIM_CHOICE_SIM2 -> accounts.getOrNull(1)
+                PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT,
+                PreferenceManager.SIM_CHOICE_LAST_IN_CALL -> {
+                    val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)
+                    if (slot != null && slot in accounts.indices) accounts[slot] else null
+                }
+                PreferenceManager.SIM_CHOICE_SETTINGS -> {
+                    when (globalSimPref) {
+                        1 -> accounts.getOrNull(0)
+                        2 -> accounts.getOrNull(1)
+                        else -> null
+                    }
+                }
+                else -> null // SIM_CHOICE_ASK
+            }
+            if (targetAccount != null) {
+                try {
+                    call.phoneAccountSelected(targetAccount, false)
+                    autoSelected = true
+                } catch (_: Throwable) {}
+            }
+        }
+
+        if (!autoSelected) {
+            updateNotification(call)
+            launchCallActivity()
+        }
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         instance = this
@@ -784,6 +858,10 @@ class CallService : InCallService() {
                 }
                 call.registerCallback(callCallback)
                 _currentCallSession.value = CallSession(call, call.state)
+                if (call.state == Call.STATE_SELECT_PHONE_ACCOUNT) {
+                    handleSelectPhoneAccount(call, number)
+                    return
+                }
                 updateNotification(call)
                 launchCallActivity()
             } else {
@@ -800,6 +878,10 @@ class CallService : InCallService() {
 
         call.registerCallback(callCallback)
         _currentCallSession.value = CallSession(call, call.state)
+        if (call.state == Call.STATE_SELECT_PHONE_ACCOUNT) {
+            handleSelectPhoneAccount(call, number)
+            return
+        }
         updateNotification(call)
         if (call.state != Call.STATE_RINGING) {
             launchCallActivity()
@@ -824,9 +906,6 @@ class CallService : InCallService() {
                     launchBiometricCallActivity("ANSWER")
                 } else {
                     answerCall()
-                    if (prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)) {
-                        launchCallActivity(answeredFromNotification = true)
-                    }
                 }
             }
             "DECLINE_CALL" -> {
@@ -868,6 +947,7 @@ class CallService : InCallService() {
     }
 
     private fun updateNotification(call: Call) {
+        if (call.state == Call.STATE_SELECT_PHONE_ACCOUNT) return
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             nm.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING_ID, "Incoming Calls", NotificationManager.IMPORTANCE_HIGH).apply {
