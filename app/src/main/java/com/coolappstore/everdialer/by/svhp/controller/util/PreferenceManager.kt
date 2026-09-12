@@ -118,6 +118,8 @@ class PreferenceManager(context: Context) {
      *  settings never gets out of sync with the slide-animation direction on the main screen. */
     fun getTabOrder(): List<String> = parseTabOrder(getString(KEY_TAB_ORDER, null))
 
+    fun getContactInfoOrder(): List<String> = parseContactInfoOrder(getString(KEY_CONTACT_INFO_ORDER, null))
+
     fun getAnimationStyle(): String =
         getString(KEY_ANIMATION_STYLE, ANIMATION_STYLE_ZOOM) ?: ANIMATION_STYLE_ZOOM
 
@@ -301,6 +303,31 @@ class PreferenceManager(context: Context) {
             return merged.filter { it in fallback }
         }
 
+        const val KEY_CONTACT_INFO_SHOW_QUICK_ACTIONS         = "contact_info_show_quick_actions"
+        const val KEY_CONTACT_INFO_SHOW_CONTACT_INFO          = "contact_info_show_contact_info"
+        const val KEY_CONTACT_INFO_SHOW_SOCIAL                = "contact_info_show_social"
+        const val KEY_CONTACT_INFO_SHOW_DESCRIPTION           = "contact_info_show_description"
+        const val KEY_CONTACT_INFO_SHOW_NOTES                 = "contact_info_show_notes"
+        const val KEY_CONTACT_INFO_SHOW_EVENTS                = "contact_info_show_events"
+        const val KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY       = "contact_info_show_recent_activity"
+        const val KEY_CONTACT_INFO_SHOW_CHOOSE_SIM            = "contact_info_show_choose_sim"
+        const val KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS   = "contact_info_show_calling_backgrounds"
+        const val KEY_CONTACT_INFO_SHOW_ADVANCED_PFP          = "contact_info_show_advanced_pfp"
+        const val KEY_CONTACT_INFO_SHOW_RINGTONE              = "contact_info_show_ringtone"
+        const val KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER = "contact_info_show_choose_default_number"
+        const val KEY_CONTACT_INFO_SHOW_SAVED_IN              = "contact_info_show_saved_in"
+        const val KEY_CONTACT_INFO_ORDER                      = "contact_info_order"
+        const val DEFAULT_CONTACT_INFO_ORDER                  = "quick_actions,contact_info,social,description,notes,events,recent_activity,choose_sim,calling_backgrounds,advanced_pfp,ringtone,choose_default_number,saved_in"
+
+        fun parseContactInfoOrder(raw: String?): List<String> {
+            val fallback = DEFAULT_CONTACT_INFO_ORDER.split(",")
+            if (raw.isNullOrBlank()) return fallback
+            val parsed = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val merged = parsed.toMutableList()
+            fallback.forEach { key -> if (key !in merged) merged.add(key) }
+            return merged.filter { it in fallback }
+        }
+
         const val KEY_DEFAULT_SIM           = "default_sim"
         // Contact Info → "Choose Sim" — per-contact override of which SIM is used to call that
         // specific contact. Key is prefixed per contact (id for saved contacts, raw phone number
@@ -318,6 +345,7 @@ class PreferenceManager(context: Context) {
         const val SIM_CHOICE_ASK                = "ask"
         const val SIM_CHOICE_SIM1               = "sim1"
         const val SIM_CHOICE_SIM2               = "sim2"
+        const val SIM_CHOICE_CALL_LOG           = "call_log"
         const val SIM_CHOICE_LAST_FOR_CONTACT   = "last_for_contact"
         const val SIM_CHOICE_LAST_IN_CALL       = "last_in_call"
         const val KEY_DYNAMIC_COLORS        = "dynamic_colors"

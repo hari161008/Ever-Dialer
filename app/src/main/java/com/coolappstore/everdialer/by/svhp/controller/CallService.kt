@@ -765,6 +765,7 @@ class CallService : InCallService() {
             val targetAccount = when (contactSimChoice) {
                 PreferenceManager.SIM_CHOICE_SIM1 -> accounts.getOrNull(0)
                 PreferenceManager.SIM_CHOICE_SIM2 -> accounts.getOrNull(1)
+                PreferenceManager.SIM_CHOICE_CALL_LOG,
                 PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT,
                 PreferenceManager.SIM_CHOICE_LAST_IN_CALL -> {
                     val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)

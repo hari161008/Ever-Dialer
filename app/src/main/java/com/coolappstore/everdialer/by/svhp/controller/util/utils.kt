@@ -294,22 +294,13 @@ fun placeCallWithContactSimPreference(
     val accounts = try { telecomManager.callCapablePhoneAccounts } catch (_: Throwable) { emptyList() }
     if (accounts.size <= 1) { makeCall(context, number, accounts.firstOrNull()); return }
 
-    val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
-        .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
-    if (useSimFromCallLog || globalSimPref == 3) {
-        val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
-        if (slot != null && slot in accounts.indices) {
-            makeCall(context, number, accounts[slot])
-            return
-        }
-    }
-
     when (contactSimChoice) {
         PreferenceManager.SIM_CHOICE_ASK -> onShowSimPicker()
         PreferenceManager.SIM_CHOICE_SIM1 -> makeCall(context, number, accounts[0])
         PreferenceManager.SIM_CHOICE_SIM2 -> {
             if (accounts.size >= 2) makeCall(context, number, accounts[1]) else onShowSimPicker()
         }
+        PreferenceManager.SIM_CHOICE_CALL_LOG,
         PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT -> {
             val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
             if (slot != null && slot in accounts.indices) makeCall(context, number, accounts[slot])
@@ -321,7 +312,19 @@ fun placeCallWithContactSimPreference(
             if (lastIdx in 1..accounts.size) makeCall(context, number, accounts[lastIdx - 1])
             else onShowSimPicker()
         }
-        else -> placeCallWithSimPreference(context, number, globalSimPref, onShowSimPicker) // SIM_CHOICE_SETTINGS
+        else -> {
+            // SIM_CHOICE_SETTINGS: falls back to app-wide default SIM setting
+            val useSimFromCallLog = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+                .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
+            if (useSimFromCallLog || globalSimPref == 3) {
+                val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
+                if (slot != null && slot in accounts.indices) {
+                    makeCall(context, number, accounts[slot])
+                    return
+                }
+            }
+            placeCallWithSimPreference(context, number, globalSimPref, onShowSimPicker)
+        }
     }
 }
 

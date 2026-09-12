@@ -169,59 +169,86 @@ private fun ConfirmCallDialogUi(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) {},
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(32.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             tonalElevation = 6.dp,
             shadowElevation = 16.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Contact Avatar or Icon
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                // Header badge
+                Surface(
+                    shape = RoundedCornerShape(100),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
                 ) {
-                    if (!photoUri.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = photoUri,
-                            contentDescription = contactName,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (!contactName.isNullOrEmpty()) {
-                        Text(
-                            text = contactName!!.take(1).uppercase(),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    } else {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Person,
+                            imageVector = Icons.Default.Call,
                             contentDescription = null,
-                            modifier = Modifier.size(34.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Confirm placing call",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
 
-                Text(
-                    text = "Confirm placing call",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
+                // Contact Avatar with Material You expressive squircle shape
+                Surface(
+                    modifier = Modifier.size(84.dp),
+                    shape = RoundedCornerShape(26.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                    tonalElevation = 2.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!photoUri.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = photoUri,
+                                contentDescription = contactName,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(26.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (!contactName.isNullOrEmpty()) {
+                            Text(
+                                text = contactName!!.trim().take(1).uppercase(),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(42.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(18.dp))
 
                 Text(
                     text = contactName ?: number,
@@ -238,55 +265,83 @@ private fun ConfirmCallDialogUi(
                     Text(
                         text = number,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                 }
 
-                if (simLabel != null && simColor != null) {
-                    Spacer(Modifier.height(12.dp))
+                if (simLabel != null) {
+                    Spacer(Modifier.height(14.dp))
+                    val badgeColor = simColor ?: MaterialTheme.colorScheme.tertiary
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = simColor.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, simColor.copy(alpha = 0.5f))
+                        shape = RoundedCornerShape(100),
+                        color = badgeColor.copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SimCard, null, modifier = Modifier.size(14.dp), tint = simColor)
-                            Spacer(Modifier.width(4.dp))
-                            Text(simLabel, style = MaterialTheme.typography.labelMedium, color = simColor, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.SimCard, null, modifier = Modifier.size(14.dp), tint = badgeColor)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = simLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = badgeColor,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(28.dp))
 
-                // Buttons
+                // Action Buttons using Material You dynamic colors & pill shapes
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
+                    FilledTonalButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(26.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
                     ) {
-                        Text("Cancel")
+                        Text(
+                            text = "Cancel",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     Button(
                         onClick = onConfirm,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(26.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF34A853),
-                            contentColor = Color.White
-                        )
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 4.dp)
                     ) {
-                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(Modifier.width(8.dp))
-                        Text("Call", fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Call",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

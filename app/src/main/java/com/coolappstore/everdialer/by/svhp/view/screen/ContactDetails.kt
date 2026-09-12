@@ -233,6 +233,23 @@ fun ContactDetailsScreen(
         }
     }
 
+    val contactInfoOrder = remember(settingsVer) {
+        prefs.getContactInfoOrder()
+    }
+    val showQuickActions = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_QUICK_ACTIONS, true) }
+    val showContactInfo = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CONTACT_INFO, true) }
+    val showSocial = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SOCIAL, true) }
+    val showDescription = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_DESCRIPTION, true) }
+    val showNotes = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_NOTES, true) }
+    val showEvents = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_EVENTS, true) }
+    val showRecentActivity = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY, true) }
+    val showChooseSim = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_SIM, true) }
+    val showCallingBackgrounds = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS, true) }
+    val showAdvancedPfp = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_ADVANCED_PFP, true) }
+    val showRingtone = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true) }
+    val showChooseDefaultNumber = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true) }
+    val showSavedIn = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true) }
+
     // All this contact's saved numbers, so the Social card can offer a choice when there's more
     // than one (e.g. one saved with a country code, one without) instead of always defaulting to
     // the first saved number — which could be one that isn't actually registered on that app.
@@ -853,1038 +870,1082 @@ fun ContactDetailsScreen(
                     }
                 }
 
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .combinedClickable(
-                                        onClick = {
-                                            if (contact != null && contactPhoneNumbers.size > 1) {
-                                                if (contactDefaultNumber != null) initiateCall(contactDefaultNumber)
-                                                else showNumberPicker = true
-                                            }
-                                            else if (contact != null && contactPhoneNumbers.isNotEmpty()) initiateCall(contactPhoneNumbers.first())
-                                            else if (displayPhone != "Unknown") initiateCall(displayPhone)
-                                        },
-                                        onLongClick = {
-                                            showCallLongPressMenu = true
-                                        }
-                                    ),
-                                shape = RoundedCornerShape(50),
-                                color = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(26.dp))
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Call", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
-                                }
-                            }
-
-                            RivoDropdownMenu(
-                                expanded = showCallLongPressMenu,
-                                onDismissRequest = { showCallLongPressMenu = false }
-                            ) {
+            contactInfoOrder.forEach { elementKey ->
+                when (elementKey) {
+                    "quick_actions" -> {
+                        if (showQuickActions) {
+                            item {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        .padding(horizontal = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Surface(
-                                        onClick = {
-                                            showCallLongPressMenu = false
-                                            callWithSimSlot(0)
-                                        },
-                                        modifier = Modifier.weight(1f).height(48.dp),
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = sim1Color,
-                                        contentColor = Color.White
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxSize(),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Default.SimCard, contentDescription = "SIM 1", modifier = Modifier.size(20.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("SIM 1", fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                    if (hasTwoSims) {
+                                    Box(modifier = Modifier.weight(1f)) {
                                         Surface(
-                                            onClick = {
-                                                showCallLongPressMenu = false
-                                                callWithSimSlot(1)
-                                            },
-                                            modifier = Modifier.weight(1f).height(48.dp),
-                                            shape = RoundedCornerShape(16.dp),
-                                            color = sim2Color,
-                                            contentColor = Color.White
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(64.dp)
+                                                .clip(RoundedCornerShape(50))
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (contact != null && contactPhoneNumbers.size > 1) {
+                                                            if (contactDefaultNumber != null) initiateCall(contactDefaultNumber)
+                                                            else showNumberPicker = true
+                                                        }
+                                                        else if (contact != null && contactPhoneNumbers.isNotEmpty()) initiateCall(contactPhoneNumbers.first())
+                                                        else if (displayPhone != "Unknown") initiateCall(displayPhone)
+                                                    },
+                                                    onLongClick = {
+                                                        showCallLongPressMenu = true
+                                                    }
+                                                ),
+                                            shape = RoundedCornerShape(50),
+                                            color = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
                                         ) {
                                             Row(
                                                 modifier = Modifier.fillMaxSize(),
                                                 horizontalArrangement = Arrangement.Center,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Default.SimCard, contentDescription = "SIM 2", modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("SIM 2", fontWeight = FontWeight.SemiBold)
+                                                Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(26.dp))
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text("Call", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                            }
+                                        }
+
+                                        RivoDropdownMenu(
+                                            expanded = showCallLongPressMenu,
+                                            onDismissRequest = { showCallLongPressMenu = false }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Surface(
+                                                    onClick = {
+                                                        showCallLongPressMenu = false
+                                                        callWithSimSlot(0)
+                                                    },
+                                                    modifier = Modifier.weight(1f).height(48.dp),
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    color = sim1Color,
+                                                    contentColor = Color.White
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        horizontalArrangement = Arrangement.Center,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(Icons.Default.SimCard, contentDescription = "SIM 1", modifier = Modifier.size(20.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("SIM 1", fontWeight = FontWeight.SemiBold)
+                                                    }
+                                                }
+                                                if (hasTwoSims) {
+                                                    Surface(
+                                                        onClick = {
+                                                            showCallLongPressMenu = false
+                                                            callWithSimSlot(1)
+                                                        },
+                                                        modifier = Modifier.weight(1f).height(48.dp),
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        color = sim2Color,
+                                                        contentColor = Color.White
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            horizontalArrangement = Arrangement.Center,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(Icons.Default.SimCard, contentDescription = "SIM 2", modifier = Modifier.size(20.dp))
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text("SIM 2", fontWeight = FontWeight.SemiBold)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (whatsAppInstalled) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                                RivoDropdownMenuItem(
+                                                    text = "Call via WhatsApp",
+                                                    iconBitmap = remember(context) { getWhatsAppIcon(context) },
+                                                    onClick = {
+                                                        showCallLongPressMenu = false
+                                                        chooseSocialApp("whatsapp")
+                                                    }
+                                                )
                                             }
                                         }
                                     }
-                                }
-                                if (whatsAppInstalled) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    )
-                                    RivoDropdownMenuItem(
-                                        text = "Call via WhatsApp",
-                                        iconBitmap = remember(context) { getWhatsAppIcon(context) },
+                                    Surface(
                                         onClick = {
-                                            showCallLongPressMenu = false
-                                            chooseSocialApp("whatsapp")
+                                            if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
+                                        },
+                                        modifier = Modifier.weight(1f).height(64.dp),
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Text", modifier = Modifier.size(26.dp))
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text("Text", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
                                         }
-                                    )
+                                    }
                                 }
-                            }
-                        }
-                        Surface(
-                            onClick = {
-                                if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
-                            },
-                            modifier = Modifier.weight(1f).height(64.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Text", modifier = Modifier.size(26.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Text", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
-                }
 
-                // Contact Info
-                item {
-                    RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
-                        if (contact != null) {
-                            contactPhoneNumbers.forEachIndexed { index, number ->
-                                val isPrimary = contactDefaultNumber == number
-                                val phoneEntry = contact.phones.firstOrNull { it.number == number || numbersLikelyMatch(it.number, number) }
-                                val typeLabel = if (phoneEntry != null) getPhoneTypeLabel(phoneEntry.type, phoneEntry.label) else "Mobile"
-                                RivoListItem(
-                                    headline = number,
-                                    supporting = if (isPrimary) "$typeLabel • Primary" else typeLabel,
-                                    leadingIcon = Icons.Default.Phone,
-                                    compact = contactPhoneNumbers.size > 1,
-                                    onClick = { initiateCall(number) },
-                                    onLongClick = {
-                                        selectedNumberForMenu = number
-                                    }
-                                )
-                                if (index < contactPhoneNumbers.size - 1 || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                            contact.emails.forEachIndexed { index, email ->
-                                RivoListItem(headline = email, supporting = "Email", leadingIcon = Icons.Default.Email, onClick = {
-                                    context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
-                                })
-                                if (index < contact.emails.size - 1 || contact.addresses.isNotEmpty()) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                            contact.addresses.forEachIndexed { index, address ->
-                                RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
-                                })
-                                if (index < contact.addresses.size - 1) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                        } else if (phoneNumber != null && phoneNumber != "Unknown") {
-                            RivoListItem(
-                                headline = phoneNumber,
-                                supporting = "Unknown Number",
-                                leadingIcon = Icons.Default.Phone,
-                                onClick = { initiateCall(phoneNumber) },
-                                onLongClick = {
-                                    selectedNumberForMenu = phoneNumber
-                                }
-                            )
-                        }
-
-                        RivoDropdownMenu(
-                            expanded = selectedNumberForMenu != null,
-                            onDismissRequest = { selectedNumberForMenu = null }
-                        ) {
-                            val menuNum = selectedNumberForMenu ?: return@RivoDropdownMenu
-                            val isPrimaryNum = contactDefaultNumber == menuNum
-                            RivoDropdownMenuItem(
-                                text = "Copy",
-                                icon = Icons.Default.ContentCopy,
-                                iconTint = Color(0xFF2196F3),
-                                onClick = {
-                                    selectedNumberForMenu = null
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", menuNum))
-                                    android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                            RivoDropdownMenuItem(
-                                text = "Edit contact",
-                                icon = Icons.Default.Edit,
-                                iconTint = Color(0xFF9C27B0),
-                                onClick = {
-                                    selectedNumberForMenu = null
+                    // Contact Info
+                    "contact_info" -> {
+                        if (showContactInfo) {
+                            item {
+                                RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
                                     if (contact != null) {
-                                        navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
-                                    } else {
-                                        navigator.navigate(ContactEditScreenDestination(initialPhone = menuNum))
-                                    }
-                                }
-                            )
-                            RivoDropdownMenuItem(
-                                text = "Share",
-                                icon = Icons.Default.Share,
-                                iconTint = Color(0xFFFF9800),
-                                onClick = {
-                                    selectedNumberForMenu = null
-                                    val shareText = if (contact != null && displayName.isNotBlank() && displayName != "Unknown") {
-                                        "$displayName\n$menuNum"
-                                    } else {
-                                        menuNum
-                                    }
-                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, shareText)
-                                    }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
-                                }
-                            )
-                            if (contact != null) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                                if (isPrimaryNum) {
-                                    RivoDropdownMenuItem(
-                                        text = "Unset as primary",
-                                        icon = Icons.Outlined.StarOutline,
-                                        iconTint = Color(0xFFFF9800),
-                                        onClick = {
-                                            selectedNumberForMenu = null
-                                            prefs.setContactDefaultNumber(contactSimKey, null)
-                                            android.widget.Toast.makeText(context, "Unset as primary number", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
-                                } else {
-                                    RivoDropdownMenuItem(
-                                        text = "Set as primary",
-                                        icon = Icons.Default.Star,
-                                        iconTint = Color(0xFFFF9800),
-                                        onClick = {
-                                            selectedNumberForMenu = null
-                                            prefs.setContactDefaultNumber(contactSimKey, menuNum)
-                                            android.widget.Toast.makeText(context, "Set as primary number", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
-                                }
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                                RivoDropdownMenuItem(
-                                    text = "Delete number",
-                                    icon = Icons.Default.Delete,
-                                    isDestructive = true,
-                                    onClick = {
-                                        selectedNumberForMenu = null
-                                        if (isPrimaryNum) {
-                                            prefs.setContactDefaultNumber(contactSimKey, null)
-                                        }
-                                        contactsViewModel.deletePhoneNumber(contact.id, menuNum) { success ->
-                                            if (success) {
-                                                android.widget.Toast.makeText(context, "Number deleted", android.widget.Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                android.widget.Toast.makeText(context, "Failed to delete number", android.widget.Toast.LENGTH_SHORT).show()
+                                        contactPhoneNumbers.forEachIndexed { index, number ->
+                                            val isPrimary = contactDefaultNumber == number
+                                            val phoneEntry = contact.phones.firstOrNull { it.number == number || numbersLikelyMatch(it.number, number) }
+                                            val typeLabel = if (phoneEntry != null) getPhoneTypeLabel(phoneEntry.type, phoneEntry.label) else "Mobile"
+                                            RivoListItem(
+                                                headline = number,
+                                                supporting = if (isPrimary) "$typeLabel • Primary" else typeLabel,
+                                                leadingIcon = Icons.Default.Phone,
+                                                compact = contactPhoneNumbers.size > 1,
+                                                onClick = { initiateCall(number) },
+                                                onLongClick = {
+                                                    selectedNumberForMenu = number
+                                                }
+                                            )
+                                            if (index < contactPhoneNumbers.size - 1 || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
+                                                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                             }
                                         }
+                                        contact.emails.forEachIndexed { index, email ->
+                                            RivoListItem(headline = email, supporting = "Email", leadingIcon = Icons.Default.Email, onClick = {
+                                                context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
+                                            })
+                                            if (index < contact.emails.size - 1 || contact.addresses.isNotEmpty()) {
+                                                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            }
+                                        }
+                                        contact.addresses.forEachIndexed { index, address ->
+                                            RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
+                                            })
+                                            if (index < contact.addresses.size - 1) {
+                                                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            }
+                                        }
+                                    } else if (phoneNumber != null && phoneNumber != "Unknown") {
+                                        RivoListItem(
+                                            headline = phoneNumber,
+                                            supporting = "Unknown Number",
+                                            leadingIcon = Icons.Default.Phone,
+                                            onClick = { initiateCall(phoneNumber) },
+                                            onLongClick = {
+                                                selectedNumberForMenu = phoneNumber
+                                            }
+                                        )
                                     }
-                                )
-                            }
-                        }
 
-                        // Copy / Share / Move / Delete — the same actions available from the
-                        // contact's long-press context menu, surfaced here too since a contact
-                        // opened straight from search/details had no way to reach them otherwise.
-                        // Visibility follows Settings → Appearance → Context Menu Elements (Contacts).
-                        if (contact != null && contactInfoActionKeys.isNotEmpty()) {
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                contactInfoActionKeys.forEach { key ->
-                                    when (key) {
-                                        "copy_number" -> RivoExpressiveButton(
+                                    RivoDropdownMenu(
+                                        expanded = selectedNumberForMenu != null,
+                                        onDismissRequest = { selectedNumberForMenu = null }
+                                    ) {
+                                        val menuNum = selectedNumberForMenu ?: return@RivoDropdownMenu
+                                        val isPrimaryNum = contactDefaultNumber == menuNum
+                                        RivoDropdownMenuItem(
+                                            text = "Copy",
                                             icon = Icons.Default.ContentCopy,
-                                            label = "Copy",
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                            size = 52.dp,
-                                            iconSize = 20.dp,
+                                            iconTint = Color(0xFF2196F3),
                                             onClick = {
-                                                val number = contact.phoneNumbers.firstOrNull() ?: displayPhone
+                                                selectedNumberForMenu = null
                                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", number))
+                                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", menuNum))
                                                 android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                             }
                                         )
-                                        "share_contact" -> RivoExpressiveButton(
-                                            icon = Icons.Default.Share,
-                                            label = "Share",
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                            size = 52.dp,
-                                            iconSize = 20.dp,
+                                        RivoDropdownMenuItem(
+                                            text = "Edit contact",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
                                             onClick = {
-                                                val numbersToShare = if (contactPhoneNumbers.isNotEmpty()) contactPhoneNumbers else contact.phoneNumbers
+                                                selectedNumberForMenu = null
+                                                if (contact != null) {
+                                                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                                                } else {
+                                                    navigator.navigate(ContactEditScreenDestination(initialPhone = menuNum))
+                                                }
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Share",
+                                            icon = Icons.Default.Share,
+                                            iconTint = Color(0xFFFF9800),
+                                            onClick = {
+                                                selectedNumberForMenu = null
+                                                val shareText = if (contact != null && displayName.isNotBlank() && displayName != "Unknown") {
+                                                    "$displayName\n$menuNum"
+                                                } else {
+                                                    menuNum
+                                                }
                                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
-                                                    putExtra(Intent.EXTRA_TEXT, "$displayName\n${numbersToShare.joinToString(", ")}")
+                                                    putExtra(Intent.EXTRA_TEXT, shareText)
                                                 }
                                                 context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
                                             }
                                         )
-                                        "move_contact" -> RivoExpressiveButton(
-                                            icon = Icons.Default.DriveFileMove,
-                                            label = "Move",
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                            size = 52.dp,
-                                            iconSize = 20.dp,
-                                            onClick = { showMoveDialog = true }
-                                        )
-                                        "delete_contact" -> RivoExpressiveButton(
-                                            icon = Icons.Default.Delete,
-                                            label = "Delete",
-                                            containerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.errorContainer,
-                                            contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onErrorContainer,
-                                            size = 52.dp,
-                                            iconSize = 20.dp,
-                                            onClick = { showDeleteConfirm = true }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Social — contact through WhatsApp / WA Business / Telegram / Meet / Truecaller. Only displayed when at least
-                // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
-                if (hasAnySocialApp) {
-                    item {
-                        val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
-                        val whatsAppBusinessIcon = remember(context) { getWhatsAppBusinessIcon(context) }
-                        val telegramIcon = remember(context) { getTelegramIcon(context) }
-                        val meetIcon = remember(context) { getGoogleMeetIcon(context) }
-                        val truecallerIcon = remember(context) { getTruecallerIcon(context) }
-                        RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
-                            val socialScrollState = rememberScrollState()
-                            val isScrollable = socialScrollState.maxValue > 0
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(socialScrollState)
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (whatsAppInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.widthIn(min = 76.dp),
-                                            icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("whatsapp")
-                                            }
-                                        )
-                                    }
-                                    if (whatsAppBusinessInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.widthIn(min = 76.dp),
-                                            icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("whatsapp_business")
-                                            }
-                                        )
-                                    }
-                                    if (telegramInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.widthIn(min = 76.dp),
-                                            icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("telegram")
-                                            }
-                                        )
-                                    }
-                                    if (meetInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.widthIn(min = 76.dp),
-                                            icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("googlemeet")
-                                            }
-                                        )
-                                    }
-                                    if (truecallerInstalled) {
-                                        RivoExpressiveButton(
-                                            modifier = Modifier.widthIn(min = 76.dp),
-                                            icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
-                                                if (displayPhone == "Unknown") return@RivoExpressiveButton
-                                                chooseSocialApp("truecaller")
-                                            }
-                                        )
-                                    }
-                                }
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = isScrollable && socialScrollState.canScrollForward,
-                                    enter = fadeIn(),
-                                    exit = fadeOut(),
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .padding(end = 4.dp)
-                                 ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shadowElevation = 3.dp,
-                                        modifier = Modifier.size(7.dp)
-                                    ) {}
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Description section (synced with Microsoft Exchange / Gmail contact notes via ContactsContract)
-                item {
-                    val accountsForDescription = remember(contactAccounts, selectedVisibilityAccount) {
-                        if (selectedVisibilityAccount != null) {
-                            contactAccounts.filter { it.rawContactId == selectedVisibilityAccount?.rawContactId }
-                        } else {
-                            contactAccounts
-                        }
-                    }
-
-                    data class UniqueDescItem(
-                        val text: String,
-                        val accounts: List<ContactAccountInfo>,
-                        val primaryAccount: ContactAccountInfo
-                    )
-
-                    val uniqueDescriptions = remember(accountsForDescription, contact?.note) {
-                        val list = mutableListOf<UniqueDescItem>()
-                        for (acc in accountsForDescription) {
-                            val desc = acc.description?.trim()
-                            if (!desc.isNullOrBlank()) {
-                                val existingIndex = list.indexOfFirst { it.text == desc }
-                                if (existingIndex >= 0) {
-                                    val existing = list[existingIndex]
-                                    list[existingIndex] = existing.copy(accounts = existing.accounts + acc)
-                                } else {
-                                    list.add(UniqueDescItem(text = desc, accounts = listOf(acc), primaryAccount = acc))
-                                }
-                            }
-                        }
-                        if (list.isEmpty() && selectedVisibilityAccount == null && !contact?.note.isNullOrBlank()) {
-                            val fallbackAcc = contactAccounts.firstOrNull() ?: ContactAccountInfo(
-                                rawContactId = 0L,
-                                accountType = null,
-                                accountName = null,
-                                displayName = "Device Storage",
-                                isReadOnly = false,
-                                isSim = false
-                            )
-                            list.add(UniqueDescItem(text = contact.note!!.trim(), accounts = listOf(fallbackAcc), primaryAccount = fallbackAcc))
-                        }
-                        list
-                    }
-
-                    RivoExpressiveCard(
-                        title = "Description",
-                        icon = Icons.Default.Description,
-                        trailingContent = {
-                            if (contact != null) {
-                                Box {
-                                    IconButton(
-                                        onClick = { showDescriptionOverflowMenu = true },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.MoreVert,
-                                            contentDescription = "Description options",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showDescriptionOverflowMenu,
-                                        onDismissRequest = { showDescriptionOverflowMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Visibility") },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.Visibility,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(20.dp)
+                                        if (contact != null) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            if (isPrimaryNum) {
+                                                RivoDropdownMenuItem(
+                                                    text = "Unset as primary",
+                                                    icon = Icons.Outlined.StarOutline,
+                                                    iconTint = Color(0xFFFF9800),
+                                                    onClick = {
+                                                        selectedNumberForMenu = null
+                                                        prefs.setContactDefaultNumber(contactSimKey, null)
+                                                        android.widget.Toast.makeText(context, "Unset as primary number", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
                                                 )
-                                            },
-                                            onClick = {
-                                                showDescriptionOverflowMenu = false
-                                                showVisibilityDialog = true
+                                            } else {
+                                                RivoDropdownMenuItem(
+                                                    text = "Set as primary",
+                                                    icon = Icons.Default.Star,
+                                                    iconTint = Color(0xFFFF9800),
+                                                    onClick = {
+                                                        selectedNumberForMenu = null
+                                                        prefs.setContactDefaultNumber(contactSimKey, menuNum)
+                                                        android.widget.Toast.makeText(context, "Set as primary number", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                )
                                             }
-                                        )
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            RivoDropdownMenuItem(
+                                                text = "Delete number",
+                                                icon = Icons.Default.Delete,
+                                                isDestructive = true,
+                                                onClick = {
+                                                    selectedNumberForMenu = null
+                                                    if (isPrimaryNum) {
+                                                        prefs.setContactDefaultNumber(contactSimKey, null)
+                                                    }
+                                                    contactsViewModel.deletePhoneNumber(contact.id, menuNum) { success ->
+                                                        if (success) {
+                                                            android.widget.Toast.makeText(context, "Number deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "Failed to delete number", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
-                                }
-                            }
-                        }
-                    ) {
-                        if (selectedVisibilityAccount != null) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "Visibility: ${selectedVisibilityAccount!!.displayName}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(
-                                    onClick = { selectedVisibilityAccount = null },
-                                    modifier = Modifier.size(18.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Clear visibility filter",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
 
-                        if (uniqueDescriptions.isNotEmpty()) {
-                            uniqueDescriptions.forEachIndexed { index, item ->
-                                var isExpanded by remember(item.text) { mutableStateOf(false) }
-                                var hasMoreThan5Lines by remember(item.text) {
-                                    mutableStateOf(item.text.lines().size > 5)
-                                }
-
-                                if (contactAccounts.size > 1 || selectedVisibilityAccount != null) {
-                                    val locationNames = item.accounts.map { it.displayName }.distinct().joinToString(", ")
-                                    val locationIcon: androidx.compose.ui.graphics.vector.ImageVector = when {
-                                        item.accounts.all { it.isSim } -> Icons.Default.SimCard
-                                        item.accounts.all { it.accountType?.contains("google", ignoreCase = true) == true } -> Icons.Default.AccountCircle
-                                        item.accounts.all { it.accountType != null } -> Icons.Default.Sync
-                                        else -> Icons.Default.PhoneAndroid
-                                    }
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    ) {
-                                        Icon(
-                                            locationIcon,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            text = locationNames,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-
-                                val annotated = buildClickableAnnotatedString(item.text)
-                                SelectionContainer {
-                                    Text(
-                                        text = annotated,
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                                        maxLines = if (isExpanded) Int.MAX_VALUE else 5,
-                                        overflow = TextOverflow.Ellipsis,
-                                        onTextLayout = { textLayoutResult ->
-                                            if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
-                                                hasMoreThan5Lines = true
+                                    // Copy / Share / Move / Delete — the same actions available from the
+                                    // contact's long-press context menu, surfaced here too since a contact
+                                    // opened straight from search/details had no way to reach them otherwise.
+                                    // Visibility follows Settings → Appearance → Context Menu Elements (Contacts).
+                                    if (contact != null && contactInfoActionKeys.isNotEmpty()) {
+                                        HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceEvenly
+                                        ) {
+                                            contactInfoActionKeys.forEach { key ->
+                                                when (key) {
+                                                    "copy_number" -> RivoExpressiveButton(
+                                                        icon = Icons.Default.ContentCopy,
+                                                        label = "Copy",
+                                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                                        size = 52.dp,
+                                                        iconSize = 20.dp,
+                                                        onClick = {
+                                                            val number = contact.phoneNumbers.firstOrNull() ?: displayPhone
+                                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone number", number))
+                                                            android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    )
+                                                    "share_contact" -> RivoExpressiveButton(
+                                                        icon = Icons.Default.Share,
+                                                        label = "Share",
+                                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                                        size = 52.dp,
+                                                        iconSize = 20.dp,
+                                                        onClick = {
+                                                            val numbersToShare = if (contactPhoneNumbers.isNotEmpty()) contactPhoneNumbers else contact.phoneNumbers
+                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(Intent.EXTRA_TEXT, "$displayName\n${numbersToShare.joinToString(", ")}")
+                                                            }
+                                                            context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                                        }
+                                                    )
+                                                    "move_contact" -> RivoExpressiveButton(
+                                                        icon = Icons.Default.DriveFileMove,
+                                                        label = "Move",
+                                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                                        size = 52.dp,
+                                                        iconSize = 20.dp,
+                                                        onClick = { showMoveDialog = true }
+                                                    )
+                                                    "delete_contact" -> RivoExpressiveButton(
+                                                        icon = Icons.Default.Delete,
+                                                        label = "Delete",
+                                                        containerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.errorContainer,
+                                                        contentColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onErrorContainer,
+                                                        size = 52.dp,
+                                                        iconSize = 20.dp,
+                                                        onClick = { showDeleteConfirm = true }
+                                                    )
+                                                }
                                             }
                                         }
-                                    )
+                                    }
                                 }
+                            }
+                        }
+                    }
 
-                                if (hasMoreThan5Lines) {
-                                    TextButton(
-                                        onClick = { isExpanded = !isExpanded },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(if (isExpanded) "Show less" else "Show more")
+                    // Social — contact through WhatsApp / WA Business / Telegram / Meet / Truecaller. Only displayed when at least
+                    // one social app is installed and enabled on the device. Individual apps are only shown if installed/enabled.
+                    "social" -> {
+                        if (showSocial && hasAnySocialApp) {
+                            item {
+                                val whatsAppIcon = remember(context) { getWhatsAppIcon(context) }
+                                val whatsAppBusinessIcon = remember(context) { getWhatsAppBusinessIcon(context) }
+                                val telegramIcon = remember(context) { getTelegramIcon(context) }
+                                val meetIcon = remember(context) { getGoogleMeetIcon(context) }
+                                val truecallerIcon = remember(context) { getTruecallerIcon(context) }
+                                RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
+                                    val socialScrollState = rememberScrollState()
+                                    val isScrollable = socialScrollState.maxValue > 0
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(socialScrollState)
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (whatsAppInstalled) {
+                                                RivoExpressiveButton(
+                                                    modifier = Modifier.widthIn(min = 76.dp),
+                                                    icon = Icons.Default.Chat, iconBitmap = whatsAppIcon, label = "WhatsApp", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                        chooseSocialApp("whatsapp")
+                                                    }
+                                                )
+                                            }
+                                            if (whatsAppBusinessInstalled) {
+                                                RivoExpressiveButton(
+                                                    modifier = Modifier.widthIn(min = 76.dp),
+                                                    icon = Icons.Default.Chat, iconBitmap = whatsAppBusinessIcon, label = "WA Business", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                        chooseSocialApp("whatsapp_business")
+                                                    }
+                                                )
+                                            }
+                                            if (telegramInstalled) {
+                                                RivoExpressiveButton(
+                                                    modifier = Modifier.widthIn(min = 76.dp),
+                                                    icon = Icons.Default.Send, iconBitmap = telegramIcon, label = "Telegram", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                        chooseSocialApp("telegram")
+                                                    }
+                                                )
+                                            }
+                                            if (meetInstalled) {
+                                                RivoExpressiveButton(
+                                                    modifier = Modifier.widthIn(min = 76.dp),
+                                                    icon = Icons.Default.VideoCall, iconBitmap = meetIcon, label = "Meet", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                        chooseSocialApp("googlemeet")
+                                                    }
+                                                )
+                                            }
+                                            if (truecallerInstalled) {
+                                                RivoExpressiveButton(
+                                                    modifier = Modifier.widthIn(min = 76.dp),
+                                                    icon = Icons.Default.Search, iconBitmap = truecallerIcon, label = "Truecaller", size = 56.dp, iconSize = 22.dp, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface, onClick = {
+                                                        if (displayPhone == "Unknown") return@RivoExpressiveButton
+                                                        chooseSocialApp("truecaller")
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = isScrollable && socialScrollState.canScrollForward,
+                                            enter = fadeIn(),
+                                            exit = fadeOut(),
+                                            modifier = Modifier
+                                                .align(Alignment.CenterEnd)
+                                                .padding(end = 4.dp)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                shadowElevation = 3.dp,
+                                                modifier = Modifier.size(7.dp)
+                                            ) {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Description section (synced with Microsoft Exchange / Gmail contact notes via ContactsContract)
+                    "description" -> {
+                        if (showDescription) {
+                            item {
+                                val accountsForDescription = remember(contactAccounts, selectedVisibilityAccount) {
+                                    if (selectedVisibilityAccount != null) {
+                                        contactAccounts.filter { it.rawContactId == selectedVisibilityAccount?.rawContactId }
+                                    } else {
+                                        contactAccounts
                                     }
                                 }
 
-                                if (contact != null) {
+                                data class UniqueDescItem(
+                                    val text: String,
+                                    val accounts: List<ContactAccountInfo>,
+                                    val primaryAccount: ContactAccountInfo
+                                )
+
+                                val uniqueDescriptions = remember(accountsForDescription, contact?.note) {
+                                    val list = mutableListOf<UniqueDescItem>()
+                                    for (acc in accountsForDescription) {
+                                        val desc = acc.description?.trim()
+                                        if (!desc.isNullOrBlank()) {
+                                            val existingIndex = list.indexOfFirst { it.text == desc }
+                                            if (existingIndex >= 0) {
+                                                val existing = list[existingIndex]
+                                                list[existingIndex] = existing.copy(accounts = existing.accounts + acc)
+                                            } else {
+                                                list.add(UniqueDescItem(text = desc, accounts = listOf(acc), primaryAccount = acc))
+                                            }
+                                        }
+                                    }
+                                    if (list.isEmpty() && selectedVisibilityAccount == null && !contact?.note.isNullOrBlank()) {
+                                        val fallbackAcc = contactAccounts.firstOrNull() ?: ContactAccountInfo(
+                                            rawContactId = 0L,
+                                            accountType = null,
+                                            accountName = null,
+                                            displayName = "Device Storage",
+                                            isReadOnly = false,
+                                            isSim = false
+                                        )
+                                        list.add(UniqueDescItem(text = contact.note!!.trim(), accounts = listOf(fallbackAcc), primaryAccount = fallbackAcc))
+                                    }
+                                    list
+                                }
+
+                                RivoExpressiveCard(
+                                    title = "Description (Synced Notes)",
+                                    icon = Icons.Default.Description,
+                                    trailingContent = {
+                                        if (contact != null) {
+                                            Box {
+                                                IconButton(
+                                                    onClick = { showDescriptionOverflowMenu = true },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.MoreVert,
+                                                        contentDescription = "Description options",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                DropdownMenu(
+                                                    expanded = showDescriptionOverflowMenu,
+                                                    onDismissRequest = { showDescriptionOverflowMenu = false }
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = { Text("Visibility") },
+                                                        leadingIcon = {
+                                                            Icon(
+                                                                Icons.Default.Visibility,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            showDescriptionOverflowMenu = false
+                                                            showVisibilityDialog = true
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    if (selectedVisibilityAccount != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                                    RoundedCornerShape(12.dp)
+                                                )
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.FilterList,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = "Visibility: ${selectedVisibilityAccount!!.displayName}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = { selectedVisibilityAccount = null },
+                                                modifier = Modifier.size(18.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Clear visibility filter",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (uniqueDescriptions.isNotEmpty()) {
+                                        uniqueDescriptions.forEachIndexed { index, item ->
+                                            var isExpanded by remember(item.text) { mutableStateOf(false) }
+                                            var hasMoreThan5Lines by remember(item.text) {
+                                                mutableStateOf(item.text.lines().size > 5)
+                                            }
+
+                                            if (contactAccounts.size > 1 || selectedVisibilityAccount != null) {
+                                                val locationNames = item.accounts.map { it.displayName }.distinct().joinToString(", ")
+                                                val locationIcon: androidx.compose.ui.graphics.vector.ImageVector = when {
+                                                    item.accounts.all { it.isSim } -> Icons.Default.SimCard
+                                                    item.accounts.all { it.accountType?.contains("google", ignoreCase = true) == true } -> Icons.Default.AccountCircle
+                                                    item.accounts.all { it.accountType != null } -> Icons.Default.Sync
+                                                    else -> Icons.Default.PhoneAndroid
+                                                }
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                ) {
+                                                    Icon(
+                                                        locationIcon,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(
+                                                        text = locationNames,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                }
+                                            }
+
+                                            val annotated = buildClickableAnnotatedString(item.text)
+                                            SelectionContainer {
+                                                Text(
+                                                    text = annotated,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                                    maxLines = if (isExpanded) Int.MAX_VALUE else 5,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    onTextLayout = { textLayoutResult ->
+                                                        if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
+                                                            hasMoreThan5Lines = true
+                                                        }
+                                                    }
+                                                )
+                                            }
+
+                                            if (hasMoreThan5Lines) {
+                                                TextButton(
+                                                    onClick = { isExpanded = !isExpanded },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(
+                                                        if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(if (isExpanded) "Show less" else "Show more")
+                                                }
+                                            }
+
+                                            if (contact != null) {
+                                                TextButton(
+                                                    onClick = {
+                                                        editingTargetAccount = if (item.accounts.size == contactAccounts.size) null else item.primaryAccount
+                                                        editingInitialDescription = item.text
+                                                        showDescriptionEditor = true
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(6.dp))
+                                                    val editLabel = if (uniqueDescriptions.size > 1) {
+                                                        val names = item.accounts.map { it.displayName }.distinct().joinToString(", ")
+                                                        "Edit description ($names)"
+                                                    } else {
+                                                        "Edit description"
+                                                    }
+                                                    Text(editLabel)
+                                                }
+                                            }
+
+                                            if (index < uniqueDescriptions.size - 1) {
+                                                HorizontalDivider(
+                                                    Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                            }
+                                        }
+
+                                        if (selectedVisibilityAccount == null && contact != null) {
+                                            val accountsWithoutDesc = contactAccounts.filter { it.description.isNullOrBlank() && !it.isReadOnly }
+                                            if (accountsWithoutDesc.isNotEmpty()) {
+                                                HorizontalDivider(
+                                                    Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                                )
+                                                TextButton(
+                                                    onClick = {
+                                                        editingTargetAccount = accountsWithoutDesc.firstOrNull()
+                                                        editingInitialDescription = ""
+                                                        showDescriptionEditor = true
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text("Add description for another location...")
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (contact != null) {
+                                            if (selectedVisibilityAccount != null) {
+                                                Text(
+                                                    text = "No description in ${selectedVisibilityAccount!!.displayName}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    editingTargetAccount = selectedVisibilityAccount
+                                                    editingInitialDescription = ""
+                                                    showDescriptionEditor = true
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(
+                                                    if (selectedVisibilityAccount != null) "Add description for ${selectedVisibilityAccount!!.displayName}..."
+                                                    else "Add description..."
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = "Save contact to sync description with Google & Exchange",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Notes section (between Contact Info and Recent Activity)
+                    "notes" -> {
+                        if (showNotes) {
+                            item {
+                                var currentNote by remember(displayName, displayPhone) {
+                                    mutableStateOf(NoteManager.readNote(context, displayName, displayPhone))
+                                }
+                                LaunchedEffect(showNoteEditor) {
+                                    if (!showNoteEditor) currentNote = NoteManager.readNote(context, displayName, displayPhone)
+                                }
+                                var isNoteExpanded by remember(currentNote) { mutableStateOf(false) }
+                                var hasNoteMoreThan5Lines by remember(currentNote) {
+                                    mutableStateOf(currentNote.lines().size > 5)
+                                }
+
+                                RivoExpressiveCard(title = "Note (Phone Only)", icon = Icons.Default.Note) {
+                                    if (currentNote.isNotBlank()) {
+                                        // Inline preview with selectable text and clickable links
+                                        val annotated = buildClickableAnnotatedString(currentNote)
+                                        SelectionContainer {
+                                            Text(
+                                                text = annotated,
+                                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                                                maxLines = if (isNoteExpanded) Int.MAX_VALUE else 5,
+                                                overflow = TextOverflow.Ellipsis,
+                                                onTextLayout = { textLayoutResult ->
+                                                    if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
+                                                        hasNoteMoreThan5Lines = true
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        if (hasNoteMoreThan5Lines) {
+                                            TextButton(
+                                                onClick = { isNoteExpanded = !isNoteExpanded },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(
+                                                    if (isNoteExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(if (isNoteExpanded) "Show less" else "Show more")
+                                            }
+                                        }
+                                        HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    }
                                     TextButton(
-                                        onClick = {
-                                            editingTargetAccount = if (item.accounts.size == contactAccounts.size) null else item.primaryAccount
-                                            editingInitialDescription = item.text
-                                            showDescriptionEditor = true
-                                        },
+                                        onClick = { showNoteEditor = true },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        val editLabel = if (uniqueDescriptions.size > 1) {
-                                            val names = item.accounts.map { it.displayName }.distinct().joinToString(", ")
-                                            "Edit description ($names)"
-                                        } else {
-                                            "Edit description"
+                                        Text(if (currentNote.isBlank()) "Add note..." else "Edit note")
+                                    }
+
+                                    // When "Integrate Notes Section" is turned OFF in Settings → Calls & System,
+                                    // this app Notes section and the call recording notes (kept inside Ever Call
+                                    // Recorder's playback screen) are merged: surface a quick link here so both
+                                    // notes live in one place from the user's perspective. When the toggle is ON
+                                    // (default) the two notes sections stay fully separate, as before.
+                                    val integrateNotes = remember(settingsVer) {
+                                        prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)
+                                    }
+                                    if (!integrateNotes) {
+                                        HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        TextButton(
+                                            onClick = {
+                                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                                    val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
+                                                    try { context.startActivity(launch) } catch (_: Exception) {}
+                                                } else {
+                                                    android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("View call recording notes for this contact")
                                         }
-                                        Text(editLabel)
                                     }
                                 }
+                            }
+                        }
+                    }
 
-                                if (index < uniqueDescriptions.size - 1) {
-                                    HorizontalDivider(
-                                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    // Events & More
+                    "events" -> {
+                        if (showEvents && contact != null && (contact.events.isNotEmpty() || contact.addresses.isNotEmpty())) {
+                            item {
+                                RivoExpressiveCard(title = "Events & More", icon = Icons.Default.Event) {
+                                    contact.events.forEachIndexed { index, event ->
+                                        val isBirthday = event.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY
+                                        RivoListItem(headline = event.date, supporting = event.label ?: if (isBirthday) "Birthday" else "Event", leadingIcon = if (isBirthday) Icons.Outlined.Cake else Icons.Outlined.Event, onClick = {})
+                                        if (index < contact.events.size - 1 || contact.addresses.isNotEmpty()) {
+                                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        }
+                                    }
+                                    contact.addresses.forEachIndexed { index, address ->
+                                        RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
+                                        })
+                                        if (index < contact.addresses.size - 1) {
+                                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recent Activity
+                    "recent_activity" -> {
+                        if (showRecentActivity && contactLogs.isNotEmpty()) {
+                            item {
+                                RivoExpressiveCard(title = "Recent Activity", icon = Icons.Default.History) {
+                                    Column(modifier = Modifier.animateContentSize()) {
+                                        contactLogs.take(3).forEachIndexed { index, log ->
+                                            CallLogTileSimple(log)
+                                            if (index < 2 && index < contactLogs.size - 1) {
+                                                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            }
+                                        }
+                                        if (contactLogs.size > 3) {
+                                            TextButton(onClick = { navController.navigate("call_log_detail_screen?contactId=${contactId ?: "null"}&phoneNumber=${phoneNumber ?: "null"}") }, modifier = Modifier.fillMaxWidth()) {
+                                                Text("Show full history")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Choose Sim — per-contact override of which SIM is used to call this contact
+                    // (saved or unsaved), defaulting to "According to Settings". Available for every
+                    // contact, so it always shows here regardless of whether Recent Activity or
+                    // Saved In end up rendering around it.
+                    "choose_sim" -> {
+                        if (showChooseSim) {
+                            item {
+                                RivoExpressiveCard(title = "Choose Sim", icon = Icons.Default.SimCard) {
+                                    RivoListItem(
+                                        headline = simChoiceLabel(contactSimChoice),
+                                        supporting = "Sim used to call this contact",
+                                        leadingIcon = Icons.Default.SimCard,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = { showChooseSimDialog = true }
                                     )
                                 }
                             }
+                        }
+                    }
 
-                            if (selectedVisibilityAccount == null && contact != null) {
-                                val accountsWithoutDesc = contactAccounts.filter { it.description.isNullOrBlank() && !it.isReadOnly }
-                                if (accountsWithoutDesc.isNotEmpty()) {
+                    // Calling Backgrounds — per-contact override for incoming and ongoing call screens
+                    "calling_backgrounds" -> {
+                        if (showCallingBackgrounds) {
+                            item {
+                                val incomingContactBgType = remember(settingsVer, contactSimKey) {
+                                    prefs.getString("contact_${contactSimKey}_incoming_bg_type", null)
+                                }
+                                val ongoingContactBgType = remember(settingsVer, contactSimKey) {
+                                    prefs.getString("contact_${contactSimKey}_ongoing_bg_type", null)
+                                }
+                                val incomingSupporting = when (incomingContactBgType) {
+                                    "wallpaper" -> "Device Wallpaper (Customized)"
+                                    "picture" -> "Custom Picture"
+                                    "video" -> "Custom Video"
+                                    "none" -> "None (Solid Background)"
+                                    else -> "According to Settings (Default)"
+                                }
+                                val ongoingSupporting = when (ongoingContactBgType) {
+                                    "wallpaper" -> "Device Wallpaper (Customized)"
+                                    "picture" -> "Custom Picture"
+                                    "video" -> "Custom Video"
+                                    "none" -> "None (Solid Background)"
+                                    else -> "According to Settings (Default)"
+                                }
+
+                                RivoExpressiveCard(title = "Calling Backgrounds", icon = Icons.Default.Wallpaper) {
+                                    RivoListItem(
+                                        headline = "Incoming Call Background",
+                                        supporting = incomingSupporting,
+                                        leadingIcon = Icons.Default.CallReceived,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = {
+                                            navigator.navigate(
+                                                CustomBackgroundPickerScreenDestination(
+                                                    isIncoming = true,
+                                                    contactKey = contactSimKey.toString(),
+                                                    contactDisplayName = contact?.name ?: displayName
+                                                )
+                                            )
+                                        }
+                                    )
                                     HorizontalDivider(
-                                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                        modifier = Modifier.padding(horizontal = 16.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                                     )
-                                    TextButton(
+                                    RivoListItem(
+                                        headline = "Ongoing Call Background",
+                                        supporting = ongoingSupporting,
+                                        leadingIcon = Icons.Default.PhoneInTalk,
+                                        trailingIcon = Icons.Default.ChevronRight,
                                         onClick = {
-                                            editingTargetAccount = accountsWithoutDesc.firstOrNull()
-                                            editingInitialDescription = ""
-                                            showDescriptionEditor = true
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Add description for another location...")
-                                    }
-                                }
-                            }
-                        } else {
-                            if (contact != null) {
-                                if (selectedVisibilityAccount != null) {
-                                    Text(
-                                        text = "No description in ${selectedVisibilityAccount!!.displayName}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                            navigator.navigate(
+                                                CustomBackgroundPickerScreenDestination(
+                                                    isIncoming = false,
+                                                    contactKey = contactSimKey.toString(),
+                                                    contactDisplayName = contact?.name ?: displayName
+                                                )
+                                            )
+                                        }
                                     )
                                 }
-                                TextButton(
-                                    onClick = {
-                                        editingTargetAccount = selectedVisibilityAccount
-                                        editingInitialDescription = ""
-                                        showDescriptionEditor = true
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        if (selectedVisibilityAccount != null) "Add description for ${selectedVisibilityAccount!!.displayName}..."
-                                        else "Add description..."
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Save contact to sync description with Google & Exchange",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                                )
                             }
                         }
                     }
-                }
 
-                // Notes section (between Contact Info and Recent Activity)
-                item {
-                    var currentNote by remember(displayName, displayPhone) {
-                        mutableStateOf(NoteManager.readNote(context, displayName, displayPhone))
-                    }
-                    LaunchedEffect(showNoteEditor) {
-                        if (!showNoteEditor) currentNote = NoteManager.readNote(context, displayName, displayPhone)
-                    }
-                    var isNoteExpanded by remember(currentNote) { mutableStateOf(false) }
-                    var hasNoteMoreThan5Lines by remember(currentNote) {
-                        mutableStateOf(currentNote.lines().size > 5)
+                    // Advanced PFP — per-contact override for incoming and ongoing call custom contact PFP
+                    "advanced_pfp" -> {
+                        if (showAdvancedPfp) {
+                            item {
+                                val incomingContactPfpType = remember(settingsVer, contactSimKey) {
+                                    prefs.getString("contact_${contactSimKey}_incoming_custom_pfp_type", null)
+                                }
+                                val ongoingContactPfpType = remember(settingsVer, contactSimKey) {
+                                    prefs.getString("contact_${contactSimKey}_ongoing_custom_pfp_type", null)
+                                }
+                                val incomingPfpSupporting = when (incomingContactPfpType) {
+                                    "wallpaper" -> "Device Wallpaper (Customized)"
+                                    "picture" -> "Custom Picture"
+                                    "video" -> "Custom Video"
+                                    "none" -> "None (Default Face Icon)"
+                                    else -> "According to Settings (Default)"
+                                }
+                                val ongoingPfpSupporting = when (ongoingContactPfpType) {
+                                    "wallpaper" -> "Device Wallpaper (Customized)"
+                                    "picture" -> "Custom Picture"
+                                    "video" -> "Custom Video"
+                                    "none" -> "None (Default Face Icon)"
+                                    else -> "According to Settings (Default)"
+                                }
+
+                                RivoExpressiveCard(title = "Advanced PFP", icon = Icons.Default.AccountCircle) {
+                                    RivoListItem(
+                                        headline = "Incoming Call PFP",
+                                        supporting = incomingPfpSupporting,
+                                        leadingIcon = Icons.Default.CallReceived,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = {
+                                            navigator.navigate(
+                                                ContactPfpCustomizationScreenDestination(
+                                                    isIncoming = true,
+                                                    contactKey = contactSimKey.toString(),
+                                                    contactDisplayName = contact?.name ?: displayName
+                                                )
+                                            )
+                                        }
+                                    )
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                    )
+                                    RivoListItem(
+                                        headline = "Ongoing Call PFP",
+                                        supporting = ongoingPfpSupporting,
+                                        leadingIcon = Icons.Default.PhoneInTalk,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = {
+                                            navigator.navigate(
+                                                ContactPfpCustomizationScreenDestination(
+                                                    isIncoming = false,
+                                                    contactKey = contactSimKey.toString(),
+                                                    contactDisplayName = contact?.name ?: displayName
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    RivoExpressiveCard(title = "Notes", icon = Icons.Default.Note) {
-                        if (currentNote.isNotBlank()) {
-                            // Inline preview with selectable text and clickable links
-                            val annotated = buildClickableAnnotatedString(currentNote)
-                            SelectionContainer {
-                                Text(
-                                    text = annotated,
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                                    maxLines = if (isNoteExpanded) Int.MAX_VALUE else 5,
-                                    overflow = TextOverflow.Ellipsis,
-                                    onTextLayout = { textLayoutResult ->
-                                        if (textLayoutResult.lineCount > 5 || textLayoutResult.hasVisualOverflow) {
-                                            hasNoteMoreThan5Lines = true
+                    // Ringtone — per-contact custom ringtone, defaulting to the system ringtone.
+                    // Only meaningful for a saved contact (writes to ContactsContract by contact id).
+                    "ringtone" -> {
+                        if (showRingtone && contact != null) {
+                            item {
+                                RivoExpressiveCard(title = "Ringtone", icon = Icons.Default.MusicNote) {
+                                    RivoListItem(
+                                        headline = contactRingtoneLabel,
+                                        supporting = "Ringtone for calls from this contact",
+                                        leadingIcon = Icons.Default.MusicNote,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = { openRingtonePicker() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Choose Default Number — only meaningful (and only shown) when the contact has
+                    // 2+ saved numbers, e.g. one saved with a country code and one without.
+                    "choose_default_number" -> {
+                        if (showChooseDefaultNumber && contact != null && contactPhoneNumbers.size > 1) {
+                            item {
+                                RivoExpressiveCard(title = "Choose Default Number", icon = Icons.Default.Numbers) {
+                                    RivoListItem(
+                                        headline = contactDefaultNumber ?: "Ask Every Time",
+                                        supporting = "Number used when calling this contact",
+                                        leadingIcon = Icons.Default.Numbers,
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = { showChooseDefaultNumberDialog = true }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Saved In — shows the user which account(s) this contact actually lives in
+                    // (Google account(s), SIM, phone storage, etc.), since a contact merged across
+                    // multiple sources can be stored in more than one place at once.
+                    "saved_in" -> {
+                        if (showSavedIn && contact != null && contact.sourceAccounts.isNotEmpty()) {
+                            item {
+                                RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage) {
+                                    contact.sourceAccounts.forEachIndexed { index, source ->
+                                        val icon = when {
+                                            source.startsWith("SIM", ignoreCase = true) -> Icons.Default.SimCard
+                                            source.equals("Device Storage", ignoreCase = true) -> Icons.Default.PhoneAndroid
+                                            source.equals("WhatsApp", ignoreCase = true) -> Icons.Default.Chat
+                                            else -> Icons.Default.AccountCircle
+                                        }
+                                        RivoListItem(headline = source, leadingIcon = icon, onClick = {})
+                                        if (index < contact.sourceAccounts.size - 1) {
+                                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         }
                                     }
-                                )
-                            }
-                            if (hasNoteMoreThan5Lines) {
-                                TextButton(
-                                    onClick = { isNoteExpanded = !isNoteExpanded },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        if (isNoteExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isNoteExpanded) "Show less" else "Show more")
-                                }
-                            }
-                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        }
-                        TextButton(
-                            onClick = { showNoteEditor = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (currentNote.isBlank()) "Add note..." else "Edit note")
-                        }
-
-                        // When "Integrate Notes Section" is turned OFF in Settings → Calls & System,
-                        // this app Notes section and the call recording notes (kept inside Ever Call
-                        // Recorder's playback screen) are merged: surface a quick link here so both
-                        // notes live in one place from the user's perspective. When the toggle is ON
-                        // (default) the two notes sections stay fully separate, as before.
-                        val integrateNotes = remember(settingsVer) {
-                            prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)
-                        }
-                        if (!integrateNotes) {
-                            HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                            TextButton(
-                                onClick = {
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                        val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
-                                        try { context.startActivity(launch) } catch (_: Exception) {}
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.width(6.dp))
-                                Text("View call recording notes for this contact")
-                            }
-                        }
-                    }
-                }
-
-                // Events & More
-                if (contact != null && (contact.events.isNotEmpty() || contact.addresses.isNotEmpty())) {
-                    item {
-                        RivoExpressiveCard(title = "Events & More", icon = Icons.Default.Event) {
-                            contact.events.forEachIndexed { index, event ->
-                                val isBirthday = event.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY
-                                RivoListItem(headline = event.date, supporting = event.label ?: if (isBirthday) "Birthday" else "Event", leadingIcon = if (isBirthday) Icons.Outlined.Cake else Icons.Outlined.Event, onClick = {})
-                                if (index < contact.events.size - 1 || contact.addresses.isNotEmpty()) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                            contact.addresses.forEachIndexed { index, address ->
-                                RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
-                                })
-                                if (index < contact.addresses.size - 1) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
                         }
                     }
                 }
-
-                // Recent Activity
-                if (contactLogs.isNotEmpty()) {
-                    item {
-                        RivoExpressiveCard(title = "Recent Activity", icon = Icons.Default.History) {
-                            Column(modifier = Modifier.animateContentSize()) {
-                                contactLogs.take(3).forEachIndexed { index, log ->
-                                    CallLogTileSimple(log)
-                                    if (index < 2 && index < contactLogs.size - 1) {
-                                        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                    }
-                                }
-                                if (contactLogs.size > 3) {
-                                    TextButton(onClick = { navController.navigate("call_log_detail_screen?contactId=${contactId ?: "null"}&phoneNumber=${phoneNumber ?: "null"}") }, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Show full history")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Choose Sim — per-contact override of which SIM is used to call this contact
-                // (saved or unsaved), defaulting to "According to Settings". Available for every
-                // contact, so it always shows here regardless of whether Recent Activity or
-                // Saved In end up rendering around it.
-                item {
-                    RivoExpressiveCard(title = "Choose Sim", icon = Icons.Default.SimCard) {
-                        RivoListItem(
-                            headline = simChoiceLabel(contactSimChoice),
-                            supporting = "Sim used to call this contact",
-                            leadingIcon = Icons.Default.SimCard,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = { showChooseSimDialog = true }
-                        )
-                    }
-                }
-
-                // Calling Backgrounds — per-contact override for incoming and ongoing call screens
-                item {
-                    val incomingContactBgType = remember(settingsVer, contactSimKey) {
-                        prefs.getString("contact_${contactSimKey}_incoming_bg_type", null)
-                    }
-                    val ongoingContactBgType = remember(settingsVer, contactSimKey) {
-                        prefs.getString("contact_${contactSimKey}_ongoing_bg_type", null)
-                    }
-                    val incomingSupporting = when (incomingContactBgType) {
-                        "wallpaper" -> "Device Wallpaper (Customized)"
-                        "picture" -> "Custom Picture"
-                        "video" -> "Custom Video"
-                        "none" -> "None (Solid Background)"
-                        else -> "According to Settings (Default)"
-                    }
-                    val ongoingSupporting = when (ongoingContactBgType) {
-                        "wallpaper" -> "Device Wallpaper (Customized)"
-                        "picture" -> "Custom Picture"
-                        "video" -> "Custom Video"
-                        "none" -> "None (Solid Background)"
-                        else -> "According to Settings (Default)"
-                    }
-
-                    RivoExpressiveCard(title = "Calling Backgrounds", icon = Icons.Default.Wallpaper) {
-                        RivoListItem(
-                            headline = "Incoming Call Background",
-                            supporting = incomingSupporting,
-                            leadingIcon = Icons.Default.CallReceived,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = {
-                                navigator.navigate(
-                                    CustomBackgroundPickerScreenDestination(
-                                        isIncoming = true,
-                                        contactKey = contactSimKey.toString(),
-                                        contactDisplayName = contact?.name ?: displayName
-                                    )
-                                )
-                            }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                        )
-                        RivoListItem(
-                            headline = "Ongoing Call Background",
-                            supporting = ongoingSupporting,
-                            leadingIcon = Icons.Default.PhoneInTalk,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = {
-                                navigator.navigate(
-                                    CustomBackgroundPickerScreenDestination(
-                                        isIncoming = false,
-                                        contactKey = contactSimKey.toString(),
-                                        contactDisplayName = contact?.name ?: displayName
-                                    )
-                                )
-                            }
-                        )
-                    }
-                }
-
-                // Advanced PFP — per-contact override for incoming and ongoing call custom contact PFP
-                item {
-                    val incomingContactPfpType = remember(settingsVer, contactSimKey) {
-                        prefs.getString("contact_${contactSimKey}_incoming_custom_pfp_type", null)
-                    }
-                    val ongoingContactPfpType = remember(settingsVer, contactSimKey) {
-                        prefs.getString("contact_${contactSimKey}_ongoing_custom_pfp_type", null)
-                    }
-                    val incomingPfpSupporting = when (incomingContactPfpType) {
-                        "wallpaper" -> "Device Wallpaper (Customized)"
-                        "picture" -> "Custom Picture"
-                        "video" -> "Custom Video"
-                        "none" -> "None (Default Face Icon)"
-                        else -> "According to Settings (Default)"
-                    }
-                    val ongoingPfpSupporting = when (ongoingContactPfpType) {
-                        "wallpaper" -> "Device Wallpaper (Customized)"
-                        "picture" -> "Custom Picture"
-                        "video" -> "Custom Video"
-                        "none" -> "None (Default Face Icon)"
-                        else -> "According to Settings (Default)"
-                    }
-
-                    RivoExpressiveCard(title = "Advanced PFP", icon = Icons.Default.AccountCircle) {
-                        RivoListItem(
-                            headline = "Incoming Call PFP",
-                            supporting = incomingPfpSupporting,
-                            leadingIcon = Icons.Default.CallReceived,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = {
-                                navigator.navigate(
-                                    ContactPfpCustomizationScreenDestination(
-                                        isIncoming = true,
-                                        contactKey = contactSimKey.toString(),
-                                        contactDisplayName = contact?.name ?: displayName
-                                    )
-                                )
-                            }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                        )
-                        RivoListItem(
-                            headline = "Ongoing Call PFP",
-                            supporting = ongoingPfpSupporting,
-                            leadingIcon = Icons.Default.PhoneInTalk,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = {
-                                navigator.navigate(
-                                    ContactPfpCustomizationScreenDestination(
-                                        isIncoming = false,
-                                        contactKey = contactSimKey.toString(),
-                                        contactDisplayName = contact?.name ?: displayName
-                                    )
-                                )
-                            }
-                        )
-                    }
-                }
-
-                // Ringtone — per-contact custom ringtone, defaulting to the system ringtone.
-                // Only meaningful for a saved contact (writes to ContactsContract by contact id).
-                if (contact != null) {
-                    item {
-                        RivoExpressiveCard(title = "Ringtone", icon = Icons.Default.MusicNote) {
-                            RivoListItem(
-                                headline = contactRingtoneLabel,
-                                supporting = "Ringtone for calls from this contact",
-                                leadingIcon = Icons.Default.MusicNote,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { openRingtonePicker() }
-                            )
-                        }
-                    }
-                }
-
-                // Choose Default Number — only meaningful (and only shown) when the contact has
-                // 2+ saved numbers, e.g. one saved with a country code and one without.
-                if (contact != null && contactPhoneNumbers.size > 1) {
-                    item {
-                        RivoExpressiveCard(title = "Choose Default Number", icon = Icons.Default.Numbers) {
-                            RivoListItem(
-                                headline = contactDefaultNumber ?: "Ask Every Time",
-                                supporting = "Number used when calling this contact",
-                                leadingIcon = Icons.Default.Numbers,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { showChooseDefaultNumberDialog = true }
-                            )
-                        }
-                    }
-                }
-
-                // Saved In — shows the user which account(s) this contact actually lives in
-                // (Google account(s), SIM, phone storage, etc.), since a contact merged across
-                // multiple sources can be stored in more than one place at once.
-                if (contact != null && contact.sourceAccounts.isNotEmpty()) {
-                    item {
-                        RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage) {
-                            contact.sourceAccounts.forEachIndexed { index, source ->
-                                val icon = when {
-                                    source.startsWith("SIM", ignoreCase = true) -> Icons.Default.SimCard
-                                    source.equals("Device Storage", ignoreCase = true) -> Icons.Default.PhoneAndroid
-                                    source.equals("WhatsApp", ignoreCase = true) -> Icons.Default.Chat
-                                    else -> Icons.Default.AccountCircle
-                                }
-                                RivoListItem(headline = source, leadingIcon = icon, onClick = {})
-                                if (index < contact.sourceAccounts.size - 1) {
-                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                        }
-                    }
-                }
+            }
 
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
@@ -1987,7 +2048,7 @@ fun DescriptionEditorDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Description",
+                            "Description (Synced Notes)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

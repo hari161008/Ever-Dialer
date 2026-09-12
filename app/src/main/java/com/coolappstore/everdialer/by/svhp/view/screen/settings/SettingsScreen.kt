@@ -1946,6 +1946,16 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             )
                             CardDivider()
                             RivoListItem(
+                                headline = "Sim And Call Placement",
+                                supporting = "Default SIM, SIM colors, confirm calls, and contacts",
+                                leadingIcon = Icons.Outlined.SimCard,
+                                iconContainerColor = ColorGreen,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("sim_and_call_placement", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = { navigator.navigate(SimAndCallPlacementScreenDestination()) }
+                            )
+                            CardDivider()
+                            RivoListItem(
                                 headline = "Open System Additional Settings",
                                 supporting = "Manage phone accounts in Android system settings",
                                 leadingIcon = Icons.Outlined.Settings,
@@ -2152,14 +2162,17 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Integrate Notes Section", "Show notes alongside call recordings", "integrate_notes", Icons.Outlined.Notes, ColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "integrate_notes")) },
         SettingsSearchEntry("Delete Notes With Recording", "Remove the note when its recording is deleted", "delete_notes_with_recording", Icons.Outlined.NoteAlt, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "delete_notes_with_recording")) },
 
+        // ── Sim And Call Placement screen ──────────────────────────────────────
+        SettingsSearchEntry("Sim And Call Placement", "Default SIM, SIM colors, confirm calls, contacts", "sim_and_call_placement", Icons.Outlined.SimCard, ColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "sim_and_call_placement")) },
+        SettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, ColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "default_sim")) },
+        SettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, ColorIndigo) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "confirm_placing_call")) },
+        SettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, ColorTeal) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
+        SettingsSearchEntry("Use SIM based on call logs history on any call", "Automatically select the same SIM from call log history", "use_sim_from_call_log", Icons.Outlined.History, ColorIndigo) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "use_sim_from_call_log")) },
+        SettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, ColorAmber) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "customize_sim_colors")) },
+        SettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, ColorBlue) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "contacts_to_display")) },
+        SettingsSearchEntry("Missed Call Notification", "Show missed call notifications through Ever Dialer", "missed_call_notification", Icons.AutoMirrored.Filled.CallMissed, ColorRed) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "missed_call_notification")) },
+
         // ── Call Settings screen ─────────────────────────────────────────────
-        SettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, ColorGreen) { it.navigate(CallSettingsScreenDestination(highlightKey = "default_sim")) },
-        SettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, ColorIndigo) { it.navigate(CallSettingsScreenDestination(highlightKey = "confirm_placing_call")) },
-        SettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, ColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
-        SettingsSearchEntry("Use SIM based on call logs history on any call", "Automatically select the same SIM from call log history", "use_sim_from_call_log", Icons.Outlined.History, ColorIndigo) { it.navigate(CallSettingsScreenDestination(highlightKey = "use_sim_from_call_log")) },
-        SettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, ColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "customize_sim_colors")) },
-        SettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, ColorBlue) { it.navigate(CallSettingsScreenDestination(highlightKey = "contacts_to_display")) },
-        SettingsSearchEntry("Missed Call Notification", "Show missed call notifications through Ever Dialer", "missed_call_notification", Icons.AutoMirrored.Filled.CallMissed, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "missed_call_notification")) },
         SettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, ColorTeal) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
         SettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, ColorRed) { it.navigate(CallSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
         SettingsSearchEntry("Pocket Mode Prevention", "Block accidental answer/decline when phone is in pocket", "pocket_mode_prevention", Icons.Outlined.Sensors, ColorAmber) { it.navigate(CallSettingsScreenDestination(highlightKey = "pocket_mode_prevention")) },
@@ -2228,6 +2241,7 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Calls Section Elements", "Choose what shows in the Calls tab", "calls_section_elements", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "calls_section_elements")) },
         SettingsSearchEntry("Context Menu Elements", "Choose what shows in long-press menus", "context_menu_elements", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "context_menu_elements")) },
         SettingsSearchEntry("Tab Sections", "Choose which bottom tabs are visible", "tab_sections", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "tab_sections")) },
+        SettingsSearchEntry("Contact Info Elements", "Choose which elements appear in contact details", "contact_info_elements", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "contact_info_elements")) },
         SettingsSearchEntry("Default Tab Section", "Which tab opens when you launch the app", "default_tab_section", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "default_tab_section")) },
         SettingsSearchEntry("Scroll Animation", "Animate list scrolling", "scroll_animation", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "scroll_animation")) },
         SettingsSearchEntry("Pill Style Navigation", "Pill-shaped bottom navigation bar", "pill_style_nav", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "pill_style_nav")) },

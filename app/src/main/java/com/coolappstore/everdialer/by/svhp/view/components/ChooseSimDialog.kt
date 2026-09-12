@@ -1,6 +1,8 @@
 package com.coolappstore.everdialer.by.svhp.view.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +43,7 @@ val SIM_CHOICE_OPTIONS = listOf(
     SimChoiceOption(PreferenceManager.SIM_CHOICE_ASK, "Ask Every Time", "Show the SIM picker on every call", Icons.Default.HelpOutline),
     SimChoiceOption(PreferenceManager.SIM_CHOICE_SIM1, "SIM 1", null, Icons.Default.SimCard),
     SimChoiceOption(PreferenceManager.SIM_CHOICE_SIM2, "SIM 2", null, Icons.Default.SimCard),
+    SimChoiceOption(PreferenceManager.SIM_CHOICE_CALL_LOG, "Use SIM based on call logs", "Automatically select the same SIM from call log history", Icons.Default.History),
     SimChoiceOption(PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT, "Last Used SIM for This Contact", "Reuse the SIM from the most recent call with them", Icons.Default.History),
     SimChoiceOption(PreferenceManager.SIM_CHOICE_LAST_IN_CALL, "Last Used SIM in Previous Call", "Reuse the SIM from the last call made from the app", Icons.Default.PhoneCallback)
 )
@@ -164,7 +167,10 @@ fun ChooseSimDialog(
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     RivoChoiceDialogHeader(title = "Choose Sim", icon = Icons.Default.SimCard)
                     Spacer(Modifier.height(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         SIM_CHOICE_OPTIONS.forEach { option ->
                             RivoChoiceRow(
                                 icon = option.icon,

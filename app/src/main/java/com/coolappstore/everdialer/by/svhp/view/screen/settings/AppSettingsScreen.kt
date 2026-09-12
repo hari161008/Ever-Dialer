@@ -83,7 +83,7 @@ fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                 RivoExpressiveCard {
                     RivoListItem(
                         headline = "Call Settings",
-                        supporting = "Accounts, sensor, pocket mode, and sound",
+                        supporting = "Sensors, pocket mode, and sound",
                         leadingIcon = Icons.Outlined.Call,
                         iconContainerColor = ColorTeal,
                         trailingIcon = Icons.Default.ChevronRight,

@@ -2,7 +2,7 @@
 <br>
 
 <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Assets/Banner%20and%20Icon/Ever%20Dialer%20Banner.png" width="100%" />
-Ever Dialer is the best replacement of Google dialer which can RECORD CALLS without announcements, without root and has Material You design with dynamic colours, aesthetic, open source, customizable, some extra features like taking notes of each contacts and it has a quick note taking window when you are on the call to take notes quickly.
+Ever Dialer is the best replacement of Google dialer and [True Phone](https://play.google.com/store/apps/details?id=com.hb.dialer.free) which has 180+ FEATURES !! it can RECORD CALLS without announcements and without root, it has Material You design with dynamic colours, aesthetic, smooth and fluid animations, open source, heavily and much customizable like [True Phone](https://play.google.com/store/apps/details?id=com.hb.dialer.free), NO ADS, some more extra features like taking notes of each contact or taking a quick note from a window when you are on a call and finally IT's 100% FREEEE !!!!
 <br><br>
 <b>Note:</b> Since this app requires Shizuku for some features, the Shizuku service stops automatically in the Official Shizuku App. To prevent this happening, Uninstall the Original Shizuku and Install this <b>Shizuku Fork (<a href="https://github.com/thedjchi/Shizuku">Click Here</a>) </b> and after installed, then run shizuku normally and make sure that you go to shizuku app, on the top right, click settings icon and click <b>"Watchdog"</b> which prevents Shizuku service from Stopping !!)
 
