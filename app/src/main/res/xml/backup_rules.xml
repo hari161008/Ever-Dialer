@@ -8,4 +8,5 @@
          explicitly so recordings only ever exist where the user currently has them.
     -->
     <exclude domain="file" path="call_recordings/" />
+    <exclude domain="sharedpref" path="." />
 </full-backup-content>

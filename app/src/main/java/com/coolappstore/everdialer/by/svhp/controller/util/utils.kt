@@ -192,6 +192,14 @@ private fun rememberLastUsedSim(context: Context, telecomManager: TelecomManager
     } catch (_: Throwable) { /* best-effort only */ }
 }
 
+/** Resolves a 0-based SIM slot index (0 for SIM 1, 1 for SIM 2) to its PhoneAccountHandle from [accounts]. */
+fun getPhoneAccountForSimSlot(context: Context, accounts: List<PhoneAccountHandle>, targetSlot: Int): PhoneAccountHandle? {
+    if (accounts.isEmpty()) return null
+    val matched = accounts.firstOrNull { getSimSlotForAccountHandle(context, it) == targetSlot }
+    if (matched != null) return matched
+    return accounts.getOrNull(targetSlot) ?: accounts.firstOrNull()
+}
+
 /**
  * Places a call respecting the user's default SIM preference.
  * simPref: 0 = ask, 1 = SIM1 (index 0), 2 = SIM2 (index 1)
@@ -212,14 +220,23 @@ fun placeCallWithSimPreference(
                 .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
             if (useSimFromCallLog || simPref == 3) {
                 val slot = queryRecentSimSlot(context, number)
-                if (slot != null && slot in accounts.indices) {
-                    makeCall(context, number, accounts[slot])
-                    return
+                if (slot != null) {
+                    val handle = getPhoneAccountForSimSlot(context, accounts, slot)
+                    if (handle != null) {
+                        makeCall(context, number, handle)
+                        return
+                    }
                 }
             }
             when {
-                simPref == 1 && accounts.isNotEmpty() -> makeCall(context, number, accounts[0])
-                simPref == 2 && accounts.size >= 2 -> makeCall(context, number, accounts[1])
+                simPref == 1 && accounts.isNotEmpty() -> {
+                    val handle = getPhoneAccountForSimSlot(context, accounts, 0)
+                    if (handle != null) makeCall(context, number, handle) else onShowSimPicker()
+                }
+                simPref == 2 && accounts.size >= 2 -> {
+                    val handle = getPhoneAccountForSimSlot(context, accounts, 1)
+                    if (handle != null) makeCall(context, number, handle) else onShowSimPicker()
+                }
                 else -> onShowSimPicker()
             }
         } else {
@@ -296,20 +313,28 @@ fun placeCallWithContactSimPreference(
 
     when (contactSimChoice) {
         PreferenceManager.SIM_CHOICE_ASK -> onShowSimPicker()
-        PreferenceManager.SIM_CHOICE_SIM1 -> makeCall(context, number, accounts[0])
+        PreferenceManager.SIM_CHOICE_SIM1 -> {
+            val handle = getPhoneAccountForSimSlot(context, accounts, 0)
+            if (handle != null) makeCall(context, number, handle) else onShowSimPicker()
+        }
         PreferenceManager.SIM_CHOICE_SIM2 -> {
-            if (accounts.size >= 2) makeCall(context, number, accounts[1]) else onShowSimPicker()
+            val handle = getPhoneAccountForSimSlot(context, accounts, 1)
+            if (handle != null) makeCall(context, number, handle) else onShowSimPicker()
         }
         PreferenceManager.SIM_CHOICE_CALL_LOG,
         PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT -> {
             val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
-            if (slot != null && slot in accounts.indices) makeCall(context, number, accounts[slot])
+            val handle = if (slot != null) getPhoneAccountForSimSlot(context, accounts, slot) else null
+            if (handle != null) makeCall(context, number, handle)
             else onShowSimPicker()
         }
         PreferenceManager.SIM_CHOICE_LAST_IN_CALL -> {
             val lastIdx = context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
                 .getInt(PreferenceManager.KEY_LAST_USED_SIM_GLOBAL, 0)
-            if (lastIdx in 1..accounts.size) makeCall(context, number, accounts[lastIdx - 1])
+            val handle = if (lastIdx in 1..2) getPhoneAccountForSimSlot(context, accounts, lastIdx - 1)
+                         else if (lastIdx in 1..accounts.size) accounts[lastIdx - 1]
+                         else null
+            if (handle != null) makeCall(context, number, handle)
             else onShowSimPicker()
         }
         else -> {
@@ -318,8 +343,9 @@ fun placeCallWithContactSimPreference(
                 .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
             if (useSimFromCallLog || globalSimPref == 3) {
                 val slot = recentSimSlotForContact ?: queryRecentSimSlot(context, number)
-                if (slot != null && slot in accounts.indices) {
-                    makeCall(context, number, accounts[slot])
+                val handle = if (slot != null) getPhoneAccountForSimSlot(context, accounts, slot) else null
+                if (handle != null) {
+                    makeCall(context, number, handle)
                     return
                 }
             }

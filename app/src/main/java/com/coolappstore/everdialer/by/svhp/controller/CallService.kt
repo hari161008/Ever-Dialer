@@ -526,6 +526,12 @@ class CallService : InCallService() {
                 _heldCallSession.value?.call == call   -> _heldCallSession.value   = CallSession(call, state)
             }
 
+            if (state == Call.STATE_SELECT_PHONE_ACCOUNT) {
+                val num = call.details?.handle?.schemeSpecificPart?.let { android.net.Uri.decode(it) } ?: ""
+                handleSelectPhoneAccount(call, num)
+                return
+            }
+
             if (pendingAccountSelectionCalls.contains(call)) {
                 if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
                     pendingAccountSelectionCalls.remove(call)
@@ -762,24 +768,38 @@ class CallService : InCallService() {
             val contactKey = try { contactsRepository.getContactByNumber(cleanNum)?.id } catch (_: Exception) { null } ?: cleanNum
             val contactSimChoice = prefs.getContactSimChoice(contactKey, cleanNum)
             val globalSimPref = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
+            val useSimFromCallLog = getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+                .getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false)
             val targetAccount = when (contactSimChoice) {
-                PreferenceManager.SIM_CHOICE_SIM1 -> accounts.getOrNull(0)
-                PreferenceManager.SIM_CHOICE_SIM2 -> accounts.getOrNull(1)
+                PreferenceManager.SIM_CHOICE_SIM1 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 0)
+                PreferenceManager.SIM_CHOICE_SIM2 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 1)
                 PreferenceManager.SIM_CHOICE_CALL_LOG,
-                PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT,
-                PreferenceManager.SIM_CHOICE_LAST_IN_CALL -> {
+                PreferenceManager.SIM_CHOICE_LAST_FOR_CONTACT -> {
                     val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)
-                    if (slot != null && slot in accounts.indices) accounts[slot] else null
+                    if (slot != null) com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, slot) else null
+                }
+                PreferenceManager.SIM_CHOICE_LAST_IN_CALL -> {
+                    val lastIdx = getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+                        .getInt(PreferenceManager.KEY_LAST_USED_SIM_GLOBAL, 0)
+                    if (lastIdx in 1..2) com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, lastIdx - 1)
+                    else if (lastIdx in 1..accounts.size) accounts[lastIdx - 1]
+                    else null
                 }
                 PreferenceManager.SIM_CHOICE_SETTINGS -> {
-                    when (globalSimPref) {
-                        1 -> accounts.getOrNull(0)
-                        2 -> accounts.getOrNull(1)
-                        3 -> {
-                            val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)
-                            if (slot != null && slot in accounts.indices) accounts[slot] else null
+                    if (useSimFromCallLog || globalSimPref == 3) {
+                        val slot = com.coolappstore.everdialer.by.svhp.controller.util.queryRecentSimSlot(this, cleanNum)
+                        if (slot != null) com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, slot)
+                        else when (globalSimPref) {
+                            1 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 0)
+                            2 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 1)
+                            else -> null
                         }
-                        else -> null
+                    } else {
+                        when (globalSimPref) {
+                            1 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 0)
+                            2 -> com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(this, accounts, 1)
+                            else -> null
+                        }
                     }
                 }
                 else -> null // SIM_CHOICE_ASK

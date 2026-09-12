@@ -302,6 +302,8 @@ fun ContactDetailsScreen(
     val scope = rememberCoroutineScope()
 
     var selectedNumberForMenu by remember { mutableStateOf<String?>(null) }
+    var selectedEmailForMenu by remember { mutableStateOf<String?>(null) }
+    var selectedAddressForMenu by remember { mutableStateOf<String?>(null) }
 
     // Contact Info → "Ringtone" — per-contact custom ringtone, read straight from Contacts
     // provider so it always reflects reality (including changes made from the system Contacts
@@ -586,7 +588,11 @@ fun ContactDetailsScreen(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                     )
 
-                    if (contactAccounts.isNotEmpty()) {
+                    val distinctVisibilityAccounts = remember(contactAccounts) {
+                        contactAccounts.distinctBy { (it.accountType ?: "") to (it.accountName ?: "") }
+                    }
+
+                    if (distinctVisibilityAccounts.isNotEmpty()) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -601,7 +607,7 @@ fun ContactDetailsScreen(
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "All locations (${contactAccounts.size})",
+                                    "All locations (${distinctVisibilityAccounts.size})",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -621,8 +627,11 @@ fun ContactDetailsScreen(
                         )
                     }
 
-                    contactAccounts.forEach { acc ->
-                        val isSelected = selectedVisibilityAccount?.rawContactId == acc.rawContactId
+                    distinctVisibilityAccounts.forEach { acc ->
+                        val isSelected = selectedVisibilityAccount?.let {
+                            it.rawContactId == acc.rawContactId ||
+                            ((it.accountType ?: "") == (acc.accountType ?: "") && (it.accountName ?: "") == (acc.accountName ?: ""))
+                        } == true
                         val icon: androidx.compose.ui.graphics.vector.ImageVector = when {
                             acc.isSim -> Icons.Default.SimCard
                             acc.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle
@@ -1033,17 +1042,33 @@ fun ContactDetailsScreen(
                                             }
                                         }
                                         contact.emails.forEachIndexed { index, email ->
-                                            RivoListItem(headline = email, supporting = "Email", leadingIcon = Icons.Default.Email, onClick = {
-                                                context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
-                                            })
+                                            RivoListItem(
+                                                headline = email,
+                                                supporting = "Email",
+                                                leadingIcon = Icons.Default.Email,
+                                                onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
+                                                },
+                                                onLongClick = {
+                                                    selectedEmailForMenu = email
+                                                }
+                                            )
                                             if (index < contact.emails.size - 1 || contact.addresses.isNotEmpty()) {
                                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                             }
                                         }
                                         contact.addresses.forEachIndexed { index, address ->
-                                            RivoListItem(headline = address, supporting = "Address", leadingIcon = Icons.Default.LocationOn, onClick = {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
-                                            })
+                                            RivoListItem(
+                                                headline = address,
+                                                supporting = "Address",
+                                                leadingIcon = Icons.Default.LocationOn,
+                                                onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$address")))
+                                                },
+                                                onLongClick = {
+                                                    selectedAddressForMenu = address
+                                                }
+                                            )
                                             if (index < contact.addresses.size - 1) {
                                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                             }
@@ -1066,6 +1091,20 @@ fun ContactDetailsScreen(
                                     ) {
                                         val menuNum = selectedNumberForMenu ?: return@RivoDropdownMenu
                                         val isPrimaryNum = contactDefaultNumber == menuNum
+                                        RivoDropdownMenuItem(
+                                            text = "Send message",
+                                            icon = Icons.AutoMirrored.Filled.Message,
+                                            iconTint = Color(0xFF4CAF50),
+                                            onClick = {
+                                                selectedNumberForMenu = null
+                                                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$menuNum")).apply {
+                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                }
+                                                try {
+                                                    context.startActivity(intent)
+                                                } catch (_: Throwable) {}
+                                            }
+                                        )
                                         RivoDropdownMenuItem(
                                             text = "Copy",
                                             icon = Icons.Default.ContentCopy,
@@ -1159,6 +1198,128 @@ fun ContactDetailsScreen(
                                                 }
                                             )
                                         }
+                                    }
+
+                                    RivoDropdownMenu(
+                                        expanded = selectedEmailForMenu != null,
+                                        onDismissRequest = { selectedEmailForMenu = null }
+                                    ) {
+                                        val menuEmail = selectedEmailForMenu ?: return@RivoDropdownMenu
+                                        RivoDropdownMenuItem(
+                                            text = "Send email",
+                                            icon = Icons.Default.Email,
+                                            iconTint = Color(0xFF4CAF50),
+                                            onClick = {
+                                                selectedEmailForMenu = null
+                                                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$menuEmail")).apply {
+                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                }
+                                                try {
+                                                    context.startActivity(intent)
+                                                } catch (_: Throwable) {}
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Copy",
+                                            icon = Icons.Default.ContentCopy,
+                                            iconTint = Color(0xFF2196F3),
+                                            onClick = {
+                                                selectedEmailForMenu = null
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Email", menuEmail))
+                                                android.widget.Toast.makeText(context, "Email copied", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Edit contact",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
+                                            onClick = {
+                                                selectedEmailForMenu = null
+                                                if (contact != null) {
+                                                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                                                }
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Share",
+                                            icon = Icons.Default.Share,
+                                            iconTint = Color(0xFFFF9800),
+                                            onClick = {
+                                                selectedEmailForMenu = null
+                                                val shareText = if (contact != null && displayName.isNotBlank() && displayName != "Unknown") {
+                                                    "$displayName\n$menuEmail"
+                                                } else {
+                                                    menuEmail
+                                                }
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                            }
+                                        )
+                                    }
+
+                                    RivoDropdownMenu(
+                                        expanded = selectedAddressForMenu != null,
+                                        onDismissRequest = { selectedAddressForMenu = null }
+                                    ) {
+                                        val menuAddress = selectedAddressForMenu ?: return@RivoDropdownMenu
+                                        RivoDropdownMenuItem(
+                                            text = "View on map",
+                                            icon = Icons.Default.LocationOn,
+                                            iconTint = Color(0xFF4CAF50),
+                                            onClick = {
+                                                selectedAddressForMenu = null
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$menuAddress")).apply {
+                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                }
+                                                try {
+                                                    context.startActivity(intent)
+                                                } catch (_: Throwable) {}
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Copy",
+                                            icon = Icons.Default.ContentCopy,
+                                            iconTint = Color(0xFF2196F3),
+                                            onClick = {
+                                                selectedAddressForMenu = null
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Address", menuAddress))
+                                                android.widget.Toast.makeText(context, "Address copied", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Edit contact",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
+                                            onClick = {
+                                                selectedAddressForMenu = null
+                                                if (contact != null) {
+                                                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                                                }
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Share",
+                                            icon = Icons.Default.Share,
+                                            iconTint = Color(0xFFFF9800),
+                                            onClick = {
+                                                selectedAddressForMenu = null
+                                                val shareText = if (contact != null && displayName.isNotBlank() && displayName != "Unknown") {
+                                                    "$displayName\n$menuAddress"
+                                                } else {
+                                                    menuAddress
+                                                }
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                            }
+                                        )
                                     }
 
                                     // Copy / Share / Move / Delete — the same actions available from the
@@ -1324,8 +1485,12 @@ fun ContactDetailsScreen(
                         if (showDescription) {
                             item {
                                 val accountsForDescription = remember(contactAccounts, selectedVisibilityAccount) {
-                                    if (selectedVisibilityAccount != null) {
-                                        contactAccounts.filter { it.rawContactId == selectedVisibilityAccount?.rawContactId }
+                                    val sel = selectedVisibilityAccount
+                                    if (sel != null) {
+                                        contactAccounts.filter {
+                                            it.rawContactId == sel.rawContactId ||
+                                            ((it.accountType ?: "") == (sel.accountType ?: "") && (it.accountName ?: "") == (sel.accountName ?: ""))
+                                        }
                                     } else {
                                         contactAccounts
                                     }
@@ -2170,7 +2335,11 @@ fun DescriptionEditorDialog(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                     )
 
-                    if (writableAccounts.isNotEmpty()) {
+                    val distinctWritableAccounts = remember(writableAccounts) {
+                        writableAccounts.distinctBy { (it.accountType ?: "") to (it.accountName ?: "") }
+                    }
+
+                    if (distinctWritableAccounts.isNotEmpty()) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2186,7 +2355,7 @@ fun DescriptionEditorDialog(
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "All locations (${writableAccounts.size})",
+                                    "All locations (${distinctWritableAccounts.size})",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2206,8 +2375,11 @@ fun DescriptionEditorDialog(
                         )
                     }
 
-                    writableAccounts.forEach { acc ->
-                        val isSelected = !updateAllLinkedAccounts && selectedTarget?.rawContactId == acc.rawContactId
+                    distinctWritableAccounts.forEach { acc ->
+                        val isSelected = !updateAllLinkedAccounts && selectedTarget?.let {
+                            it.rawContactId == acc.rawContactId ||
+                            ((it.accountType ?: "") == (acc.accountType ?: "") && (it.accountName ?: "") == (acc.accountName ?: ""))
+                        } == true
                         val icon: androidx.compose.ui.graphics.vector.ImageVector = when {
                             acc.isSim -> Icons.Default.SimCard
                             acc.accountType?.contains("google", ignoreCase = true) == true -> Icons.Default.AccountCircle

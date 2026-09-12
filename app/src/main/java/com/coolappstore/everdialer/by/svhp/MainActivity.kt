@@ -117,8 +117,11 @@ class MainActivity : FragmentActivity() {
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        // When permission prompt dismisses, prompt for default dialer if not already held
-        if (!DefaultDialerManager.isDefaultDialer(this)) {
+        // When permission prompt dismisses, prompt for default dialer if not already held and welcome dialog not needed
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
+        val needsWelcome = !DefaultDialerManager.isDefaultDialer(this) && (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        if (!DefaultDialerManager.isDefaultDialer(this) && !needsWelcome) {
             requestDefaultDialer()
         }
     }
@@ -170,9 +173,13 @@ class MainActivity : FragmentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
 
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
+        val needsWelcome = !DefaultDialerManager.isDefaultDialer(this) && (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+
         if (!hasBasicPermissions) {
             requestRequiredPermissions()
-        } else if (!DefaultDialerManager.isDefaultDialer(this)) {
+        } else if (!DefaultDialerManager.isDefaultDialer(this) && !needsWelcome) {
             requestDefaultDialer()
         }
 
@@ -234,16 +241,18 @@ class MainActivity : FragmentActivity() {
                 val isFirstLaunch = remember {
                     !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
                 }
+                val needsWelcomeDialog = remember {
+                    !DefaultDialerManager.isDefaultDialer(this@MainActivity) &&
+                    (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                }
 
-                // ── First Launch Welcome Dialog ─────────────────────────────
-                // Show AFTER the default dialer prompt (which fires in onCreate)
+                // ── First Launch / Android 14 Welcome Dialog ─────────────────
                 var showWelcomeDialog by remember { mutableStateOf(false) }
                 var showTelegramDialog by remember { mutableStateOf(false) }
                 var showFullScreenIntentDialog by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
-                    if (isFirstLaunch) {
-                        // Small delay so the default dialer system dialog appears first
-                        kotlinx.coroutines.delay(600)
+                    if (needsWelcomeDialog) {
+                        kotlinx.coroutines.delay(400)
                         showWelcomeDialog = true
                     } else if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
                         // Welcome already done but Telegram dialog not yet shown — show it
