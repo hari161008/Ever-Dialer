@@ -333,8 +333,9 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Circle Icons", "Use circle shapes for icons across the app", "circle_icons", Icons.Outlined.Palette, GsColorCyan) { it.navigate(InterfaceScreenDestination(highlightKey = "circle_icons")) },
         GlobalSettingsSearchEntry("Use Colorful Avatars", "Give fallback avatars varied colors", "colorful_avatars", Icons.Outlined.Palette, GsColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "colorful_avatars")) },
         GlobalSettingsSearchEntry("Show Picture in Avatar", "Show a contact's photo in their avatar", "avatar_picture", Icons.Outlined.Palette, GsColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_picture")) },
-        GlobalSettingsSearchEntry("App Icon", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, GsColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
-        GlobalSettingsSearchEntry("App Name", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
+        GlobalSettingsSearchEntry("App Icon (Change)", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, GsColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
+        GlobalSettingsSearchEntry("App Name (Change)", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
+        GlobalSettingsSearchEntry("Show call logs in the dialpad search list", "Show recent call logs in the search list when nothing is typed or searched", "show_call_logs_in_dialpad_search_list", Icons.Outlined.History, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "show_call_logs_in_dialpad_search_list")) },
 
         // ── Incoming Call UI screen ──────────────────────────────────────────────
         GlobalSettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, GsColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },

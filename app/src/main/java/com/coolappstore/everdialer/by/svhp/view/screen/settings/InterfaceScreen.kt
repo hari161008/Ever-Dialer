@@ -151,6 +151,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var hideDuplicateNumbersInContact by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true)) }
     var nameNonContactsAsUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)) }
     var dialpadMemory  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
+    var showCallLogsInDialpadSearchList by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, true)) }
 
     var autoDeleteUnknownEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED, false)) }
     var autoDeleteUnknownValue   by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1).toString()) }
@@ -2199,6 +2200,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(
+                                    headline = "Show call logs in the dialpad search list",
+                                    supporting = "Show recent call logs in the search list when nothing is typed or searched",
+                                    leadingIcon = Icons.Outlined.History,
+                                    iconContainerColor = ColorTeal,
+                                    checked = showCallLogsInDialpadSearchList,
+                                    modifier = Modifier.settingsSearchHighlight("show_call_logs_in_dialpad_search_list", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        showCallLogsInDialpadSearchList = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
                                     headline = "Auto Delete Unknown No in call log",
                                     supporting = if (autoDeleteUnknownEnabled)
                                         "Deletes call log entries from unsaved numbers older than $autoDeleteUnknownValue ${if (autoDeleteUnknownUnit == "hours") "hour(s)" else "day(s)"}"
@@ -2391,7 +2406,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         )
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline = "App Icon",
+                                headline = "App Icon (Change)",
                                 supporting = "Choose the app icon displayed on your home screen",
                                 leadingIcon = Icons.Outlined.Apps,
                                 iconContainerColor = ColorIndigo,
@@ -2406,7 +2421,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
 
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline = "App Name",
+                                headline = "App Name (Change)",
                                 supporting = "Currently: " + (appNamePresets.firstOrNull { it.key == selectedAppNameKey }?.label ?: "Ever Dialer (Default)"),
                                 leadingIcon = Icons.Outlined.Badge,
                                 iconContainerColor = ColorTeal,

@@ -107,6 +107,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringCont
 import com.coolappstore.everdialer.by.svhp.view.components.AppQuickActionsDialog
 import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
+import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
@@ -203,6 +204,59 @@ private fun DialpadExtraResultTile(
             onAvatarClick = { if (result.item.phoneNumber.isNotBlank()) onOpenContactInfo(result.item.phoneNumber) },
             onClick = { if (result.item.phoneNumber.isNotBlank()) onCallNumber(result.item.phoneNumber) }
         )
+    }
+}
+
+@Composable
+private fun DialpadRecentCallLogsList(
+    recentLogs: List<CallLogEntry>,
+    showSimButtons: Boolean,
+    directCallOnTap: Boolean,
+    context: Context,
+    prefs: PreferenceManager,
+    replaceNumber: (String) -> Unit,
+    clearSearch: () -> Unit,
+    navigateToContact: (String?, String?) -> Unit,
+    onShowSimPickerForNumber: (String) -> Unit
+) {
+    recentLogs.forEachIndexed { index, log ->
+        CallLogTile(
+            log = log,
+            onTileClick = { clickedLog ->
+                if (showSimButtons && clickedLog.number.isNotEmpty()) {
+                    replaceNumber(clickedLog.number)
+                    clearSearch()
+                } else if (directCallOnTap) {
+                    val recentSlot = if (clickedLog.simSlot in 0..1) clickedLog.simSlot else null
+                    placeCallHonoringContactSim(context, prefs, clickedLog.contactId ?: clickedLog.number, clickedLog.number, recentSlot) {
+                        onShowSimPickerForNumber(clickedLog.number)
+                    }
+                } else {
+                    navigateToContact(clickedLog.contactId, clickedLog.number)
+                }
+            },
+            onButtonClick = { clickedLog ->
+                val recentSlot = if (clickedLog.simSlot in 0..1) clickedLog.simSlot else null
+                placeCallHonoringContactSim(context, prefs, clickedLog.contactId ?: clickedLog.number, clickedLog.number, recentSlot) {
+                    onShowSimPickerForNumber(clickedLog.number)
+                }
+            },
+            onAvatarClick = { clickedLog ->
+                if (showSimButtons && clickedLog.number.isNotEmpty()) {
+                    replaceNumber(clickedLog.number)
+                    clearSearch()
+                } else {
+                    navigateToContact(clickedLog.contactId, clickedLog.number)
+                }
+            }
+        )
+        if (index < recentLogs.size - 1) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                thickness = 0.5.dp
+            )
+        }
     }
 }
 
@@ -652,6 +706,33 @@ fun DialPadContent(
         }
     }
 
+    val showCallLogsInDialpadSearchList = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, true)
+    }
+    val groupCallsByLatest = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)
+    }
+    val isSearching = searchQuery.trim().isNotEmpty() || number.isNotEmpty()
+    val recentCallLogs by remember(callLogsForSearch, settingsState, groupCallsByLatest) {
+        derivedStateOf {
+            val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
+            val base = if (hiddenIds.isEmpty()) callLogsForSearch else callLogsForSearch.filter { it.contactId == null || it.contactId !in hiddenIds }
+            if (groupCallsByLatest) {
+                val seen = LinkedHashMap<String, CallLogEntry>()
+                base.forEach { entry ->
+                    val key = entry.contactId?.takeIf { it.isNotBlank() } ?: normalizeNumberDigits(entry.number).ifBlank { entry.number }
+                    if (!seen.containsKey(key)) {
+                        seen[key] = entry
+                    }
+                }
+                seen.values.take(25)
+            } else {
+                base.take(25)
+            }
+        }
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (number.isNotEmpty()) 1f else 0.95f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -976,8 +1057,13 @@ fun DialPadContent(
                 }
 
                 // Search results
+                val showResultsPanelLandscape = if (isSearching) {
+                    searchResults.isNotEmpty() || extraSearchResults.isNotEmpty()
+                } else {
+                    showCallLogsInDialpadSearchList && recentCallLogs.isNotEmpty()
+                }
                 AnimatedVisibility(
-                    visible = searchResults.isNotEmpty() || extraSearchResults.isNotEmpty(),
+                    visible = showResultsPanelLandscape,
                     enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
                             expandVertically(tween(420, easing = FastOutSlowInEasing)),
                     exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
@@ -991,59 +1077,73 @@ fun DialPadContent(
                         Column(
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            searchResults.forEach { contact ->
-                                val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
-                                val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
-                                SingleTile(
-                                    title    = contact.name,
-                                    subtitle = contactNum,
-                                    photoUri = contact.photoUri,
-                                    onAvatarClick = {
-                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                            replaceNumber(contactNum)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else {
-                                            navigateToContact(contactId = contact.id)
+                            if (isSearching) {
+                                searchResults.forEach { contact ->
+                                    val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                                    val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
+                                    SingleTile(
+                                        title    = contact.name,
+                                        subtitle = contactNum,
+                                        photoUri = contact.photoUri,
+                                        onAvatarClick = {
+                                            if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                replaceNumber(contactNum)
+                                                searchQuery = ""
+                                                focusManager.clearFocus()
+                                            } else {
+                                                navigateToContact(contactId = contact.id)
+                                            }
+                                        },
+                                        onClick  = {
+                                            if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                replaceNumber(contactNum)
+                                                searchQuery = ""
+                                                focusManager.clearFocus()
+                                            } else if (directCallOnTap) {
+                                                val num = contactNum ?: return@SingleTile
+                                                initiateCall(num)
+                                            } else {
+                                                navigateToContact(contactId = contact.id)
+                                            }
                                         }
-                                    },
-                                    onClick  = {
-                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                            replaceNumber(contactNum)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else if (directCallOnTap) {
-                                            val num = contactNum ?: return@SingleTile
-                                            initiateCall(num)
-                                        } else {
-                                            navigateToContact(contactId = contact.id)
+                                    )
+                                }
+                                extraSearchResults.forEach { extra ->
+                                    DialpadExtraResultTile(
+                                        result = extra,
+                                        onCallNumber = { num ->
+                                            if (showSimButtons) {
+                                                replaceNumber(num)
+                                                searchQuery = ""
+                                                focusManager.clearFocus()
+                                            } else if (directCallOnTap) {
+                                                initiateCall(num)
+                                            } else {
+                                                navigateToContact(phoneNumber = num)
+                                            }
+                                        },
+                                        onOpenContactInfo = { num ->
+                                            if (showSimButtons) {
+                                                replaceNumber(num)
+                                                searchQuery = ""
+                                                focusManager.clearFocus()
+                                            } else {
+                                                navigateToContact(phoneNumber = num)
+                                            }
                                         }
-                                    }
-                                )
-                            }
-                            extraSearchResults.forEach { extra ->
-                                DialpadExtraResultTile(
-                                    result = extra,
-                                    onCallNumber = { num ->
-                                        if (showSimButtons) {
-                                            replaceNumber(num)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else if (directCallOnTap) {
-                                            initiateCall(num)
-                                        } else {
-                                            navigateToContact(phoneNumber = num)
-                                        }
-                                    },
-                                    onOpenContactInfo = { num ->
-                                        if (showSimButtons) {
-                                            replaceNumber(num)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else {
-                                            navigateToContact(phoneNumber = num)
-                                        }
-                                    }
+                                    )
+                                }
+                            } else if (showCallLogsInDialpadSearchList) {
+                                DialpadRecentCallLogsList(
+                                    recentLogs = recentCallLogs,
+                                    showSimButtons = showSimButtons,
+                                    directCallOnTap = directCallOnTap,
+                                    context = context,
+                                    prefs = prefs,
+                                    replaceNumber = { replaceNumber(it) },
+                                    clearSearch = { searchQuery = ""; focusManager.clearFocus() },
+                                    navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
+                                    onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true }
                                 )
                             }
                         }
@@ -1293,8 +1393,13 @@ fun DialPadContent(
         ) {
 
         // Search results
+        val showResultsPanelPortrait = if (isSearching) {
+            searchResults.isNotEmpty() || extraSearchResults.isNotEmpty()
+        } else {
+            showCallLogsInDialpadSearchList && recentCallLogs.isNotEmpty()
+        }
         AnimatedVisibility(
-            visible = searchResults.isNotEmpty() || extraSearchResults.isNotEmpty(),
+            visible = showResultsPanelPortrait,
             enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
                     expandVertically(tween(420, easing = FastOutSlowInEasing)),
             exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
@@ -1307,38 +1412,39 @@ fun DialPadContent(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        searchResults.forEach { contact ->
-                            val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
-                            val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
-                            SingleTile(
-                                title    = contact.name,
-                                subtitle = contactNum,
-                                photoUri = contact.photoUri,
-                                onAvatarClick = {
-                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                        replaceNumber(contactNum)
-                                        searchQuery = ""
-                                        focusManager.clearFocus()
-                                    } else {
-                                        navigateToContact(contactId = contact.id)
+                        if (isSearching) {
+                            searchResults.forEach { contact ->
+                                val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                                val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
+                                SingleTile(
+                                    title    = contact.name,
+                                    subtitle = contactNum,
+                                    photoUri = contact.photoUri,
+                                    onAvatarClick = {
+                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                            replaceNumber(contactNum)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else {
+                                            navigateToContact(contactId = contact.id)
+                                        }
+                                    },
+                                    onClick  = {
+                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                            replaceNumber(contactNum)
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        } else if (directCallOnTap) {
+                                            val num = contactNum ?: return@SingleTile
+                                            initiateCall(num)
+                                        } else {
+                                            navigateToContact(contactId = contact.id)
+                                        }
                                     }
-                                },
-                                onClick  = {
-                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                        replaceNumber(contactNum)
-                                        searchQuery = ""
-                                        focusManager.clearFocus()
-                                    } else if (directCallOnTap) {
-                                        val num = contactNum ?: return@SingleTile
-                                        initiateCall(num)
-                                    } else {
-                                        navigateToContact(contactId = contact.id)
-                                    }
-                                }
-                            )
-                        }
-                        extraSearchResults.forEach { extra ->
-                            DialpadExtraResultTile(
+                                )
+                            }
+                            extraSearchResults.forEach { extra ->
+                                DialpadExtraResultTile(
                                     result = extra,
                                     onCallNumber = { num ->
                                         if (showSimButtons) {
@@ -1361,6 +1467,19 @@ fun DialPadContent(
                                         }
                                     }
                                 )
+                            }
+                        } else if (showCallLogsInDialpadSearchList) {
+                            DialpadRecentCallLogsList(
+                                recentLogs = recentCallLogs,
+                                showSimButtons = showSimButtons,
+                                directCallOnTap = directCallOnTap,
+                                context = context,
+                                prefs = prefs,
+                                replaceNumber = { replaceNumber(it) },
+                                clearSearch = { searchQuery = ""; focusManager.clearFocus() },
+                                navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
+                                onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true }
+                            )
                         }
                     }
                 }

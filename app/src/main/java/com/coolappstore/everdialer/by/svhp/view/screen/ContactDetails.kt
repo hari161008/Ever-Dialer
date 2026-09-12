@@ -30,6 +30,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactPhone
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.ClickableText
@@ -304,6 +307,13 @@ fun ContactDetailsScreen(
     var selectedNumberForMenu by remember { mutableStateOf<String?>(null) }
     var selectedEmailForMenu by remember { mutableStateOf<String?>(null) }
     var selectedAddressForMenu by remember { mutableStateOf<String?>(null) }
+
+    var editingNumberValue by remember { mutableStateOf<String?>(null) }
+    var originalNumberValue by remember { mutableStateOf<String?>(null) }
+    var editingEmailValue by remember { mutableStateOf<String?>(null) }
+    var originalEmailValue by remember { mutableStateOf<String?>(null) }
+    var editingAddressValue by remember { mutableStateOf<String?>(null) }
+    var originalAddressValue by remember { mutableStateOf<String?>(null) }
 
     // Contact Info → "Ringtone" — per-contact custom ringtone, read straight from Contacts
     // provider so it always reflects reality (including changes made from the system Contacts
@@ -1130,6 +1140,17 @@ fun ContactDetailsScreen(
                                             }
                                         )
                                         RivoDropdownMenuItem(
+                                            text = "Edit number",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
+                                            onClick = {
+                                                val numToEdit = menuNum
+                                                selectedNumberForMenu = null
+                                                editingNumberValue = numToEdit
+                                                originalNumberValue = numToEdit
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
                                             text = "Share",
                                             icon = Icons.Default.Share,
                                             iconTint = Color(0xFFFF9800),
@@ -1242,6 +1263,17 @@ fun ContactDetailsScreen(
                                             }
                                         )
                                         RivoDropdownMenuItem(
+                                            text = "Edit email",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
+                                            onClick = {
+                                                val emailToEdit = menuEmail
+                                                selectedEmailForMenu = null
+                                                editingEmailValue = emailToEdit
+                                                originalEmailValue = emailToEdit
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
                                             text = "Share",
                                             icon = Icons.Default.Share,
                                             iconTint = Color(0xFFFF9800),
@@ -1303,6 +1335,17 @@ fun ContactDetailsScreen(
                                             }
                                         )
                                         RivoDropdownMenuItem(
+                                            text = "Edit location",
+                                            icon = Icons.Default.Edit,
+                                            iconTint = Color(0xFF9C27B0),
+                                            onClick = {
+                                                val addressToEdit = menuAddress
+                                                selectedAddressForMenu = null
+                                                editingAddressValue = addressToEdit
+                                                originalAddressValue = addressToEdit
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
                                             text = "Share",
                                             icon = Icons.Default.Share,
                                             iconTint = Color(0xFFFF9800),
@@ -1318,6 +1361,197 @@ fun ContactDetailsScreen(
                                                     putExtra(Intent.EXTRA_TEXT, shareText)
                                                 }
                                                 context.startActivity(Intent.createChooser(shareIntent, "Share contact"))
+                                            }
+                                        )
+                                    }
+
+                                    if (editingNumberValue != null) {
+                                        var editedNumber by remember(editingNumberValue) { mutableStateOf(editingNumberValue ?: "") }
+                                        AlertDialog(
+                                            onDismissRequest = {
+                                                editingNumberValue = null
+                                                originalNumberValue = null
+                                            },
+                                            shape = RoundedCornerShape(28.dp),
+                                            title = { Text("Edit number") },
+                                            text = {
+                                                OutlinedTextField(
+                                                    value = editedNumber,
+                                                    onValueChange = { editedNumber = it },
+                                                    label = { Text("Phone number") },
+                                                    singleLine = true,
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        val oldNum = originalNumberValue ?: ""
+                                                        val newNum = editedNumber.trim()
+                                                        editingNumberValue = null
+                                                        originalNumberValue = null
+                                                        if (newNum.isNotBlank() && newNum != oldNum) {
+                                                            if (contact != null) {
+                                                                val updatedPhones = if (contact.phones.isNotEmpty()) {
+                                                                    contact.phones.map { phone ->
+                                                                        if (phone.number == oldNum || numbersLikelyMatch(phone.number, oldNum)) {
+                                                                            phone.copy(number = newNum)
+                                                                        } else phone
+                                                                    }
+                                                                } else {
+                                                                    listOf(ContactPhone(number = newNum))
+                                                                }
+                                                                val updatedPhoneNumbers = contact.phoneNumbers.map { num ->
+                                                                    if (num == oldNum || numbersLikelyMatch(num, oldNum)) newNum else num
+                                                                }.let { if (newNum !in it) it + newNum else it }
+                                                                val updatedContact = contact.copy(
+                                                                    phones = updatedPhones,
+                                                                    phoneNumbers = updatedPhoneNumbers
+                                                                )
+                                                                contactsViewModel.saveContact(
+                                                                    contact = updatedContact,
+                                                                    originalContact = contact,
+                                                                    updateAllAccounts = true
+                                                                )
+                                                                if (contactDefaultNumber == oldNum) {
+                                                                    prefs.setContactDefaultNumber(contactSimKey, newNum)
+                                                                }
+                                                                android.widget.Toast.makeText(context, "Number updated", android.widget.Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                navigator.navigate(ContactEditScreenDestination(initialPhone = newNum))
+                                                            }
+                                                        }
+                                                    }
+                                                ) {
+                                                    Text("Save")
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        editingNumberValue = null
+                                                        originalNumberValue = null
+                                                    }
+                                                ) {
+                                                    Text("Cancel")
+                                                }
+                                            }
+                                        )
+                                    }
+
+                                    if (editingEmailValue != null) {
+                                        var editedEmail by remember(editingEmailValue) { mutableStateOf(editingEmailValue ?: "") }
+                                        AlertDialog(
+                                            onDismissRequest = {
+                                                editingEmailValue = null
+                                                originalEmailValue = null
+                                            },
+                                            shape = RoundedCornerShape(28.dp),
+                                            title = { Text("Edit email") },
+                                            text = {
+                                                OutlinedTextField(
+                                                    value = editedEmail,
+                                                    onValueChange = { editedEmail = it },
+                                                    label = { Text("Email") },
+                                                    singleLine = true,
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        val oldEmail = originalEmailValue ?: ""
+                                                        val newEmail = editedEmail.trim()
+                                                        editingEmailValue = null
+                                                        originalEmailValue = null
+                                                        if (newEmail.isNotBlank() && newEmail != oldEmail) {
+                                                            if (contact != null) {
+                                                                val updatedEmails = contact.emails.map { email ->
+                                                                    if (email == oldEmail) newEmail else email
+                                                                }.let { if (newEmail !in it) it + newEmail else it }
+                                                                val updatedContact = contact.copy(emails = updatedEmails)
+                                                                contactsViewModel.saveContact(
+                                                                    contact = updatedContact,
+                                                                    originalContact = contact,
+                                                                    updateAllAccounts = true
+                                                                )
+                                                                android.widget.Toast.makeText(context, "Email updated", android.widget.Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    }
+                                                ) {
+                                                    Text("Save")
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        editingEmailValue = null
+                                                        originalEmailValue = null
+                                                    }
+                                                ) {
+                                                    Text("Cancel")
+                                                }
+                                            }
+                                        )
+                                    }
+
+                                    if (editingAddressValue != null) {
+                                        var editedAddress by remember(editingAddressValue) { mutableStateOf(editingAddressValue ?: "") }
+                                        AlertDialog(
+                                            onDismissRequest = {
+                                                editingAddressValue = null
+                                                originalAddressValue = null
+                                            },
+                                            shape = RoundedCornerShape(28.dp),
+                                            title = { Text("Edit location") },
+                                            text = {
+                                                OutlinedTextField(
+                                                    value = editedAddress,
+                                                    onValueChange = { editedAddress = it },
+                                                    label = { Text("Location") },
+                                                    singleLine = false,
+                                                    maxLines = 3,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        val oldAddress = originalAddressValue ?: ""
+                                                        val newAddress = editedAddress.trim()
+                                                        editingAddressValue = null
+                                                        originalAddressValue = null
+                                                        if (newAddress.isNotBlank() && newAddress != oldAddress) {
+                                                            if (contact != null) {
+                                                                val updatedAddresses = contact.addresses.map { addr ->
+                                                                    if (addr == oldAddress) newAddress else addr
+                                                                }.let { if (newAddress !in it) it + newAddress else it }
+                                                                val updatedContact = contact.copy(addresses = updatedAddresses)
+                                                                contactsViewModel.saveContact(
+                                                                    contact = updatedContact,
+                                                                    originalContact = contact,
+                                                                    updateAllAccounts = true
+                                                                )
+                                                                android.widget.Toast.makeText(context, "Location updated", android.widget.Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    }
+                                                ) {
+                                                    Text("Save")
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        editingAddressValue = null
+                                                        originalAddressValue = null
+                                                    }
+                                                ) {
+                                                    Text("Cancel")
+                                                }
                                             }
                                         )
                                     }

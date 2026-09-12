@@ -434,6 +434,9 @@ class PreferenceManager(context: Context) {
         // stay there after the sheet is closed or a call is placed, so reopening the Dialpad
         // shows the same number again. When off, the Dialpad is wiped in both of those cases.
         const val KEY_DIALPAD_MEMORY        = "dialpad_memory"
+        // Show Call Logs in Dialpad Search List — on by default. When on, recent call logs are
+        // shown in the dialpad search list when nothing has been typed/searched yet.
+        const val KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST = "show_call_logs_in_dialpad_search_list"
         // Auto Delete Unknown No in call log — off by default. When on, call log entries from
         // numbers that aren't saved contacts get auto-deleted once older than the configured
         // threshold. Only applies going forward from the moment it's turned on (see

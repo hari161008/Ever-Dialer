@@ -2235,8 +2235,9 @@ private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
         SettingsSearchEntry("Circle Icons", "Use circle shapes for icons across the app", "circle_icons", Icons.Outlined.Palette, Color(0xFF00BCD4)) { it.navigate(InterfaceScreenDestination(highlightKey = "circle_icons")) },
         SettingsSearchEntry("Use Colorful Avatars", "Give fallback avatars varied colors", "colorful_avatars", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "colorful_avatars")) },
         SettingsSearchEntry("Show Picture in Avatar", "Show a contact's photo in their avatar", "avatar_picture", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_picture")) },
-        SettingsSearchEntry("App Icon", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
-        SettingsSearchEntry("App Name", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
+        SettingsSearchEntry("App Icon (Change)", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
+        SettingsSearchEntry("App Name (Change)", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
+        SettingsSearchEntry("Show call logs in the dialpad search list", "Show recent call logs in the search list when nothing is typed or searched", "show_call_logs_in_dialpad_search_list", Icons.Outlined.History, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "show_call_logs_in_dialpad_search_list")) },
 
         // ── Incoming Call UI screen ───────────────────────────────────────────
         SettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
