@@ -17,14 +17,30 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private val tlCalendar = ThreadLocal.withInitial { Calendar.getInstance() }
+
+private var cachedCurrentYear: Int = -1
+private var cachedCurrentYearTimestamp: Long = 0L
+
+private fun getCurrentYear(): Int {
+    val now = System.currentTimeMillis()
+    if (cachedCurrentYear == -1 || now - cachedCurrentYearTimestamp > 60_000L) {
+        val cal = tlCalendar.get()
+        cal.timeInMillis = now
+        cachedCurrentYear = cal.get(Calendar.YEAR)
+        cachedCurrentYearTimestamp = now
+    }
+    return cachedCurrentYear
+}
+
 private fun isYesterday(timestamp: Long): Boolean {
     return DateUtils.isToday(timestamp + DateUtils.DAY_IN_MILLIS)
 }
 
-private fun isSameYear(timestamp1: Long, timestamp2: Long): Boolean {
-    val cal1 = Calendar.getInstance().apply { timeInMillis = timestamp1 }
-    val cal2 = Calendar.getInstance().apply { timeInMillis = timestamp2 }
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
+private fun isTimestampInCurrentYear(timestamp: Long): Boolean {
+    val cal = tlCalendar.get()
+    cal.timeInMillis = timestamp
+    return cal.get(Calendar.YEAR) == getCurrentYear()
 }
 
 private fun getRelativeDay(timestamp: Long): String? {
@@ -35,18 +51,31 @@ private fun getRelativeDay(timestamp: Long): String? {
     }
 }
 
+// Thread-local formatters so we never allocate SimpleDateFormat on every call during scroll
+private val tlTimeFormat12 = ThreadLocal.withInitial { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+private val tlTimeFormat24 = ThreadLocal.withInitial { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+private val tlHeaderSameYear = ThreadLocal.withInitial { SimpleDateFormat("MMMM d", Locale.getDefault()) }
+private val tlHeaderDiffYear = ThreadLocal.withInitial { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()) }
+private val tlCallLogDateSameYear = ThreadLocal.withInitial { SimpleDateFormat("MMM d", Locale.getDefault()) }
+private val tlCallLogDateDiffYear = ThreadLocal.withInitial { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+private val reusableDate = ThreadLocal.withInitial { Date() }
+
 fun formatDateHeader(timestamp: Long): String {
     val relative = getRelativeDay(timestamp)
     if (relative != null) return relative
 
-    val pattern = if (isSameYear(timestamp, System.currentTimeMillis())) "MMMM d" else "MMMM d, yyyy"
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+    val formatter = if (isTimestampInCurrentYear(timestamp)) tlHeaderSameYear.get() else tlHeaderDiffYear.get()
+    val date = reusableDate.get()
+    date.time = timestamp
+    return formatter.format(date)
 }
 
 fun formatDate(timestamp: Long, use24Hour: Boolean = false): String {
     val relative = getRelativeDay(timestamp)
-    val timePattern = if (use24Hour) "HH:mm" else "h:mm a"
-    val time = SimpleDateFormat(timePattern, Locale.getDefault()).format(Date(timestamp))
+    val timeFormatter = if (use24Hour) tlTimeFormat24.get() else tlTimeFormat12.get()
+    val date = reusableDate.get()
+    date.time = timestamp
+    val time = timeFormatter.format(date)
     return if (relative != null) "$relative, $time" else "${formatDateHeader(timestamp)}, $time"
 }
 
@@ -56,8 +85,10 @@ fun formatDate(timestamp: Long, use24Hour: Boolean = false): String {
  * (12-hour "h:mm a" by default, or 24-hour "HH:mm" when [use24Hour] is true).
  */
 fun formatTimeOnly(timestamp: Long, use24Hour: Boolean = false): String {
-    val timePattern = if (use24Hour) "HH:mm" else "h:mm a"
-    return SimpleDateFormat(timePattern, Locale.getDefault()).format(Date(timestamp))
+    val formatter = if (use24Hour) tlTimeFormat24.get() else tlTimeFormat12.get()
+    val date = reusableDate.get()
+    date.time = timestamp
+    return formatter.format(date)
 }
 
 /**
@@ -68,8 +99,10 @@ fun formatCallLogDate(timestamp: Long): String {
     val relative = getRelativeDay(timestamp)
     if (relative != null) return relative
 
-    val pattern = if (isSameYear(timestamp, System.currentTimeMillis())) "MMM d" else "MMM d, yyyy"
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+    val formatter = if (isTimestampInCurrentYear(timestamp)) tlCallLogDateSameYear.get() else tlCallLogDateDiffYear.get()
+    val date = reusableDate.get()
+    date.time = timestamp
+    return formatter.format(date)
 }
 
 fun formatDuration(durationSeconds: Long): String {

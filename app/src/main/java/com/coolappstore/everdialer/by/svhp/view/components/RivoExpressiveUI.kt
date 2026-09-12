@@ -254,20 +254,18 @@ fun RivoAnimatedSection(
         return
     }
 
-    var visible by remember { mutableStateOf(false) }
+    val anim = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        if (delayMs > 0L) delay(delayMs)
-        visible = true
+        if (delayMs > 0L) kotlinx.coroutines.delay(delayMs)
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        )
     }
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(280),
-        label = "sectionProgress"
-    )
     Box(
         modifier = modifier.graphicsLayer {
-            alpha = progress
-            translationY = (1f - progress) * 18.dp.toPx()
+            alpha = anim.value
+            translationY = (1f - anim.value) * 14.dp.toPx()
         }
     ) {
         content()
@@ -687,15 +685,13 @@ fun RivoListItem(
         label = "ListItemScale"
     )
 
-    var itemBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-
     Surface(
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
-            .onGloballyPositioned { coords ->
-                itemBounds = coords.boundsInRoot()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
             },
         shadowElevation = 0.dp
     ) {
@@ -707,16 +703,7 @@ fun RivoListItem(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {
-                        itemBounds?.let { bounds ->
-                            val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
-                            val screenHeight = context.resources.displayMetrics.heightPixels.toFloat()
-                            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordTap(
-                                bounds.center.x,
-                                bounds.center.y,
-                                screenWidth,
-                                screenHeight
-                            )
-                        }
+                        com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordTap(0f, 0f, 0f, 0f)
                         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                             performAppHaptic(
                                 context,
@@ -736,6 +723,7 @@ fun RivoListItem(
                     name = avatarName ?: "",
                     photoUri = photoUri,
                     forcePersonIcon = avatarForcePersonIcon,
+                    size = 48.dp,
                     modifier = Modifier
                         .size(48.dp)
                         .then(
@@ -1069,16 +1057,21 @@ fun RivoCheckboxListItem(
 @Composable
 fun RivoScrollAnimatedItem(
     delayMs: Long = 0L,
+    enabled: Boolean? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val prefs = koinInject<PreferenceManager>()
-    // Must be keyed on settingsVersion (not a bare remember{}) — otherwise a composable
-    // that was already placed in the lazy list keeps its first-read value forever and
-    // flipping the setting in InterfaceScreen has no visible effect until the process
-    // restarts or the item happens to leave/re-enter composition.
-    val settingsVersion by prefs.settingsChanged.collectAsState()
-    val scrollAnimEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
+    val scrollAnimEnabled = if (enabled != null) {
+        enabled
+    } else {
+        val prefs = koinInject<PreferenceManager>()
+        // Must be keyed on settingsVersion (not a bare remember{}) — otherwise a composable
+        // that was already placed in the lazy list keeps its first-read value forever and
+        // flipping the setting in InterfaceScreen has no visible effect until the process
+        // restarts or the item happens to leave/re-enter composition.
+        val settingsVersion by prefs.settingsChanged.collectAsState()
+        remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true) }
+    }
 
     if (scrollAnimEnabled) {
         // Use a key that changes each time this composable enters composition,

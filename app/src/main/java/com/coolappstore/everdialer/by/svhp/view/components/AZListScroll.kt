@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -209,7 +210,7 @@ fun AZListContent(
                     }
 
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        RivoScrollAnimatedItem(delayMs = (index * 25L).coerceAtMost(250L)) {
+                        RivoScrollAnimatedItem(delayMs = 0L) {
                         Surface(
                             shape = shape,
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -245,7 +246,7 @@ fun AZListContent(
 
         AlphabetSideBar(
             alphabet = alphabetIndices.keys.toList(),
-            selectedChar = draggingChar ?: scrollingChar,
+            selectedCharProvider = { draggingChar ?: scrollingChar },
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 4.dp),
@@ -302,7 +303,6 @@ fun ContactListItem(
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
-    var isPressed by remember { mutableStateOf(false) }
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val settingsVer by prefs.settingsChanged.collectAsState()
@@ -313,7 +313,7 @@ fun ContactListItem(
     var showCallChatViaPicker by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (showMenu) 0.97f else if (isPressed) 0.97f else 1f,
+        targetValue = if (showMenu) 0.97f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "contactItemScale"
     )
@@ -367,7 +367,7 @@ fun ContactListItem(
         )
     }
 
-    Box(modifier = Modifier.fillMaxWidth().scale(scale)) {
+    Box(modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -397,7 +397,6 @@ fun ContactListItem(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        isPressed = true
                         horizontalDragDetected = false
                         val downPos = down.position
                         do {
@@ -408,7 +407,6 @@ fun ContactListItem(
                             if (dx > 28.dp.toPx() && dx > dy * 1.3f) horizontalDragDetected = true
                             if (!current.pressed) break
                         } while (true)
-                        isPressed = false
                     }
                 }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -417,6 +415,7 @@ fun ContactListItem(
             RivoAvatar(
                 name = headline,
                 photoUri = contact.photoUri,
+                size = 48.dp,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
@@ -457,37 +456,38 @@ fun ContactListItem(
             )
         }
 
-        val hasNumber = !contact.phoneNumbers.firstOrNull().isNullOrEmpty()
-        val contactNumberBlocked = remember(settingsVer, hasNumber, contact.phoneNumbers) {
-            hasNumber && BlockedNumbersManager.isBlocked(context, prefs, contact.phoneNumbers.firstOrNull())
-        }
-        val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
-        val hasTelegram = remember(context) { isTelegramInstalled(context) }
-        val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
-        val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
-        val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
+        if (showMenu && !selectionMode) {
+            val hasNumber = !contact.phoneNumbers.firstOrNull().isNullOrEmpty()
+            val contactNumberBlocked = remember(settingsVer, hasNumber, contact.phoneNumbers) {
+                hasNumber && BlockedNumbersManager.isBlocked(context, prefs, contact.phoneNumbers.firstOrNull())
+            }
+            val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+            val hasTelegram = remember(context) { isTelegramInstalled(context) }
+            val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
+            val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
+            val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
 
-        val contactContextMenuKeys = remember(settingsVer, hasNumber, fakeCallInContextMenu, contact.isFavorite, hasAnySocialApp) {
-            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
-                prefs,
-                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
-                listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
-            ).filter { key ->
-                when (key) {
-                    "copy_number" -> hasNumber
-                    "block_contact" -> hasNumber
-                    "fake_call" -> fakeCallInContextMenu
-                    "call_chat_via" -> hasNumber && hasAnySocialApp
-                    "send_text" -> hasNumber
-                    else -> true
+            val contactContextMenuKeys = remember(settingsVer, hasNumber, fakeCallInContextMenu, contact.isFavorite, hasAnySocialApp) {
+                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+                    prefs,
+                    com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
+                    listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
+                ).filter { key ->
+                    when (key) {
+                        "copy_number" -> hasNumber
+                        "block_contact" -> hasNumber
+                        "fake_call" -> fakeCallInContextMenu
+                        "call_chat_via" -> hasNumber && hasAnySocialApp
+                        "send_text" -> hasNumber
+                        else -> true
+                    }
                 }
             }
-        }
 
-        RivoDropdownMenu(
-            expanded         = showMenu && !selectionMode,
-            onDismissRequest = { showMenu = false }
-        ) {
+            RivoDropdownMenu(
+                expanded         = showMenu && !selectionMode,
+                onDismissRequest = { showMenu = false }
+            ) {
             fun groupOf(key: String) = when (key) {
                 "select" -> 0
                 "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text" -> 1
@@ -643,6 +643,7 @@ fun ContactListItem(
                 }
             }
         }
+        }
     }
 
     val hideDuplicatesInContact = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true) }
@@ -663,7 +664,8 @@ fun ContactListItem(
 @Composable
 fun AlphabetSideBar(
     alphabet: List<Char>,
-    selectedChar: Char?,
+    selectedChar: Char? = null,
+    selectedCharProvider: (() -> Char?)? = null,
     modifier: Modifier = Modifier,
     onLetterSelected: (Char) -> Unit,
     onDragEnd: () -> Unit
@@ -699,13 +701,14 @@ fun AlphabetSideBar(
         color = Color.Transparent,
         shape = RoundedCornerShape(12.dp)
     ) {
+        val activeChar = selectedCharProvider?.invoke() ?: selectedChar
         Column(
             modifier = Modifier.padding(vertical = 8.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             alphabet.forEach { char ->
-                val isSelected = char == selectedChar
+                val isSelected = char == activeChar
                 Box(
                     modifier = Modifier
                         .size(18.dp)

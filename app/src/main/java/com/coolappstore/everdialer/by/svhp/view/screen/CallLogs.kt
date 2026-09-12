@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -197,34 +198,64 @@ fun CallLogFullScreen(
                     }
 
                     val groupedLogs = remember(finalLogs) { finalLogs.groupBy { formatDateHeader(it.date) } }
+                    val use24HourTime = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+                    val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(prefs, settingsVersion)
 
                     ScrollHapticsEffect(listState = listState)
+                    CompositionLocalProvider(com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides avatarConfig) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                        contentPadding = PaddingValues(bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         groupedLogs.forEach { (header, logsInGroup) ->
-                            item(key = "group_$header", contentType = "logGroup") {
-                                RivoSectionHeader(title = header)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                RivoExpressiveCard {
-                                    logsInGroup.forEachIndexed { index, lg ->
-                                        CallLogTileSimple(lg)
-                                        if (index < logsInGroup.size - 1) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(horizontal = 16.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                            )
-                                        }
+                            if (header.isNotBlank()) {
+                                item(key = "header_$header", contentType = "sectionHeader") {
+                                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                        RivoSectionHeader(title = header)
                                     }
                                 }
                             }
+                            itemsIndexed(
+                                items = logsInGroup,
+                                key = { _, lg -> lg.callIds.firstOrNull()?.toString() ?: "${lg.number}_${lg.date}" },
+                                contentType = { _, _ -> "callLogEntry" }
+                            ) { index, lg ->
+                                val isFirst = index == 0
+                                val isLast = index == logsInGroup.size - 1
+                                val cornerRadius = 24.dp
+                                val topStart = if (isFirst) cornerRadius else 0.dp
+                                val topEnd = if (isFirst) cornerRadius else 0.dp
+                                val bottomStart = if (isLast) cornerRadius else 0.dp
+                                val bottomEnd = if (isLast) cornerRadius else 0.dp
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(
+                                            topStart = topStart,
+                                            topEnd = topEnd,
+                                            bottomStart = bottomStart,
+                                            bottomEnd = bottomEnd
+                                        ),
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            if (!isFirst) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                    thickness = 0.5.dp
+                                                )
+                                            }
+                                            CallLogTileSimple(lg, use24HourTime = use24HourTime)
+                                        }
+                                    }
+                                }
+                                if (isLast) Spacer(modifier = Modifier.height(12.dp))
+                            }
                         }
-                        item(key = "bottom_spacer", contentType = "spacer") {
-                            Spacer(modifier = Modifier.height(100.dp))
-                        }
+                    }
                     }
                 }
             }

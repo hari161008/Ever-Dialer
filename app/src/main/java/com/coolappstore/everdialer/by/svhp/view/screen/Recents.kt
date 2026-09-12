@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -626,6 +627,35 @@ fun CallLogFullContent(
             }
         }
 
+        val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(prefs, settingsVersion)
+        val callLogDisplayConfig = remember(settingsVersion, groupCallsByLatest, hiddenIds) {
+            val fakeCallInContextMenu = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+            val use24HourTime = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false)
+            val showTalkTime = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false)
+            val showTotalCallsMade = groupCallsByLatest || prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
+            val hideNames = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
+            val nameNonContactsAsUnknown = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)
+            val showSimsSetting = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())
+            val sim1Color = Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM1_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM1_COLOR))
+            val sim2Color = Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM2_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM2_COLOR))
+            val isScrollAnimEnabled = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SCROLL_ANIMATION, true)
+
+            com.coolappstore.everdialer.by.svhp.view.components.CallLogDisplayConfig(
+                use24HourTime = use24HourTime,
+                showTalkTime = showTalkTime,
+                groupCallsByLatest = groupCallsByLatest,
+                showTotalCallsMade = showTotalCallsMade,
+                showSims = showSimsSetting,
+                hideNames = hideNames,
+                hiddenIds = hiddenIds,
+                nameNonContactsAsUnknown = nameNonContactsAsUnknown,
+                fakeCallInContextMenu = fakeCallInContextMenu,
+                sim1Color = sim1Color,
+                sim2Color = sim2Color,
+                isScrollAnimEnabled = isScrollAnimEnabled
+            )
+        }
+
         if (showSelectionDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { onShowSelectionDeleteConfirmChange(false) },
@@ -867,9 +897,9 @@ fun CallLogFullContent(
                 // actual filter change (All/Missed/etc.) gets the slide transition.
                 var hasLoadedOnce by remember { mutableStateOf(false) }
                 AnimatedContent(
-                    targetState = Pair(selectedFilter, groupedLogs),
+                    targetState = selectedFilter,
                     transitionSpec = {
-                        val filterChanged = initialState.first != targetState.first
+                        val filterChanged = initialState != targetState
                         if (!hasLoadedOnce) {
                             // Startup: slow gentle fade, no slide
                             fadeIn(animationSpec = tween(600, easing = LinearOutSlowInEasing)) togetherWith
@@ -878,8 +908,8 @@ fun CallLogFullContent(
                             // Data-only refresh: instant, no animation whatsoever
                             EnterTransition.None togetherWith ExitTransition.None
                         } else {
-                            val currentIdx = filterEntries.indexOf(targetState.first)
-                            val prevIdx = filterEntries.indexOf(initialState.first)
+                            val currentIdx = filterEntries.indexOf(targetState)
+                            val prevIdx = filterEntries.indexOf(initialState)
                             val goingRight = currentIdx > prevIdx
                             if (goingRight) {
                                 slideInHorizontally(
@@ -902,9 +932,10 @@ fun CallLogFullContent(
                     },
                     modifier = Modifier.fillMaxSize(),
                     label = "filterSlide"
-                ) { (_, currentGroupedLogs) ->
+                ) { _ ->
                     LaunchedEffect(Unit) { hasLoadedOnce = true }
                     ScrollHapticsEffect(listState = listState)
+                    CompositionLocalProvider(com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides avatarConfig) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -994,11 +1025,11 @@ fun CallLogFullContent(
                         }
 
                         val directCall = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
-                        currentGroupedLogs.forEach { (header, logsInGroup) ->
+                        groupedLogs.forEach { (header, logsInGroup) ->
                             // Section header as its own item
                             if (header.isNotBlank()) {
                                 item(key = "header_$header", contentType = "sectionHeader") {
-                                    RivoScrollAnimatedItem {
+                                    RivoScrollAnimatedItem(enabled = callLogDisplayConfig.isScrollAnimEnabled) {
                                         RivoSectionHeader(title = header)
                                     }
                                 }
@@ -1008,7 +1039,11 @@ fun CallLogFullContent(
                                 }
                             }
                             // Individual items per log entry with per-item rounded corners
-                            logsInGroup.forEachIndexed { index, lg ->
+                            itemsIndexed(
+                                items = logsInGroup,
+                                key = { _, lg -> lg.callIds.firstOrNull()?.toString() ?: "${lg.number}_${lg.date}" },
+                                contentType = { _, _ -> "callLogEntry" }
+                            ) { index, lg ->
                                 val isFirst = index == 0
                                 val isLast = index == logsInGroup.size - 1
                                 val cornerRadius = 28.dp
@@ -1016,78 +1051,74 @@ fun CallLogFullContent(
                                 val topEnd = if (isFirst) cornerRadius else 0.dp
                                 val bottomStart = if (isLast) cornerRadius else 0.dp
                                 val bottomEnd = if (isLast) cornerRadius else 0.dp
-                                item(
-                                    key = "log_${lg.number}_${lg.date}_${index}",
-                                    contentType = "callLogEntry"
-                                ) {
-                                    RivoScrollAnimatedItem(delayMs = (index.coerceAtMost(5) * 30).toLong()) {
-                                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                            Surface(
-                                                shape = RoundedCornerShape(
-                                                    topStart = topStart,
-                                                    topEnd = topEnd,
-                                                    bottomStart = bottomStart,
-                                                    bottomEnd = bottomEnd
-                                                ),
-                                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column {
-                                                    if (!isFirst) {
-                                                        HorizontalDivider(
-                                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                                            thickness = 0.5.dp
-                                                        )
-                                                    }
-                                                    val contactKey = lg.contactId?.takeIf { it.isNotBlank() } ?: lg.number.filter { it.isDigit() }.ifEmpty { lg.number }
-                                                    CallLogTile(
-                                                        log = lg,
-                                                        totalCallsCount = totalCallsMap[contactKey] ?: lg.count,
-                                                        isSelected = selectedLogs.contains("${lg.number}|${lg.date}"),
-                                                        selectionMode = selectionMode,
-                                                        onSelectToggle = { log ->
+                                RivoScrollAnimatedItem(delayMs = 0L, enabled = callLogDisplayConfig.isScrollAnimEnabled) {
+                                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                        Surface(
+                                            shape = RoundedCornerShape(
+                                                topStart = topStart,
+                                                topEnd = topEnd,
+                                                bottomStart = bottomStart,
+                                                bottomEnd = bottomEnd
+                                            ),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column {
+                                                if (!isFirst) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                        thickness = 0.5.dp
+                                                    )
+                                                }
+                                                val contactKey = lg.contactId?.takeIf { it.isNotBlank() } ?: lg.number.filter { it.isDigit() }.ifEmpty { lg.number }
+                                                CallLogTile(
+                                                    log = lg,
+                                                    config = callLogDisplayConfig,
+                                                    totalCallsCount = totalCallsMap[contactKey] ?: lg.count,
+                                                    isSelected = selectedLogs.contains("${lg.number}|${lg.date}"),
+                                                    selectionMode = selectionMode,
+                                                    onSelectToggle = { log ->
+                                                        val key = "${log.number}|${log.date}"
+                                                        onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
+                                                    },
+                                                    onSelectMode = { log ->
+                                                        onSelectionModeChange(true)
+                                                        val key = "${log.number}|${log.date}"
+                                                        onSelectedLogsChange(setOf(key))
+                                                    },
+                                                    onTileClick = { log ->
+                                                        if (selectionMode) {
                                                             val key = "${log.number}|${log.date}"
                                                             onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
-                                                        },
-                                                        onSelectMode = { log ->
-                                                            onSelectionModeChange(true)
-                                                            val key = "${log.number}|${log.date}"
-                                                            onSelectedLogsChange(setOf(key))
-                                                        },
-                                                        onTileClick = { log ->
-                                                            if (selectionMode) {
-                                                                val key = "${log.number}|${log.date}"
-                                                                onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)
-                                                            } else if (directCall) {
-                                                                val recentSlot = if (log.simSlot in 0..1) log.simSlot else null
-                                                                placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number, recentSlot) {
-                                                                    pendingNumber = log.number; showSimPicker = true
-                                                                }
-                                                            } else {
-                                                                navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
-                                                            }
-                                                        },
-                                                        onAvatarClick = { log ->
-                                                            navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
-                                                        },
-                                                        onButtonClick = { log ->
+                                                        } else if (directCall) {
                                                             val recentSlot = if (log.simSlot in 0..1) log.simSlot else null
                                                             placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number, recentSlot) {
                                                                 pendingNumber = log.number; showSimPicker = true
                                                             }
-                                                        },
-                                                        onDelete = { viewModel.refreshLogs() }
-                                                    )
-
-                                                }
+                                                        } else {
+                                                            navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                        }
+                                                    },
+                                                    onAvatarClick = { log ->
+                                                        navigator.navigate(ContactDetailsScreenDestination(contactId = log.contactId ?: "null", phoneNumber = log.number))
+                                                    },
+                                                    onButtonClick = { log ->
+                                                        val recentSlot = if (log.simSlot in 0..1) log.simSlot else null
+                                                        placeCallHonoringContactSim(context, prefs, log.contactId ?: log.number, log.number, recentSlot) {
+                                                            pendingNumber = log.number; showSimPicker = true
+                                                        }
+                                                    },
+                                                    onDelete = { viewModel.refreshLogs() }
+                                                )
                                             }
                                         }
                                     }
-                                    if (isLast) Spacer(modifier = Modifier.height(12.dp))
                                 }
+                                if (isLast) Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
+                    }
                     }
                 }
             }

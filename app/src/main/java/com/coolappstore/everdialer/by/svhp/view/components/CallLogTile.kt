@@ -74,32 +74,80 @@ private val SimCardNotchShape = GenericShape { size, _ ->
     close()
 }
 
+@Immutable
+data class CallLogDisplayConfig(
+    val use24HourTime: Boolean = false,
+    val showTalkTime: Boolean = false,
+    val groupCallsByLatest: Boolean = false,
+    val showTotalCallsMade: Boolean = false,
+    val showSims: Boolean = true,
+    val hideNames: Boolean = false,
+    val hiddenIds: Set<String> = emptySet(),
+    val nameNonContactsAsUnknown: Boolean = true,
+    val fakeCallInContextMenu: Boolean = false,
+    val sim1Color: Color = Color(PreferenceManager.DEFAULT_SIM1_COLOR),
+    val sim2Color: Color = Color(PreferenceManager.DEFAULT_SIM2_COLOR),
+    val isScrollAnimEnabled: Boolean = true
+)
+
 @Composable
-fun SimSlotBadge(slot: Int, modifier: Modifier = Modifier, shape: Shape = SimCardNotchShape) {
-    val prefs = org.koin.compose.koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val sim1Color = remember(settingsVer) { Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM1_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM1_COLOR)) }
-    val sim2Color = remember(settingsVer) { Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM2_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM2_COLOR)) }
-    val color = if (slot == 0) sim1Color else sim2Color
-    BoxWithConstraints(
-        modifier = modifier
-            .size(width = 18.dp, height = 21.dp) // fallback size, only applies if `modifier` didn't already set one
-            .clip(shape)
-            .background(color),
-        contentAlignment = Alignment.Center
-    ) {
-        val fontSize = (maxHeight.value * 0.52f).sp
-        Text(
-            text = if (slot == 0) "1" else "2",
-            color = Color.White,
-            fontSize = fontSize,
-            lineHeight = fontSize,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            style = androidx.compose.ui.text.TextStyle(
-                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+fun SimSlotBadge(
+    slot: Int,
+    modifier: Modifier = Modifier,
+    shape: Shape = SimCardNotchShape,
+    overrideColor: Color? = null,
+    fontSize: androidx.compose.ui.unit.TextUnit? = null
+) {
+    val color = if (overrideColor != null) {
+        overrideColor
+    } else {
+        val prefs = org.koin.compose.koinInject<PreferenceManager>()
+        val settingsVer by prefs.settingsChanged.collectAsState()
+        val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+        val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+        if (slot == 0) sim1Color else sim2Color
+    }
+
+    if (fontSize != null) {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(color),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (slot == 0) "1" else "2",
+                color = Color.White,
+                fontSize = fontSize,
+                lineHeight = fontSize,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                )
             )
-        )
+        }
+    } else {
+        BoxWithConstraints(
+            modifier = modifier
+                .size(width = 18.dp, height = 21.dp)
+                .clip(shape)
+                .background(color),
+            contentAlignment = Alignment.Center
+        ) {
+            val resolvedFontSize = (maxHeight.value * 0.52f).sp
+            Text(
+                text = if (slot == 0) "1" else "2",
+                color = Color.White,
+                fontSize = resolvedFontSize,
+                lineHeight = resolvedFontSize,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                )
+            )
+        }
     }
 }
 
@@ -117,10 +165,14 @@ private fun nationalNumberDigits(number: String): String {
 }
 
 @Composable
-fun CallLogTileSimple(log: CallLogEntry) {
-    val prefs = koinInject<PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
+    val is24H = if (use24HourTime != null) {
+        use24HourTime
+    } else {
+        val prefs = koinInject<PreferenceManager>()
+        val settingsVer by prefs.settingsChanged.collectAsState()
+        remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+    }
     val isMissed = log.type == CallLog.Calls.MISSED_TYPE
 
     val icon = when (log.type) {
@@ -139,7 +191,7 @@ fun CallLogTileSimple(log: CallLogEntry) {
             CallLog.Calls.MISSED_TYPE   -> "Missed"
             else                        -> "Call"
         },
-        supporting = "${formatDate(log.date, use24HourTime)}${if (durationText != null) " • $durationText" else ""}",
+        supporting = "${formatDate(log.date, is24H)}${if (durationText != null) " • $durationText" else ""}",
         leadingIcon = icon,
         iconContainerColor = if (isMissed) MaterialTheme.colorScheme.errorContainer else null,
         onClick = { }
@@ -165,39 +217,67 @@ fun CallLogTile(
     selectionMode: Boolean = false,
     onSelectToggle: ((CallLogEntry) -> Unit)? = null,
     onSelectMode: ((CallLogEntry) -> Unit)? = null,
-    totalCallsCount: Int? = null
+    totalCallsCount: Int? = null,
+    config: CallLogDisplayConfig? = null
 ) {
     val context   = LocalContext.current
     val isContact = log.name != null && log.name != log.number
     var showMenu  by remember { mutableStateOf(false) }
 
-    val prefs = koinInject<PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val fakeCallInContextMenu = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    val fakeCallInContextMenu: Boolean
+    val use24HourTime: Boolean
+    val showTalkTime: Boolean
+    val groupCallsByLatest: Boolean
+    val showTotalCallsMade: Boolean
+    val hideNames: Boolean
+    val hiddenIds: Set<String>
+    val nameNonContactsAsUnknown: Boolean
+    val showSimsSetting: Boolean
+    val sim1Color: Color
+    val sim2Color: Color
+
+    if (config != null) {
+        fakeCallInContextMenu = config.fakeCallInContextMenu
+        use24HourTime = config.use24HourTime
+        showTalkTime = config.showTalkTime
+        groupCallsByLatest = config.groupCallsByLatest
+        showTotalCallsMade = config.showTotalCallsMade
+        hideNames = config.hideNames
+        hiddenIds = config.hiddenIds
+        nameNonContactsAsUnknown = config.nameNonContactsAsUnknown
+        showSimsSetting = config.showSims
+        sim1Color = config.sim1Color
+        sim2Color = config.sim2Color
+    } else {
+        val prefs = koinInject<PreferenceManager>()
+        val settingsVer by prefs.settingsChanged.collectAsState()
+        fakeCallInContextMenu = remember(settingsVer) {
+            prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+        }
+        use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+        showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
+        groupCallsByLatest = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false) }
+        showTotalCallsMade = remember(settingsVer) {
+            groupCallsByLatest || prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
+        }
+        hideNames = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false) }
+        hiddenIds = remember(settingsVer) {
+            val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        }
+        nameNonContactsAsUnknown = remember(settingsVer) {
+            prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)
+        }
+        showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
+        sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+        sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
     }
-    val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
-    val showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
-    val groupCallsByLatest = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false) }
-    val showTotalCallsMade = remember(settingsVer) {
-        groupCallsByLatest || prefs.getBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
-    }
-    val isNumberBlocked = remember(settingsVer, log.number) { BlockedNumbersManager.isBlocked(context, prefs, log.number) }
+
     var showFakeCallSheet by remember { mutableStateOf(false) }
     var showCallChatViaPicker by remember { mutableStateOf(false) }
 
-    // Contacts Hider: mask name if enabled and this contact is hidden
-    val hideNames = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false) }
-    val hiddenIds = remember(settingsVer) {
-        val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
-        if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
-    }
-    val contactsRepo = koinInject<IContactsRepository>()
     val isHiddenContact = remember(log.contactId, hiddenIds, hideNames) {
         hideNames && hiddenIds.isNotEmpty() && log.contactId != null && log.contactId in hiddenIds
-    }
-    val nameNonContactsAsUnknown = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)
     }
     val displayName = when {
         isHiddenContact -> log.number
@@ -226,10 +306,16 @@ fun CallLogTile(
             )
         }
         Box(modifier = Modifier.weight(1f)) {
-        val showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
         val showNumberOnSupportingLine = !isHiddenContact && (isContact || nameNonContactsAsUnknown)
-        val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({ SimSlotBadge(slot = log.simSlot, modifier = Modifier.size(width = 14.dp, height = 16.dp)) }) else null
+        val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({
+            SimSlotBadge(
+                slot = log.simSlot,
+                overrideColor = if (log.simSlot == 0) sim1Color else sim2Color,
+                fontSize = 8.sp,
+                modifier = Modifier.size(width = 14.dp, height = 16.dp)
+            )
+        }) else null
         val totalCallsBadge: (@Composable () -> Unit)? = if (showTotalCallsMade) {
             val total = totalCallsCount ?: log.count
             {
@@ -305,32 +391,37 @@ fun CallLogTile(
             }
         )
 
-        // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
-        val callLogContextMenuKeys = remember(settingsVer, isContact, fakeCallInContextMenu) {
-            com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
-                prefs,
-                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
-                listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "share", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
-            ).filter { key ->
-                when (key) {
-                    "add_to_contacts" -> !isContact
-                    "search_truecaller" -> !isContact && log.number.isNotBlank()
-                    "fake_call" -> fakeCallInContextMenu
-                    "call_chat_via" -> log.number.isNotBlank()
-                    else -> true
+        if (showMenu) {
+            val prefs = koinInject<PreferenceManager>()
+            val settingsVer by prefs.settingsChanged.collectAsState()
+            val isNumberBlocked = remember(settingsVer, log.number) { BlockedNumbersManager.isBlocked(context, prefs, log.number) }
+            val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
+            val hasTelegram = remember(context) { isTelegramInstalled(context) }
+            val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
+            val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
+            val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
+
+            // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
+            val callLogContextMenuKeys = remember(settingsVer, isContact, fakeCallInContextMenu) {
+                com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
+                    prefs,
+                    com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
+                    listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "share", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
+                ).filter { key ->
+                    when (key) {
+                        "add_to_contacts" -> !isContact
+                        "search_truecaller" -> !isContact && log.number.isNotBlank()
+                        "fake_call" -> fakeCallInContextMenu
+                        "call_chat_via" -> log.number.isNotBlank()
+                        else -> true
+                    }
                 }
             }
-        }
-        val hasWhatsApp = remember(context) { isAnyPackageInstalled(context, WHATSAPP_PACKAGES) }
-        val hasTelegram = remember(context) { isTelegramInstalled(context) }
-        val hasGoogleMeet = remember(context) { isGoogleMeetInstalled(context) }
-        val hasTruecaller = remember(context) { isTruecallerInstalled(context) }
-        val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
 
-        RivoDropdownMenu(
-            expanded          = showMenu,
-            onDismissRequest  = { showMenu = false }
-        ) {
+            RivoDropdownMenu(
+                expanded          = showMenu,
+                onDismissRequest  = { showMenu = false }
+            ) {
             callLogContextMenuKeys.forEachIndexed { index, key ->
                 if (key == "delete_call_log" && index > 0) {
                     HorizontalDivider(
@@ -569,9 +660,11 @@ fun CallLogTile(
             }
         }
         }
+        }
     }
 
     if (showFakeCallSheet) {
+        val prefs = koinInject<PreferenceManager>()
         FakeCallAddSheet(
             mode = AddMode.Number,
             initialNumber = log.number,
@@ -584,27 +677,21 @@ fun CallLogTile(
         )
     }
 
-    // Look up the saved contact (if any) so WhatsApp/Telegram/Google Meet can offer every number
-    // on the contact, not just this particular call log entry's number — e.g. a contact saved
-    // with both a country-coded and a plain number, where only one is actually registered on the
-    // target app.
-    // Bug fix: this used to be `remember(log.number) { contactsRepo.getContactByNumber(...) }`,
-    // a synchronous ContentResolver query run eagerly during composition for every tile even
-    // though the result is only ever needed if the user actually opens the Call/Chat Via picker.
-    // Deferred into a LaunchedEffect gated on the picker actually being opened, and off the main
-    // composition path entirely, so scrolling the list no longer pays for it at all.
-    var callChatViaNumbers by remember(log.number) { mutableStateOf<List<String>?>(null) }
-    LaunchedEffect(showCallChatViaPicker, log.number) {
-        if (showCallChatViaPicker && callChatViaNumbers == null) {
-            callChatViaNumbers = try { contactsRepo.getContactByNumber(log.number)?.phoneNumbers } catch (_: Exception) { null }
+    if (showCallChatViaPicker) {
+        val contactsRepo = koinInject<IContactsRepository>()
+        var callChatViaNumbers by remember(log.number) { mutableStateOf<List<String>?>(null) }
+        LaunchedEffect(log.number) {
+            if (callChatViaNumbers == null) {
+                callChatViaNumbers = try { contactsRepo.getContactByNumber(log.number)?.phoneNumbers } catch (_: Exception) { null }
+            }
         }
+        CallChatViaOverlay(
+            phoneNumber = log.number.takeIf { it.isNotBlank() },
+            phoneNumbers = callChatViaNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+                ?: listOfNotNull(log.number.takeIf { it.isNotBlank() }),
+            showPicker = showCallChatViaPicker,
+            onPickerDismiss = { showCallChatViaPicker = false },
+            showGoogleMeet = true
+        )
     }
-    CallChatViaOverlay(
-        phoneNumber = log.number.takeIf { it.isNotBlank() },
-        phoneNumbers = callChatViaNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-            ?: listOfNotNull(log.number.takeIf { it.isNotBlank() }),
-        showPicker = showCallChatViaPicker,
-        onPickerDismiss = { showCallChatViaPicker = false },
-        showGoogleMeet = true
-    )
 }
