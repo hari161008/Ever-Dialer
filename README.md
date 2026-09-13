@@ -47,39 +47,57 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 # 📱 Screenshots:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/1.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/2.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/3.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/1.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/2.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/3.png" width="32%"/>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/4.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/5.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/6.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/4.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/5.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/6.png" width="32%"/>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/7.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/8.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/9.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/7.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/8.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/9.png" width="32%"/>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/10.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/11.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/12.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/10.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/11.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/12.png" width="32%"/>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/13.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/14.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/15.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/13.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/14.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/15.png" width="32%"/>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/16.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/17.png" width="32%"/>
-  <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Screenshots/18.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/16.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/17.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/18.png" width="32%"/>
+</p>
+
+<p align="center">
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/19.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/20.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/21.png" width="32%"/>
+</p>
+
+<p align="center">
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/22.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/23.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/24.png" width="32%"/>
+</p>
+
+<p align="center">
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/25.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/26.png" width="32%"/>
+  <img src="https://hari161008.github.io/Website-For-Everlasting-Android-Tweak/Ever%20Dialer/Screenshots/27.png" width="32%"/>
 </p>
 
 <br>

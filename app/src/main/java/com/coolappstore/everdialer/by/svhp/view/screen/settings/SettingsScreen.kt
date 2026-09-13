@@ -74,6 +74,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.ScrollHapticsEffect
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
+import com.coolappstore.everdialer.by.svhp.view.components.globalSettingsSearchEntries
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.*
@@ -1450,7 +1451,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     // Recordings) — typing here only ever searches settings screens and toggles, never contacts
     // or notes, and there's no Filter button since there's nothing to filter by category.
     var settingsSearchQuery by remember { mutableStateOf("") }
-    val settingsSearchEntries = settingsSearchEntriesList
+    val settingsSearchEntries = globalSettingsSearchEntries
     val filteredSettingsResults = remember(settingsSearchQuery) {
         val q = settingsSearchQuery.trim()
         if (q.isBlank()) emptyList()
@@ -2088,184 +2089,6 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         }
     }
 }
-
-private data class SettingsSearchEntry(
-    val title: String,
-    val subtitle: String,
-    val key: String,
-    val icon: ImageVector,
-    val iconContainerColor: Color,
-    val titleLower: String = title.lowercase(),
-    val subtitleLower: String = subtitle.lowercase(),
-    // When null, the row lives on this screen and is highlighted in place. When set, the
-    // search result belongs to a nested settings screen — navigate there and let that
-    // screen pick up `highlightKey` to scroll/flash the row once it composes.
-    val navigateTo: ((DestinationsNavigator) -> Unit)? = null
-)
-
-private val settingsSearchEntriesList: List<SettingsSearchEntry> by lazy {
-    listOf(
-        // ── Rows that live directly on this screen ──────────────────────────
-        SettingsSearchEntry("Check For Updates", "Current version: v$APP_VERSION", "check_for_updates", Icons.Default.SystemUpdate, ColorAmber),
-        SettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer", "rate_and_review", Icons.Default.Star, ColorCyan),
-        SettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer", "check_ratings", Icons.Default.Reviews, ColorGreen),
-        SettingsSearchEntry("More Apps", "Check out other apps from the developer", "more_apps", Icons.Default.Apps, ColorIndigo),
-        SettingsSearchEntry("Donate", "Support this open source project", "donate", Icons.Default.Favorite, ColorRed),
-        SettingsSearchEntry("Interface", "Themes, colors, and layout", "interface", Icons.Outlined.Palette, ColorPurple),
-        SettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, ColorPurple),
-        SettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app", "scroll_haptics", Icons.Outlined.SwipeVertical, ColorIndigo),
-        SettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password", "authentication", Icons.Default.Fingerprint, Color(0xFF6750A4)),
-        SettingsSearchEntry("Interesting Settings !", "Call settings, network switcher, and notes", "app_settings", Icons.Outlined.Tune, ColorTeal),
-        SettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code", "contacts_hider", Icons.Outlined.Lock, Color(0xFF5E35B1)),
-        SettingsSearchEntry("Fake Call", "Schedule fake incoming calls without calling the real person", "fake_call", Icons.Outlined.PhoneCallback, ColorRed),
-        SettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
-        SettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, ColorRed),
-        SettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, ColorBluGrey),
-        SettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, ColorAmber) { it.navigate(UpdatesScreenDestination) },
-        SettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, ColorGreen),
-        SettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, ColorBrown),
-        SettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, ColorBluGrey),
-
-        // ── App Settings screen ──────────────────────────────────────────────
-        SettingsSearchEntry("Interesting Settings !", "Call features, Volume DND, network switcher, notes", "app_settings", Icons.Outlined.Tune, ColorTeal) { it.navigate(AppSettingsScreenDestination()) },
-        SettingsSearchEntry("4G/5G Switcher", "Quickly switch network mode per app", "network_switcher", Icons.Outlined.NetworkCell, ColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Integrate Notes Section", "Show notes alongside call recordings", "integrate_notes", Icons.Outlined.Notes, ColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "integrate_notes")) },
-        SettingsSearchEntry("Delete Notes With Recording", "Remove the note when its recording is deleted", "delete_notes_with_recording", Icons.Outlined.NoteAlt, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "delete_notes_with_recording")) },
-
-        // ── Sim And Call Placement screen ──────────────────────────────────────
-        SettingsSearchEntry("Sim And Call Placement", "Default SIM, SIM colors, confirm calls, contacts", "sim_and_call_placement", Icons.Outlined.SimCard, ColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "sim_and_call_placement")) },
-        SettingsSearchEntry("Sound & Vibration", "Ringtones and dialpad tones", "sound_vibration_link", Icons.Outlined.VolumeUp, ColorBlue) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "sound_vibration_link")) },
-        SettingsSearchEntry("Default SIM", "Which SIM is used to place calls", "default_sim", Icons.Outlined.SimCard, ColorGreen) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "default_sim")) },
-        SettingsSearchEntry("Confirm placing a call", "Ask for confirmation before placing any outgoing call", "confirm_placing_call", Icons.Outlined.CheckCircle, ColorIndigo) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "confirm_placing_call")) },
-        SettingsSearchEntry("Show SIM buttons", "Show SIM 1 and SIM 2 buttons instead of dial button in dialpad", "show_sim_buttons_in_dialpad", Icons.Outlined.Dialpad, ColorTeal) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "show_sim_buttons_in_dialpad")) },
-        SettingsSearchEntry("Use SIM based on call logs history on any call", "Automatically select the same SIM from call log history", "use_sim_from_call_log", Icons.Outlined.History, ColorIndigo) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "use_sim_from_call_log")) },
-        SettingsSearchEntry("Customize SIM Colors", "Choose custom colors for SIM 1 and SIM 2", "customize_sim_colors", Icons.Outlined.Palette, ColorAmber) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "customize_sim_colors")) },
-        SettingsSearchEntry("Contacts to display", "Choose which accounts' contacts are shown", "contacts_to_display", Icons.Outlined.Contacts, ColorBlue) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "contacts_to_display")) },
-        SettingsSearchEntry("Missed Call Notification", "Show missed call notifications through Ever Dialer", "missed_call_notification", Icons.AutoMirrored.Filled.CallMissed, ColorRed) { it.navigate(SimAndCallPlacementScreenDestination(highlightKey = "missed_call_notification")) },
-
-        // ── Call Features & Behavior ──────────────────────────────────────────
-        SettingsSearchEntry("Proximity Sensor on in background", "Turn off screen when phone is near ear during a call", "proximity_sensor_bg", Icons.Outlined.Sensors, ColorTeal) { it.navigate(AppSettingsScreenDestination(highlightKey = "proximity_sensor_bg")) },
-        SettingsSearchEntry("Device Orientation with Proximity Sensor", "Combine orientation and proximity to prevent false screen-offs during a call", "proximity_orientation_bg", Icons.Outlined.ScreenLockPortrait, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "proximity_orientation_bg")) },
-        SettingsSearchEntry("Pocket Mode Prevention", "Block accidental answer/decline when phone is in pocket", "pocket_mode_prevention", Icons.Outlined.Sensors, ColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "pocket_mode_prevention")) },
-        SettingsSearchEntry("Floating Ongoing Call", "Draggable floating bubble during calls", "floating_ongoing_call", Icons.Outlined.Sensors, ColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "floating_ongoing_call")) },
-        SettingsSearchEntry("Direct Call on Tap", "Tap a call log entry to call directly", "direct_call_on_tap", Icons.Outlined.Call, ColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "direct_call_on_tap")) },
-        SettingsSearchEntry("Auto Speaker", "Switch to loudspeaker when phone is away from ear", "auto_speaker", Icons.Outlined.VolumeUp, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "auto_speaker")) },
-        SettingsSearchEntry("Rain Mode", "Answer/decline calls by shaking your device", "rain_mode_link", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
-        SettingsSearchEntry("Auto Redial", "Automatically redial on rejected/unanswered/busy calls", "auto_redial", Icons.Default.Replay, ColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "auto_redial")) },
-        SettingsSearchEntry("Missed Call Popup", "Show interactive popup over other apps on missed calls", "missed_call_popup", Icons.AutoMirrored.Filled.CallMissed, ColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "missed_call_popup")) },
-        SettingsSearchEntry("Always Show Popup After Every Call Ends", "Show popup after every call ends with only custom response", "always_show_after_call_ends", Icons.AutoMirrored.Filled.CallMissed, ColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "missed_call_popup")) },
-        SettingsSearchEntry("Volume DND", "Toggle Do Not Disturb using volume button combination", "volume_dnd", Icons.Outlined.VolumeUp, Color(0xFF7C4DFF)) { it.navigate(VolumeDndScreenDestination(highlightKey = "volume_dnd")) },
-
-        // ── Rain Mode screen ─────────────────────────────────────────────────
-        SettingsSearchEntry("Enable Rain Mode", "Answer or decline calls by shaking device", "enable_rain_mode", Icons.Outlined.WaterDrop, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination(highlightKey = "enable_rain_mode")) },
-        SettingsSearchEntry("Rain Mode Shake Sensitivity", "Adjust shake intensity threshold for Rain Mode", "rain_mode_intensity", Icons.Outlined.Tune, Color(0xFF0288D1)) { it.navigate(RainModeScreenDestination()) },
-        SettingsSearchEntry("Rain Mode Vibration Feedback", "Vibrate when call is answered or declined via shake gesture", "rain_mode_vibrate", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RainModeScreenDestination(highlightKey = "rain_mode_vibrate")) },
-
-        // ── Raise to Answer screen ───────────────────────────────────────────
-        SettingsSearchEntry("Enable Raise to Answer", "Answer calls by raising the phone to your ear", "enable_raise_to_answer", Icons.Outlined.Vibration, ColorTeal) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "enable_raise_to_answer")) },
-        SettingsSearchEntry("Answer at Any Angle", "Raise to Answer sensitivity", "answer_any_angle", Icons.Outlined.Vibration, ColorTeal) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "answer_any_angle")) },
-        SettingsSearchEntry("Decline by Flipping", "Flip the phone face down to decline a call", "decline_by_flipping", Icons.Outlined.Vibration, ColorRed) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "decline_by_flipping")) },
-        SettingsSearchEntry("Raise to Answer Beep Feedback", "Play a beep when raise/flip is detected", "raise_beep_feedback", Icons.Outlined.Vibration, ColorAmber) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "raise_beep_feedback")) },
-        SettingsSearchEntry("Raise to Answer Vibrate Feedback", "Vibrate when raise/flip is detected", "raise_vibrate_feedback", Icons.Outlined.Vibration, ColorPurple) { it.navigate(RaiseToAnswerScreenDestination(highlightKey = "raise_vibrate_feedback")) },
-
-        // ── Ever Call Recorder Settings ──────────────────────────────────────
-        SettingsSearchEntry("Call Recording Master Switch", "Enable or disable all background call recording", "call_recording_master", Icons.Default.FiberManualRecord, Color(0xFFE53935)) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Auto Record Incoming Calls", "Automatically record incoming calls from all or specific contacts", "auto_record_incoming", Icons.Outlined.CallReceived, ColorGreen) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Auto Record Outgoing Calls", "Automatically record outgoing calls to all or specific contacts", "auto_record_outgoing", Icons.Outlined.CallMade, ColorBlue) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Recording Storage Location", "Choose custom folder or app-private storage for recordings", "recording_storage", Icons.Outlined.Folder, ColorAmber) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Recording Audio Source", "Microphone, media projection, or internal call stream", "recording_audio_source", Icons.Outlined.Mic, ColorTeal) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Recording Audio Codec", "Audio recording format (AAC, Opus, etc.)", "recording_audio_codec", Icons.Outlined.GraphicEq, ColorPurple) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Recording Sample Rate", "Audio quality sample rate (e.g. 48kHz, 44.1kHz)", "recording_sample_rate", Icons.Outlined.Equalizer, ColorIndigo) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Auto Delete Old Recordings", "Clean up call recordings older than 7/30/90 days", "auto_delete_recordings", Icons.Outlined.DeleteSweep, ColorRed) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Recording Notifications", "Show persistent notification while recording calls", "recording_notifications", Icons.Outlined.Notifications, ColorAmber) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Post-Recording File Actions", "Quick play, share, or delete notification after call ends", "post_recording_actions", Icons.Outlined.DoneAll, ColorGreen) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Call Recording App Lock", "Require PIN or biometric authentication for recordings", "recording_app_lock", Icons.Default.Fingerprint, Color(0xFF6750A4)) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-        SettingsSearchEntry("Separate Audio Channels", "Record caller and receiver on left and right channels", "separate_channels", Icons.Outlined.Headphones, ColorCyan) { it.navigate(RecordingsScreenDestination(openedFromSettings = true)) },
-
-        // ── 4G/5G Network Switch Settings ─────────────────────────────────────
-        SettingsSearchEntry("4G/5G Network Switcher", "Force LTE/NR network mode or per-app automation", "network_switcher_app", Icons.Outlined.NetworkCell, ColorBlue) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Per-App Network Mode Automation", "Automatically switch network mode per application", "network_automation", Icons.Outlined.AutoMode, ColorIndigo) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Preferred Network Mode", "Select 5G NR, 4G LTE, 3G, or 2G network modes", "preferred_network_mode", Icons.Outlined.SignalCellularAlt, ColorTeal) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Network Switcher Shizuku Mode", "Switch network modes without root using Shizuku", "network_shizuku", Icons.Outlined.Security, ColorGreen) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Network Switcher Root Mode", "Direct shell network mode execution with root access", "network_root", Icons.Outlined.AdminPanelSettings, ColorRed) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Network Switch Quick Settings Tile", "Toggle 4G/5G directly from Android notification shade", "network_tile", Icons.Outlined.ViewStream, ColorAmber) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-        SettingsSearchEntry("Network Switch Floating Hint", "Show on-screen network mode floating indicator", "network_floating_hint", Icons.Outlined.PictureInPicture, ColorCyan) { it.navigate(AppSettingsScreenDestination(highlightKey = "network_switcher")) },
-
-        // ── Sound & Vibration screen ──────────────────────────────────────────
-        SettingsSearchEntry("DTMF Tone", "Play tones when dialing digits", "dtmf_tone", Icons.Outlined.VolumeUp, ColorBlue) { it.navigate(SoundVibrationScreenDestination(highlightKey = "dtmf_tone")) },
-        SettingsSearchEntry("Dial Pad Tone", "Choose the dialpad key tone", "dialpad_tone", Icons.Outlined.VolumeUp, ColorTeal) { it.navigate(SoundVibrationScreenDestination(highlightKey = "dialpad_tone")) },
-        SettingsSearchEntry("Ringtone Settings", "Choose your incoming call ringtone", "ringtone_settings", Icons.Outlined.VolumeUp, ColorAmber) { it.navigate(SoundVibrationScreenDestination(highlightKey = "ringtone_settings")) },
-        SettingsSearchEntry("Do Not Disturb", "Manage Do Not Disturb access", "dnd_settings", Icons.Outlined.VolumeUp, ColorIndigo) { it.navigate(SoundVibrationScreenDestination(highlightKey = "dnd_settings")) },
-
-        // ── Authentication (Biometric) screen ────────────────────────────────
-        SettingsSearchEntry("Authentication Method", "System biometrics, PIN, or password", "auth_method", Icons.Default.Fingerprint, Color(0xFF6750A4)) { it.navigate(BiometricScreenDestination(highlightKey = "auth_method")) },
-        SettingsSearchEntry("Lock App on Open", "Require authentication whenever the app opens", "lock_app_open", Icons.Default.Fingerprint, ColorRed) { it.navigate(BiometricScreenDestination(highlightKey = "lock_app_open")) },
-        SettingsSearchEntry("Lock Call Actions", "Require authentication for sensitive call actions", "lock_call_actions", Icons.Default.Fingerprint, ColorTeal) { it.navigate(BiometricScreenDestination(highlightKey = "lock_call_actions")) },
-
-        // ── Interface screen ──────────────────────────────────────────────────
-        SettingsSearchEntry("Dynamic Colors", "Match app colors to your wallpaper (Material You)", "dynamic_colors", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "dynamic_colors")) },
-        SettingsSearchEntry("Material Liquid You Glass", "Liquid glass visual effects", "liquid_glass_toggle", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "liquid_glass_toggle")) },
-        SettingsSearchEntry("Elements to have liquid glass effect", "Choose where liquid glass effects apply", "liquid_glass_elements_link", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "liquid_glass_elements_link")) },
-        SettingsSearchEntry("Material Blur Effects", "Blur effects across the interface", "blur_effects_toggle", Icons.Outlined.Palette, ColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "blur_effects_toggle")) },
-        SettingsSearchEntry("Elements to have blur effect", "Choose where blur effects apply", "blur_effects_elements_link", Icons.Outlined.Palette, ColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "blur_effects_elements_link")) },
-        SettingsSearchEntry("Hangup Animation", "Animate the screen when a call ends", "hangup_animation", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "hangup_animation")) },
-        SettingsSearchEntry("Incoming Call UI", "Customize the incoming call screen", "incoming_call_ui_link", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "incoming_call_ui_link")) },
-        SettingsSearchEntry("Ongoing Call UI", "Customize the in-call screen layout", "caller_ui_link", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "caller_ui_link")) },
-        SettingsSearchEntry("Calls Section Elements", "Choose what shows in the Calls tab", "calls_section_elements", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "calls_section_elements")) },
-        SettingsSearchEntry("Context Menu Elements", "Choose what shows in long-press menus", "context_menu_elements", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "context_menu_elements")) },
-        SettingsSearchEntry("Tab Sections", "Choose which bottom tabs are visible", "tab_sections", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "tab_sections")) },
-        SettingsSearchEntry("Contact Info Elements", "Choose which elements appear in contact details", "contact_info_elements", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "contact_info_elements")) },
-        SettingsSearchEntry("Default Tab Section", "Which tab opens when you launch the app", "default_tab_section", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "default_tab_section")) },
-        SettingsSearchEntry("Scroll Animation", "Animate list scrolling", "scroll_animation", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "scroll_animation")) },
-        SettingsSearchEntry("Pill Style Navigation", "Pill-shaped bottom navigation bar", "pill_style_nav", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "pill_style_nav")) },
-        SettingsSearchEntry("Group numbers in call logs based on latest calls", "Group call logs by number and sort by latest calls", "group_calls_by_latest", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "group_calls_by_latest")) },
-        SettingsSearchEntry("Show Sims In Call Logs", "Show which SIM a call used in the call log", "show_sims_call_logs", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "show_sims_call_logs")) },
-        SettingsSearchEntry("Show total number of calls made", "Show total call count in call logs", "show_total_calls_made", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "show_total_calls_made")) },
-        SettingsSearchEntry("Hide Duplicate Numbers In A Contact", "Show only one of multiple identical phone numbers", "hide_duplicate_numbers_in_contact", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "hide_duplicate_numbers_in_contact")) },
-        SettingsSearchEntry("Name non contacts as Unknown", "Display Unknown or phone number for unsaved callers", "name_non_contacts_as_unknown", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "name_non_contacts_as_unknown")) },
-        SettingsSearchEntry("Auto Delete Unknown No in call log", "Automatically clean up unknown-number entries", "auto_delete_unknown_calllog", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "auto_delete_unknown_calllog")) },
-
-        SettingsSearchEntry("Call Time Format in call logs", "12-hour or 24-hour time format", "call_time_format", Icons.Outlined.Palette, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "call_time_format")) },
-        SettingsSearchEntry("Talk time in call logs", "Show call duration for non-missed calls", "talk_time_in_call_logs", Icons.Outlined.Timer, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "talk_time_in_call_logs")) },
-        SettingsSearchEntry("Icon-Only Bottom Bar", "Hide labels on the bottom navigation bar", "icon_only_bottom_bar", Icons.Outlined.Palette, ColorIndigo) { it.navigate(InterfaceScreenDestination(highlightKey = "icon_only_bottom_bar")) },
-        SettingsSearchEntry("Open Dialpad by Default", "Launch straight into the dialpad", "open_dialpad_default", Icons.Outlined.Palette, ColorBlue) { it.navigate(InterfaceScreenDestination(highlightKey = "open_dialpad_default")) },
-        SettingsSearchEntry("Show favourites in list", "Display favourites in a vertical list instead of grid", "favorites_in_list", Icons.Outlined.Palette, Color(0xFFE91E63)) { it.navigate(InterfaceScreenDestination(highlightKey = "favorites_in_list")) },
-        SettingsSearchEntry("Show First Letter in Avatar", "Fallback avatar shows a contact's initial", "avatar_first_letter", Icons.Outlined.Palette, ColorAmber) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_first_letter")) },
-        SettingsSearchEntry("Solid Icons", "Use solid background behind icons without colors", "solid_icons", Icons.Outlined.Palette, Color(0xFF607D8B)) { it.navigate(InterfaceScreenDestination(highlightKey = "solid_icons")) },
-        SettingsSearchEntry("Circle Icons", "Use circle shapes for icons across the app", "circle_icons", Icons.Outlined.Palette, Color(0xFF00BCD4)) { it.navigate(InterfaceScreenDestination(highlightKey = "circle_icons")) },
-        SettingsSearchEntry("Use Colorful Avatars", "Give fallback avatars varied colors", "colorful_avatars", Icons.Outlined.Palette, ColorPurple) { it.navigate(InterfaceScreenDestination(highlightKey = "colorful_avatars")) },
-        SettingsSearchEntry("Show Picture in Avatar", "Show a contact's photo in their avatar", "avatar_picture", Icons.Outlined.Palette, ColorGreen) { it.navigate(InterfaceScreenDestination(highlightKey = "avatar_picture")) },
-        SettingsSearchEntry("App Icon (Change)", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, ColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
-        SettingsSearchEntry("App Name (Change)", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
-        SettingsSearchEntry("Show call logs in the dialpad search list", "Show recent call logs in the search list when nothing is typed or searched", "show_call_logs_in_dialpad_search_list", Icons.Outlined.History, ColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "show_call_logs_in_dialpad_search_list")) },
-
-        // ── Incoming Call UI screen ───────────────────────────────────────────
-        SettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },
-        SettingsSearchEntry("Show Mute button", "Show a button to silence ringtone during incoming calls", "incoming_show_mute_button", Icons.Outlined.VolumeUp, ColorAmber) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_mute_button")) },
-        SettingsSearchEntry("Contact PFP Customisation (Incoming)", "Customize avatar photo for incoming calls", "incoming_contact_pfp_customisation", Icons.Outlined.Contacts, ColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_contact_pfp_customisation")) },
-        SettingsSearchEntry("Show Contact PFP", "Display caller's avatar photo over incoming call screen", "incoming_show_contact_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_contact_pfp")) },
-        SettingsSearchEntry("Show PFP for Non-Contacts (Incoming)", "Display avatar for incoming callers without photo", "incoming_custom_pfp_show_for_no_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_custom_pfp_show_for_no_pfp")) },
-        SettingsSearchEntry("Show Phone Number", "Display caller's phone number on incoming call screen", "incoming_show_phone_number", Icons.Outlined.Call, ColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "incoming_show_phone_number")) },
-        SettingsSearchEntry("Default Message", "Quick-reply message shown for incoming calls", "default_message_link", Icons.Outlined.Message, ColorBlue) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "default_message_link")) },
-
-        // ── Ongoing Call UI screen ────────────────────────────────────────────
-        SettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, ColorBlue) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_when_answered")) },
-        SettingsSearchEntry("Show ongoing call UI screen in lockscreen when the call is answered", "Display in-call screen on lockscreen after answering", "show_ongoing_call_ui_on_lockscreen_when_answered", Icons.Outlined.Lock, ColorIndigo) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_on_lockscreen_when_answered")) },
-        SettingsSearchEntry("Contact PFP Customisation (Ongoing)", "Customize avatar photo for ongoing in-call screen", "ongoing_contact_pfp_customisation", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_contact_pfp_customisation")) },
-        SettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
-        SettingsSearchEntry("Show PFP for Non-Contacts (Ongoing)", "Display avatar on ongoing call screen for callers without photo", "ongoing_custom_pfp_show_for_no_pfp", Icons.Outlined.Contacts, ColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_custom_pfp_show_for_no_pfp")) },
-        SettingsSearchEntry("Show Phone Number in Ongoing Call", "Display phone number on ongoing call screen", "ongoing_show_phone_number", Icons.Outlined.Call, ColorGreen) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_phone_number")) },
-
-        // ── About screen ───────────────────────────────────────────────────────
-        SettingsSearchEntry("Made By Hari", "Developer info", "made_by_hari", Icons.Outlined.Info, ColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "made_by_hari")) },
-        SettingsSearchEntry("Source Code", "View Ever Dialer's source on GitHub", "source_code", Icons.Outlined.Info, ColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "source_code")) },
-        SettingsSearchEntry("Telegram App Support Group", "Get help and discuss the app", "telegram_support", Icons.Outlined.Info, ColorBlue) { it.navigate(AboutAppScreenDestination(highlightKey = "telegram_support")) },
-        SettingsSearchEntry("App Recommending Channel in Telegram", "Follow for app announcements", "telegram_channel", Icons.Outlined.Info, ColorBlue) { it.navigate(AboutAppScreenDestination(highlightKey = "telegram_channel")) },
-        SettingsSearchEntry("My Other App (Everlasting Android Tweak)", "Check out the developer's other app", "other_app_link", Icons.Outlined.Info, ColorIndigo) { it.navigate(AboutAppScreenDestination(highlightKey = "other_app_link")) }
-    )
-}
-
-
 
 private sealed class BackupDialogState {
     object Idle : BackupDialogState()

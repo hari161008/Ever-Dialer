@@ -867,8 +867,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
     }
 
     private fun updateNote(ops: ArrayList<ContentProviderOperation>, rawId: Long, note: String?) {
-        var existingId: Long? = null
-        var existingNote: String? = null
+        val existingRows = mutableListOf<Pair<Long, String?>>()
         try {
             contentResolver.query(
                 ContactsContract.Data.CONTENT_URI,
@@ -877,11 +876,12 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 arrayOf(rawId.toString(), ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
                 null
             )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
-                    val noteIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
-                    if (idIdx >= 0) existingId = cursor.getLong(idIdx)
-                    if (noteIdx >= 0) existingNote = cursor.getString(noteIdx)
+                val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
+                val noteIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
+                while (cursor.moveToNext()) {
+                    if (idIdx >= 0) {
+                        existingRows.add(cursor.getLong(idIdx) to if (noteIdx >= 0) cursor.getString(noteIdx) else null)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -890,20 +890,28 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
         val cleanNote = note?.trim()
         if (cleanNote.isNullOrBlank()) {
-            if (existingId != null) {
+            for (row in existingRows) {
                 ops.add(
                     ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
-                        .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingId.toString()))
+                        .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(row.first.toString()))
                         .build()
                 )
             }
         } else {
-            if (existingId != null) {
-                if (existingNote?.trim() != cleanNote) {
+            if (existingRows.isNotEmpty()) {
+                val (firstId, firstNote) = existingRows.first()
+                if (firstNote?.trim() != cleanNote) {
                     ops.add(
                         ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-                            .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingId.toString()))
+                            .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(firstId.toString()))
                             .withValue(ContactsContract.CommonDataKinds.Note.NOTE, cleanNote)
+                            .build()
+                    )
+                }
+                for (i in 1 until existingRows.size) {
+                    ops.add(
+                        ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                            .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingRows[i].first.toString()))
                             .build()
                     )
                 }
@@ -1289,22 +1297,56 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         contactId: String,
         note: String?,
         targetRawContactId: Long?,
-        updateAllAccounts: Boolean
+        updateAllAccounts: Boolean,
+        oldNote: String?
     ) {
         val ops = ArrayList<ContentProviderOperation>()
         val allRawContacts = getRawContactsForContact(contactId)
         val writableRawContacts = allRawContacts.filter { !it.isReadOnly }
         if (writableRawContacts.isEmpty()) return
 
+        val cleanOldNote = oldNote?.trim()
+        val cleanNewNote = note?.trim()
+
         if (updateAllAccounts || targetRawContactId == null) {
             for (raw in writableRawContacts) {
-                updateNote(ops, raw.id, note)
+                updateNote(ops, raw.id, cleanNewNote)
             }
         } else {
             val target = writableRawContacts.firstOrNull { it.id == targetRawContactId }
                 ?: writableRawContacts.firstOrNull()
             if (target != null) {
-                updateNote(ops, target.id, note)
+                updateNote(ops, target.id, cleanNewNote)
+            }
+            if (!cleanOldNote.isNullOrBlank()) {
+                val otherRawContacts = writableRawContacts.filter { it.id != target?.id }
+                for (otherRaw in otherRawContacts) {
+                    try {
+                        contentResolver.query(
+                            ContactsContract.Data.CONTENT_URI,
+                            arrayOf(ContactsContract.Data._ID, ContactsContract.CommonDataKinds.Note.NOTE),
+                            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                            arrayOf(otherRaw.id.toString(), ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
+                            null
+                        )?.use { cursor ->
+                            val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
+                            val noteIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
+                            while (cursor.moveToNext()) {
+                                val n = if (noteIdx >= 0) cursor.getString(noteIdx) else null
+                                val id = if (idIdx >= 0) cursor.getLong(idIdx) else -1L
+                                if (id > 0 && n?.trim() == cleanOldNote) {
+                                    ops.add(
+                                        ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                                            .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(id.toString()))
+                                            .build()
+                                    )
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ContactsRepo", "Error cleaning old note from other raw contact", e)
+                    }
+                }
             }
         }
 

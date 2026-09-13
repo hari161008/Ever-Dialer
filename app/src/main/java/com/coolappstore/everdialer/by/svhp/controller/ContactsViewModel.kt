@@ -518,7 +518,8 @@ class ContactsViewModel(
         contactId: String,
         note: String?,
         targetRawContactId: Long? = null,
-        updateAllAccounts: Boolean = false
+        updateAllAccounts: Boolean = false,
+        oldNote: String? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             // Optimistically update memory and cache
@@ -528,7 +529,7 @@ class ContactsViewModel(
             updateDisplayedContacts(updated)
             ContactsCache.write(getApplication(), updated)
             
-            contactsRepo.updateContactNote(contactId, note, targetRawContactId, updateAllAccounts)
+            contactsRepo.updateContactNote(contactId, note, targetRawContactId, updateAllAccounts, oldNote)
             fetchContacts()
         }
     }

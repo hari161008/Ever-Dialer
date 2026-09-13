@@ -54,6 +54,7 @@ import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDest
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -770,7 +771,11 @@ fun ContactSearchContent(
                                         trailingIcon = Icons.Default.ChevronRight,
                                         onClick = {
                                             keyboardController?.hide()
-                                            entry.navigateTo(navigator)
+                                            if (entry.navigateTo != null) {
+                                                entry.navigateTo.invoke(navigator)
+                                            } else {
+                                                navigator.navigate(SettingsScreenDestination(highlightKey = entry.key))
+                                            }
                                         }
                                     )
                                     if (index < settingResults.size - 1) {

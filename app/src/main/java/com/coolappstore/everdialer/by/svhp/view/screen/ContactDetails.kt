@@ -214,6 +214,8 @@ fun ContactDetailsScreen(
         }
     }
     var showCallLongPressMenu by remember { mutableStateOf(false) }
+    var showTextLongPressMenu by remember { mutableStateOf(false) }
+    var pendingTextAction by remember { mutableStateOf<String?>(null) }
     var pendingSimSlotToCall by remember { mutableStateOf<Int?>(null) }
     val hideDuplicateNumbers = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true)
@@ -382,6 +384,39 @@ fun ContactDetailsScreen(
         }
     }
 
+    fun launchTextApp(action: String, number: String) {
+        when (action) {
+            "sms" -> {
+                if (number.isNotBlank() && number != "Unknown") {
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$number")))
+                    } catch (_: Exception) {}
+                }
+            }
+            "whatsapp" -> {
+                val opened = openWhatsAppChat(context, number)
+                if (!opened) android.widget.Toast.makeText(context, "WhatsApp isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            "whatsapp_business" -> {
+                val opened = openWhatsAppBusinessChat(context, number)
+                if (!opened) android.widget.Toast.makeText(context, "WhatsApp Business isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun chooseTextApp(action: String) {
+        val numbers = socialNumbers
+        if (numbers.isEmpty()) return
+        val default = contactDefaultNumber?.takeIf { it in numbers }
+        if (default != null) {
+            launchTextApp(action, default)
+        } else if (numbers.size > 1) {
+            pendingTextAction = action
+        } else {
+            launchTextApp(action, numbers.first())
+        }
+    }
+
     // Most recent SIM slot used on a call with this contact, for the "last used SIM for this
     // contact" option — derived straight from this contact's call log history.
     val recentSimSlotForContact = remember(contactLogs) {
@@ -465,6 +500,17 @@ fun ContactDetailsScreen(
             onNumberSelected = { number ->
                 pendingSocialApp = null
                 launchSocialApp(app, number)
+            }
+        )
+    }
+    if (pendingTextAction != null) {
+        val action = pendingTextAction!!
+        NumberPickerDialog(
+            numbers = socialNumbers,
+            onDismissRequest = { pendingTextAction = null },
+            onNumberSelected = { number ->
+                pendingTextAction = null
+                launchTextApp(action, number)
             }
         )
     }
@@ -566,7 +612,8 @@ fun ContactDetailsScreen(
                     contactId = contact.id,
                     note = newNote.ifBlank { null },
                     targetRawContactId = targetAccount?.rawContactId,
-                    updateAllAccounts = updateAll
+                    updateAllAccounts = updateAll,
+                    oldNote = editingInitialDescription.ifBlank { null }
                 )
                 accountsRefreshTrigger++
             },
@@ -576,7 +623,8 @@ fun ContactDetailsScreen(
                     contactId = contact.id,
                     note = null,
                     targetRawContactId = targetAccount?.rawContactId,
-                    updateAllAccounts = updateAll
+                    updateAllAccounts = updateAll,
+                    oldNote = editingInitialDescription.ifBlank { null }
                 )
                 accountsRefreshTrigger++
             },
@@ -804,7 +852,7 @@ fun ContactDetailsScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -1002,25 +1050,105 @@ fun ContactDetailsScreen(
                                                     }
                                                 )
                                             }
+                                            if (whatsAppBusinessInstalled) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                                RivoDropdownMenuItem(
+                                                    text = "Call via WhatsApp Business",
+                                                    iconBitmap = remember(context) { getWhatsAppBusinessIcon(context) },
+                                                    onClick = {
+                                                        showCallLongPressMenu = false
+                                                        chooseSocialApp("whatsapp_business")
+                                                    }
+                                                )
+                                            }
+                                            if (meetInstalled) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                                RivoDropdownMenuItem(
+                                                    text = "Call via Google Meet",
+                                                    iconBitmap = remember(context) { getGoogleMeetIcon(context) },
+                                                    onClick = {
+                                                        showCallLongPressMenu = false
+                                                        chooseSocialApp("googlemeet")
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
-                                    Surface(
-                                        onClick = {
-                                            if (displayPhone != "Unknown") context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$displayPhone")))
-                                        },
-                                        modifier = Modifier.weight(1f).height(64.dp),
-                                        shape = RoundedCornerShape(50),
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxSize(),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(64.dp)
+                                                .clip(RoundedCornerShape(50))
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        chooseTextApp("sms")
+                                                    },
+                                                    onLongClick = {
+                                                        showTextLongPressMenu = true
+                                                    }
+                                                ),
+                                            shape = RoundedCornerShape(50),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ) {
-                                            Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Text", modifier = Modifier.size(26.dp))
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Text("Text", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                            Row(
+                                                modifier = Modifier.fillMaxSize(),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Text", modifier = Modifier.size(26.dp))
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text("Text", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                                            }
+                                        }
+
+                                        RivoDropdownMenu(
+                                            expanded = showTextLongPressMenu,
+                                            onDismissRequest = { showTextLongPressMenu = false }
+                                        ) {
+                                            RivoDropdownMenuItem(
+                                                text = "SMS",
+                                                icon = Icons.AutoMirrored.Filled.Message,
+                                                onClick = {
+                                                    showTextLongPressMenu = false
+                                                    chooseTextApp("sms")
+                                                }
+                                            )
+                                            if (whatsAppInstalled) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                                RivoDropdownMenuItem(
+                                                    text = "Chat on WhatsApp",
+                                                    iconBitmap = remember(context) { getWhatsAppIcon(context) },
+                                                    onClick = {
+                                                        showTextLongPressMenu = false
+                                                        chooseTextApp("whatsapp")
+                                                    }
+                                                )
+                                            }
+                                            if (whatsAppBusinessInstalled) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                )
+                                                RivoDropdownMenuItem(
+                                                    text = "Chat on WhatsApp Business",
+                                                    iconBitmap = remember(context) { getWhatsAppBusinessIcon(context) },
+                                                    onClick = {
+                                                        showTextLongPressMenu = false
+                                                        chooseTextApp("whatsapp_business")
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -2353,8 +2481,8 @@ fun ContactDetailsScreen(
                         }
                     }
                 }
-                item { Spacer(modifier = Modifier.height(100.dp)) }
             }
+            item { Spacer(modifier = Modifier.height(100.dp)) }
         }
     }
 
@@ -2433,7 +2561,7 @@ fun DescriptionEditorDialog(
     onDelete: (targetAccount: ContactAccountInfo?, updateAll: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var text by remember { mutableStateOf(initialDescription) }
+    var text by remember(initialDescription) { mutableStateOf(initialDescription) }
     val writableAccounts = remember(accounts) { accounts.filter { !it.isReadOnly } }
     var updateAllLinkedAccounts by remember(initialSelectedAccount) {
         mutableStateOf(initialSelectedAccount == null)
