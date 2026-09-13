@@ -213,7 +213,10 @@ fun PlaybackScreen(
                     }
                     OutlinedTextField(
                         value = note,
-                        onValueChange = { vm.updateNote(it) },
+                        onValueChange = {
+                            vm.updateNote(it)
+                            homeVm.updateNote(recording.uri, it)
+                        },
                         placeholder = {
                             Text("Add notes about this call…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                         },

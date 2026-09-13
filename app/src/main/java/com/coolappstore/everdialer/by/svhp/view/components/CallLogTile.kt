@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.PhoneCallback
 import androidx.compose.foundation.layout.Box
@@ -48,13 +49,21 @@ import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.controller.util.formatCallLogDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDuration
+import android.content.ContentUris
+import android.net.Uri
+import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
+import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinActivityViewModel
 
 /**
  * A small, clean SIM-card-chip badge — solid flat color with the slot number in bold, so the
@@ -218,11 +227,23 @@ fun CallLogTile(
     onSelectToggle: ((CallLogEntry) -> Unit)? = null,
     onSelectMode: ((CallLogEntry) -> Unit)? = null,
     totalCallsCount: Int? = null,
-    config: CallLogDisplayConfig? = null
+    config: CallLogDisplayConfig? = null,
+    navigator: DestinationsNavigator? = null
 ) {
     val context   = LocalContext.current
-    val isContact = log.name != null && log.name != log.number
+    val contactsVM: ContactsViewModel = koinActivityViewModel()
+    val allContacts by contactsVM.allContacts.collectAsState()
+    val matchedContact = remember(log.contactId, log.number, allContacts) {
+        if (!log.contactId.isNullOrBlank() && log.contactId != "0" && log.contactId != "-1" && log.contactId != "null") {
+            allContacts.find { it.id == log.contactId }
+        } else if (log.number.isNotBlank()) {
+            allContacts.find { c -> c.phoneNumbers.any { n -> numbersLikelyMatch(log.number, n) } }
+        } else null
+    }
+    val isContact = (log.name != null && log.name != log.number) || matchedContact != null
     var showMenu  by remember { mutableStateOf(false) }
+    var showAddContactChoiceDialog by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
 
     val fakeCallInContextMenu: Boolean
     val use24HourTime: Boolean
@@ -281,13 +302,13 @@ fun CallLogTile(
     }
     val displayName = when {
         isHiddenContact -> log.number
-        isContact -> log.name!!
+        isContact -> matchedContact?.name ?: log.name ?: log.number
         nameNonContactsAsUnknown -> "Unknown"
         else -> log.number
     }
     val avatarSourceName = when {
         isHiddenContact -> log.number
-        isContact -> log.name!!
+        isContact -> matchedContact?.name ?: log.name ?: log.number
         else -> nationalNumberDigits(log.number).ifEmpty { "Unknown" }
     }
 
@@ -402,17 +423,27 @@ fun CallLogTile(
             val hasAnySocialApp = hasWhatsApp || hasTelegram || hasGoogleMeet || hasTruecaller
 
             // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
-            val callLogContextMenuKeys = remember(settingsVer, isContact, fakeCallInContextMenu) {
+            val defaultCallLogOrder = listOf(
+                "select", "call_back", "view_contact", "edit_contact", "copy_number", "add_to_contacts",
+                "share", "call_chat_via", "send_text", "search_truecaller", "move_contact", "toggle_favorite",
+                "block_number", "fake_call", "delete_call_log"
+            )
+            val callLogContextMenuKeys = remember(settingsVer, isContact, matchedContact, fakeCallInContextMenu, hasAnySocialApp, hasTruecaller) {
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                     prefs,
                     com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CALL_LOGS,
-                    listOf("select", "call_back", "call_chat_via", "search_truecaller", "copy_number", "share", "add_to_contacts", "block_number", "fake_call", "delete_call_log")
+                    defaultCallLogOrder
                 ).filter { key ->
                     when (key) {
-                        "add_to_contacts" -> !isContact
-                        "search_truecaller" -> !isContact && log.number.isNotBlank()
-                        "fake_call" -> fakeCallInContextMenu
-                        "call_chat_via" -> log.number.isNotBlank()
+                        "view_contact"      -> isContact
+                        "edit_contact"      -> isContact
+                        "add_to_contacts"   -> !isContact
+                        "search_truecaller" -> !isContact && log.number.isNotBlank() && hasTruecaller
+                        "move_contact"      -> isContact && matchedContact != null
+                        "toggle_favorite"   -> isContact && matchedContact != null
+                        "fake_call"         -> fakeCallInContextMenu
+                        "call_chat_via"     -> log.number.isNotBlank() && hasAnySocialApp
+                        "send_text"         -> log.number.isNotBlank()
                         else -> true
                     }
                 }
@@ -422,32 +453,40 @@ fun CallLogTile(
                 expanded          = showMenu,
                 onDismissRequest  = { showMenu = false }
             ) {
-            callLogContextMenuKeys.forEachIndexed { index, key ->
-                if (key == "delete_call_log" && index > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
+                fun groupOf(key: String) = when (key) {
+                    "select" -> 0
+                    "call_back", "view_contact", "edit_contact", "copy_number", "add_to_contacts", "share", "call_chat_via", "send_text", "search_truecaller" -> 1
+                    "move_contact", "toggle_favorite", "block_number", "fake_call" -> 2
+                    "delete_call_log" -> 3
+                    else -> 1
                 }
-                when (key) {
-                    "select" -> RivoDropdownMenuItem(
-                        text     = "Select",
-                        icon     = Icons.Default.CheckBox,
-                        iconTint = Color(0xFF9C27B0),
-                        onClick  = {
-                            showMenu = false
-                            onSelectMode?.invoke(log)
-                        }
-                    )
-                    "call_back" -> {
-                        val showSimButtonsInDialpad = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIM_BUTTONS_IN_DIALPAD, false) }
-                        val hasTwoSims = remember(settingsVer) {
-                            prefs.getActiveSimCount() >= 2 || run {
-                                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                                try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                var previousGroup: Int? = null
+                callLogContextMenuKeys.forEach { key ->
+                    val group = groupOf(key)
+                    if (previousGroup != null && group != previousGroup) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                    previousGroup = group
+                    when (key) {
+                        "select" -> RivoDropdownMenuItem(
+                            text     = "Select",
+                            icon     = Icons.Default.CheckBox,
+                            iconTint = Color(0xFF9C27B0),
+                            onClick  = {
+                                showMenu = false
+                                onSelectMode?.invoke(log)
                             }
-                        }
-                        if (hasTwoSims && showSimButtonsInDialpad) {
+                        )
+                        "call_back" -> {
+                            val hasTwoSims = remember(settingsVer) {
+                                prefs.getActiveSimCount() >= 2 || run {
+                                    val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                                    try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                                }
+                            }
                             val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
                             val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
                             val tm = remember(context) { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
@@ -455,213 +494,309 @@ fun CallLogTile(
                             val account1 = accounts.getOrNull(0)
                             val account2 = accounts.getOrNull(1)
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Surface(
-                                    onClick = {
-                                        showMenu = false
-                                        makeCall(context, log.number, account1)
-                                    },
-                                    modifier = Modifier.weight(1f).height(46.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = sim1Color,
-                                    contentColor = Color.White
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        SimCardIconWithNumber(
-                                            simSlotNumber = "1",
-                                            tint = Color.White,
-                                            isLarge = false
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("SIM 1", fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                                Surface(
-                                    onClick = {
-                                        showMenu = false
-                                        makeCall(context, log.number, account2)
-                                    },
-                                    modifier = Modifier.weight(1f).height(46.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = sim2Color,
-                                    contentColor = Color.White
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        SimCardIconWithNumber(
-                                            simSlotNumber = "2",
-                                            tint = Color.White,
-                                            isLarge = false
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("SIM 2", fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        } else {
                             RivoDropdownMenuItem(
                                 text     = "Call back",
                                 icon     = Icons.Default.Call,
                                 iconTint = Color(0xFF4CAF50),
-                                onClick  = { showMenu = false; onButtonClick(log) }
-                            )
-                        }
-                    }
-                    "call_chat_via" -> {
-                        if (hasAnySocialApp) {
-                            RivoDropdownMenuItem(
-                                text     = "Call/Chat Via",
-                                icon     = Icons.AutoMirrored.Filled.Chat,
-                                iconTint = Color(0xFF00BFA5),
-                                onClick  = {
-                                    showMenu = false
-                                    showCallChatViaPicker = true
-                                }
-                            )
-                        }
-                    }
-                    "search_truecaller" -> {
-                        if (hasTruecaller) {
-                            RivoDropdownMenuItem(
-                                text     = "Search Truecaller",
-                                icon     = Icons.Default.Search,
-                                iconTint = Color(0xFF0084FF),
-                                onClick  = {
-                                    showMenu = false
-                                    val isLaunched: Boolean = com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller(context, log.number)
-                                    if (!isLaunched) {
-                                        Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
+                                onClick  = { showMenu = false; onButtonClick(log) },
+                                trailingContent = if (hasTwoSims && log.number.isNotBlank()) {
+                                    {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                onClick = {
+                                                    showMenu = false
+                                                    makeCall(context, log.number, account1)
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = sim1Color,
+                                                contentColor = Color.White,
+                                                modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    SimCardIconWithNumber(
+                                                        simSlotNumber = "1",
+                                                        tint = Color.White,
+                                                        isLarge = false
+                                                    )
+                                                }
+                                            }
+                                            Surface(
+                                                onClick = {
+                                                    showMenu = false
+                                                    makeCall(context, log.number, account2)
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = sim2Color,
+                                                contentColor = Color.White,
+                                                modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    SimCardIconWithNumber(
+                                                        simSlotNumber = "2",
+                                                        tint = Color.White,
+                                                        isLarge = false
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                }
+                                } else null
                             )
                         }
-                    }
-                    "copy_number" -> RivoDropdownMenuItem(
-                        text     = "Copy number",
-                        icon     = Icons.Default.ContentCopy,
-                        iconTint = Color(0xFF2196F3),
-                        onClick  = {
-                            showMenu = false
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
-                            Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                    "share" -> RivoDropdownMenuItem(
-                        text     = "Share",
-                        icon     = Icons.Default.Share,
-                        iconTint = Color(0xFFFF9800),
-                        onClick  = {
-                            showMenu = false
-                            val primaryNum = log.contactId?.let { prefs.getContactDefaultNumber(it) } ?: log.number
-                            val shareText = if (!log.name.isNullOrBlank() && log.name != log.number) {
-                                "${log.name}\n$primaryNum"
-                            } else {
-                                primaryNum
+                        "view_contact" -> {
+                            if (isContact) {
+                                RivoDropdownMenuItem(
+                                    text     = "View contact",
+                                    icon     = Icons.Default.Person,
+                                    iconTint = Color(0xFF2196F3),
+                                    onClick  = {
+                                        showMenu = false
+                                        if (navigator != null) {
+                                            navigator.navigate(
+                                                ContactDetailsScreenDestination(
+                                                    contactId = matchedContact?.id ?: log.contactId ?: "null",
+                                                    phoneNumber = log.number
+                                                )
+                                            )
+                                        } else {
+                                            onTileClick(log)
+                                        }
+                                    }
+                                )
                             }
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        "edit_contact" -> {
+                            if (isContact) {
+                                RivoDropdownMenuItem(
+                                    text     = "Edit contact",
+                                    icon     = Icons.Default.Edit,
+                                    iconTint = Color(0xFF9C27B0),
+                                    onClick  = {
+                                        showMenu = false
+                                        val targetId = matchedContact?.id ?: log.contactId
+                                        if (targetId != null && targetId.isNotBlank() && targetId != "null" && navigator != null) {
+                                            navigator.navigate(ContactEditScreenDestination(contactId = targetId))
+                                        } else if (targetId != null && targetId.isNotBlank() && targetId != "null") {
+                                            val intent = Intent(Intent.ACTION_EDIT).apply {
+                                                data = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, targetId.toLongOrNull() ?: 0L)
+                                            }
+                                            try { context.startActivity(intent) } catch (_: Exception) {}
+                                        } else if (navigator != null) {
+                                            navigator.navigate(ContactEditScreenDestination(initialPhone = log.number))
+                                        }
+                                    }
+                                )
                             }
-                            context.startActivity(Intent.createChooser(intent, "Share contact"))
                         }
-                    )
-                    "add_to_contacts" -> RivoDropdownMenuItem(
-                        text     = "Add to contacts",
-                        icon     = Icons.Default.PersonAdd,
-                        iconTint = Color(0xFF9C27B0),
-                        onClick  = {
-                            showMenu = false
-                            val intent = Intent(Intent.ACTION_INSERT).apply {
-                                type = ContactsContract.RawContacts.CONTENT_TYPE
-                                putExtra(ContactsContract.Intents.Insert.PHONE, log.number)
+                        "copy_number" -> RivoDropdownMenuItem(
+                            text     = "Copy number",
+                            icon     = Icons.Default.ContentCopy,
+                            iconTint = Color(0xFF009688),
+                            onClick  = {
+                                showMenu = false
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Phone number", log.number))
+                                Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(intent)
+                        )
+                        "add_to_contacts" -> {
+                            if (!isContact) {
+                                RivoDropdownMenuItem(
+                                    text     = "Add contact",
+                                    icon     = Icons.Default.PersonAdd,
+                                    iconTint = Color(0xFF9C27B0),
+                                    onClick  = {
+                                        showMenu = false
+                                        showAddContactChoiceDialog = true
+                                    }
+                                )
+                            }
                         }
-                    )
-                    "block_number" -> RivoDropdownMenuItem(
-                        text     = if (isNumberBlocked) "Unblock number" else "Block number",
-                        icon     = if (isNumberBlocked) Icons.Default.RemoveCircleOutline else Icons.Default.Block,
-                        iconTint = if (isNumberBlocked) Color(0xFF4CAF50) else Color(0xFFFF9800),
-                        onClick  = {
-                            showMenu = false
-                            if (log.number.isBlank()) return@RivoDropdownMenuItem
-                            BlockedNumbersManager.toggle(context, prefs, log.number)
-                            Toast.makeText(
-                                context,
-                                if (isNumberBlocked) "Number unblocked" else "Number blocked",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                        "share" -> RivoDropdownMenuItem(
+                            text     = if (isContact) "Share contact" else "Share",
+                            icon     = Icons.Default.Share,
+                            iconTint = Color(0xFFFF9800),
+                            onClick  = {
+                                showMenu = false
+                                val primaryNum = log.contactId?.let { prefs.getContactDefaultNumber(it) } ?: log.number
+                                val shareText = if (isContact && !displayName.isNullOrBlank() && displayName != log.number) {
+                                    "$displayName\n$primaryNum"
+                                } else {
+                                    primaryNum
+                                }
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Share contact"))
+                            }
+                        )
+                        "call_chat_via" -> {
+                            if (hasAnySocialApp) {
+                                RivoDropdownMenuItem(
+                                    text     = "Call/Chat Via",
+                                    icon     = Icons.AutoMirrored.Filled.Chat,
+                                    iconTint = Color(0xFF00BFA5),
+                                    onClick  = {
+                                        showMenu = false
+                                        showCallChatViaPicker = true
+                                    }
+                                )
+                            }
                         }
-                    )
-                    "fake_call" -> RivoDropdownMenuItem(
-                        text     = "Fake Call",
-                        icon     = Icons.Outlined.PhoneCallback,
-                        iconTint = MaterialTheme.colorScheme.primary,
-                        onClick  = {
-                            showMenu = false
-                            showFakeCallSheet = true
+                        "send_text" -> RivoDropdownMenuItem(
+                            text     = "Send text",
+                            icon     = Icons.AutoMirrored.Filled.Message,
+                            iconTint = Color(0xFF009688),
+                            onClick  = {
+                                showMenu = false
+                                if (log.number.isNotBlank()) {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:${log.number}"))
+                                    try { context.startActivity(intent) } catch (_: Exception) {}
+                                }
+                            }
+                        )
+                        "search_truecaller" -> {
+                            if (hasTruecaller) {
+                                RivoDropdownMenuItem(
+                                    text     = "Search Truecaller",
+                                    icon     = Icons.Default.Search,
+                                    iconTint = Color(0xFF0084FF),
+                                    onClick  = {
+                                        showMenu = false
+                                        val isLaunched: Boolean = com.coolappstore.everdialer.by.svhp.controller.util.openTruecaller(context, log.number)
+                                        if (!isLaunched) {
+                                            Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
                         }
-                    )
-                    "delete_call_log" -> RivoDropdownMenuItem(
-                        text          = "Delete from call log",
-                        icon          = Icons.Default.Delete,
-                        isDestructive = true,
-                        onClick       = {
-                            showMenu = false
-                            try {
-                                val allIds = log.callIds.filter { it > 0 }.distinct()
-                                if (allIds.isNotEmpty()) {
-                                    allIds.chunked(500).forEach { chunk ->
-                                        val inClause = chunk.joinToString(",")
+                        "move_contact" -> {
+                            if (matchedContact != null) {
+                                RivoDropdownMenuItem(
+                                    text     = "Move contact",
+                                    icon     = Icons.Default.DriveFileMove,
+                                    iconTint = Color(0xFF00897B),
+                                    onClick  = {
+                                        showMenu = false
+                                        showMoveDialog = true
+                                    }
+                                )
+                            }
+                        }
+                        "toggle_favorite" -> {
+                            if (matchedContact != null) {
+                                val isFav = matchedContact.isFavorite
+                                RivoDropdownMenuItem(
+                                    text     = if (isFav) "Remove from Favourites" else "Add to Favourites",
+                                    icon     = Icons.Default.Favorite,
+                                    iconTint = if (isFav) Color(0xFFF44336) else Color(0xFFE91E63),
+                                    isDestructive = isFav,
+                                    onClick  = {
+                                        showMenu = false
+                                        contactsVM.toggleFavorite(matchedContact)
+                                    }
+                                )
+                            }
+                        }
+                        "block_number" -> RivoDropdownMenuItem(
+                            text     = if (isNumberBlocked) (if (isContact) "Unblock contact" else "Unblock number") else (if (isContact) "Block contact" else "Block number"),
+                            icon     = if (isNumberBlocked) Icons.Default.RemoveCircleOutline else Icons.Default.Block,
+                            iconTint = if (isNumberBlocked) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                            onClick  = {
+                                showMenu = false
+                                if (log.number.isBlank()) return@RivoDropdownMenuItem
+                                BlockedNumbersManager.toggle(context, prefs, log.number)
+                                Toast.makeText(
+                                    context,
+                                    if (isNumberBlocked) (if (isContact) "Contact unblocked" else "Number unblocked") else (if (isContact) "Contact blocked" else "Number blocked"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        "fake_call" -> RivoDropdownMenuItem(
+                            text     = "Fake Call",
+                            icon     = Icons.Outlined.PhoneCallback,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            onClick  = {
+                                showMenu = false
+                                showFakeCallSheet = true
+                            }
+                        )
+                        "delete_call_log" -> RivoDropdownMenuItem(
+                            text          = "Delete from call log",
+                            icon          = Icons.Default.Delete,
+                            isDestructive = true,
+                            onClick       = {
+                                showMenu = false
+                                try {
+                                    val allIds = log.callIds.filter { it > 0 }.distinct()
+                                    if (allIds.isNotEmpty()) {
+                                        allIds.chunked(500).forEach { chunk ->
+                                            val inClause = chunk.joinToString(",")
+                                            context.contentResolver.delete(
+                                                CallLog.Calls.CONTENT_URI,
+                                                "${CallLog.Calls._ID} IN ($inClause)",
+                                                null
+                                            )
+                                        }
+                                    }
+                                    val targetDates = (log.dates + log.date).distinct()
+                                    targetDates.chunked(100).forEach { dateChunk ->
+                                        val placeholders = dateChunk.map { "?" }.joinToString(",")
+                                        val args = (listOf(log.number) + dateChunk.map { it.toString() }).toTypedArray()
                                         context.contentResolver.delete(
                                             CallLog.Calls.CONTENT_URI,
-                                            "${CallLog.Calls._ID} IN ($inClause)",
-                                            null
+                                            "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} IN ($placeholders)",
+                                            args
                                         )
                                     }
+                                    onDelete?.invoke()
+                                    Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
                                 }
-                                val targetDates = (log.dates + log.date).distinct()
-                                targetDates.chunked(100).forEach { dateChunk ->
-                                    val placeholders = dateChunk.map { "?" }.joinToString(",")
-                                    val args = (listOf(log.number) + dateChunk.map { it.toString() }).toTypedArray()
-                                    context.contentResolver.delete(
-                                        CallLog.Calls.CONTENT_URI,
-                                        "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} IN ($placeholders)",
-                                        args
-                                    )
-                                }
-                                onDelete?.invoke()
-                                Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
                             }
-                        }
-                    )
-                }
-                if (key == "select" && index < callLogContextMenuKeys.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
+                        )
+                    }
                 }
             }
         }
         }
-        }
     }
+
+    if (showMoveDialog && matchedContact != null) {
+        val moveTargets = remember { contactsVM.getSaveTargets() }
+        MoveContactDialog(
+            contactName = displayName,
+            targets = moveTargets,
+            onSelect = { target ->
+                showMoveDialog = false
+                contactsVM.moveContact(matchedContact, target) { success ->
+                    Toast.makeText(
+                        context,
+                        if (success) "Moved to ${target.label}" else "Couldn't move contact",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onDismiss = { showMoveDialog = false }
+        )
+    }
+
+    if (showAddContactChoiceDialog) {
+        AddContactChoiceDialog(
+            visible = showAddContactChoiceDialog,
+            phoneNumber = log.number,
+            onDismissRequest = { showAddContactChoiceDialog = false },
+            navigator = navigator
+        )
+    }
+
 
     if (showFakeCallSheet) {
         val prefs = koinInject<PreferenceManager>()

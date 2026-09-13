@@ -1182,8 +1182,9 @@ fun RivoDropdownMenu(
                         val useBlurDropdown = blurEffects && blurDropdownMenu && !useLgDropdown
 
                         Box(
-                            modifier = modifier
+                            modifier = Modifier
                                 .width(260.dp)
+                                .then(modifier)
                                 .scale(backScale.value)
                                 .alpha(backAlpha.value)
                                 .then(
@@ -1270,7 +1271,9 @@ fun RivoDropdownMenuItem(
     icon: ImageVector? = null,
     iconBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
     iconTint: Color = MaterialTheme.colorScheme.primary,
-    isDestructive: Boolean = false
+    isDestructive: Boolean = false,
+    maxLines: Int = 1,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val prefs2 = koinInject<PreferenceManager>()
     val settingsVer2 by prefs2.settingsChanged.collectAsState()
@@ -1382,8 +1385,14 @@ fun RivoDropdownMenuItem(
                 text       = text,
                 style      = MaterialTheme.typography.bodyLarge,
                 color      = textColor,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines   = maxLines,
+                overflow   = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+            if (trailingContent != null) {
+                Spacer(modifier = Modifier.weight(1f))
+                trailingContent()
+            }
         }
     }
 }

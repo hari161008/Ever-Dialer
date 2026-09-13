@@ -162,6 +162,9 @@ class MainActivity : FragmentActivity() {
     // the LaunchedEffect below, since Compose has no way to observe a mutation of the Activity's
     // own `intent` field.
     private var pendingIntent by mutableStateOf<Intent?>(null)
+    private var isAppUnlocked by mutableStateOf(true)
+    private var callAuthRequired by mutableStateOf(false)
+    private var pendingDirectCallAction: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -169,11 +172,15 @@ class MainActivity : FragmentActivity() {
         // Edge-to-edge is set via theme XML instead (windowDrawsSystemBarBackgrounds etc).
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
+        val appLockEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
+        isAppUnlocked = !(biometricType.isNotEmpty() && appLockEnabled)
+
         val hasBasicPermissions = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
 
-        val prefs = GlobalContext.get().get<PreferenceManager>()
         val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
         val needsWelcome = !DefaultDialerManager.isDefaultDialer(this) && (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 
@@ -222,8 +229,10 @@ class MainActivity : FragmentActivity() {
                 val appLockEnabled = remember(settingsVer) {
                     prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
                 }
-                var isUnlocked by remember {
-                    mutableStateOf(!(biometricType.isNotEmpty() && appLockEnabled))
+                LaunchedEffect(settingsVer) {
+                    if (biometricType.isEmpty() || !appLockEnabled) {
+                        isAppUnlocked = true
+                    }
                 }
 
                 // Compute start destination from prefs — done once so no flash
@@ -434,7 +443,7 @@ class MainActivity : FragmentActivity() {
 
                 // ── Biometric blur + lock ─────────────────────────────────
                 val blurRadius by animateDpAsState(
-                    targetValue = if (!isUnlocked) 22.dp else 0.dp,
+                    targetValue = if (!isAppUnlocked || callAuthRequired) 22.dp else 0.dp,
                     animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
                     label = "biometricBlur"
                 )
@@ -536,18 +545,7 @@ class MainActivity : FragmentActivity() {
                     val showRecordingsRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
 
                     fun navTo(route: String) {
-                        // Always open Notes fresh from the rail — enterNotesTab() guarantees a
-                        // brand new instance with no leftover highlightQuery, so the search bar
-                        // and nav rail can never come back hidden from a previous search visit.
-                        if (route == NotesScreenDestination.route) {
-                            navController.enterNotesTab()
-                            return
-                        }
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper.navigateToTab(navController, route)
                     }
 
                     if (isLandscape) {
@@ -655,10 +653,7 @@ class MainActivity : FragmentActivity() {
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
                                                         onClick = {
-                                                            if (currentDest?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true) return@RailItem
-                                                            navController.navigate(DialPadScreenDestination().route) {
-                                                                launchSingleTop = true
-                                                            }
+                                                            navTo(DialPadScreenDestination().route)
                                                         }
                                                     )
                                                 }
@@ -730,26 +725,42 @@ class MainActivity : FragmentActivity() {
                 } // end blurred Column
 
                     // ── Biometric overlay (above blur, inside Box) ─────────
-                    if (!isUnlocked) {
+                    val showAuthOverlay = !isAppUnlocked || callAuthRequired
+                    if (showAuthOverlay) {
                         val activity = this@MainActivity
-                        LaunchedEffect(biometricType) {
-                            if (biometricType.isEmpty() || !appLockEnabled) {
-                                isUnlocked = true; return@LaunchedEffect
+                        LaunchedEffect(biometricType, callAuthRequired) {
+                            if (biometricType.isEmpty()) {
+                                isAppUnlocked = true
+                                callAuthRequired = false
+                                val action = pendingDirectCallAction
+                                pendingDirectCallAction = null
+                                action?.invoke()
+                                return@LaunchedEffect
                             }
                             if (biometricType == "system") {
                                 val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
                                 val prompt = androidx.biometric.BiometricPrompt(
                                     activity, executor,
                                     object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                                        override fun onAuthenticationSucceeded(r: androidx.biometric.BiometricPrompt.AuthenticationResult) { isUnlocked = true }
-                                        override fun onAuthenticationError(code: Int, msg: CharSequence) { finish() }
-                                        override fun onAuthenticationFailed() { finish() }
+                                        override fun onAuthenticationSucceeded(r: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                            isAppUnlocked = true
+                                            callAuthRequired = false
+                                            val action = pendingDirectCallAction
+                                            pendingDirectCallAction = null
+                                            action?.invoke()
+                                        }
+                                        override fun onAuthenticationError(code: Int, msg: CharSequence) {
+                                            pendingDirectCallAction = null
+                                            callAuthRequired = false
+                                            finish()
+                                        }
+                                        override fun onAuthenticationFailed() {}
                                     }
                                 )
                                 prompt.authenticate(
                                     androidx.biometric.BiometricPrompt.PromptInfo.Builder()
                                         .setTitle("Ever Dialer")
-                                        .setSubtitle("Verify your identity to continue")
+                                        .setSubtitle(if (callAuthRequired) "Verify your identity to place call" else "Verify your identity to continue")
                                         .setNegativeButtonText("Cancel")
                                         .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
                                         .build()
@@ -758,15 +769,39 @@ class MainActivity : FragmentActivity() {
                         }
                         if (biometricType == "pin") {
                             com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
-                                title = "Enter PIN", isVerify = true,
+                                title = if (callAuthRequired) "Verify PIN to Call" else "Enter PIN",
+                                isVerify = true,
                                 expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
-                                onConfirm = { isUnlocked = true }, onDismiss = { finish() }
+                                onConfirm = {
+                                    isAppUnlocked = true
+                                    callAuthRequired = false
+                                    val action = pendingDirectCallAction
+                                    pendingDirectCallAction = null
+                                    action?.invoke()
+                                },
+                                onDismiss = {
+                                    pendingDirectCallAction = null
+                                    callAuthRequired = false
+                                    finish()
+                                }
                             )
                         } else if (biometricType == "password") {
                             com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
-                                title = "Enter Password", isVerify = true,
+                                title = if (callAuthRequired) "Verify Password to Call" else "Enter Password",
+                                isVerify = true,
                                 expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
-                                onConfirm = { isUnlocked = true }, onDismiss = { finish() }
+                                onConfirm = {
+                                    isAppUnlocked = true
+                                    callAuthRequired = false
+                                    val action = pendingDirectCallAction
+                                    pendingDirectCallAction = null
+                                    action?.invoke()
+                                },
+                                onDismiss = {
+                                    pendingDirectCallAction = null
+                                    callAuthRequired = false
+                                    finish()
+                                }
                             )
                         }
                     }
@@ -980,6 +1015,26 @@ class MainActivity : FragmentActivity() {
         val cleanNumber = targetNumber.trim()
         if (cleanNumber.isBlank()) return
 
+        val prefs = GlobalContext.get().get<PreferenceManager>()
+        val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
+        val isCallGated = biometricType.isNotEmpty() && prefs.shouldGateCallWithBiometric(cleanNumber)
+        val appLockEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
+        val isAppGated = biometricType.isNotEmpty() && appLockEnabled && !isAppUnlocked
+
+        if (isCallGated || isAppGated) {
+            pendingDirectCallAction = {
+                executeDirectCall(cleanNumber, contactKey)
+            }
+            if (isCallGated) {
+                callAuthRequired = true
+            }
+            return
+        }
+
+        executeDirectCall(cleanNumber, contactKey)
+    }
+
+    private fun executeDirectCall(cleanNumber: String, contactKey: String?) {
         val prefs = GlobalContext.get().get<PreferenceManager>()
         // If contactKey wasn't supplied, try finding the matching contact by phone number
         val resolvedKey = contactKey?.takeIf { it.isNotBlank() } ?: run {

@@ -68,6 +68,8 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -168,18 +170,13 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                             val elapsed = System.currentTimeMillis() - startTime
                             if (!triggered && elapsed >= 150L && !change.isConsumed && kotlin.math.abs(dx) > 700f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 5.5f) {
                                 triggered = true
-                                if (dx > 0) {
-                                    scope.launch {
-                                        navController.navigate(RecentScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true; restoreState = true
-                                        }
-                                    }
-                                } else {
-                                    // swipe left from Contacts → Notes (wrap around)
-                                    scope.launch {
-                                        navController.enterNotesTab()
-                                    }
+                                scope.launch {
+                                    TabNavigationHelper.navigateAdjacentTab(
+                                        navController = navController,
+                                        currentRoute = ContactScreenDestination.route,
+                                        goForward = dx < 0,
+                                        prefs = prefs_ui
+                                    )
                                 }
                             }
                             if (!change.pressed) break

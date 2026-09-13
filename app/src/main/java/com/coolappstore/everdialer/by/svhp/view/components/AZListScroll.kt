@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.telecom.TelecomManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -59,6 +60,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbers
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -471,9 +474,10 @@ fun ContactListItem(
                 com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
                     prefs,
                     com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.SECTION_CONTACTS,
-                    listOf("select", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
+                    listOf("select", "call", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text", "move_contact", "toggle_favorite", "block_contact", "fake_call", "delete_contact")
                 ).filter { key ->
                     when (key) {
+                        "call" -> hasNumber
                         "copy_number" -> hasNumber
                         "block_contact" -> hasNumber
                         "fake_call" -> fakeCallInContextMenu
@@ -490,7 +494,7 @@ fun ContactListItem(
             ) {
             fun groupOf(key: String) = when (key) {
                 "select" -> 0
-                "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text" -> 1
+                "call", "view_contact", "edit_contact", "copy_number", "share_contact", "call_chat_via", "send_text" -> 1
                 "move_contact", "toggle_favorite", "block_contact", "fake_call" -> 2
                 "delete_contact" -> 3
                 else -> 1
@@ -515,6 +519,82 @@ fun ContactListItem(
                             onSelectMode()
                         }
                     )
+                    "call" -> {
+                        val hasTwoSims = remember(settingsVer) {
+                            prefs.getActiveSimCount() >= 2 || run {
+                                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                                try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                            }
+                        }
+                        val primaryNumber = remember(settingsVer, contact.id, contact.phoneNumbers) {
+                            prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                        }
+                        val numToCall = primaryNumber ?: contact.phoneNumbers.firstOrNull().orEmpty()
+
+                        val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+                        val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+                        val tm = remember(context) { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+                        val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+                        val account1 = accounts.getOrNull(0)
+                        val account2 = accounts.getOrNull(1)
+
+                        RivoDropdownMenuItem(
+                            text     = "Call",
+                            icon     = Icons.Default.Call,
+                            iconTint = Color(0xFF4CAF50),
+                            onClick  = {
+                                showMenu = false
+                                if (numToCall.isNotBlank()) {
+                                    makeCall(context, numToCall)
+                                }
+                            },
+                            trailingContent = if (hasTwoSims && numToCall.isNotBlank()) {
+                                {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            onClick = {
+                                                showMenu = false
+                                                makeCall(context, numToCall, account1)
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = sim1Color,
+                                            contentColor = Color.White,
+                                            modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                SimCardIconWithNumber(
+                                                    simSlotNumber = "1",
+                                                    tint = Color.White,
+                                                    isLarge = false
+                                                )
+                                            }
+                                        }
+                                        Surface(
+                                            onClick = {
+                                                showMenu = false
+                                                makeCall(context, numToCall, account2)
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = sim2Color,
+                                            contentColor = Color.White,
+                                            modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                SimCardIconWithNumber(
+                                                    simSlotNumber = "2",
+                                                    tint = Color.White,
+                                                    isLarge = false
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else null
+                        )
+                    }
                     "view_contact" -> RivoDropdownMenuItem(
                         text     = "View contact",
                         icon     = Icons.Default.Person,

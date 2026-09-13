@@ -117,6 +117,21 @@ fun ContactEditScreen(
                     phoneFields.add(EditablePhoneField(nextFieldId++, ""))
                 }
 
+                if (!initialPhone.isNullOrBlank()) {
+                    val cleanInit = initialPhone.filter { it.isDigit() || it == '+' }
+                    val alreadyPresent = phoneFields.any { field ->
+                        val cleanField = field.value.filter { it.isDigit() || it == '+' }
+                        cleanField == cleanInit || (cleanField.isNotEmpty() && cleanInit.isNotEmpty() && (cleanField.endsWith(cleanInit) || cleanInit.endsWith(cleanField)))
+                    }
+                    if (!alreadyPresent) {
+                        if (phoneFields.size == 1 && phoneFields[0].value.isBlank()) {
+                            phoneFields[0] = phoneFields[0].copy(value = initialPhone)
+                        } else {
+                            phoneFields.add(EditablePhoneField(nextFieldId++, initialPhone))
+                        }
+                    }
+                }
+
                 emailFields.clear()
                 if (contact.emails.isNotEmpty()) {
                     contact.emails.forEach { emailFields.add(EditableField(nextFieldId++, it)) }

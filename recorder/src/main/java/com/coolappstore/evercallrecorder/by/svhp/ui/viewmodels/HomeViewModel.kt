@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -78,11 +79,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val durationCache = application.getSharedPreferences("recording_duration", Context.MODE_PRIVATE)
 
     private val phonePhotoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
-    @Volatile private var cachedExactIndex: Map<String, ContactIndexEntry> = emptyMap()
-    @Volatile private var cachedSuffixIndex: Map<String, MutableList<ContactIndexEntry>> = emptyMap()
 
-    private val _allRecordings = MutableStateFlow<List<RecordingItem>>(emptyList())
-    private val _isLoading     = MutableStateFlow(false)
+    companion object {
+        @Volatile private var cachedExactIndex: Map<String, ContactIndexEntry> = emptyMap()
+        @Volatile private var cachedSuffixIndex: Map<String, MutableList<ContactIndexEntry>> = emptyMap()
+        @Volatile private var contactIndexTimestamp: Long = 0L
+
+        @Volatile private var cachedRecordings: List<RecordingItem> = emptyList()
+        @Volatile private var lastParsedTemplate: String? = null
+    }
+
+    private val _allRecordings = MutableStateFlow<List<RecordingItem>>(cachedRecordings)
+    private val _isLoading     = MutableStateFlow(cachedRecordings.isEmpty())
     val isLoading: StateFlow<Boolean> = _isLoading
     // Public read-only view of every recording on disk (unfiltered by searchQuery/filterTab),
     // used by the dialer's own global search screen to search recording notes.
@@ -103,7 +111,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val filterTab   = MutableStateFlow(FilterTab.ALL)
     val searchQuery = MutableStateFlow("")
-    val recordings  = MutableStateFlow<List<RecordingItem>>(emptyList())
+    val recordings  = MutableStateFlow<List<RecordingItem>>(cachedRecordings)
 
     private val dateFormats = listOf(
         SimpleDateFormat("yyyyMMdd_HHmmss.SSSZ", Locale.CANADA),
@@ -111,6 +119,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     init {
+        if (cachedRecordings.isNotEmpty()) {
+            applyFilters()
+        }
         loadRecordings()
         viewModelScope.launch {
             sortConfig.collect { config ->
@@ -170,6 +181,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) {
                 selectedUris.value = selectedUris.value - actuallyDeleted
                 _allRecordings.value = _allRecordings.value.filter { it.uri !in actuallyDeleted }
+                cachedRecordings = _allRecordings.value
                 applyFilters()
                 if (preferences.isShowToastsEnabled() && actuallyDeleted.size < toDelete.size) {
                     val failed = toDelete.size - actuallyDeleted.size
@@ -190,6 +202,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _allRecordings.value = _allRecordings.value.map {
             if (it.uri == item.uri) it.copy(isFavourite = !isFav) else it
         }
+        cachedRecordings = _allRecordings.value
         applyFilters()
     }
 
@@ -208,6 +221,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) {
                 if (deleted) {
                     _allRecordings.value = _allRecordings.value.filter { it.uri != item.uri }
+                    cachedRecordings = _allRecordings.value
                     applyFilters()
                 } else if (preferences.isShowToastsEnabled()) {
                     android.widget.Toast.makeText(context, "Failed to delete recording", android.widget.Toast.LENGTH_SHORT).show()
@@ -218,6 +232,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getNote(uri: Uri)                = notesPrefs.getString(uri.toString(), "") ?: ""
     fun saveNote(uri: Uri, note: String) = notesPrefs.edit().putString(uri.toString(), note).apply()
+
+    fun updateNote(uri: Uri, note: String) {
+        saveNote(uri, note)
+        _allRecordings.value = _allRecordings.value.map {
+            if (it.uri == uri) it.copy(noteText = note) else it
+        }
+        cachedRecordings = _allRecordings.value
+        applyFilters()
+    }
 
     /**
      * Copies the currently selected recordings into [destinationFolderUri], a SAF folder picked
@@ -404,13 +427,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadRecordings() {
         viewModelScope.launch {
-            _isLoading.value = true
+            if (_allRecordings.value.isEmpty()) {
+                _isLoading.value = true
+            }
             val fetched = fetchRecordings()
             _allRecordings.value = fetched
+            cachedRecordings = fetched
             applyFilters()
             _isLoading.value = false
-            // Run cleanup rules after the initial load so UI shows immediately
-            launch(Dispatchers.IO) { runAutoDeleteIfNeeded(getApplication(), fetched) }
+            // Run cleanup rules and background duration resolution
+            launch(Dispatchers.IO) {
+                runAutoDeleteIfNeeded(getApplication(), fetched)
+                resolveMissingDurations(getApplication(), fetched)
+            }
+        }
+    }
+
+    private suspend fun resolveMissingDurations(context: Context, items: List<RecordingItem>) {
+        val missing = items.filter { it.durationMs <= 0L }
+        if (missing.isEmpty()) return
+
+        var hasUpdates = false
+        val resolvedDurations = mutableMapOf<Uri, Long>()
+        for (item in missing) {
+            val dur = resolveAudioDurationInternal(context, item.uri, item.sizeBytes)
+            if (dur > 0L) {
+                resolvedDurations[item.uri] = dur
+                hasUpdates = true
+            }
+        }
+        if (hasUpdates) {
+            withContext(Dispatchers.Main) {
+                _allRecordings.value = _allRecordings.value.map { item ->
+                    resolvedDurations[item.uri]?.let { item.copy(durationMs = it) } ?: item
+                }
+                cachedRecordings = _allRecordings.value
+                applyFilters()
+            }
         }
     }
 
@@ -441,6 +494,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Minimal description of a file on disk, used to unify SAF-folder and private-storage listings before mapping to [RecordingItem]. */
     private data class RecordingFileEntry(val uri: Uri, val name: String, val length: Long)
 
+    private fun querySafEntriesFast(context: Context, folderUri: Uri): List<RecordingFileEntry> {
+        val results = mutableListOf<RecordingFileEntry>()
+        try {
+            val treeDocId = DocumentsContract.getTreeDocumentId(folderUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(folderUri, treeDocId)
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_MIME_TYPE
+            )
+            context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val sizeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                val mimeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                while (cursor.moveToNext()) {
+                    val mime = if (mimeIdx >= 0) cursor.getString(mimeIdx) else null
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) continue
+                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null ?: continue
+                    val docId = if (idIdx >= 0) cursor.getString(idIdx) else null ?: continue
+                    val size = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else 0L
+                    val fileUri = DocumentsContract.buildDocumentUriUsingTree(folderUri, docId)
+                    results.add(RecordingFileEntry(uri = fileUri, name = name, length = size))
+                }
+            }
+        } catch (_: Exception) {
+            val dir = DocumentFile.fromTreeUri(context, folderUri)
+            if (dir != null && dir.exists() && dir.canRead()) {
+                dir.listFiles()
+                    .filter { it.isFile && it.name != null }
+                    .mapTo(results) { file -> RecordingFileEntry(uri = file.uri, name = file.name!!, length = file.length()) }
+            }
+        }
+        return results
+    }
+
     private suspend fun fetchRecordings(): List<RecordingItem> = withContext(Dispatchers.IO) {
         val context = getApplication<Application>()
         val template = preferences.getFileNameTemplate()
@@ -462,12 +552,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             AppPreferences.StorageMode.SAF_FOLDER -> {
                 val folderUri = preferences.getRecordingFolderUri()
                 val safEntries = if (folderUri != null) {
-                    val dir = DocumentFile.fromTreeUri(context, folderUri)
-                    if (dir != null && dir.exists() && dir.canRead()) {
-                        dir.listFiles()
-                            .filter { it.isFile && it.name != null }
-                            .map { file -> RecordingFileEntry(uri = file.uri, name = file.name!!, length = file.length()) }
-                    } else emptyList()
+                    querySafEntriesFast(context, folderUri)
                 } else emptyList()
 
                 val authority = SafHelper.getPrivateStorageAuthority(context)
@@ -500,12 +585,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        val (exactContactIndex, suffixContactIndex) = buildContactIndex(context)
-        cachedExactIndex = exactContactIndex
-        cachedSuffixIndex = suffixContactIndex
-        val recentCallLogs = readRecentCallLogs(context)
+        val canReuse = (lastParsedTemplate == template)
+        val existingMap = if (canReuse) cachedRecordings.associateBy { it.uri } else emptyMap()
+        lastParsedTemplate = template
+
+        val unmatchedEntries = entries.filter { entry ->
+            val existing = existingMap[entry.uri]
+            existing == null || existing.sizeBytes != entry.length
+        }
+
+        val (exactContactIndex, suffixContactIndex) = if (unmatchedEntries.isNotEmpty()) {
+            buildContactIndex(context)
+        } else {
+            cachedExactIndex to cachedSuffixIndex
+        }
+
+        val needsCallLogs = unmatchedEntries.any { entry ->
+            val baseName = entry.name.substringBeforeLast('.')
+            extractHiddenPhoneSuffix(baseName) == null &&
+                parseFilenameWithTemplate(baseName, template).phoneNumber.isBlank()
+        }
+        val recentCallLogs = if (needsCallLogs) readRecentCallLogs(context) else emptyList()
 
         entries.mapNotNull { entry ->
+            val existing = existingMap[entry.uri]
+            if (existing != null && existing.sizeBytes == entry.length) {
+                return@mapNotNull existing.copy(
+                    isFavourite = isFavourite(entry.uri),
+                    noteText    = notesPrefs.getString(entry.uri.toString(), "") ?: ""
+                )
+            }
+
             val name     = entry.name
             val ext      = name.substringAfterLast('.', "")
             var baseName = name.substringBeforeLast('.')
@@ -528,7 +638,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             var callLogMatch: SimpleCallLog? = null
-            if (recTimeMs > 0L && recentCallLogs.isNotEmpty()) {
+            if ((phoneNumber == "Unknown" || phoneNumber.isBlank()) && recTimeMs > 0L && recentCallLogs.isNotEmpty()) {
                 var bestDiff = Long.MAX_VALUE
                 for (call in recentCallLogs) {
                     if (targetType != 0 && call.type != targetType) continue
@@ -538,10 +648,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         callLogMatch = call
                     }
                 }
-            }
-
-            if ((phoneNumber == "Unknown" || phoneNumber.isBlank()) && callLogMatch != null) {
-                if (callLogMatch.number.isNotBlank()) {
+                if (callLogMatch != null && callLogMatch.number.isNotBlank()) {
                     phoneNumber = callLogMatch.number
                 }
             }
@@ -689,7 +796,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
-    private fun buildContactIndex(context: Context): Pair<Map<String, ContactIndexEntry>, Map<String, MutableList<ContactIndexEntry>>> {
+    private fun buildContactIndex(context: Context, force: Boolean = false): Pair<Map<String, ContactIndexEntry>, Map<String, MutableList<ContactIndexEntry>>> {
+        if (!force && cachedExactIndex.isNotEmpty() && System.currentTimeMillis() - contactIndexTimestamp < 60_000L) {
+            return cachedExactIndex to cachedSuffixIndex
+        }
         val exact = HashMap<String, ContactIndexEntry>()
         val suffix = HashMap<String, MutableList<ContactIndexEntry>>()
         try {
@@ -734,6 +844,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) {}
         cachedExactIndex = exact
         cachedSuffixIndex = suffix
+        contactIndexTimestamp = System.currentTimeMillis()
         return exact to suffix
     }
 
@@ -821,7 +932,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun resolveAudioDuration(context: Context, uri: Uri, fileSizeBytes: Long): Long {
-        // Cache key = uri + file size so cache is invalidated when the file is replaced
+        val cacheKey = "${uri}_$fileSizeBytes"
+        val cached = durationCache.getLong(cacheKey, -1L)
+        if (cached >= 0L) return cached
+        return 0L
+    }
+
+    private fun resolveAudioDurationInternal(context: Context, uri: Uri, fileSizeBytes: Long): Long {
         val cacheKey = "${uri}_$fileSizeBytes"
         val cached = durationCache.getLong(cacheKey, -1L)
         if (cached >= 0L) return cached
@@ -839,7 +956,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         } catch (_: Exception) { 0L }
 
-        durationCache.edit().putLong(cacheKey, duration).apply()
+        if (duration > 0L) {
+            durationCache.edit().putLong(cacheKey, duration).apply()
+        }
         return duration
     }
 

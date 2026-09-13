@@ -183,7 +183,7 @@ fun HomeScreen(
                     )
                 }
                 when {
-                    isLoading -> item {
+                    isLoading && recordings.isEmpty() -> item {
                         Box(modifier = Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -84,16 +85,16 @@ fun RecordingsScreen(
     var selectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
     var highlightQuery by remember { mutableStateOf("") }
     var isRecordingSelectionMode by remember { mutableStateOf(false) }
-    // True only when this screen was navigated to directly for a single recording (from Search).
-    // Drives the back button popping the whole screen instead of just clearing the player.
-    val isDirectRecordingEntry = !openedRecordingUri.isNullOrEmpty()
+    var directEntryUriToOpen by remember { mutableStateOf(openedRecordingUri) }
 
     // Jump straight into the player for the requested recording as soon as it's found in the
     // (already-loading) recordings list, instead of showing the list first.
-    LaunchedEffect(openedRecordingUri, recordingsForLookup) {
-        if (!openedRecordingUri.isNullOrEmpty() && selectedRecording == null) {
-            recordingsForLookup.firstOrNull { it.uri.toString() == openedRecordingUri }?.let {
+    LaunchedEffect(directEntryUriToOpen, recordingsForLookup) {
+        val uri = directEntryUriToOpen
+        if (!uri.isNullOrEmpty() && selectedRecording == null) {
+            recordingsForLookup.firstOrNull { it.uri.toString() == uri }?.let {
                 selectedRecording = it
+                directEntryUriToOpen = null
             }
         }
     }
@@ -102,12 +103,12 @@ fun RecordingsScreen(
         preferences.isAppLockEnabled() && !isAppLockUnlocked
 
     BackHandler(enabled = selectedRecording != null && !isAppLocked) {
-        if (isDirectRecordingEntry) {
-            navigator.navigateUp()
-        } else {
-            selectedRecording = null
-            highlightQuery = ""
-        }
+        selectedRecording = null
+        highlightQuery = ""
+    }
+
+    BackHandler(enabled = openedFromSettings && selectedRecording == null && !isAppLocked) {
+        navigator.navigateUp()
     }
 
     // Re-check disclaimer/permission state whenever this tab (re)appears or the app resumes.
@@ -188,49 +189,51 @@ fun RecordingsScreen(
                 )
             }
             else -> {
-                AnimatedContent(
-                    targetState = selectedRecording,
-                    modifier = Modifier.fillMaxSize(),
-                    transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
-                    label = "RecordingsTabContent"
-                ) { recording ->
-                    if (recording != null) {
-                        PlaybackScreen(
-                            recording = recording,
-                            onBack = {
-                                if (isDirectRecordingEntry) {
-                                    navigator.navigateUp()
-                                } else {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    HomeScreen(
+                        appVersion = appVersion,
+                        onSettingsClick = {
+                            // Opens the bundled Ever Call Recorder app directly on its
+                            // Call Recording settings screen (storage location, filename
+                            // format, auto-delete rules, etc.), skipping the recordings list.
+                            val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
+                            launch.putExtra(com.coolappstore.evercallrecorder.by.svhp.MainActivity.EXTRA_OPEN_SETTINGS, true)
+                            context.startActivity(launch)
+                        },
+                        onRecordingClick = { recordingItem, query ->
+                            selectedRecording = recordingItem
+                            highlightQuery = query
+                        },
+                        onSelectionModeChanged = { isRecordingSelectionMode = it },
+                        onGlobalSearchClick = {
+                            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination)
+                        },
+                        onEverDialerSettingsClick = {
+                            navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination())
+                        }
+                    )
+
+                    var lastSelectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
+                    if (selectedRecording != null) {
+                        lastSelectedRecording = selectedRecording
+                    }
+
+                    AnimatedVisibility(
+                        visible = selectedRecording != null,
+                        enter = fadeIn(tween(220)),
+                        exit = fadeOut(tween(160))
+                    ) {
+                        lastSelectedRecording?.let { recording ->
+                            PlaybackScreen(
+                                recording = recording,
+                                onBack = {
                                     selectedRecording = null
                                     highlightQuery = ""
-                                }
-                            },
-                            highlightQuery = highlightQuery,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        HomeScreen(
-                            appVersion = appVersion,
-                            onSettingsClick = {
-                                // Opens the bundled Ever Call Recorder app directly on its
-                                // Call Recording settings screen (storage location, filename
-                                // format, auto-delete rules, etc.), skipping the recordings list.
-                                val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
-                                launch.putExtra(com.coolappstore.evercallrecorder.by.svhp.MainActivity.EXTRA_OPEN_SETTINGS, true)
-                                context.startActivity(launch)
-                            },
-                            onRecordingClick = { recordingItem, query ->
-                                selectedRecording = recordingItem
-                                highlightQuery = query
-                            },
-                            onSelectionModeChanged = { isRecordingSelectionMode = it },
-                            onGlobalSearchClick = {
-                                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination)
-                            },
-                            onEverDialerSettingsClick = {
-                                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination())
-                            }
-                        )
+                                },
+                                highlightQuery = highlightQuery,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }

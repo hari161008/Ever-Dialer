@@ -21,31 +21,23 @@ import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestin
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 
+import com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper
+import org.koin.core.context.GlobalContext
+
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.ui.graphics.TransformOrigin
 
-/** Maps a tab-order key (as stored in [PreferenceManager.KEY_TAB_ORDER]) to its nav route. */
-private fun routeForTabKey(key: String): String? = when (key) {
-    "favorites"  -> FavoritesScreenDestination.route
-    "calls"      -> RecentScreenDestination.route
-    "contacts"   -> ContactScreenDestination.route
-    "groups"     -> GroupsScreenDestination.route
-    "recordings" -> RecordingsScreenDestination.route
-    "notes"      -> NotesScreenDestination.route
-    else         -> null
-}
-
 /** Tab route order, kept in sync with the user's Settings > Appearance > Tab Sections order —
  *  never hardcoded. Falls back to [PreferenceManager.DEFAULT_TAB_ORDER] until the first sync. */
 private var tabRouteOrder: List<String> =
-    PreferenceManager.parseTabOrder(null).mapNotNull { routeForTabKey(it) }
+    PreferenceManager.parseTabOrder(null).mapNotNull { TabNavigationHelper.routeForTabKey(it) }
 
 /** Call whenever settings may have changed (e.g. once per recomposition from the screen that
  *  hosts the main NavHost) so the page-switching slide direction always matches the tab order
  *  the user actually configured, however they've arranged it. */
 internal fun syncTabTransitionOrder(prefs: PreferenceManager) {
-    tabRouteOrder = prefs.getTabOrder().mapNotNull { routeForTabKey(it) }
+    tabRouteOrder = prefs.getTabOrder().mapNotNull { TabNavigationHelper.routeForTabKey(it) }
 }
 
 private val EaseOutQuart = CubicBezierEasing(0.25f, 1f, 0.5f, 1f)
@@ -55,10 +47,20 @@ internal var isLandscapeMode: Boolean = false
 
 object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
 
+    private fun getLiveTabOrder(): List<String> {
+        return try {
+            val prefs = GlobalContext.get().get<PreferenceManager>()
+            prefs.getTabOrder().mapNotNull { TabNavigationHelper.routeForTabKey(it) }
+        } catch (_: Exception) {
+            tabRouteOrder
+        }
+    }
+
     private fun routeOrder(route: String?): Int {
         if (route == null) return -1
         val base = route.substringBefore("?").substringBefore("/")
-        return tabRouteOrder.indexOfFirst { base.contains(it, ignoreCase = true) }
+        val order = getLiveTabOrder()
+        return order.indexOfFirst { base.contains(it, ignoreCase = true) || it.contains(base, ignoreCase = true) }
     }
 
     private fun isTabRoute(route: String?): Boolean = routeOrder(route) >= 0

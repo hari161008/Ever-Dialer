@@ -47,13 +47,15 @@ class RecentCallsWidgetProvider : AppWidgetProvider() {
             try {
                 context.startActivity(
                     Intent(Intent.ACTION_CALL, callUri).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        setClass(context, MainActivity::class.java)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
                 )
             } catch (_: Exception) {
                 context.startActivity(
                     Intent(Intent.ACTION_DIAL, callUri).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        setClass(context, MainActivity::class.java)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
                 )
             }

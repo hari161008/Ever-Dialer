@@ -65,6 +65,7 @@ import androidx.activity.compose.PredictiveBackHandler
 import kotlinx.coroutines.CancellationException
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
@@ -334,22 +335,13 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                                 kotlin.math.abs(dx) > kotlin.math.abs(dy) * 5.5f
                             ) {
                                 triggered = true
-                                if (dx < 0) {
-                                    scope.launch {
-                                        navController.navigate(ContactScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                } else {
-                                    scope.launch {
-                                        navController.navigate(FavoritesScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
+                                scope.launch {
+                                    TabNavigationHelper.navigateAdjacentTab(
+                                        navController = navController,
+                                        currentRoute = RecentScreenDestination.route,
+                                        goForward = dx < 0,
+                                        prefs = prefs
+                                    )
                                 }
                             }
                             if (!change.pressed) {
@@ -1078,6 +1070,7 @@ fun CallLogFullContent(
                                                     totalCallsCount = totalCallsMap[contactKey] ?: lg.count,
                                                     isSelected = selectedLogs.contains("${lg.number}|${lg.date}"),
                                                     selectionMode = selectionMode,
+                                                    navigator = navigator,
                                                     onSelectToggle = { log ->
                                                         val key = "${log.number}|${log.date}"
                                                         onSelectedLogsChange(if (selectedLogs.contains(key)) selectedLogs - key else selectedLogs + key)

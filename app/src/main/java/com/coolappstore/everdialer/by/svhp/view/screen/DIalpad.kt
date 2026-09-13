@@ -105,6 +105,10 @@ import com.coolappstore.everdialer.by.svhp.controller.util.startTelegramVideoCal
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
 import com.coolappstore.everdialer.by.svhp.view.components.AppQuickActionsDialog
+import com.coolappstore.everdialer.by.svhp.view.components.AddContactChoiceDialog
+import com.coolappstore.everdialer.by.svhp.view.components.SelectExistingContactDialog
+import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
@@ -217,11 +221,13 @@ private fun DialpadRecentCallLogsList(
     replaceNumber: (String) -> Unit,
     clearSearch: () -> Unit,
     navigateToContact: (String?, String?) -> Unit,
-    onShowSimPickerForNumber: (String) -> Unit
+    onShowSimPickerForNumber: (String) -> Unit,
+    navigator: DestinationsNavigator? = null
 ) {
     recentLogs.forEachIndexed { index, log ->
         CallLogTile(
             log = log,
+            navigator = navigator,
             onTileClick = { clickedLog ->
                 if (showSimButtons && clickedLog.number.isNotEmpty()) {
                     replaceNumber(clickedLog.number)
@@ -505,6 +511,8 @@ fun DialPadContent(
     var number by remember {
         mutableStateOf(initialNumber ?: if (dialpadMemoryEnabled) DialpadDraftHolder.pendingNumber else "")
     }
+    var showAddContactChoiceDialog by remember { mutableStateOf(false) }
+    var showSelectExistingContactDialog by remember { mutableStateOf(false) }
     // Where new digits get inserted / backspace deletes from. Defaults to the end of the number
     // (normal typing behaviour), but the user can tap anywhere in the number to move it, so they
     // can fill in a missing digit in the middle without having to delete and retype everything.
@@ -968,6 +976,32 @@ fun DialPadContent(
         onFakeCall = { showFakeCallSheet = true }
     )
 
+    if (showAddContactChoiceDialog) {
+        AddContactChoiceDialog(
+            visible = showAddContactChoiceDialog,
+            phoneNumber = number,
+            onDismissRequest = { showAddContactChoiceDialog = false },
+            navigator = navigator
+        )
+    }
+
+    if (showSelectExistingContactDialog) {
+        val allContacts by contactsVM.allContacts.collectAsState()
+        SelectExistingContactDialog(
+            contacts = allContacts,
+            onSelectContact = { contact ->
+                showSelectExistingContactDialog = false
+                navigator?.navigate(
+                    ContactEditScreenDestination(
+                        contactId = contact.id,
+                        initialPhone = number.ifBlank { null }
+                    )
+                )
+            },
+            onDismiss = { showSelectExistingContactDialog = false }
+        )
+    }
+
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -1143,7 +1177,8 @@ fun DialPadContent(
                                     replaceNumber = { replaceNumber(it) },
                                     clearSearch = { searchQuery = ""; focusManager.clearFocus() },
                                     navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
-                                    onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true }
+                                    onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
+                                    navigator = navigator
                                 )
                             }
                         }
@@ -1196,13 +1231,7 @@ fun DialPadContent(
                     ) {
                         DialerActionExpressive(
                             onClick = {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
-                                    type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
-                                    if (number.isNotEmpty()) {
-                                        putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, number)
-                                    }
-                                }
-                                context.startActivity(intent)
+                                showAddContactChoiceDialog = true
                             },
                             icon = Icons.Default.PersonAdd,
                             contentDescription = "Add Contact",
@@ -1478,7 +1507,8 @@ fun DialPadContent(
                                 replaceNumber = { replaceNumber(it) },
                                 clearSearch = { searchQuery = ""; focusManager.clearFocus() },
                                 navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
-                                onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true }
+                                onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
+                                navigator = navigator
                             )
                         }
                     }
@@ -1521,11 +1551,7 @@ fun DialPadContent(
                 Surface(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
-                            type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
-                            putExtra(ContactsContract.Intents.Insert.PHONE, number)
-                        }
-                        context.startActivity(intent)
+                        showSelectExistingContactDialog = true
                     },
                     shape = RoundedCornerShape(50.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -1718,13 +1744,7 @@ fun DialPadContent(
                                 iconTint = MaterialTheme.colorScheme.primary,
                                 onClick  = {
                                     showOverflowMenu = false
-                                    val intent = Intent(Intent.ACTION_INSERT).apply {
-                                        type = ContactsContract.RawContacts.CONTENT_TYPE
-                                        if (number.isNotEmpty()) {
-                                            putExtra(ContactsContract.Intents.Insert.PHONE, number)
-                                        }
-                                    }
-                                    context.startActivity(intent)
+                                    showAddContactChoiceDialog = true
                                 }
                             )
 
@@ -1765,13 +1785,7 @@ fun DialPadContent(
                 ) {
                     DialerActionExpressive(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_INSERT).apply {
-                                type = ContactsContract.RawContacts.CONTENT_TYPE
-                                if (number.isNotEmpty()) {
-                                    putExtra(ContactsContract.Intents.Insert.PHONE, number)
-                                }
-                            }
-                            context.startActivity(intent)
+                            showAddContactChoiceDialog = true
                         },
                         icon = Icons.Default.PersonAdd,
                         contentDescription = "Add Contact",

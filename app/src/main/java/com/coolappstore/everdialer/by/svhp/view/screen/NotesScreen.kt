@@ -54,6 +54,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -201,22 +202,13 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
                             val elapsed = System.currentTimeMillis() - startTime
                             if (!triggered && elapsed >= 150L && !change.isConsumed && abs(dx) > 700f && abs(dx) > abs(dy) * 5.5f) {
                                 triggered = true
-                                if (dx > 0) {
-                                    // swipe right from Notes → Contacts
-                                    coroutineScope.launch {
-                                        navController.navigate(ContactScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true; restoreState = true
-                                        }
-                                    }
-                                } else {
-                                    // swipe left from Notes → Favorites (wrap)
-                                    coroutineScope.launch {
-                                        navController.navigate(FavoritesScreenDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true; restoreState = true
-                                        }
-                                    }
+                                coroutineScope.launch {
+                                    com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper.navigateAdjacentTab(
+                                        navController = navController,
+                                        currentRoute = NotesScreenDestination.route,
+                                        goForward = dx < 0,
+                                        prefs = prefs
+                                    )
                                 }
                             }
                             if (!change.pressed) break

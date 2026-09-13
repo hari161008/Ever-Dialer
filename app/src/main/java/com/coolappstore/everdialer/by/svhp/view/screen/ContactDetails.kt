@@ -307,6 +307,7 @@ fun ContactDetailsScreen(
     var selectedNumberForMenu by remember { mutableStateOf<String?>(null) }
     var selectedEmailForMenu by remember { mutableStateOf<String?>(null) }
     var selectedAddressForMenu by remember { mutableStateOf<String?>(null) }
+    var showAddContactChoiceDialog by remember { mutableStateOf(false) }
 
     var editingNumberValue by remember { mutableStateOf<String?>(null) }
     var originalNumberValue by remember { mutableStateOf<String?>(null) }
@@ -870,7 +871,7 @@ fun ContactDetailsScreen(
                                         )
                                     }
                                     IconButton(onClick = {
-                                        navigator.navigate(ContactEditScreenDestination(initialPhone = phoneNumber))
+                                        showAddContactChoiceDialog = true
                                     }) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                                 }
                             }
@@ -1126,19 +1127,27 @@ fun ContactDetailsScreen(
                                                 android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
                                             }
                                         )
-                                        RivoDropdownMenuItem(
-                                            text = "Edit contact",
-                                            icon = Icons.Default.Edit,
-                                            iconTint = Color(0xFF9C27B0),
-                                            onClick = {
-                                                selectedNumberForMenu = null
-                                                if (contact != null) {
+                                        if (contact != null) {
+                                            RivoDropdownMenuItem(
+                                                text = "Edit contact",
+                                                icon = Icons.Default.Edit,
+                                                iconTint = Color(0xFF9C27B0),
+                                                onClick = {
+                                                    selectedNumberForMenu = null
                                                     navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
-                                                } else {
-                                                    navigator.navigate(ContactEditScreenDestination(initialPhone = menuNum))
                                                 }
-                                            }
-                                        )
+                                            )
+                                        } else {
+                                            RivoDropdownMenuItem(
+                                                text = "Add contact",
+                                                icon = Icons.Default.PersonAdd,
+                                                iconTint = Color(0xFF4CAF50),
+                                                onClick = {
+                                                    selectedNumberForMenu = null
+                                                    showAddContactChoiceDialog = true
+                                                }
+                                            )
+                                        }
                                         RivoDropdownMenuItem(
                                             text = "Edit number",
                                             icon = Icons.Default.Edit,
@@ -2344,12 +2353,21 @@ fun ContactDetailsScreen(
                         }
                     }
                 }
-            }
-
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
     }
+
+    if (showAddContactChoiceDialog) {
+        val phoneToAdd = phoneNumber ?: selectedNumberForMenu ?: displayPhone.takeIf { it != "Unknown" } ?: ""
+        AddContactChoiceDialog(
+            visible = showAddContactChoiceDialog,
+            phoneNumber = phoneToAdd,
+            onDismissRequest = { showAddContactChoiceDialog = false },
+            navigator = navigator
+        )
+    }
+}
 
 @Composable
 fun QrCodeDialog(name: String, phone: String?, email: String?, onDismiss: () -> Unit) {

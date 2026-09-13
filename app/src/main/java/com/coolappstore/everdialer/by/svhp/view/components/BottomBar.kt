@@ -84,7 +84,8 @@ private val TAB_ROUTES = setOf(
     ContactScreenDestination.route,
     GroupsScreenDestination.route,
     RecordingsScreenDestination.route,
-    NotesScreenDestination.route
+    NotesScreenDestination.route,
+    DialPadScreenDestination.route
 )
 
 /** Describes a single bottom-navigation tab, driving both the pill-style and standard nav bars. */
@@ -172,28 +173,15 @@ fun BottomBar(navController: NavController) {
         !NavBarVisibilityState.hideForSettingsEntry &&
         !NavBarVisibilityState.hideForSearchResult &&
         !currentRoute.contains(GroupsScreenDestination.route, ignoreCase = true)
-    fun routeForTabKey(key: String): String? = when (key) {
-        "favorites"  -> FavoritesScreenDestination.route
-        "calls"      -> RecentScreenDestination.route
-        "contacts"   -> ContactScreenDestination.route
-        "groups"     -> GroupsScreenDestination.route
-        "recordings" -> RecordingsScreenDestination.route
-        "notes"      -> NotesScreenDestination.route
-        "dialpad"    -> DialPadScreenDestination.route
-        else         -> null
-    }
 
     LaunchedEffect(isOnHiddenTab) {
         if (isOnHiddenTab) {
             val firstVisible = tabOrder
                 .asSequence()
-                .mapNotNull { routeForTabKey(it) }
+                .mapNotNull { TabNavigationHelper.routeForTabKey(it) }
                 .firstOrNull { it in visibleTabRoutes }
                 ?: RecentScreenDestination.route
-            navController.navigate(firstVisible) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = false }
-                launchSingleTop = true
-            }
+            TabNavigationHelper.navigateToTab(navController, firstVisible)
         }
     }
 
@@ -224,21 +212,7 @@ fun BottomBar(navController: NavController) {
     }
 
     fun navigate(route: String) {
-        // Tapping the Notes tab always means "show the normal Notes view" — enterNotesTab()
-        // guarantees a fresh instance with no leftover highlightQuery/hidden chrome, whether
-        // Notes was already selected (in a hidden search-result state) or not selected at all.
-        if (route == NotesScreenDestination.route) {
-            navController.enterNotesTab()
-            return
-        }
-        // If already on this route, do nothing (prevents double-tap freeze).
-        val alreadyOnRoute = currentDestination?.hierarchy?.any { it.route == route } == true
-        if (alreadyOnRoute) return
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-            launchSingleTop = true
-            restoreState    = true
-        }
+        TabNavigationHelper.navigateToTab(navController, route)
     }
 
     val orderedTabs: List<TabSpec> = remember(
@@ -289,10 +263,7 @@ fun BottomBar(navController: NavController) {
                     selected = isDialpadSelected,
                     onClick = {
                         doHaptic()
-                        if (isDialpadSelected) return@TabSpec
-                        navController.navigate(DialPadScreenDestination().route) {
-                            launchSingleTop = true
-                        }
+                        navigate(DialPadScreenDestination().route)
                     }
                 ) else null
                 else -> null

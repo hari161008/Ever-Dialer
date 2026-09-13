@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -369,17 +370,23 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         "call_logs" to listOf(
             ContextMenuItemOption("select",           "Select",                    Icons.Default.CheckBox),
             ContextMenuItemOption("call_back",         "Call back",                 Icons.Default.Call),
-            ContextMenuItemOption("call_chat_via",     "Call/Chat Via",             Icons.AutoMirrored.Filled.Chat),
-            ContextMenuItemOption("search_truecaller", "Search Truecaller",         Icons.Default.Search),
+            ContextMenuItemOption("view_contact",      "View contact",              Icons.Default.Person),
+            ContextMenuItemOption("edit_contact",      "Edit contact",              Icons.Default.Edit),
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
-            ContextMenuItemOption("share",             "Share",                     Icons.Default.Share),
-            ContextMenuItemOption("add_to_contacts",   "Add to contacts",           Icons.Default.PersonAdd),
+            ContextMenuItemOption("add_to_contacts",   "Add contact",               Icons.Default.PersonAdd),
+            ContextMenuItemOption("share",             "Share contact",             Icons.Default.Share),
+            ContextMenuItemOption("call_chat_via",     "Call/Chat Via",             Icons.AutoMirrored.Filled.Chat),
+            ContextMenuItemOption("send_text",         "Send text",                 Icons.AutoMirrored.Filled.Message),
+            ContextMenuItemOption("search_truecaller", "Search Truecaller",         Icons.Default.Search),
+            ContextMenuItemOption("move_contact",      "Move contact",              Icons.Default.DriveFileMove),
+            ContextMenuItemOption("toggle_favorite",   "Add/Remove Favourites",     Icons.Default.Favorite),
             ContextMenuItemOption("block_number",      "Block/Unblock number",      Icons.Default.Block),
             ContextMenuItemOption("fake_call",         "Fake Call",                 Icons.Outlined.PhoneCallback),
             ContextMenuItemOption("delete_call_log",   "Delete from call log",      Icons.Default.Delete)
         ),
         "contacts" to listOf(
             ContextMenuItemOption("select",           "Select",                    Icons.Default.CheckBox),
+            ContextMenuItemOption("call",             "Call",                      Icons.Default.Call),
             ContextMenuItemOption("view_contact",      "View contact",              Icons.Default.Person),
             ContextMenuItemOption("edit_contact",      "Edit contact",              Icons.Default.Edit),
             ContextMenuItemOption("copy_number",       "Copy number",               Icons.Default.ContentCopy),
@@ -408,19 +415,32 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 val list = mutableStateListOf<String>()
                 list.addAll(savedKeys.filter { it in validKeys })
                 validKeys.forEach { key -> if (key !in list) list.add(key) }
-                if (section.key == "call_logs" && "share" in list) {
+                if (section.key == "call_logs") {
                     val copyIdx = list.indexOf("copy_number")
-                    val shareIdx = list.indexOf("share")
+                    val addIdx = list.indexOf("add_to_contacts")
                     val deleteIdx = list.indexOf("delete_call_log")
-                    if (deleteIdx != -1 && shareIdx > deleteIdx) {
-                        list.removeAt(shareIdx)
-                        val targetIdx = if (copyIdx != -1) list.indexOf("copy_number") + 1 else deleteIdx
-                        list.add(targetIdx, "share")
-                        prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
-                    } else if (copyIdx != -1 && shareIdx != copyIdx + 1 && (deleteIdx == -1 || copyIdx < deleteIdx)) {
-                        list.removeAt(shareIdx)
-                        val newCopyIdx = list.indexOf("copy_number")
-                        list.add(newCopyIdx + 1, "share")
+                    if (copyIdx != -1 && addIdx != -1) {
+                        if (deleteIdx != -1 && addIdx > deleteIdx) {
+                            list.removeAt(addIdx)
+                            val newCopyIdx = list.indexOf("copy_number")
+                            list.add(newCopyIdx + 1, "add_to_contacts")
+                            prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
+                        } else if (addIdx != copyIdx + 1 && (deleteIdx == -1 || copyIdx < deleteIdx)) {
+                            list.removeAt(addIdx)
+                            val newCopyIdx = list.indexOf("copy_number")
+                            list.add(newCopyIdx + 1, "add_to_contacts")
+                            prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
+                        }
+                    }
+                }
+                if (section.key == "contacts" && "call" in list) {
+                    val selectIdx = list.indexOf("select")
+                    val callIdx = list.indexOf("call")
+                    val deleteIdx = list.indexOf("delete_contact")
+                    if (deleteIdx != -1 && callIdx > deleteIdx) {
+                        list.removeAt(callIdx)
+                        val targetIdx = if (selectIdx != -1) selectIdx + 1 else 0
+                        list.add(targetIdx, "call")
                         prefs.setString(contextMenuOrderKey(section.key), list.joinToString(","))
                     }
                 }
@@ -524,7 +544,13 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    Column {
+                    val maxListHeight = (LocalConfiguration.current.screenHeightDp.dp * 0.55f).coerceAtLeast(240.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxListHeight)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         callUIOrder.forEach { itemKey ->
                             val option = callUIOptions.firstOrNull { it.key == itemKey } ?: return@forEach
                             val isDragging = draggedKey == itemKey
@@ -800,7 +826,13 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    Column {
+                    val maxListHeight = (LocalConfiguration.current.screenHeightDp.dp * 0.55f).coerceAtLeast(240.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxListHeight)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         tabOrder.forEach { tabKey ->
                             val option = tabOptions.firstOrNull { it.key == tabKey } ?: return@forEach
                             val isDragging = draggedKey == tabKey
@@ -1148,7 +1180,13 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
-                        Column {
+                        val maxListHeight = (LocalConfiguration.current.screenHeightDp.dp * 0.55f).coerceAtLeast(240.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = maxListHeight)
+                                .verticalScroll(rememberScrollState())
+                        ) {
                             sectionOrder.forEach { itemKey ->
                                 val option = sectionItems.firstOrNull { it.key == itemKey } ?: return@forEach
                                 val isDragging = draggedKey == itemKey
