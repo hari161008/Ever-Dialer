@@ -361,7 +361,9 @@ fun ContactPfpCustomizationScreen(
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            SettingsSearchEntryPoint(navigator = navigator)
+            if (!isContactSpecific) {
+                SettingsSearchEntryPoint(navigator = navigator)
+            }
 
             // ── Live Preview Container ───────────────────────────────────────────
             RivoAnimatedSection(delayMs = 0L) {

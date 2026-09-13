@@ -582,9 +582,11 @@ class PreferenceManager(context: Context) {
         const val KEY_SEARCH_FILTER_CONTACTS        = "search_filter_contacts"
         const val KEY_SEARCH_FILTER_NON_CONTACTS    = "search_filter_non_contacts"
         const val KEY_SEARCH_FILTER_RECORDINGS      = "search_filter_recordings"
+        const val KEY_SEARCH_FILTER_GROUPS          = "search_filter_groups"
         const val KEY_SEARCH_FILTER_CONTACT_NOTES   = "search_filter_contact_notes"
         const val KEY_SEARCH_FILTER_RECORDING_NOTES = "search_filter_recording_notes"
         const val KEY_SEARCH_FILTER_SETTINGS        = "search_filter_settings"
+        const val KEY_SEARCH_FILTER_ORDER           = "search_filter_order"
 
         const val KEY_APP_OPEN_COUNT                = "app_open_count"
         const val KEY_LAST_APP_VERSION              = "last_app_version"

@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
@@ -50,6 +51,7 @@ import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
@@ -98,6 +100,7 @@ fun SearchScreen(navController: NavController, navigator: DestinationsNavigator)
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             ContactSearchContent(
                 navigator = navigator,
+                navController = navController,
                 isGranted = permState.status == PermissionStatus.Granted,
                 onRequestPermission = { permState.launchPermissionRequest() },
                 listState = listState
@@ -121,6 +124,7 @@ private fun groupedRowShape(index: Int, count: Int, corner: androidx.compose.ui.
 @Composable
 fun ContactSearchContent(
     navigator: DestinationsNavigator,
+    navController: NavController,
     isGranted: Boolean,
     onRequestPermission: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState
@@ -146,8 +150,22 @@ fun ContactSearchContent(
     val contacts by contactsVM.displayedContacts.collectAsState()
     val callLogs by callLogVM.allCallLogs.collectAsState()
     val recordings by recordingsVM.allRecordings.collectAsState()
+    val contactGroups by contactsVM.contactGroups.collectAsState()
 
     val settingsVer by prefs.settingsChanged.collectAsState()
+    val hiddenGroupIds = remember(settingsVer) { prefs.getHiddenContactGroupIds() }
+    val enabledAccountKeys by contactsVM.enabledAccountKeys.collectAsState()
+
+    LaunchedEffect(Unit) {
+        contactsVM.fetchContactGroups()
+    }
+
+    val visibleContactGroups = remember(contactGroups, hiddenGroupIds, enabledAccountKeys) {
+        contactGroups.filter { it.id !in hiddenGroupIds }.filter { group ->
+            com.coolappstore.everdialer.by.svhp.view.components.isGroupMatchingAccountFilter(group, enabledAccountKeys)
+        }
+    }
+
     val filterState = remember(settingsVer) { prefs.getSearchFilterState() }
 
     // TextFieldValue (not a plain String) so the cursor position survives this screen being
@@ -221,12 +239,19 @@ fun ContactSearchContent(
         val notes: List<NoteEntry>,
         val recordingNotes: List<RecordingItem>,
         val recordings: List<RecordingItem>,
+        val groups: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>,
         val settings: List<GlobalSettingsSearchEntry>
     )
-    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
-    val searchResults = remember(query, contactIndex, callLogs, allNotes, recordings, globalSettings, filterState) {
+    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
+    val searchResults = remember(query, contactIndex, callLogs, allNotes, recordings, visibleContactGroups, globalSettings, filterState) {
         val q = query
-        if (q.isBlank()) return@remember emptySearchResults
+        if (q.isBlank()) {
+            return@remember if (filterState.groups && visibleContactGroups.isNotEmpty()) {
+                SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), visibleContactGroups, emptyList())
+            } else {
+                emptySearchResults
+            }
+        }
 
         val qLower = q.lowercase()
         val qDigits = q.replace(" ", "")
@@ -279,23 +304,29 @@ fun ContactSearchContent(
                             rec.phoneNumber.replace(" ", "").contains(qDigits))
         }
 
+        val gr = if (!filterState.groups) emptyList()
+        else visibleContactGroups.filter { group ->
+            com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(group.name, q)
+        }
+
         val sr = if (!filterState.settings) emptyList()
         else globalSettings.filter { entry ->
             com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.title, q) ||
                     com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.subtitle, q)
         }
 
-        SearchResults(fc, ncr, cnr, rnr, rr, sr)
+        SearchResults(fc, ncr, cnr, rnr, rr, gr, sr)
     }
     val filteredContacts = searchResults.contacts
     val nonContactResults = searchResults.nonContacts
     val contactNoteResults = searchResults.notes
     val recordingNoteResults = searchResults.recordingNotes
     val recordingResults = searchResults.recordings
+    val groupResults = searchResults.groups
     val settingResults = searchResults.settings
 
     val totalResults = filteredContacts.size + nonContactResults.size + recordingResults.size +
-            contactNoteResults.size + recordingNoteResults.size + settingResults.size
+            groupResults.size + contactNoteResults.size + recordingNoteResults.size + settingResults.size
     val hasAnyResults = totalResults > 0
 
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
@@ -322,7 +353,7 @@ fun ContactSearchContent(
                     value = queryFieldValue,
                     onValueChange = { queryFieldValue = it },
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                    placeholder = { Text("Search contacts or numbers", color = searchBarPlaceholder) },
+                    placeholder = { Text("Universal Search", color = searchBarPlaceholder) },
                     leadingIcon = {
                         IconButton(onClick = { navigator.navigateUp() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = searchBarFg)
@@ -385,8 +416,8 @@ fun ContactSearchContent(
         // same kind of sliding/fading reveal as the Dialpad's search results panel, instead of
         // just instantly swapping.
         val searchUiState = when {
-            contacts.isEmpty() -> "loading"
-            query.isBlank() -> "blank"
+            contacts.isEmpty() && visibleContactGroups.isEmpty() -> "loading"
+            query.isBlank() && !hasAnyResults -> "blank"
             !hasAnyResults -> "empty"
             else -> "results"
         }
@@ -418,7 +449,7 @@ fun ContactSearchContent(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )
                             Text(
-                                "Search contacts or numbers",
+                                "Universal Search",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -481,313 +512,366 @@ fun ContactSearchContent(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (filteredContacts.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Contacts")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        // Same long-press context menu as the main Contacts list (Select, View,
-                        // Edit, Copy number, Share, Move, Favourite, Fake Call, Delete) — this
-                        // was previously missing here, so searched contacts couldn't be
-                        // moved/deleted/etc. without opening the full contact list. Visibility
-                        // and ordering stay in sync with Settings → Appearance → Context Menu
-                        // Elements (Contacts), since ContactListItem reads the same preferences.
-                        itemsIndexed(
-                            items = filteredContacts,
-                            key = { _, contact -> "contact_${contact.id}" }
-                        ) { index, contact ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, filteredContacts.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    ContactListItem(
-                                        contact = contact,
-                                        navigator = navigator
-                                    )
-                                    if (index < filteredContacts.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
+                    filterState.order.forEach { sectionKey ->
+                        when (sectionKey) {
+                            "contacts" -> {
+                                if (filteredContacts.isNotEmpty()) {
+                                    item(key = "section_contacts_header") {
+                                        RivoSectionHeader(title = "Contacts")
+                                        Spacer(modifier = Modifier.height(8.dp))
                                     }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-                    }
-
-                    if (nonContactResults.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Non Contacts")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        itemsIndexed(
-                            items = nonContactResults,
-                            key = { _, entry -> "noncontact_${entry.number}_${entry.date}" }
-                        ) { index, entry ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, nonContactResults.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    SingleTile(
-                                        title = entry.name?.ifEmpty { entry.number } ?: entry.number,
-                                        subtitle = if (entry.name.isNullOrEmpty() || entry.name == entry.number) null else entry.number,
-                                        icon = Icons.Default.Person,
-                                        phoneNumber = entry.number,
-                                        onAvatarClick = {
-                                            navigator.navigate(ContactDetailsScreenDestination(phoneNumber = entry.number))
-                                        },
-                                        trailingContent = {
-                                            IconButton(onClick = {
-                                                navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
-                                            }) {
-                                                Icon(Icons.Default.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.primary)
-                                            }
-                                        },
-                                        onClick = {
-                                            navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
-                                        }
-                                    )
-                                    if (index < nonContactResults.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-                    }
-
-                    if (contactNoteResults.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Notes")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        itemsIndexed(
-                            items = contactNoteResults,
-                            key = { _, note -> "note_${note.file.absolutePath}" }
-                        ) { index, note ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, contactNoteResults.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    SingleTile(
-                                        title = note.contactName.ifBlank { note.phoneNumber.ifBlank { "Unknown" } },
-                                        subtitle = note.content,
-                                        icon = Icons.Default.StickyNote2,
-                                        phoneNumber = note.phoneNumber,
-                                        onAvatarClick = {
-                                            navigator.navigate(ContactDetailsScreenDestination(phoneNumber = note.phoneNumber))
-                                        },
-                                        supportingContent = {
-                                            Text(
-                                                note.content,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        },
-                                        onClick = {
-                                            NavBarVisibilityState.hideForSearchResult = true
-                                            navigator.navigate(NotesScreenDestination(highlightQuery = query))
-                                        }
-                                    )
-                                    if (index < contactNoteResults.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-                    }
-
-                    if (recordingResults.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Recordings")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        itemsIndexed(
-                            items = recordingResults,
-                            key = { _, rec -> "recording_${rec.uri}" }
-                        ) { index, rec ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, recordingResults.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    SingleTile(
-                                        title = rec.contactName?.ifBlank { rec.phoneNumber } ?: rec.phoneNumber,
-                                        subtitle = rec.phoneNumber,
-                                        icon = Icons.Default.Mic,
-                                        phoneNumber = rec.phoneNumber,
-                                        onAvatarClick = {
-                                            navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
-                                        },
-                                        onClick = {
-                                            NavBarVisibilityState.hideForSettingsEntry = true
-                                            navigator.navigate(
-                                                RecordingsScreenDestination(
-                                                    openedFromSettings = true,
-                                                    openedRecordingUri = rec.uri.toString()
+                                    itemsIndexed(
+                                        items = filteredContacts,
+                                        key = { _, contact -> "contact_${contact.id}" }
+                                    ) { index, contact ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, filteredContacts.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                ContactListItem(
+                                                    contact = contact,
+                                                    navigator = navigator
                                                 )
-                                            )
-                                        }
-                                    )
-                                    if (index < recordingResults.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-                    }
-
-                    if (recordingNoteResults.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Recording Notes")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        itemsIndexed(
-                            items = recordingNoteResults,
-                            key = { _, rec -> "recordingnote_${rec.uri}" }
-                        ) { index, rec ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, recordingNoteResults.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    SingleTile(
-                                        title = rec.contactName?.ifBlank { rec.phoneNumber } ?: rec.phoneNumber,
-                                        subtitle = rec.noteText,
-                                        icon = Icons.Default.Mic,
-                                        phoneNumber = rec.phoneNumber,
-                                        onAvatarClick = {
-                                            navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
-                                        },
-                                        supportingContent = {
-                                            Text(
-                                                rec.noteText,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        },
-                                        onClick = {
-                                            NavBarVisibilityState.hideForSettingsEntry = true
-                                            navigator.navigate(
-                                                RecordingsScreenDestination(
-                                                    openedFromSettings = true,
-                                                    openedRecordingUri = rec.uri.toString()
-                                                )
-                                            )
-                                        }
-                                    )
-                                    if (index < recordingNoteResults.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-                    }
-
-                    if (settingResults.isNotEmpty()) {
-                        item {
-                            RivoSectionHeader(title = "Settings")
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        itemsIndexed(
-                            items = settingResults,
-                            key = { _, entry -> "setting_${entry.key}_${entry.title}" }
-                        ) { index, entry ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(
-                                        fadeInSpec = tween(320, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                                        fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
-                                    ),
-                                shape = groupedRowShape(index, settingResults.size),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column {
-                                    RivoListItem(
-                                        headline = entry.title,
-                                        supporting = entry.subtitle,
-                                        leadingIcon = entry.icon,
-                                        iconContainerColor = entry.iconContainerColor,
-                                        trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = {
-                                            keyboardController?.hide()
-                                            if (entry.navigateTo != null) {
-                                                entry.navigateTo.invoke(navigator)
-                                            } else {
-                                                navigator.navigate(SettingsScreenDestination(highlightKey = entry.key))
+                                                if (index < filteredContacts.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
                                             }
                                         }
-                                    )
-                                    if (index < settingResults.size - 1) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
                                     }
+                                    item(key = "section_contacts_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "non_contacts" -> {
+                                if (nonContactResults.isNotEmpty()) {
+                                    item(key = "section_non_contacts_header") {
+                                        RivoSectionHeader(title = "Non Contacts")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = nonContactResults,
+                                        key = { _, entry -> "noncontact_${entry.number}_${entry.date}" }
+                                    ) { index, entry ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, nonContactResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = entry.name?.ifEmpty { entry.number } ?: entry.number,
+                                                    subtitle = if (entry.name.isNullOrEmpty() || entry.name == entry.number) null else entry.number,
+                                                    icon = Icons.Default.Person,
+                                                    phoneNumber = entry.number,
+                                                    onAvatarClick = {
+                                                        navigator.navigate(ContactDetailsScreenDestination(phoneNumber = entry.number))
+                                                    },
+                                                    trailingContent = {
+                                                        IconButton(onClick = {
+                                                            navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
+                                                        }) {
+                                                            Icon(Icons.Default.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.primary)
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
+                                                    }
+                                                )
+                                                if (index < nonContactResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_non_contacts_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "recordings" -> {
+                                if (recordingResults.isNotEmpty()) {
+                                    item(key = "section_recordings_header") {
+                                        RivoSectionHeader(title = "Recordings")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = recordingResults,
+                                        key = { _, rec -> "recording_${rec.uri}" }
+                                    ) { index, rec ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, recordingResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = rec.contactName?.ifBlank { rec.phoneNumber } ?: rec.phoneNumber,
+                                                    subtitle = rec.phoneNumber,
+                                                    icon = Icons.Default.Mic,
+                                                    phoneNumber = rec.phoneNumber,
+                                                    onAvatarClick = {
+                                                        navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
+                                                    },
+                                                    onClick = {
+                                                        NavBarVisibilityState.hideForSettingsEntry = true
+                                                        navigator.navigate(
+                                                            RecordingsScreenDestination(
+                                                                openedFromSettings = true,
+                                                                openedRecordingUri = rec.uri.toString()
+                                                            )
+                                                        )
+                                                    }
+                                                )
+                                                if (index < recordingResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_recordings_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "groups" -> {
+                                if (groupResults.isNotEmpty()) {
+                                    item(key = "section_groups_header") {
+                                        RivoSectionHeader(title = "Groups")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = groupResults,
+                                        key = { _, group -> "group_${group.id}" }
+                                    ) { index, group ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, groupResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = group.name,
+                                                    subtitle = "${group.contactIds.size} ${if (group.contactIds.size == 1) "contact" else "contacts"}",
+                                                    icon = Icons.Default.Group,
+                                                    iconContainerColor = Color(0xFF2196F3),
+                                                    onClick = {
+                                                        contactsVM.setGroupFilter(group.id)
+                                                        navController.navigate(ContactScreenDestination.route) {
+                                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                            launchSingleTop = true
+                                                            restoreState = true
+                                                        }
+                                                    }
+                                                )
+                                                if (index < groupResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_groups_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "contact_notes" -> {
+                                if (contactNoteResults.isNotEmpty()) {
+                                    item(key = "section_contact_notes_header") {
+                                        RivoSectionHeader(title = "Notes")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = contactNoteResults,
+                                        key = { _, note -> "note_${note.file.absolutePath}" }
+                                    ) { index, note ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, contactNoteResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = note.contactName.ifBlank { note.phoneNumber.ifBlank { "Unknown" } },
+                                                    subtitle = note.content,
+                                                    icon = Icons.Default.StickyNote2,
+                                                    phoneNumber = note.phoneNumber,
+                                                    onAvatarClick = {
+                                                        navigator.navigate(ContactDetailsScreenDestination(phoneNumber = note.phoneNumber))
+                                                    },
+                                                    supportingContent = {
+                                                        Text(
+                                                            note.content,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        NavBarVisibilityState.hideForSearchResult = true
+                                                        navigator.navigate(NotesScreenDestination(highlightQuery = query))
+                                                    }
+                                                )
+                                                if (index < contactNoteResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_contact_notes_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "recording_notes" -> {
+                                if (recordingNoteResults.isNotEmpty()) {
+                                    item(key = "section_recording_notes_header") {
+                                        RivoSectionHeader(title = "Recording Notes")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = recordingNoteResults,
+                                        key = { _, rec -> "recordingnote_${rec.uri}" }
+                                    ) { index, rec ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, recordingNoteResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = rec.contactName?.ifBlank { rec.phoneNumber } ?: rec.phoneNumber,
+                                                    subtitle = rec.noteText,
+                                                    icon = Icons.Default.Mic,
+                                                    phoneNumber = rec.phoneNumber,
+                                                    onAvatarClick = {
+                                                        navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
+                                                    },
+                                                    supportingContent = {
+                                                        Text(
+                                                            rec.noteText,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        NavBarVisibilityState.hideForSettingsEntry = true
+                                                        navigator.navigate(
+                                                            RecordingsScreenDestination(
+                                                                openedFromSettings = true,
+                                                                openedRecordingUri = rec.uri.toString()
+                                                            )
+                                                        )
+                                                    }
+                                                )
+                                                if (index < recordingNoteResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_recording_notes_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "settings" -> {
+                                if (settingResults.isNotEmpty()) {
+                                    item(key = "section_settings_header") {
+                                        RivoSectionHeader(title = "Settings")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = settingResults,
+                                        key = { _, entry -> "setting_${entry.key}_${entry.title}" }
+                                    ) { index, entry ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, settingResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                RivoListItem(
+                                                    headline = entry.title,
+                                                    supporting = entry.subtitle,
+                                                    leadingIcon = entry.icon,
+                                                    iconContainerColor = entry.iconContainerColor,
+                                                    trailingIcon = Icons.Default.ChevronRight,
+                                                    onClick = {
+                                                        keyboardController?.hide()
+                                                        if (entry.navigateTo != null) {
+                                                            entry.navigateTo.invoke(navigator)
+                                                        } else {
+                                                            navigator.navigate(SettingsScreenDestination(highlightKey = entry.key))
+                                                        }
+                                                    }
+                                                )
+                                                if (index < settingResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_settings_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
                                 }
                             }
                         }
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
 
                     item { Spacer(modifier = Modifier.height(100.dp)) }

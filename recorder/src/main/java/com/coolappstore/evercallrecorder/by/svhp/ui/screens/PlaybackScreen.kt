@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +71,7 @@ fun PlaybackScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text("Recording", fontWeight = FontWeight.SemiBold) },
@@ -83,12 +85,22 @@ fun PlaybackScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
+        val density = LocalDensity.current
+        val isImeVisible = WindowInsets.ime.getBottom(density) > 0
+        val scrollState = rememberScrollState()
+
+        LaunchedEffect(isImeVisible) {
+            if (isImeVisible) {
+                scrollState.animateScrollTo(scrollState.maxValue)
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .padding(top = innerPadding.calculateTopPadding())
                 .imePadding()
+                .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -242,8 +254,12 @@ fun PlaybackScreen(
                     }
                 }
             }
-            Spacer(Modifier.navigationBarsPadding())
-            Spacer(Modifier.height(130.dp))
+            if (!isImeVisible) {
+                Spacer(Modifier.navigationBarsPadding())
+                Spacer(Modifier.height(130.dp))
+            } else {
+                Spacer(Modifier.height(16.dp))
+            }
         }
     }
 }
