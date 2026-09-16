@@ -1355,12 +1355,38 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        "Display & Font Size",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Display & Font Size",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                displayScale = 1.0f
+                                                fontSizeScale = 1.0f
+                                                prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)
+                                                prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
+                                            },
+                                            modifier = Modifier.size(28.dp),
+                                            shape = CircleShape,
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Refresh,
+                                                contentDescription = "Reset scale",
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
                                     Spacer(Modifier.height(14.dp))
 
                                     // Display Scaling Slider

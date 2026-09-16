@@ -117,6 +117,10 @@ class MainActivity : FragmentActivity() {
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
+        try {
+            GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel>()?.fetchContacts()
+            GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel>()?.refreshLogs()
+        } catch (_: Throwable) {}
         // When permission prompt dismisses, prompt for default dialer if not already held and welcome dialog not needed
         val prefs = GlobalContext.get().get<PreferenceManager>()
         val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)

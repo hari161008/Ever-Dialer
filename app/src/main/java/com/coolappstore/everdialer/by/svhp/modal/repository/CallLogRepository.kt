@@ -87,6 +87,7 @@ class CallLogRepository(
     // can be invoked from different coroutine dispatchers across refreshes.
     @Volatile private var cachedContactIndex: Pair<Map<String, ContactMatch>, Map<String, MutableList<ContactMatch>>>? = null
     @Volatile private var contactIndexDirty = true
+    private var contactsObserverRegistered = false
 
     private val contactsObserver = object : android.database.ContentObserver(
         android.os.Handler(android.os.Looper.getMainLooper())
@@ -101,11 +102,27 @@ class CallLogRepository(
     }
 
     init {
-        try {
-            contentResolver.registerContentObserver(
-                ContactsContract.Contacts.CONTENT_URI, true, contactsObserver
-            )
-        } catch (_: Exception) {}
+        ensureContactsObserver()
+    }
+
+    fun invalidateContactIndex() {
+        contactIndexDirty = true
+        cachedContactIndex = null
+    }
+
+    private fun ensureContactsObserver() {
+        if (!contactsObserverRegistered &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.READ_CONTACTS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            try {
+                contentResolver.registerContentObserver(
+                    ContactsContract.Contacts.CONTENT_URI, true, contactsObserver
+                )
+                contactsObserverRegistered = true
+            } catch (_: Exception) {}
+        }
     }
 
     override fun getCallLogs(): List<CallLogEntry> = try {
@@ -119,17 +136,29 @@ class CallLogRepository(
     }
 
     private fun getCallLogsInternal(): List<CallLogEntry> {
+        ensureContactsObserver()
+        val hasContactsPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.READ_CONTACTS
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
         // Reuse the cached "number -> contact" index unless a contact was actually added, edited,
-        // or removed since it was built. Every lookup in this pass (both for pruning and for the
-        // real call log) is then a plain in-memory map lookup - no IPC at all on the common case
-        // of "contacts haven't changed since last refresh".
+        // or removed since it was built. If permission wasn't granted when previously built,
+        // force a rebuild now so contact photos and names can be properly resolved.
         val existing = cachedContactIndex
-        val (exactIndex, suffixIndex) = if (!contactIndexDirty && existing != null) {
+        val canUseExisting = !contactIndexDirty && existing != null &&
+            (!hasContactsPermission || existing.first.isNotEmpty())
+
+        val (exactIndex, suffixIndex) = if (canUseExisting && existing != null) {
             existing
         } else {
             val built = buildContactIndex()
-            cachedContactIndex = built
-            contactIndexDirty = false
+            if (hasContactsPermission) {
+                cachedContactIndex = built
+                contactIndexDirty = false
+            } else {
+                cachedContactIndex = null
+                contactIndexDirty = true
+            }
             built
         }
 

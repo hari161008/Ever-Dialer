@@ -70,9 +70,12 @@ class CallLogViewModel(
         }
     }
 
-    init {
+    private var callLogObserverRegistered = false
+    private var contactsObserverRegistered = false
+
+    private fun ensureObservers() {
         try {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
+            if (!callLogObserverRegistered && androidx.core.content.ContextCompat.checkSelfPermission(
                     getApplication(),
                     android.Manifest.permission.READ_CALL_LOG
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -82,10 +85,11 @@ class CallLogViewModel(
                     true,
                     callLogObserver
                 )
+                callLogObserverRegistered = true
             }
         } catch (_: Throwable) {}
         try {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
+            if (!contactsObserverRegistered && androidx.core.content.ContextCompat.checkSelfPermission(
                     getApplication(),
                     android.Manifest.permission.READ_CONTACTS
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -95,8 +99,13 @@ class CallLogViewModel(
                     true,
                     contactsObserver
                 )
+                contactsObserverRegistered = true
             }
         } catch (_: Throwable) {}
+    }
+
+    init {
+        ensureObservers()
         // Step 1: serve disk cache immediately so UI is instant
         viewModelScope.launch(Dispatchers.IO) {
             val diskCache = loadFromDisk()
@@ -167,6 +176,8 @@ class CallLogViewModel(
     }
 
     fun refreshLogs() {
+        (callLogRepo as? com.coolappstore.everdialer.by.svhp.modal.repository.CallLogRepository)?.invalidateContactIndex()
+        ensureObservers()
         fetchLogs(forceRefresh = true)
     }
 
@@ -221,6 +232,7 @@ class CallLogViewModel(
     }
 
     private suspend fun fetchLogsInternal() {
+        ensureObservers()
         if (isFetching) return
         isFetching = true
         try {

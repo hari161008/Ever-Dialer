@@ -66,18 +66,26 @@ class ContactsViewModel(
         }
     }
 
+    private var observersRegistered = false
+
+    private fun ensureContentObservers() {
+        if (!observersRegistered && ContextCompat.checkSelfPermission(getApplication(), Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val resolver = getApplication<Application>().contentResolver
+                resolver.registerContentObserver(android.provider.ContactsContract.Contacts.CONTENT_URI, true, contactsContentObserver)
+                resolver.registerContentObserver(android.provider.ContactsContract.Groups.CONTENT_URI, true, contactsContentObserver)
+                resolver.registerContentObserver(android.provider.ContactsContract.Data.CONTENT_URI, true, contactsContentObserver)
+                observersRegistered = true
+            } catch (_: Exception) {}
+        }
+    }
+
     init {
         _enabledAccountKeys.value = getEnabledAccountKeys()
         fetchContactGroups()
         loadCachedContactsThenRefresh()
         fetchAvailableAccounts()
-
-        try {
-            val resolver = getApplication<Application>().contentResolver
-            resolver.registerContentObserver(android.provider.ContactsContract.Contacts.CONTENT_URI, true, contactsContentObserver)
-            resolver.registerContentObserver(android.provider.ContactsContract.Groups.CONTENT_URI, true, contactsContentObserver)
-            resolver.registerContentObserver(android.provider.ContactsContract.Data.CONTENT_URI, true, contactsContentObserver)
-        } catch (_: Exception) {}
+        ensureContentObservers()
     }
 
     fun fetchContactGroups() {
@@ -333,6 +341,7 @@ class ContactsViewModel(
     }
 
     fun fetchContacts() {
+        ensureContentObservers()
         val ctx = getApplication<Application>()
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) {

@@ -141,11 +141,25 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     // instant it's looked at, with no scroll needed. Uses the same activity-scoped
     // CallLogViewModel instance that CallLogFullContent below reads from.
     val callLogViewModel: CallLogViewModel = koinActivityViewModel()
+    val contactsViewModel: ContactsViewModel = koinActivityViewModel()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    LaunchedEffect(permState.status) {
+        if (permState.status == PermissionStatus.Granted) {
+            callLogViewModel.refreshLogs()
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                contactsViewModel.fetchContacts()
+            }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 callLogViewModel.refreshLogs()
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                    contactsViewModel.fetchContacts()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

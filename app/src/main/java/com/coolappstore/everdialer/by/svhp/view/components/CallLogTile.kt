@@ -358,6 +358,8 @@ fun CallLogTile(
         else -> nationalNumberDigits(log.number).ifEmpty { "Unknown" }
     }
 
+    val resolvedPhotoUri = matchedContact?.photoUri ?: log.photoUri
+
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(
             visible = selectionMode,
@@ -412,7 +414,7 @@ fun CallLogTile(
             supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,
             avatarForcePersonIcon = !isContact,
-            photoUri    = log.photoUri,
+            photoUri    = resolvedPhotoUri,
             headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
             headlineEndContent = totalCallsBadge,
             supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
@@ -446,7 +448,7 @@ fun CallLogTile(
             },
             trailingIconTint = trailingTint,
             trailingIconContainerColor = trailingContainerColor,
-            onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log) }) else null,
+            onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log.copy(contactId = matchedContact?.id ?: log.contactId, photoUri = resolvedPhotoUri)) }) else null,
             onLongClick = {
                 if (selectionMode) onSelectToggle?.invoke(log)
                 else showMenu = true
