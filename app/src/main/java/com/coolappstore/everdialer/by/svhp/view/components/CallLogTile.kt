@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -175,14 +176,33 @@ private fun nationalNumberDigits(number: String): String {
 
 @Composable
 fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
     val is24H = if (use24HourTime != null) {
         use24HourTime
     } else {
-        val prefs = koinInject<PreferenceManager>()
-        val settingsVer by prefs.settingsChanged.collectAsState()
         remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
     }
     val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+
+    val trailingContainerColor = if (isMissed) {
+        if (isSaturatedActive) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.errorContainer
+    } else {
+        if (isSaturatedActive) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+    }
+
+    val trailingTint = if (isMissed) {
+        if (isSaturatedActive) MaterialTheme.colorScheme.onError
+        else MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onPrimaryContainer
+    }
 
     val icon = when (log.type) {
         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
@@ -201,8 +221,9 @@ fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
             else                        -> "Call"
         },
         supporting = "${formatDate(log.date, is24H)}${if (durationText != null) " • $durationText" else ""}",
-        leadingIcon = icon,
-        iconContainerColor = if (isMissed) MaterialTheme.colorScheme.errorContainer else null,
+        trailingIcon = icon,
+        trailingIconTint = trailingTint,
+        trailingIconContainerColor = trailingContainerColor,
         onClick = { }
     )
 }
@@ -240,10 +261,35 @@ fun CallLogTile(
             allContacts.find { c -> c.phoneNumbers.any { n -> numbersLikelyMatch(log.number, n) } }
         } else null
     }
-    val isContact = (log.name != null && log.name != log.number) || matchedContact != null
+    val resolvedContactName = matchedContact?.name?.takeIf { it.isNotBlank() }
+        ?: log.name?.takeIf { it.isNotBlank() && it != log.number && !log.isCallerIdName }
+    val isContact = resolvedContactName != null
+    val isCallerId = !isContact && log.isCallerIdName && !log.name.isNullOrBlank() && log.name != log.number
     var showMenu  by remember { mutableStateOf(false) }
     var showAddContactChoiceDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
+
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+
+    val trailingContainerColor = if (isMissed) {
+        if (isSaturatedActive) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.errorContainer
+    } else {
+        if (isSaturatedActive) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+    }
+
+    val trailingTint = if (isMissed) {
+        if (isSaturatedActive) MaterialTheme.colorScheme.onError
+        else MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onPrimaryContainer
+    }
 
     val fakeCallInContextMenu: Boolean
     val use24HourTime: Boolean
@@ -270,8 +316,6 @@ fun CallLogTile(
         sim1Color = config.sim1Color
         sim2Color = config.sim2Color
     } else {
-        val prefs = koinInject<PreferenceManager>()
-        val settingsVer by prefs.settingsChanged.collectAsState()
         fakeCallInContextMenu = remember(settingsVer) {
             prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
         }
@@ -302,17 +346,17 @@ fun CallLogTile(
     }
     val displayName = when {
         isHiddenContact -> log.number
-        isContact -> matchedContact?.name ?: log.name ?: log.number
+        isContact -> resolvedContactName ?: log.number
+        isCallerId -> log.name ?: log.number
         nameNonContactsAsUnknown -> "Unknown"
         else -> log.number
     }
     val avatarSourceName = when {
         isHiddenContact -> log.number
-        isContact -> matchedContact?.name ?: log.name ?: log.number
+        isContact -> resolvedContactName ?: log.number
+        isCallerId -> log.name ?: log.number
         else -> nationalNumberDigits(log.number).ifEmpty { "Unknown" }
     }
-
-    val isMissed = log.type == CallLog.Calls.MISSED_TYPE
 
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(
@@ -328,7 +372,7 @@ fun CallLogTile(
         }
         Box(modifier = Modifier.weight(1f)) {
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
-        val showNumberOnSupportingLine = !isHiddenContact && (isContact || nameNonContactsAsUnknown)
+        val showNumberOnSupportingLine = !isHiddenContact && (isContact || isCallerId || nameNonContactsAsUnknown)
         val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({
             SimSlotBadge(
                 slot = log.simSlot,
@@ -400,7 +444,8 @@ fun CallLogTile(
                 CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
                 else                        -> Icons.Default.Call
             },
-            trailingIconTint = if (isMissed) MaterialTheme.colorScheme.error else null,
+            trailingIconTint = trailingTint,
+            trailingIconContainerColor = trailingContainerColor,
             onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log) }) else null,
             onLongClick = {
                 if (selectionMode) onSelectToggle?.invoke(log)

@@ -43,12 +43,12 @@ fun CallLogTile(
     val showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
     val nameNonContactsAsUnknown = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true) }
     val displayTitle = displayNameOverride ?: (
-        if (!log.name.isNullOrEmpty()) {
+        if (!log.name.isNullOrBlank() && log.name != log.number) {
             log.name
         } else if (nameNonContactsAsUnknown) {
             "Unknown"
         } else {
-            log.number.ifEmpty { "Unknown" }
+            log.number.ifBlank { "Unknown" }
         }
     )
 

@@ -460,6 +460,8 @@ class PreferenceManager(context: Context) {
         const val KEY_FIRST_LAUNCH_DONE     = "first_launch_done"
         // Hangup button width fraction (0.4f .. 1.0f)
         const val KEY_HANGUP_WIDTH          = "hangup_button_width"
+        // Container height scale factor for ongoing call screen (0.70f .. 1.40f)
+        const val KEY_ONGOING_CONTAINER_HEIGHT = "ongoing_container_height"
         // Feature Buttons — ongoing call screen button customization
         // Comma-separated ordered list of button ids (see CallButtonPrefs.ALL_IDS)
         const val KEY_CALL_BUTTONS_ORDER    = "call_buttons_order"
@@ -518,6 +520,7 @@ class PreferenceManager(context: Context) {
         // Comma-separated list of tab keys (favorites, calls, contacts, groups, recordings, notes, dialpad)
         // describing the order tabs appear in the bottom navigation bar.
         const val KEY_TAB_ORDER                = "tab_order"
+        const val KEY_MISSED_CALL_RESET_TIME   = "missed_call_reset_time"
         const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,groups,recordings,notes,dialpad"
         // Biometrics
         const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | ""

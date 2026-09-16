@@ -147,8 +147,10 @@ class CallLogRepository(
             if (hiddenIds.isNotEmpty() && contactIdStr != null && contactIdStr in hiddenIds) {
                 continue
             }
-            val displayName = match?.name ?: raw.cachedName ?: raw.number
-            val isCallerIdName = match == null && raw.cachedName != null
+            val resolvedMatchName = match?.name?.takeIf { it.isNotBlank() }
+            val resolvedCachedName = raw.cachedName?.takeIf { it.isNotBlank() }
+            val displayName = resolvedMatchName ?: resolvedCachedName ?: raw.number
+            val isCallerIdName = match == null && resolvedCachedName != null
 
             val lastEntry = callLogs.lastOrNull()
             // Only merge consecutive rows into one grouped entry when they're the same number
@@ -242,7 +244,7 @@ class CallLogRepository(
                         id = id,
                         number = number,
                         digits = number.filter { it.isDigit() },
-                        cachedName = cursor.getString(cachedNameIdx),
+                        cachedName = cursor.getString(cachedNameIdx)?.takeIf { it.isNotBlank() },
                         type = type,
                         date = date,
                         duration = duration,

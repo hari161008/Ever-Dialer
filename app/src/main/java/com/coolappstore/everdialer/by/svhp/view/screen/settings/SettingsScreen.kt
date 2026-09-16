@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -65,9 +66,11 @@ import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
 import com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
+import com.coolappstore.everdialer.by.svhp.view.components.SearchHistorySection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
@@ -1451,6 +1454,15 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     // Recordings) — typing here only ever searches settings screens and toggles, never contacts
     // or notes, and there's no Filter button since there's nothing to filter by category.
     var settingsSearchQuery by remember { mutableStateOf("") }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    val settingsSearchHistory = remember(rateReviewSettingsVersion) {
+        SearchHistoryManager.getHistory(prefs, SearchHistoryManager.Type.SETTINGS)
+    }
+    fun saveSettingsSearchQuery(q: String = settingsSearchQuery) {
+        if (q.isNotBlank()) {
+            SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.SETTINGS, q)
+        }
+    }
     val settingsSearchEntries = globalSettingsSearchEntries
     val filteredSettingsResults = remember(settingsSearchQuery) {
         val q = settingsSearchQuery.trim()
@@ -1565,7 +1577,9 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         TextField(
                             value = settingsSearchQuery,
                             onValueChange = { settingsSearchQuery = it },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { isSearchFocused = it.isFocused },
                             placeholder = { Text("Search settings") },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                             trailingIcon = {
@@ -1580,6 +1594,15 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 unfocusedContainerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onSearch = {
+                                    saveSettingsSearchQuery()
+                                    keyboardController?.hide()
+                                }
                             ),
                             singleLine = true
                         )
@@ -1627,6 +1650,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                     onClick = {
                                         keyboardController?.hide()
                                         focusManager.clearFocus(force = true)
+                                        saveSettingsSearchQuery()
                                         settingsSearchQuery = ""
                                         if (entry.navigateTo != null) {
                                             entry.navigateTo.invoke(navigator)
@@ -1646,6 +1670,36 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
                 }
             } else {
+
+            item {
+                AnimatedVisibility(
+                    visible = isSearchFocused && settingsSearchQuery.isBlank() && settingsSearchHistory.isNotEmpty(),
+                    enter = fadeIn(tween(250)) + expandVertically(tween(300)),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(250))
+                ) {
+                    SearchHistorySection(
+                        history = settingsSearchHistory,
+                        onItemClick = { item ->
+                            settingsSearchQuery = item
+                            saveSettingsSearchQuery(item)
+                        },
+                        onRemoveItem = { item ->
+                            SearchHistoryManager.removeHistoryItem(
+                                prefs,
+                                SearchHistoryManager.Type.SETTINGS,
+                                item
+                            )
+                        },
+                        onClearAll = {
+                            SearchHistoryManager.clearHistory(
+                                prefs,
+                                SearchHistoryManager.Type.SETTINGS
+                            )
+                        },
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                }
+            }
 
             // ── Default Dialer Warning Banner ──────────────────────────────────
             if (!isDefaultDialer) {

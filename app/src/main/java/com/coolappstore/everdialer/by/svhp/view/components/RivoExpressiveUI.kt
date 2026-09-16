@@ -655,6 +655,7 @@ fun RivoListItem(
     iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
     trailingIconTint: Color? = null,
+    trailingIconContainerColor: Color? = null,
     trailingText: String? = null,
     trailingTextColor: Color? = null,
     trailingSubText: String? = null,
@@ -842,11 +843,27 @@ fun RivoListItem(
             }
 
             if (trailingIcon != null) {
-                Icon(
-                    trailingIcon, null,
-                    tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
+                if (trailingIconContainerColor != null) {
+                    Surface(
+                        shape = CircleShape,
+                        color = trailingIconContainerColor,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                trailingIcon, null,
+                                tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Icon(
+                        trailingIcon, null,
+                        tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

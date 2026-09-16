@@ -40,6 +40,7 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
 import com.coolappstore.everdialer.by.svhp.controller.util.normalizeNumberDigits
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
@@ -176,6 +177,14 @@ fun ContactSearchContent(
         mutableStateOf(TextFieldValue(""))
     }
     val query = queryFieldValue.text
+    val searchHistory = remember(settingsVer) {
+        SearchHistoryManager.getHistory(prefs, SearchHistoryManager.Type.UNIVERSAL)
+    }
+    fun saveSearchQuery() {
+        if (query.isNotBlank()) {
+            SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.UNIVERSAL, query)
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -195,6 +204,7 @@ fun ContactSearchContent(
             keyboardController?.show()
         }
     }
+
 
     // ── Precomputed search index over `contacts` ────────────────────────────────────────────
     // Built only when the contacts list itself changes (cold start / cache refresh) instead of
@@ -375,6 +385,15 @@ fun ContactSearchContent(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent
                     ),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = {
+                            saveSearchQuery()
+                            keyboardController?.hide()
+                        }
+                    ),
                     singleLine = true
                 )
             }
@@ -403,6 +422,7 @@ fun ContactSearchContent(
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = {
+                        saveSearchQuery()
                         navigator.navigate(DialPadScreenDestination(initialNumber = query))
                     }) {
                         Text("Open Dialpad", color = MaterialTheme.colorScheme.primary)
@@ -437,22 +457,40 @@ fun ContactSearchContent(
             when (state) {
                 "loading" -> RivoLoadingIndicatorView()
                 "blank" -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    if (searchHistory.isNotEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+                            SearchHistorySection(
+                                history = searchHistory,
+                                onItemClick = { item ->
+                                    queryFieldValue = TextFieldValue(item, TextRange(item.length))
+                                    SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.UNIVERSAL, item)
+                                },
+                                onRemoveItem = { item ->
+                                    SearchHistoryManager.removeHistoryItem(prefs, SearchHistoryManager.Type.UNIVERSAL, item)
+                                },
+                                onClearAll = {
+                                    SearchHistoryManager.clearHistory(prefs, SearchHistoryManager.Type.UNIVERSAL)
+                                }
                             )
-                            Text(
-                                "Universal Search",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                                Text(
+                                    "Universal Search",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

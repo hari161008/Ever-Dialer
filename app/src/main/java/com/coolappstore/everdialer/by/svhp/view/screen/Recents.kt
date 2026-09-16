@@ -27,6 +27,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
@@ -550,6 +553,8 @@ fun CallLogFullContent(
 
         var showSimPicker by remember { mutableStateOf(false) }
         var pendingNumber by remember { mutableStateOf<String?>(null) }
+        var showAllGroupMenuPortrait by remember { mutableStateOf(false) }
+        var showAllGroupMenuLandscape by remember { mutableStateOf(false) }
 
         // Selection mode state - hoisted to parent
 
@@ -732,9 +737,12 @@ fun CallLogFullContent(
             // consistently reflect the current calendar day.
             val todayStart = remember { todayStartMillis() }
             val todayLogs  = remember(logs) { logs.filter { it.date >= todayStart } }
+            val missedResetTime = remember(settingsVersion) {
+                prefs.getLong(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_MISSED_CALL_RESET_TIME, 0L)
+            }
 
             val totalToday        = remember(todayLogs) { todayLogs.size }
-            val missedToday       = remember(todayLogs) { todayLogs.count { it.type == CallLog.Calls.MISSED_TYPE } }
+            val missedToday       = remember(todayLogs, missedResetTime) { todayLogs.count { it.type == CallLog.Calls.MISSED_TYPE && it.date > missedResetTime } }
             val outgoingToday     = remember(todayLogs) { todayLogs.count { it.type == CallLog.Calls.OUTGOING_TYPE } }
             val totalDurationToday = remember(todayLogs) {
                 todayLogs.filter { it.duration > 0 }.sumOf { it.duration }
@@ -785,9 +793,23 @@ fun CallLogFullContent(
                 fun StatCardItem(cardKey: String, delayMs: Long) {
                     when (cardKey) {
                         "today" -> AnimatedStatCard(delayMs, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) }
-                        "missed" -> AnimatedStatCard(delayMs, "Missed", missedToday.toString(), Icons.AutoMirrored.Filled.CallMissed, ColorRed, Modifier.size(110.dp),
-                            if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow
-                        ) { viewModel.setFilter(CallLogFilter.Missed) }
+                        "missed" -> AnimatedStatCard(
+                            delayMs = delayMs,
+                            label = "Missed",
+                            value = missedToday.toString(),
+                            icon = Icons.AutoMirrored.Filled.CallMissed,
+                            iconTint = ColorRed,
+                            modifier = Modifier.size(110.dp),
+                            containerColor = if (missedToday > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                            onClick = { viewModel.setFilter(CallLogFilter.Missed) },
+                            onLongClick = {
+                                if (prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                    performAppHaptic(context, prefs.getString(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                }
+                                prefs.setLong(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_MISSED_CALL_RESET_TIME, System.currentTimeMillis())
+                                com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(context)
+                            }
+                        )
                         "outgoing" -> AnimatedStatCard(delayMs, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) }
                         "call_time" -> AnimatedStatCard(delayMs, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) }
                         "contacts" -> AnimatedStatCard(delayMs, "Contacts", if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) {
@@ -855,28 +877,87 @@ fun CallLogFullContent(
                                 animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
                                 label = "chipScale"
                             )
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    previousFilterIndex = filterEntries.indexOf(selectedFilter)
-                                    viewModel.setFilter(filter)
-                                },
-                                label = {
-                                    Text(
-                                        filter.displayName,
-                                        color = labelColor
-                                    )
-                                },
-                                shape = RoundedCornerShape(50.dp),
-                                border = null,
-                                modifier = Modifier.scale(scale),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = containerColor,
-                                    selectedContainerColor = containerColor,
-                                    labelColor = labelColor,
-                                    selectedLabelColor = labelColor
-                                )
-                            )
+                            Box {
+                                Surface(
+                                    shape = RoundedCornerShape(50.dp),
+                                    color = containerColor,
+                                    modifier = Modifier
+                                        .scale(scale)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .combinedClickable(
+                                            onClick = {
+                                                previousFilterIndex = filterEntries.indexOf(selectedFilter)
+                                                viewModel.setFilter(filter)
+                                            },
+                                            onLongClick = if (filter == CallLogFilter.All) {
+                                                {
+                                                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                        performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                    }
+                                                    showAllGroupMenuPortrait = true
+                                                }
+                                            } else null
+                                        )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(32.dp)
+                                            .padding(horizontal = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            filter.displayName,
+                                            color = labelColor,
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    }
+                                }
+
+                                if (filter == CallLogFilter.All) {
+                                    DropdownMenu(
+                                        expanded = showAllGroupMenuPortrait,
+                                        onDismissRequest = { showAllGroupMenuPortrait = false },
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Grouped based on date") },
+                                            onClick = {
+                                                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                    performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                }
+                                                prefs.setBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)
+                                                prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
+                                                showAllGroupMenuPortrait = false
+                                            },
+                                            leadingIcon = {
+                                                if (!groupCallsByLatest) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(modifier = Modifier.size(24.dp))
+                                                }
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Grouped based on number") },
+                                            onClick = {
+                                                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                    performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                }
+                                                prefs.setBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, true)
+                                                prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, true)
+                                                showAllGroupMenuPortrait = false
+                                            },
+                                            leadingIcon = {
+                                                if (groupCallsByLatest) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(modifier = Modifier.size(24.dp))
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -989,28 +1070,87 @@ fun CallLogFullContent(
                                             animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
                                             label = "chipScale"
                                         )
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = {
-                                                previousFilterIndex = filterEntries.indexOf(selectedFilter)
-                                                viewModel.setFilter(filter)
-                                            },
-                                            label = {
-                                                Text(
-                                                    filter.displayName,
-                                                    color = labelColor
-                                                )
-                                            },
-                                            shape = RoundedCornerShape(50.dp),
-                                            border = null,
-                                            modifier = Modifier.scale(scale),
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = containerColor,
-                                                selectedContainerColor = containerColor,
-                                                labelColor = labelColor,
-                                                selectedLabelColor = labelColor
-                                            )
-                                        )
+                                        Box {
+                                            Surface(
+                                                shape = RoundedCornerShape(50.dp),
+                                                color = containerColor,
+                                                modifier = Modifier
+                                                    .scale(scale)
+                                                    .clip(RoundedCornerShape(50.dp))
+                                                    .combinedClickable(
+                                                        onClick = {
+                                                            previousFilterIndex = filterEntries.indexOf(selectedFilter)
+                                                            viewModel.setFilter(filter)
+                                                        },
+                                                        onLongClick = if (filter == CallLogFilter.All) {
+                                                            {
+                                                                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                                    performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                                }
+                                                                showAllGroupMenuLandscape = true
+                                                            }
+                                                        } else null
+                                                    )
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .height(32.dp)
+                                                        .padding(horizontal = 16.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        filter.displayName,
+                                                        color = labelColor,
+                                                        style = MaterialTheme.typography.labelLarge
+                                                    )
+                                                }
+                                            }
+
+                                            if (filter == CallLogFilter.All) {
+                                                DropdownMenu(
+                                                    expanded = showAllGroupMenuLandscape,
+                                                    onDismissRequest = { showAllGroupMenuLandscape = false },
+                                                    shape = RoundedCornerShape(16.dp)
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = { Text("Grouped based on date") },
+                                                        onClick = {
+                                                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                            }
+                                                            prefs.setBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)
+                                                            prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
+                                                            showAllGroupMenuLandscape = false
+                                                        },
+                                                        leadingIcon = {
+                                                            if (!groupCallsByLatest) {
+                                                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                            } else {
+                                                                Spacer(modifier = Modifier.size(24.dp))
+                                                            }
+                                                        }
+                                                    )
+                                                    DropdownMenuItem(
+                                                        text = { Text("Grouped based on number") },
+                                                        onClick = {
+                                                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                                                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                                                            }
+                                                            prefs.setBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, true)
+                                                            prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, true)
+                                                            showAllGroupMenuLandscape = false
+                                                        },
+                                                        leadingIcon = {
+                                                            if (groupCallsByLatest) {
+                                                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                            } else {
+                                                                Spacer(modifier = Modifier.size(24.dp))
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1126,6 +1266,7 @@ fun CallLogFullContent(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AnimatedStatCard(
     delayMs: Long,
@@ -1135,14 +1276,24 @@ private fun AnimatedStatCard(
     iconTint: Color,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(delayMs); visible = true }
     val cardAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "statAlpha")
     val cardOffset by animateDpAsState(if (visible) 0.dp else 16.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "statOffset")
     Box(modifier = Modifier.alpha(cardAlpha).offset(y = cardOffset)) {
-        Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = Color.Transparent, modifier = modifier) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color.Transparent,
+            modifier = modifier
+                .clip(RoundedCornerShape(20.dp))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
+        ) {
             RivoStatCard(label = label, value = value, icon = icon, iconTint = iconTint, containerColor = containerColor, modifier = Modifier.fillMaxSize())
         }
     }

@@ -73,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -118,6 +119,10 @@ import com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDest
 import com.ramcosta.composedestinations.generated.destinations.VolumeDndScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.collectAsState
+import org.koin.compose.koinInject
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
 
 /**
  * Applied to a settings row so that tapping a search result can reveal *where* that setting
@@ -400,6 +405,18 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    var isFocused by remember { mutableStateOf(false) }
+    val prefs: PreferenceManager = koinInject()
+    val settingsState by prefs.settingsChanged.collectAsState()
+    val settingsSearchHistory = remember(settingsState) {
+        SearchHistoryManager.getHistory(prefs, SearchHistoryManager.Type.SETTINGS)
+    }
+    fun saveQuery(q: String = query) {
+        if (q.isNotBlank()) {
+            SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.SETTINGS, q)
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(
             shape = RoundedCornerShape(28.dp),
@@ -409,7 +426,9 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
             TextField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isFocused = it.isFocused },
                 placeholder = { Text("Search settings") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
@@ -419,6 +438,15 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
                         }
                     }
                 },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSearch = {
+                        saveQuery()
+                        keyboardController?.hide()
+                    }
+                ),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -427,6 +455,38 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
                 ),
                 singleLine = true
             )
+        }
+
+        AnimatedVisibility(
+            visible = isFocused && query.isBlank() && settingsSearchHistory.isNotEmpty(),
+            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(250)) +
+                    androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(300)),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+                    androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(250))
+        ) {
+            Column {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+                SearchHistorySection(
+                    history = settingsSearchHistory,
+                    onItemClick = { item ->
+                        query = item
+                        saveQuery(item)
+                    },
+                    onRemoveItem = { item ->
+                        com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager.removeHistoryItem(
+                            prefs,
+                            com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager.Type.SETTINGS,
+                            item
+                        )
+                    },
+                    onClearAll = {
+                        com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager.clearHistory(
+                            prefs,
+                            com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager.Type.SETTINGS
+                        )
+                    }
+                )
+            }
         }
 
         if (query.isNotBlank()) {
@@ -449,6 +509,7 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
                             iconContainerColor = entry.iconContainerColor,
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = {
+                                saveQuery()
                                 keyboardController?.hide()
                                 focusManager.clearFocus(force = true)
                                 if (entry.navigateTo != null) {

@@ -31,6 +31,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -119,6 +120,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.components.getSearchFilterState
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.SingleTile
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.TileGroup
+import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
+import com.coolappstore.everdialer.by.svhp.view.components.SearchHistorySection
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
@@ -587,6 +590,14 @@ fun DialPadContent(
     // Filter state for the search bar's Filter button (Contacts / Non contacts / Contact
     // notes / Recording notes), persisted so it's remembered across app restarts.
     val settingsVerForFilter by prefs.settingsChanged.collectAsState()
+    val dialpadSearchHistory = remember(settingsVerForFilter) {
+        SearchHistoryManager.getHistory(prefs, SearchHistoryManager.Type.DIALPAD)
+    }
+    fun saveDialpadSearchQuery(q: String = searchQuery) {
+        if (q.isNotBlank()) {
+            SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.DIALPAD, q)
+        }
+    }
     val searchFilterState = remember(settingsVerForFilter) { prefs.getSearchFilterState() }
     val callLogVM: CallLogViewModel = koinActivityViewModel()
     val callLogsForSearch by callLogVM.allCallLogs.collectAsState()
@@ -734,16 +745,16 @@ fun DialPadContent(
                         seen[key] = entry
                     }
                 }
-                seen.values.take(25)
+                seen.values.take(10)
             } else {
-                base.take(25)
+                base.take(10)
             }
         }
     }
 
     val scale by animateFloatAsState(
         targetValue = if (number.isNotEmpty()) 1f else 0.95f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "numberScale"
     )
 
@@ -1024,70 +1035,87 @@ fun DialPadContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Search bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            // Once the hosting sheet starts closing, permanently refuse focus —
-                            // stronger than reactively clearing/hiding after the fact, since it
-                            // guarantees the keyboard can't be re-triggered by window refocus or
-                            // any other later event during the close animation/teardown.
-                            .focusProperties { canFocus = !closing },
-                        placeholder = { Text("Search contacts...") },
-                        leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, null)
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(28.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            showKeyboardOnFocus = false
-                        )
-                    )
-
-                    // Closes the whole dialpad UI, separate from the search field's own "clear text" X.
-                    if (onDismiss != null) {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close dialpad", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-
-                // Number display — below search bar
-                Box(
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (number.isNotEmpty())
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            else Color.Transparent
-                        )
-                        .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
-                        .padding(vertical = 8.dp, horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    DialpadNumberDisplay(
-                        number = number,
-                        fontSize = if (number.length > 11) 24 else 30,
-                        cursorPosition = cursorPosition,
-                        onCursorPositionChange = { cursorPosition = it }
+                        // Once the hosting sheet starts closing, permanently refuse focus —
+                        // stronger than reactively clearing/hiding after the fact, since it
+                        // guarantees the keyboard can't be re-triggered by window refocus or
+                        // any other later event during the close animation/teardown.
+                        .focusProperties { canFocus = !closing },
+                    placeholder = { Text("Search contacts...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, null)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                        showKeyboardOnFocus = false
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = {
+                            saveDialpadSearchQuery()
+                            keyboardController?.hide()
+                        }
                     )
+                )
+
+                // Number display — below search bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (number.isNotEmpty())
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else Color.Transparent
+                            )
+                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DialpadNumberDisplay(
+                            number = number,
+                            fontSize = if (number.length > 11) 24 else 30,
+                            cursorPosition = cursorPosition,
+                            onCursorPositionChange = { cursorPosition = it }
+                        )
+                    }
+
+                    if (onDismiss != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close dialpad",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
                 // Search results
@@ -1098,88 +1126,142 @@ fun DialPadContent(
                 }
                 AnimatedVisibility(
                     visible = showResultsPanelLandscape,
-                    enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
-                            expandVertically(tween(420, easing = FastOutSlowInEasing)),
-                    exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
-                            shrinkVertically(tween(320, easing = FastOutLinearInEasing))
+                    enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                            expandVertically(tween(240, easing = FastOutSlowInEasing)),
+                    exit  = fadeOut(tween(180, easing = FastOutLinearInEasing)) +
+                            shrinkVertically(tween(200, easing = FastOutLinearInEasing))
                 ) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                     ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            if (isSearching) {
-                                searchResults.forEach { contact ->
-                                    val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
-                                    val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
-                                    SingleTile(
-                                        title    = contact.name,
-                                        subtitle = contactNum,
-                                        photoUri = contact.photoUri,
-                                        onAvatarClick = {
-                                            if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                                replaceNumber(contactNum)
-                                                searchQuery = ""
-                                                focusManager.clearFocus()
-                                            } else {
-                                                navigateToContact(contactId = contact.id)
-                                            }
-                                        },
-                                        onClick  = {
-                                            if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                                replaceNumber(contactNum)
-                                                searchQuery = ""
-                                                focusManager.clearFocus()
-                                            } else if (directCallOnTap) {
-                                                val num = contactNum ?: return@SingleTile
-                                                initiateCall(num)
-                                            } else {
-                                                navigateToContact(contactId = contact.id)
-                                            }
+                        AnimatedContent(
+                            targetState = isSearching,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)) +
+                                 slideInVertically(animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)) { h -> if (targetState) 28 else -28 })
+                                .togetherWith(
+                                    fadeOut(animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)) +
+                                    slideOutVertically(animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)) { h -> if (targetState) -28 else 28 }
+                                )
+                                .using(
+                                    SizeTransform(
+                                        clip = false,
+                                        sizeAnimationSpec = { _, _ ->
+                                            spring(
+                                                stiffness = Spring.StiffnessMediumLow,
+                                                dampingRatio = Spring.DampingRatioNoBouncy
+                                            )
                                         }
                                     )
-                                }
-                                extraSearchResults.forEach { extra ->
-                                    DialpadExtraResultTile(
-                                        result = extra,
-                                        onCallNumber = { num ->
-                                            if (showSimButtons) {
-                                                replaceNumber(num)
-                                                searchQuery = ""
-                                                focusManager.clearFocus()
-                                            } else if (directCallOnTap) {
-                                                initiateCall(num)
-                                            } else {
-                                                navigateToContact(phoneNumber = num)
-                                            }
-                                        },
-                                        onOpenContactInfo = { num ->
-                                            if (showSimButtons) {
-                                                replaceNumber(num)
-                                                searchQuery = ""
-                                                focusManager.clearFocus()
-                                            } else {
-                                                navigateToContact(phoneNumber = num)
-                                            }
+                                )
+                            },
+                            label = "DialpadResultsSwitchAnimationLandscape",
+                            modifier = Modifier.fillMaxWidth()
+                        ) { searching ->
+                            if (searching) {
+                                AnimatedContent(
+                                    targetState = searchResults to extraSearchResults,
+                                    transitionSpec = {
+                                        (fadeIn(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)) +
+                                         slideInVertically(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)) { 16 })
+                                        .togetherWith(
+                                            fadeOut(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing)) +
+                                            slideOutVertically(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing)) { -16 }
+                                        )
+                                        .using(
+                                            SizeTransform(
+                                                clip = false,
+                                                sizeAnimationSpec = { _, _ ->
+                                                    spring(
+                                                        stiffness = Spring.StiffnessMediumLow,
+                                                        dampingRatio = Spring.DampingRatioNoBouncy
+                                                    )
+                                                }
+                                            )
+                                        )
+                                    },
+                                    label = "DialpadSearchResultsItemsAnimationLandscape",
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { (contacts, extras) ->
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    ) {
+                                        contacts.forEach { contact ->
+                                            val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                                            val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
+                                            SingleTile(
+                                                title    = contact.name,
+                                                subtitle = contactNum,
+                                                photoUri = contact.photoUri,
+                                                onAvatarClick = {
+                                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                        replaceNumber(contactNum)
+                                                        searchQuery = ""
+                                                        focusManager.clearFocus()
+                                                    } else {
+                                                        navigateToContact(contactId = contact.id)
+                                                    }
+                                                },
+                                                onClick  = {
+                                                    if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                        replaceNumber(contactNum)
+                                                        searchQuery = ""
+                                                        focusManager.clearFocus()
+                                                    } else if (directCallOnTap) {
+                                                        val num = contactNum ?: return@SingleTile
+                                                        initiateCall(num)
+                                                    } else {
+                                                        navigateToContact(contactId = contact.id)
+                                                    }
+                                                }
+                                            )
                                         }
-                                    )
+                                        extras.forEach { extra ->
+                                            DialpadExtraResultTile(
+                                                result = extra,
+                                                onCallNumber = { num ->
+                                                    if (showSimButtons) {
+                                                        replaceNumber(num)
+                                                        searchQuery = ""
+                                                        focusManager.clearFocus()
+                                                    } else if (directCallOnTap) {
+                                                        initiateCall(num)
+                                                    } else {
+                                                        navigateToContact(phoneNumber = num)
+                                                    }
+                                                },
+                                                onOpenContactInfo = { num ->
+                                                    if (showSimButtons) {
+                                                        replaceNumber(num)
+                                                        searchQuery = ""
+                                                        focusManager.clearFocus()
+                                                    } else {
+                                                        navigateToContact(phoneNumber = num)
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
                             } else if (showCallLogsInDialpadSearchList) {
-                                DialpadRecentCallLogsList(
-                                    recentLogs = recentCallLogs,
-                                    showSimButtons = showSimButtons,
-                                    directCallOnTap = directCallOnTap,
-                                    context = context,
-                                    prefs = prefs,
-                                    replaceNumber = { replaceNumber(it) },
-                                    clearSearch = { searchQuery = ""; focusManager.clearFocus() },
-                                    navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
-                                    onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
-                                    navigator = navigator
-                                )
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    DialpadRecentCallLogsList(
+                                        recentLogs = recentCallLogs,
+                                        showSimButtons = showSimButtons,
+                                        directCallOnTap = directCallOnTap,
+                                        context = context,
+                                        prefs = prefs,
+                                        replaceNumber = { replaceNumber(it) },
+                                        clearSearch = { searchQuery = ""; focusManager.clearFocus() },
+                                        navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
+                                        onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
+                                        navigator = navigator
+                                    )
+                                }
                             }
                         }
                     }
@@ -1330,53 +1412,72 @@ fun DialPadContent(
         ) {
 
         // ── Search bar — always visible at top of screen ───────────────
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .weight(1f)
-                    // Once the hosting sheet starts closing, permanently refuse focus — stronger
-                    // than reactively clearing/hiding after the fact, since it guarantees the
-                    // keyboard can't be re-triggered by window refocus or any other later event
-                    // during the close animation/teardown.
-                    .focusProperties { canFocus = !closing }
-                    .onFocusChanged { focusState -> searchFieldFocused = focusState.isFocused },
-                placeholder = { Text("Search contacts...") },
-                leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            searchQuery = ""
-                            focusManager.clearFocus()
-                        }) {
-                            Icon(Icons.Default.Close, null)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        // Once the hosting sheet starts closing, permanently refuse focus — stronger
+                        // than reactively clearing/hiding after the fact, since it guarantees the
+                        // keyboard can't be re-triggered by window refocus or any other later event
+                        // during the close animation/teardown.
+                        .focusProperties { canFocus = !closing }
+                        .onFocusChanged { focusState -> searchFieldFocused = focusState.isFocused },
+                    placeholder = { Text("Search contacts...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = {
+                                searchQuery = ""
+                                focusManager.clearFocus()
+                            }) {
+                                Icon(Icons.Default.Close, null)
+                            }
                         }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(28.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                ),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    showKeyboardOnFocus = false
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                        showKeyboardOnFocus = false
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = {
+                            saveDialpadSearchQuery()
+                            keyboardController?.hide()
+                        }
+                    )
                 )
-            )
 
-            // Closes the whole dialpad UI — separate from the search field's own "clear text" X,
-            // which only appears once text is typed and just empties the field instead.
-            if (onDismiss != null) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close dialpad", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (onDismiss != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close dialpad",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -1421,6 +1522,35 @@ fun DialPadContent(
             verticalArrangement = Arrangement.Top
         ) {
 
+        // Dialpad search history when focused and query is blank
+        AnimatedVisibility(
+            visible = searchQuery.isBlank() && searchFieldFocused && dialpadSearchHistory.isNotEmpty(),
+            enter = fadeIn(tween(200)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
+        ) {
+            SearchHistorySection(
+                history = dialpadSearchHistory,
+                onItemClick = { item ->
+                    searchQuery = item
+                    saveDialpadSearchQuery(item)
+                },
+                onRemoveItem = { item ->
+                    SearchHistoryManager.removeHistoryItem(
+                        prefs,
+                        SearchHistoryManager.Type.DIALPAD,
+                        item
+                    )
+                },
+                onClearAll = {
+                    SearchHistoryManager.clearHistory(
+                        prefs,
+                        SearchHistoryManager.Type.DIALPAD
+                    )
+                },
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         // Search results
         val showResultsPanelPortrait = if (isSearching) {
             searchResults.isNotEmpty() || extraSearchResults.isNotEmpty()
@@ -1429,87 +1559,143 @@ fun DialPadContent(
         }
         AnimatedVisibility(
             visible = showResultsPanelPortrait,
-            enter = fadeIn(tween(380, easing = FastOutSlowInEasing)) +
-                    expandVertically(tween(420, easing = FastOutSlowInEasing)),
-            exit  = fadeOut(tween(280, easing = FastOutLinearInEasing)) +
-                    shrinkVertically(tween(320, easing = FastOutLinearInEasing))
+            enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                    expandVertically(tween(240, easing = FastOutSlowInEasing)),
+            exit  = fadeOut(tween(180, easing = FastOutLinearInEasing)) +
+                    shrinkVertically(tween(200, easing = FastOutLinearInEasing))
         ) {
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        if (isSearching) {
-                            searchResults.forEach { contact ->
-                                val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
-                                val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
-                                SingleTile(
-                                    title    = contact.name,
-                                    subtitle = contactNum,
-                                    photoUri = contact.photoUri,
-                                    onAvatarClick = {
-                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                            replaceNumber(contactNum)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else {
-                                            navigateToContact(contactId = contact.id)
-                                        }
-                                    },
-                                    onClick  = {
-                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                            replaceNumber(contactNum)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else if (directCallOnTap) {
-                                            val num = contactNum ?: return@SingleTile
-                                            initiateCall(num)
-                                        } else {
-                                            navigateToContact(contactId = contact.id)
-                                        }
+                    AnimatedContent(
+                        targetState = isSearching,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)) +
+                             slideInVertically(animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)) { h -> if (targetState) 28 else -28 })
+                            .togetherWith(
+                                fadeOut(animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)) +
+                                slideOutVertically(animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)) { h -> if (targetState) -28 else 28 }
+                            )
+                            .using(
+                                SizeTransform(
+                                    clip = false,
+                                    sizeAnimationSpec = { _, _ ->
+                                        spring(
+                                            stiffness = Spring.StiffnessMediumLow,
+                                            dampingRatio = Spring.DampingRatioNoBouncy
+                                        )
                                     }
                                 )
-                            }
-                            extraSearchResults.forEach { extra ->
-                                DialpadExtraResultTile(
-                                    result = extra,
-                                    onCallNumber = { num ->
-                                        if (showSimButtons) {
-                                            replaceNumber(num)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else if (directCallOnTap) {
-                                            initiateCall(num)
-                                        } else {
-                                            navigateToContact(phoneNumber = num)
-                                        }
-                                    },
-                                    onOpenContactInfo = { num ->
-                                        if (showSimButtons) {
-                                            replaceNumber(num)
-                                            searchQuery = ""
-                                            focusManager.clearFocus()
-                                        } else {
-                                            navigateToContact(phoneNumber = num)
-                                        }
+                            )
+                        },
+                        label = "DialpadResultsSwitchAnimationPortrait",
+                        modifier = Modifier.fillMaxWidth()
+                    ) { searching ->
+                        if (searching) {
+                            AnimatedContent(
+                                targetState = searchResults to extraSearchResults,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)) +
+                                     slideInVertically(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)) { 16 })
+                                    .togetherWith(
+                                        fadeOut(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing)) +
+                                        slideOutVertically(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing)) { -16 }
+                                    )
+                                    .using(
+                                        SizeTransform(
+                                            clip = false,
+                                            sizeAnimationSpec = { _, _ ->
+                                                spring(
+                                                    stiffness = Spring.StiffnessMediumLow,
+                                                    dampingRatio = Spring.DampingRatioNoBouncy
+                                                )
+                                            }
+                                        )
+                                    )
+                                },
+                                label = "DialpadSearchResultsItemsAnimationPortrait",
+                                modifier = Modifier.fillMaxWidth()
+                            ) { (contacts, extras) ->
+                                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                    contacts.forEach { contact ->
+                                        val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                                        val contactNum = primaryNum ?: contact.phoneNumbers.firstOrNull()
+                                        SingleTile(
+                                            title    = contact.name,
+                                            subtitle = contactNum,
+                                            photoUri = contact.photoUri,
+                                            onAvatarClick = {
+                                                saveDialpadSearchQuery()
+                                                if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                    replaceNumber(contactNum)
+                                                    searchQuery = ""
+                                                    focusManager.clearFocus()
+                                                } else {
+                                                    navigateToContact(contactId = contact.id)
+                                                }
+                                            },
+                                            onClick  = {
+                                                saveDialpadSearchQuery()
+                                                if (showSimButtons && !contactNum.isNullOrEmpty()) {
+                                                    replaceNumber(contactNum)
+                                                    searchQuery = ""
+                                                    focusManager.clearFocus()
+                                                } else if (directCallOnTap) {
+                                                    val num = contactNum ?: return@SingleTile
+                                                    initiateCall(num)
+                                                } else {
+                                                    navigateToContact(contactId = contact.id)
+                                                }
+                                            }
+                                        )
                                     }
-                                )
+                                    extras.forEach { extra ->
+                                        DialpadExtraResultTile(
+                                            result = extra,
+                                            onCallNumber = { num ->
+                                                saveDialpadSearchQuery()
+                                                if (showSimButtons) {
+                                                    replaceNumber(num)
+                                                    searchQuery = ""
+                                                    focusManager.clearFocus()
+                                                } else if (directCallOnTap) {
+                                                    initiateCall(num)
+                                                } else {
+                                                    navigateToContact(phoneNumber = num)
+                                                }
+                                            },
+                                            onOpenContactInfo = { num ->
+                                                saveDialpadSearchQuery()
+                                                if (showSimButtons) {
+                                                    replaceNumber(num)
+                                                    searchQuery = ""
+                                                    focusManager.clearFocus()
+                                                } else {
+                                                    navigateToContact(phoneNumber = num)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         } else if (showCallLogsInDialpadSearchList) {
-                            DialpadRecentCallLogsList(
-                                recentLogs = recentCallLogs,
-                                showSimButtons = showSimButtons,
-                                directCallOnTap = directCallOnTap,
-                                context = context,
-                                prefs = prefs,
-                                replaceNumber = { replaceNumber(it) },
-                                clearSearch = { searchQuery = ""; focusManager.clearFocus() },
-                                navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
-                                onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
-                                navigator = navigator
-                            )
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                DialpadRecentCallLogsList(
+                                    recentLogs = recentCallLogs,
+                                    showSimButtons = showSimButtons,
+                                    directCallOnTap = directCallOnTap,
+                                    context = context,
+                                    prefs = prefs,
+                                    replaceNumber = { replaceNumber(it) },
+                                    clearSearch = { searchQuery = ""; focusManager.clearFocus() },
+                                    navigateToContact = { cid, pnum -> navigateToContact(contactId = cid, phoneNumber = pnum) },
+                                    onShowSimPickerForNumber = { num -> pendingSearchCallNumber = num; showSimPicker = true },
+                                    navigator = navigator
+                                )
+                            }
                         }
                     }
                 }
@@ -1518,8 +1704,8 @@ fun DialPadContent(
 
         AnimatedVisibility(
             visible = number.isNotEmpty() && searchResults.isEmpty() && extraSearchResults.isEmpty() && searchQuery.isEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(tween(200)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1539,7 +1725,7 @@ fun DialPadContent(
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -1558,7 +1744,7 @@ fun DialPadContent(
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -1606,12 +1792,16 @@ fun DialPadContent(
             visible = showDialpad,
             enter = slideInVertically(
                 initialOffsetY = { it },
-                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)),
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+            ) + expandVertically(
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)),
             exit = slideOutVertically(
                 targetOffsetY = { it },
-                animationSpec = tween(durationMillis = 260, easing = FastOutLinearInEasing)
-            ) + fadeOut(animationSpec = tween(durationMillis = 200, easing = FastOutLinearInEasing))
+                animationSpec = tween(durationMillis = 240, easing = FastOutLinearInEasing)
+            ) + shrinkVertically(
+                animationSpec = tween(durationMillis = 240, easing = FastOutLinearInEasing)
+            ) + fadeOut(animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing))
         ) {
 
         Spacer(modifier = Modifier.height(2.dp))
@@ -1654,22 +1844,31 @@ fun DialPadContent(
                 verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
                 // Header row
-                Row(
+                Box(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                    val backspaceSpace by animateDpAsState(
+                        targetValue = if (number.isNotEmpty()) (56 * scaleFactor).coerceIn(44f, 60f).dp else 0.dp,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "backspaceSpace"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = backspaceSpace)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .defaultMinSize(minHeight = if (number.isEmpty()) 58.dp else 0.dp)
+                                .defaultMinSize(minHeight = 58.dp)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(
                                     if (number.isNotEmpty())
                                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                    else MaterialTheme.colorScheme.surfaceContainerLow
+                                    else Color.Transparent
                                 )
-                                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
+                                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                                 .combinedClickable(
                                     onClick = {},
                                     onLongClick = {
@@ -1747,8 +1946,20 @@ fun DialPadContent(
                                     showAddContactChoiceDialog = true
                                 }
                             )
-
                         }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
+                    ) {
+                        BackspaceActionButton(
+                            number = number,
+                            onBackspace = { backspaceAtCursor() },
+                            onClear = { replaceNumber("") },
+                            size = (48 * scaleFactor).coerceIn(42f, 52f).dp
+                        )
                     }
                 }
 
@@ -1779,9 +1990,9 @@ fun DialPadContent(
 
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     DialerActionExpressive(
                         onClick = {
@@ -1790,7 +2001,8 @@ fun DialPadContent(
                         icon = Icons.Default.PersonAdd,
                         contentDescription = "Add Contact",
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.size(actionSize)
+                        modifier = Modifier.width(keyWidth).height(callH),
+                        isLarge = true
                     )
 
                     val lgBackdrop = LocalLiquidGlassBackdrop.current
@@ -1886,12 +2098,7 @@ fun DialPadContent(
                         )
                     }
 
-                    BackspaceActionButton(
-                        number = number,
-                        onBackspace = { backspaceAtCursor() },
-                        onClear = { replaceNumber("") },
-                        size = actionSize
-                    )
+                    Spacer(modifier = Modifier.width(keyWidth))
                 }
             }
         }
@@ -2212,8 +2419,10 @@ fun DialPadKey(
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
     val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
-    val mainFontSize = (if (compact) 18f else 22f) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
-    val subFontSize = (10f * scaleFactor.coerceIn(0.6f, 1.4f)) * fontScale
+    val isStarKey = number == "*"
+    val isPlusSubKey = letters.trim() == "+"
+    val mainFontSize = (if (isStarKey) (if (compact) 26f else 32f) else (if (compact) 18f else 22f)) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
+    val subFontSize = (if (isPlusSubKey) 16f else 10f) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
 
     val triggerTapPulse = {
         tapJob?.cancel()
@@ -2247,9 +2456,20 @@ fun DialPadKey(
         color = bgColor
     ) {
         Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
-            Text(text = number, style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp), color = mainTextColor, fontWeight = FontWeight.Medium)
+            Text(
+                text = number,
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp),
+                color = mainTextColor,
+                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium
+            )
             if (letters.isNotBlank()) {
-                Text(text = letters, style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp), color = subTextColor, letterSpacing = 1.sp)
+                Text(
+                    text = letters,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp),
+                    color = subTextColor,
+                    letterSpacing = if (isPlusSubKey) 0.sp else 1.sp,
+                    fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal
+                )
             }
         }
     }
@@ -2294,6 +2514,10 @@ private fun DialpadNumberDisplay(
     val stableChars = remember { mutableStateListOf<Pair<Int, Char>>() }
 
     LaunchedEffect(number) {
+        if (number.isEmpty()) {
+            stableChars.clear()
+            return@LaunchedEffect
+        }
         val current = stableChars.map { it.second }.joinToString("")
         if (number == current) return@LaunchedEffect
 
@@ -2324,118 +2548,141 @@ private fun DialpadNumberDisplay(
     val cursorBlink = rememberInfiniteTransition(label = "cursorBlink")
     val cursorAlpha by cursorBlink.animateFloat(
         initialValue = 1f,
-        targetValue = 1f,
+        targetValue = 0f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 1000
                 1f at 0
-                1f at 500
-                0f at 501
-                0f at 999
-            }
+                1f at 499
+                0f at 500
+                0f at 1000
+            },
+            repeatMode = RepeatMode.Restart
         ),
         label = "cursorAlpha"
     )
 
     val clampedCursor = cursorPosition.coerceIn(0, stableChars.size)
 
-    LazyRow(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment     = Alignment.CenterVertically,
-        userScrollEnabled     = false,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // Leading spacer matching the trailing tap zone's width below, so the digits (and the
-        // cursor) are actually centered in the box instead of being pulled off-center by an
-        // unbalanced zone that only exists on the trailing side.
-        item(key = "leading_cursor_area") {
-            Box(modifier = Modifier.width(28.dp))
-        }
-        itemsIndexed(
-            items = stableChars,
-            key   = { _, pair -> pair.first }
-        ) { index, pair ->
-            var appeared by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { appeared = true }
-
-            val offsetY by animateDpAsState(
-                targetValue  = if (appeared) 0.dp else 20.dp,
-                animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "charOffY"
-            )
-            val alpha by animateFloatAsState(
-                targetValue  = if (appeared) 1f else 0f,
-                animationSpec = tween(360, easing = easeOutExpo),
-                label = "charAlpha"
-            )
-            val scale by animateFloatAsState(
-                targetValue  = if (appeared) 1f else 0.55f,
-                animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "charScale"
-            )
-
-            Box(contentAlignment = Alignment.CenterStart) {
-                // A thin blinking bar rendered just before this character when the cursor sits
-                // here, so it visually sits between the two adjacent digits.
-                if (clampedCursor == index) {
-                    Box(
-                        modifier = Modifier
-                            .offset(x = (-2).dp)
-                            .width(2.dp)
-                            .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 0.9f })
-                            .align(Alignment.CenterStart)
-                            .graphicsLayer { this.alpha = cursorAlpha }
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
-                Text(
-                    text     = pair.second.toString(),
-                    style    = textStyle,
-                    color    = textColor,
-                    modifier = Modifier
-                        .animateItem(
-                            placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                            fadeInSpec     = tween(360, easing = easeOutExpo),
-                            fadeOutSpec    = tween(220)
-                        )
-                        .offset(y = offsetY)
-                        .alpha(alpha)
-                        .scale(scale)
-                        .pointerInput(pair.first) {
-                            detectTapGestures(
-                                onLongPress = { onLongPress() }
-                            ) { tapOffset ->
-                                // Tapping the left half of a digit places the cursor before it,
-                                // the right half places it after — like a normal text field.
-                                val newPos = if (tapOffset.x < size.width / 2f) index else index + 1
-                                onCursorPositionChange(newPos)
-                            }
-                        }
-                )
-            }
-        }
-        // Trailing tap target so the user can move the cursor to the very end even when there's
-        // no character there (e.g. an empty number, or after the last digit).
-        item(key = "trailing_cursor_area") {
+    if (number.isEmpty() || stableChars.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(with(LocalDensity.current) { (textStyle.fontSize.toDp() * 1.4f).coerceAtLeast(44.dp) })
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { onLongPress() }
+                    ) { onCursorPositionChange(0) }
+                },
+            contentAlignment = Alignment.Center
+        ) {
             Box(
                 modifier = Modifier
-                    .width(28.dp)
-                    .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 1.4f })
-                    .pointerInput(stableChars.size) {
-                        detectTapGestures(
-                            onLongPress = { onLongPress() }
-                        ) { onCursorPositionChange(stableChars.size) }
-                    },
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (clampedCursor == stableChars.size) {
-                    Box(
+                    .width(2.5.dp)
+                    .height(with(LocalDensity.current) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(28.dp) })
+                    .graphicsLayer { this.alpha = cursorAlpha }
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+            )
+        }
+    } else {
+        LazyRow(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment     = Alignment.CenterVertically,
+            userScrollEnabled     = false,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Leading spacer matching the trailing tap zone's width below, so the digits (and the
+            // cursor) are actually centered in the box instead of being pulled off-center by an
+            // unbalanced zone that only exists on the trailing side.
+            item(key = "leading_cursor_area") {
+                Box(modifier = Modifier.width(28.dp))
+            }
+            itemsIndexed(
+                items = stableChars,
+                key   = { _, pair -> pair.first }
+            ) { index, pair ->
+                var appeared by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { appeared = true }
+
+                val offsetY by animateDpAsState(
+                    targetValue  = if (appeared) 0.dp else 28.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                    label = "charOffY"
+                )
+                val alpha by animateFloatAsState(
+                    targetValue  = if (appeared) 1f else 0f,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    label = "charAlpha"
+                )
+                val scale by animateFloatAsState(
+                    targetValue  = if (appeared) 1f else 0.7f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                    label = "charScale"
+                )
+
+                Box(contentAlignment = Alignment.CenterStart) {
+                    // A thin blinking bar rendered just before this character when the cursor sits
+                    // here, so it visually sits between the two adjacent digits.
+                    if (clampedCursor == index) {
+                        Box(
+                            modifier = Modifier
+                                .offset(x = (-2).dp)
+                                .width(2.5.dp)
+                                .height(with(LocalDensity.current) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(28.dp) })
+                                .align(Alignment.CenterStart)
+                                .graphicsLayer { this.alpha = cursorAlpha }
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                        )
+                    }
+                    Text(
+                        text     = pair.second.toString(),
+                        style    = textStyle,
+                        color    = textColor,
                         modifier = Modifier
-                            .width(2.dp)
-                            .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 0.9f })
-                            .graphicsLayer { this.alpha = cursorAlpha }
-                            .background(MaterialTheme.colorScheme.primary)
+                            .animateItem(
+                                placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                                fadeInSpec     = tween(240, easing = FastOutSlowInEasing),
+                                fadeOutSpec    = tween(180, easing = FastOutLinearInEasing)
+                            )
+                            .offset(y = offsetY)
+                            .alpha(alpha)
+                            .scale(scale)
+                            .pointerInput(pair.first) {
+                                detectTapGestures(
+                                    onLongPress = { onLongPress() }
+                                ) { tapOffset ->
+                                    // Tapping the left half of a digit places the cursor before it,
+                                    // the right half places it after — like a normal text field.
+                                    val newPos = if (tapOffset.x < size.width / 2f) index else index + 1
+                                    onCursorPositionChange(newPos)
+                                }
+                            }
                     )
+                }
+            }
+            // Trailing tap target so the user can move the cursor to the very end even when there's
+            // no character there (e.g. an empty number, or after the last digit).
+            item(key = "trailing_cursor_area") {
+                Box(
+                    modifier = Modifier
+                        .width(28.dp)
+                        .height(with(LocalDensity.current) { textStyle.fontSize.toDp() * 1.4f })
+                        .pointerInput(stableChars.size) {
+                            detectTapGestures(
+                                onLongPress = { onLongPress() }
+                            ) { onCursorPositionChange(stableChars.size) }
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (clampedCursor == stableChars.size) {
+                        Box(
+                            modifier = Modifier
+                                .width(2.5.dp)
+                                .height(with(LocalDensity.current) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(28.dp) })
+                                .graphicsLayer { this.alpha = cursorAlpha }
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                        )
+                    }
                 }
             }
         }
@@ -2498,11 +2745,11 @@ private fun BackspaceActionButton(
     size: Dp = 64.dp
 ) {
     val hasContent = number.isNotEmpty()
-    val alpha by animateFloatAsState(if (hasContent) 1f else 0f, label = "BackspaceAlpha")
-    val scale by animateFloatAsState(if (hasContent) 1f else 0.7f, label = "BackspaceScale")
+    val alpha by animateFloatAsState(if (hasContent) 1f else 0f, animationSpec = tween(120), label = "BackspaceAlpha")
+    val scale by animateFloatAsState(if (hasContent) 1f else 0.7f, animationSpec = tween(120), label = "BackspaceScale")
     Box(
         modifier = Modifier
-            .size(72.dp)
+            .size(size)
             .graphicsLayer { this.alpha = alpha; scaleX = scale; scaleY = scale },
         contentAlignment = Alignment.Center
     ) {

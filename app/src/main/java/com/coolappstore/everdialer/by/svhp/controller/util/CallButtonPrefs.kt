@@ -180,4 +180,20 @@ object CallButtonPrefs {
     fun setElementSize(prefs: PreferenceManager, size: Float) {
         prefs.setFloat(PreferenceManager.KEY_CALL_BUTTONS_ELEMENT_SIZE, size.coerceIn(ELEMENT_SIZE_MIN, ELEMENT_SIZE_MAX))
     }
+
+    // ── Container Height ─────────────────────────────────────────────────────────────
+    // Scale factor applied to the height / vertical padding of the ongoing call screen container.
+    // Range 0.60f (60%) .. 1.60f (160%), 1.0f (100%) by default.
+
+    const val CONTAINER_HEIGHT_MIN = 0.60f
+    const val CONTAINER_HEIGHT_MAX = 1.60f
+    const val CONTAINER_HEIGHT_DEFAULT = 1.0f
+
+    fun getContainerHeight(prefs: PreferenceManager): Float =
+        prefs.getFloat(PreferenceManager.KEY_ONGOING_CONTAINER_HEIGHT, CONTAINER_HEIGHT_DEFAULT)
+            .coerceIn(CONTAINER_HEIGHT_MIN, CONTAINER_HEIGHT_MAX)
+
+    fun setContainerHeight(prefs: PreferenceManager, height: Float) {
+        prefs.setFloat(PreferenceManager.KEY_ONGOING_CONTAINER_HEIGHT, height.coerceIn(CONTAINER_HEIGHT_MIN, CONTAINER_HEIGHT_MAX))
+    }
 }

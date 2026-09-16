@@ -1001,6 +1001,9 @@ fun ExpressiveCallScreen(
     val elementSizeScale = remember(settingsVersion) {
         prefs?.let { CallButtonPrefs.getElementSize(it) } ?: CallButtonPrefs.ELEMENT_SIZE_DEFAULT
     }
+    val ongoingContainerHeight = remember(settingsVersion) {
+        prefs?.let { CallButtonPrefs.getContainerHeight(it) } ?: CallButtonPrefs.CONTAINER_HEIGHT_DEFAULT
+    }
     var showMoreMenu by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
 
@@ -1748,7 +1751,8 @@ fun ExpressiveCallScreen(
                                             activeButtonIds = if (freeformEnabled) displayedButtonIds + CallButtonPrefs.ID_HANGUP else displayedButtonIds,
                                             freeformEnabled = freeformEnabled,
                                             freeformPositions = freeformPositions,
-                                            rowSpacing = 16.dp
+                                            rowSpacing = 16.dp,
+                                            containerHeightScale = ongoingContainerHeight
                                         ) { id -> RenderFeatureButton(id) }
                                     }
                                 }
@@ -2056,14 +2060,27 @@ fun ExpressiveCallScreen(
 
                     // ── Bottom: controls — anchored to bottom ─────────────────
                     if (!isIncomingMode) {
+                        val baseMinHeight = if (freeformEnabled) 260.dp else (if (displayedButtonIds.size > 3) 300.dp else 230.dp)
+                        val targetMinHeight = baseMinHeight + 220.dp * (ongoingContainerHeight - 0.6f)
+                        val containerVerticalPadding = (16.dp + 55.dp * (ongoingContainerHeight - 0.6f)).coerceIn(12.dp, 80.dp)
+                        val buttonRowSpacing = (10.dp + 26.dp * (ongoingContainerHeight - 0.6f)).coerceIn(6.dp, 40.dp)
+                        val hangupSpacing = (12.dp + 30.dp * (ongoingContainerHeight - 0.6f)).coerceIn(8.dp, 46.dp)
+
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.BottomCenter)
+                                .defaultMinSize(minHeight = targetMinHeight)
                                 .clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)),
                             color = overlayColor
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = containerVerticalPadding),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 // Feature Buttons — order & visibility from Settings → Appearance → Caller UI
                                 CompositionLocalProvider(
                                     LocalCallButtonElementSize provides elementSizeScale,
@@ -2073,12 +2090,13 @@ fun ExpressiveCallScreen(
                                         activeButtonIds = if (freeformEnabled) displayedButtonIds + CallButtonPrefs.ID_HANGUP else displayedButtonIds,
                                         freeformEnabled = freeformEnabled,
                                         freeformPositions = freeformPositions,
-                                        rowSpacing = 20.dp
+                                        rowSpacing = buttonRowSpacing,
+                                        containerHeightScale = ongoingContainerHeight
                                     ) { id -> RenderFeatureButton(id) }
                                 }
 
                                 if (!freeformEnabled) {
-                                Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(hangupSpacing))
 
                                 // ── Hangup Button with configurable width ──────────────
                                 val endInteraction = remember { MutableInteractionSource() }
@@ -2486,6 +2504,7 @@ private fun FeatureButtonsLayout(
     freeformEnabled: Boolean,
     freeformPositions: Map<String, Pair<Float, Float>>,
     rowSpacing: androidx.compose.ui.unit.Dp = 20.dp,
+    containerHeightScale: Float = 1.0f,
     content: @Composable (String) -> Unit
 ) {
     if (!freeformEnabled) {
@@ -2500,7 +2519,7 @@ private fun FeatureButtonsLayout(
 
     val density = LocalDensity.current
     val rows = if (activeButtonIds.isEmpty()) 1 else ((activeButtonIds.size + 2) / 3)
-    val areaHeight = (rows * 96).dp.coerceAtLeast(120.dp)
+    val areaHeight = ((rows * 75).dp + 160.dp * (containerHeightScale - 0.6f)).coerceAtLeast(100.dp)
     val tileWidthPx = with(density) { 76.dp.toPx() }
     val tileHeightPx = with(density) { 88.dp.toPx() }
 

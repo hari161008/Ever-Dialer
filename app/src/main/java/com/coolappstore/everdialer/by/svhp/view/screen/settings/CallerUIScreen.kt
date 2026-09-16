@@ -38,6 +38,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.CallButtonSpec
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
@@ -141,6 +142,9 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     // real ongoing-call screen.
     var elementSize by remember { mutableFloatStateOf(CallButtonPrefs.getElementSize(prefs)) }
 
+    // Container Height — scale factor applied to the ongoing call controls container height.
+    var containerHeight by remember { mutableFloatStateOf(CallButtonPrefs.getContainerHeight(prefs)) }
+
     fun resetButtonLayout() {
         buttonOrder.clear()
         buttonOrder.addAll(CallButtonPrefs.DEFAULT_ORDER.split(",").map { it.trim() })
@@ -148,6 +152,8 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         CallButtonPrefs.ALL_IDS.forEach { enabledMap[it] = it !in defaultDisabled }
         CallButtonPrefs.setOrder(prefs, buttonOrder)
         CallButtonPrefs.setDisabled(prefs, defaultDisabled)
+        containerHeight = CallButtonPrefs.CONTAINER_HEIGHT_DEFAULT
+        CallButtonPrefs.setContainerHeight(prefs, CallButtonPrefs.CONTAINER_HEIGHT_DEFAULT)
     }
 
     val ongoingBgType = remember(settingsVersion) {
@@ -329,12 +335,12 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             }
 
-            // ── Feature Buttons ───────────────────────────────────────
+            // ── Feature Buttons & Sizing ─────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 40L) {
                     Column {
                         Text(
-                            "Feature Buttons",
+                            "Feature Buttons & Sizing",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
@@ -343,23 +349,15 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.Widgets,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
+                                    RivoIconBox(
+                                        icon = Icons.Default.Widgets,
+                                        iconContainerColor = Color(0xFF673AB7),
+                                        size = 40.dp,
+                                        iconSize = 22.dp
+                                    )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             "Ongoing Call Buttons",
@@ -433,6 +431,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                         CallButtonPrefs.setShowNamesEnabled(prefs, it)
                                     },
                                     elementSize = elementSize,
+                                    containerHeight = containerHeight,
                                     freeformPositions = freeformPositions,
                                     onFreeformPositionsChanged = {
                                         CallButtonPrefs.setFreeformPositions(
@@ -448,44 +447,108 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                     },
                                     onDragActiveChanged = { isDraggingAnyButton = it }
                                 )
-                            }
-                        }
-                    }
-                }
-            }
 
-            // ── Button Sizing & Hang Up Width ───────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 50L) {
-                    Column {
-                        Text(
-                            "Button Sizing & Width",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
-                        RivoExpressiveCard {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // ── Container Height Slider (below preview) ──
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    RivoIconBox(
+                                        icon = Icons.Default.Height,
+                                        iconContainerColor = Color(0xFF009688),
+                                        size = 40.dp,
+                                        iconSize = 22.dp
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Container Height",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            "Adjust the height of the container in the ongoing call screen",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(14.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Remove,
+                                        null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Slider(
+                                        value = containerHeight,
+                                        onValueChange = { containerHeight = it },
+                                        onValueChangeFinished = {
+                                            CallButtonPrefs.setContainerHeight(prefs, containerHeight)
+                                        },
+                                        valueRange = CallButtonPrefs.CONTAINER_HEIGHT_MIN..CallButtonPrefs.CONTAINER_HEIGHT_MAX,
+                                        steps = 19,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        Icons.Default.Add,
+                                        null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "Compact",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        "${(containerHeight * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Tall",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
                                 // 1. Icon Size
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.PhotoSizeSelectLarge,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
+                                    RivoIconBox(
+                                        icon = Icons.Default.PhotoSizeSelectLarge,
+                                        iconContainerColor = Color(0xFF2196F3),
+                                        size = 40.dp,
+                                        iconSize = 22.dp
+                                    )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             "Icon Size",
@@ -562,23 +625,16 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 // 2. Hang Up Button Width
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = Color(0xFFD32F2F).copy(alpha = 0.15f),
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.CallEnd,
-                                                contentDescription = null,
-                                                tint = Color(0xFFD32F2F),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                    Column {
+                                    RivoIconBox(
+                                        icon = Icons.Default.CallEnd,
+                                        iconContainerColor = Color(0xFFD32F2F),
+                                        size = 40.dp,
+                                        iconSize = 22.dp
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             "Hang Up Button Width",
                                             style = MaterialTheme.typography.titleSmall,
@@ -731,6 +787,7 @@ private fun FeatureButtonsPreview(
     showNamesEnabled: Boolean,
     onShowNamesEnabledChanged: (Boolean) -> Unit,
     elementSize: Float,
+    containerHeight: Float = 1.0f,
     freeformPositions: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Offset>,
     onFreeformPositionsChanged: () -> Unit,
     onOrderChanged: () -> Unit,
@@ -826,10 +883,17 @@ private fun FeatureButtonsPreview(
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = Color(0xFF2E2622),
-            modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 340.dp)
+                .defaultMinSize(minHeight = 180.dp + 160.dp * (containerHeight - 0.6f))
         ) {
+            val previewVerticalPadding = (12.dp + 48.dp * (containerHeight - 0.6f)).coerceIn(8.dp, 65.dp)
+            val rowSpacing = (10.dp + 30.dp * (containerHeight - 0.6f)).coerceIn(6.dp, 44.dp)
+            val hangupSpacing = (14.dp + 38.dp * (containerHeight - 0.6f)).coerceIn(8.dp, 56.dp)
+
             Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = previewVerticalPadding, horizontal = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (freeformEnabled) {
@@ -842,11 +906,12 @@ private fun FeatureButtonsPreview(
                         onDragActiveChanged = onDragActiveChanged,
                         onPositionsChanged = onFreeformPositionsChanged,
                         elementSize = elementSize,
+                        containerHeight = containerHeight,
                         showNamesEnabled = showNamesEnabled
                     )
                 } else {
                     gridIds.chunked(3).forEachIndexed { rowIndex, rowIds ->
-                        if (rowIndex > 0) Spacer(Modifier.height(20.dp))
+                        if (rowIndex > 0) Spacer(Modifier.height(rowSpacing))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             rowIds.forEach { id ->
                                 val spec = CallButtonPrefs.specFor(id) ?: return@forEach
@@ -921,7 +986,7 @@ private fun FeatureButtonsPreview(
                         }
                     }
 
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(hangupSpacing))
 
                     // Fixed (non-draggable) Hang Up preview, matching the current width setting
                     // below. Only shown outside Freeform — in Freeform, Hang Up is a draggable tile
@@ -973,11 +1038,12 @@ private fun FreeformButtonsArea(
     onDragActiveChanged: (Boolean) -> Unit,
     onPositionsChanged: () -> Unit,
     elementSize: Float,
+    containerHeight: Float = 1.0f,
     showNamesEnabled: Boolean
 ) {
     val density = LocalDensity.current
     val rows = if (gridIds.isEmpty()) 1 else ((gridIds.size + 2) / 3)
-    val areaHeight = (rows * 96).dp.coerceAtLeast(120.dp)
+    val areaHeight = ((rows * 75).dp + 160.dp * (containerHeight - 0.6f)).coerceAtLeast(100.dp)
     // Width must track elementSize the same way the grid layout's tile column does, otherwise
     // the 56.dp*elementSize icon circle gets width-clamped once it exceeds a fixed 76.dp tile
     // while its height keeps growing unconstrained — stretching the icon vertically only.

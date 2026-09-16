@@ -2162,9 +2162,37 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         if (it) {
                                             showTotalCallsMade = true
                                             prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, true)
+                                        } else {
+                                            showTotalCallsMade = false
+                                            prefs.setBoolean(PreferenceManager.KEY_SHOW_TOTAL_CALLS_MADE, false)
                                         }
                                     }
                                 )
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Info,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "In call logs, long pressing the all button will show a menu to choose grouped based on number or by date.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(
