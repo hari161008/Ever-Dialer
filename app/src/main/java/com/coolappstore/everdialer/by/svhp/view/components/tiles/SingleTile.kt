@@ -44,6 +44,7 @@ import org.koin.compose.koinInject
 fun SingleTile(
     title: String,
     modifier: Modifier = Modifier,
+    titleMaxLines: Int = 1,
     subtitle: String? = null,
     photoUri: String? = null,
     icon: ImageVector? = null,
@@ -182,7 +183,7 @@ fun SingleTile(
                         fontWeight = FontWeight.SemiBold,
                         color    = if (isMissedCall) MaterialTheme.colorScheme.error
                                    else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = titleMaxLines,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )

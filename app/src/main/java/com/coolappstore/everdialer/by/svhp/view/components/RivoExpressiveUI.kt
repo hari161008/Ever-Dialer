@@ -650,6 +650,7 @@ fun RivoIconBox(
 fun RivoListItem(
     headline: String,
     supporting: String? = null,
+    headlineMaxLines: Int = 1,
     leadingIcon: ImageVector? = null,
     iconContainerColor: Color? = null,
     trailingIcon: ImageVector? = null,
@@ -755,7 +756,7 @@ fun RivoListItem(
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
+                            maxLines = headlineMaxLines,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
@@ -770,7 +771,7 @@ fun RivoListItem(
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = headlineMaxLines,
                         overflow = TextOverflow.Ellipsis
                     )
                 }

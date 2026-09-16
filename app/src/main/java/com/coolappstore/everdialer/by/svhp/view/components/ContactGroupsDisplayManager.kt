@@ -376,12 +376,17 @@ fun ContactsToDisplaySheet(
                                     )
                                     val subtitle = buildString {
                                         append("${group.contactIds.size} contacts")
-                                        if (!group.targetLabel.isNullOrBlank()) {
-                                            append(" · ")
-                                            append(group.targetLabel)
-                                        } else if (!group.accountName.isNullOrBlank()) {
-                                            append(" · ")
-                                            append(group.accountName)
+                                        val rawTarget = group.targetLabel?.ifBlank { null } ?: group.accountName?.ifBlank { null }
+                                        if (!rawTarget.isNullOrBlank()) {
+                                            val emailInBracketsRegex = Regex("\\s*\\([^)]*@[^)]*\\)")
+                                            var cleaned = rawTarget.replace(emailInBracketsRegex, "").trim()
+                                            if (cleaned.isBlank() && !group.accountName.isNullOrBlank()) {
+                                                cleaned = group.accountName
+                                            }
+                                            if (cleaned.isNotBlank()) {
+                                                append(" · ")
+                                                append(cleaned)
+                                            }
                                         }
                                     }
                                     Text(

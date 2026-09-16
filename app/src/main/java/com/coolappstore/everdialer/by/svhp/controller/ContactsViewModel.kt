@@ -375,9 +375,15 @@ class ContactsViewModel(
         val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
 
         if (groupId != null) {
-            val group = _contactGroups.value.find { it.id == groupId } ?: prefs.getContactGroups().find { it.id == groupId }
-            val groupContactIds = group?.contactIds?.toSet() ?: emptySet()
-            _displayedContacts.value = baseContacts.filter { it.id in groupContactIds && (hiddenIds.isEmpty() || it.id !in hiddenIds) }
+            if (groupId == GROUP_ID_UNGROUPED) {
+                val allGroups = _contactGroups.value.ifEmpty { prefs.getContactGroups() }
+                val allGroupedIds = allGroups.flatMap { it.contactIds }.toSet()
+                _displayedContacts.value = baseContacts.filter { it.id !in allGroupedIds && (hiddenIds.isEmpty() || it.id !in hiddenIds) }
+            } else {
+                val group = _contactGroups.value.find { it.id == groupId } ?: prefs.getContactGroups().find { it.id == groupId }
+                val groupContactIds = group?.contactIds?.toSet() ?: emptySet()
+                _displayedContacts.value = baseContacts.filter { it.id in groupContactIds && (hiddenIds.isEmpty() || it.id !in hiddenIds) }
+            }
         } else if (sessionKey != null) {
             viewModelScope.launch(Dispatchers.IO) {
                 val raw = contactsRepo.getContacts(setOf(sessionKey))
@@ -592,5 +598,9 @@ class ContactsViewModel(
         try {
             getApplication<Application>().contentResolver.unregisterContentObserver(contactsContentObserver)
         } catch (_: Exception) {}
+    }
+
+    companion object {
+        const val GROUP_ID_UNGROUPED = "__UNGROUPED__"
     }
 }

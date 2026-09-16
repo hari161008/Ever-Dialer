@@ -56,6 +56,7 @@ fun CallLogTile(
 
     SingleTile(
         title = displayTitle,
+        titleMaxLines = 2,
         photoUri = log.photoUri,
         forcePersonIcon = log.name.isNullOrEmpty(),
         isMissedCall = isMissed,

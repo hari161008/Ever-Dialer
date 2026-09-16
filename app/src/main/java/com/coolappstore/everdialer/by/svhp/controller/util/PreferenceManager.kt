@@ -272,6 +272,7 @@ class PreferenceManager(context: Context) {
 
     companion object {
         const val KEY_HIDDEN_CONTACT_GROUPS = "hidden_contact_groups"
+        const val KEY_GROUPS_SORT_ORDER = "groups_sort_order"
         const val ITEM_ALL_CONTACTS = "all_contacts"
         const val ITEM_CONTACT_GROUPS = "contact_groups"
         const val KEY_CONTACT_GROUPS = "contact_groups"

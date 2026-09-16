@@ -364,6 +364,7 @@ fun CallLogTile(
                 append(displayName)
                 if (log.count > 1 && !showTotalCallsMade) append(" (${log.count})")
             },
+            headlineMaxLines = 2,
             supporting = if (showNumberOnSupportingLine) log.number else null,
             avatarName  = avatarSourceName,
             avatarForcePersonIcon = !isContact,
@@ -812,21 +813,15 @@ fun CallLogTile(
         )
     }
 
-    if (showCallChatViaPicker) {
-        val contactsRepo = koinInject<IContactsRepository>()
-        var callChatViaNumbers by remember(log.number) { mutableStateOf<List<String>?>(null) }
-        LaunchedEffect(log.number) {
-            if (callChatViaNumbers == null) {
-                callChatViaNumbers = try { contactsRepo.getContactByNumber(log.number)?.phoneNumbers } catch (_: Exception) { null }
-            }
-        }
-        CallChatViaOverlay(
-            phoneNumber = log.number.takeIf { it.isNotBlank() },
-            phoneNumbers = callChatViaNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-                ?: listOfNotNull(log.number.takeIf { it.isNotBlank() }),
-            showPicker = showCallChatViaPicker,
-            onPickerDismiss = { showCallChatViaPicker = false },
-            showGoogleMeet = true
-        )
+    val callChatViaNumbers = remember(matchedContact, log.number) {
+        matchedContact?.phoneNumbers?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+            ?: listOfNotNull(log.number.takeIf { it.isNotBlank() })
     }
+    CallChatViaOverlay(
+        phoneNumber = log.number.takeIf { it.isNotBlank() },
+        phoneNumbers = callChatViaNumbers,
+        showPicker = showCallChatViaPicker,
+        onPickerDismiss = { showCallChatViaPicker = false },
+        showGoogleMeet = true
+    )
 }

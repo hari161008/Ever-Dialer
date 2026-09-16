@@ -1914,7 +1914,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                             contactIds = emptyList(),
                             accountType = accType,
                             accountName = accName,
-                            targetLabel = if (!accName.isNullOrBlank()) "$accName (${buildAccountDisplayName(accType ?: "", accName)})" else null
+                            targetLabel = if (!accName.isNullOrBlank()) accName else null
                         )
                         groupIdToGroupMap[rowId] = g
                     }

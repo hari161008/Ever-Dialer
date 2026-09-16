@@ -376,8 +376,12 @@ fun ContactContent(
             val contactsCountText = when {
                 isLoadingContacts -> "Loading…"
                 selectedGroupId != null -> {
-                    val grp = contactGroups.find { it.id == selectedGroupId }
-                    "${grp?.name ?: "Group"} · ${contacts.size}"
+                    if (selectedGroupId == ContactsViewModel.GROUP_ID_UNGROUPED) {
+                        "Ungrouped · ${contacts.size}"
+                    } else {
+                        val grp = contactGroups.find { it.id == selectedGroupId }
+                        "${grp?.name ?: "Group"} · ${contacts.size}"
+                    }
                 }
                 selectedAccountKey != null -> {
                     val acc = availableAccounts.find { it.key == selectedAccountKey }
@@ -437,6 +441,27 @@ fun ContactContent(
                                 else contactsVM.setGroupFilter(grp.id)
                             },
                             label = { Text(grp.name) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.People,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
+
+                    // "Ungrouped" group chip
+                    item(key = "group_ungrouped") {
+                        val isSelected = selectedGroupId == ContactsViewModel.GROUP_ID_UNGROUPED
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                if (isSelected) contactsVM.clearFilters()
+                                else contactsVM.setGroupFilter(ContactsViewModel.GROUP_ID_UNGROUPED)
+                            },
+                            label = { Text("Ungrouped") },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.People,
