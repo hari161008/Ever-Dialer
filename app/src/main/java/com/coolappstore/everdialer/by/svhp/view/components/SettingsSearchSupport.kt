@@ -352,7 +352,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("App Icon (Change)", "Choose a custom launcher icon", "app_icon_link", Icons.Outlined.Palette, GsColorRed) { it.navigate(InterfaceScreenDestination(highlightKey = "app_icon_link")) },
         GlobalSettingsSearchEntry("App Name (Change)", "Change the name shown for the app", "app_name_link", Icons.Outlined.Badge, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "app_name_link")) },
         GlobalSettingsSearchEntry("Show call logs in the dialpad search list", "Show recent call logs in the search list when nothing is typed or searched", "show_call_logs_in_dialpad_search_list", Icons.Outlined.History, GsColorTeal) { it.navigate(InterfaceScreenDestination(highlightKey = "show_call_logs_in_dialpad_search_list")) },
-        GlobalSettingsSearchEntry("Custom Font", "Typography styles, Playwrite USA Modern, Comfortaa, and font scaling", "custom_font", Icons.Outlined.TextFormat, GsColorPurple) { it.navigate(CustomFontScreenDestination()) },
+        GlobalSettingsSearchEntry("Fonts", "Typography styles, Playwrite USA Modern, Comfortaa, Patrick Hand, Gochi Hand, and font scaling", "fonts", Icons.Outlined.TextFormat, GsColorPurple) { it.navigate(CustomFontScreenDestination()) },
 
         // ── Incoming Call UI screen ──────────────────────────────────────────────
         GlobalSettingsSearchEntry("Show Full screen call UI on any apps", "Open full screen incoming call UI over any app", "show_fullscreen_call_ui_on_any_apps", Icons.Outlined.Call, GsColorGreen) { it.navigate(IncomingCallUIScreenDestination(highlightKey = "show_fullscreen_call_ui_on_any_apps")) },

@@ -11,6 +11,8 @@ object AppFontConstants {
     const val FONT_ID_SYSTEM = "system"
     const val FONT_ID_PLAYWRITE = "playwrite_us_modern"
     const val FONT_ID_COMFORTAA = "comfortaa"
+    const val FONT_ID_PATRICK_HAND = "patrick_hand"
+    const val FONT_ID_GOCHI_HAND = "gochi_hand"
 
     val OFL_1_1_LICENSE_TEXT = """
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
@@ -68,6 +70,14 @@ val ComfortaaFontFamily = FontFamily(
     Font(R.font.comfortaa_medium, FontWeight.Medium),
     Font(R.font.comfortaa_semibold, FontWeight.SemiBold),
     Font(R.font.comfortaa_bold, FontWeight.Bold)
+)
+
+val PatrickHandFontFamily = FontFamily(
+    Font(R.font.patrick_hand_regular, FontWeight.Normal)
+)
+
+val GochiHandFontFamily = FontFamily(
+    Font(R.font.gochi_hand_regular, FontWeight.Normal)
 )
 
 data class AppFontItem(
@@ -131,6 +141,39 @@ I hope you will enjoy using my font!
         licenseName = "SIL Open Font License, Version 1.1",
         licenseText = AppFontConstants.OFL_1_1_LICENSE_TEXT,
         fontFamily = ComfortaaFontFamily
+    ),
+    AppFontItem(
+        id = AppFontConstants.FONT_ID_PATRICK_HAND,
+        name = "Patrick Hand",
+        styleTag = "Warm Handwriting Script",
+        designer = "Patrick Wagesreiter",
+        about = """
+Patrick Hand is a font based on the designer's own handwriting. It is developed to bring an impressive and useful handwriting effect to your texts.
+
+It has all the basic latin characters as well as most of the latin extended ones. It also includes some fancy glyphs like heavy quotation marks and the floral heart! Ligatures, small caps and old style numbers are available as OpenType features in the downloaded version of this font.
+Updated with support for more European languages and Vietnamese, and a Small Caps sister family.
+        """.trimIndent(),
+        upstreamUrl = "https://fonts.google.com/specimen/Patrick+Hand",
+        copyrightNotice = "Copyright (c) 2010-2012 Patrick Wagesreiter (mail@patrickwagesreiter.at)",
+        licenseName = "SIL Open Font License, Version 1.1",
+        licenseText = AppFontConstants.OFL_1_1_LICENSE_TEXT,
+        fontFamily = PatrickHandFontFamily
+    ),
+    AppFontItem(
+        id = AppFontConstants.FONT_ID_GOCHI_HAND,
+        name = "Gochi Hand",
+        styleTag = "Spontaneous Casual Script",
+        designer = "HT Fonts, Juan Pablo del Peral",
+        about = """
+Gochi Hand is a typographic interpretation of the handwriting of a teenager. The style is fresh, not like the letters made by a calligrapher, but those of an ordinary person. The text line is spontaneous but solid and consistent, expressive and works well on screen, even in small sizes. The glyphs were carefully designed with a good curve quality that makes it able to look good when printed too.
+
+Designed by Juan Pablo del Peral for HT Fonts. To contribute, see github.com/huertatipografica/gochi-hand.
+        """.trimIndent(),
+        upstreamUrl = "https://fonts.google.com/specimen/Gochi+Hand",
+        copyrightNotice = "Copyright (c) 2011, Juan Pablo del Peral (juandelperal@htfonts.com), with Reserved Font Names \"Gochi\" and \"Gochi Hand\"",
+        licenseName = "SIL Open Font License, Version 1.1",
+        licenseText = AppFontConstants.OFL_1_1_LICENSE_TEXT,
+        fontFamily = GochiHandFontFamily
     )
 )
 
@@ -142,6 +185,8 @@ object AppFontHelper {
         return when (fontKeyOrPath) {
             AppFontConstants.FONT_ID_PLAYWRITE -> PlaywriteUsModernFontFamily
             AppFontConstants.FONT_ID_COMFORTAA -> ComfortaaFontFamily
+            AppFontConstants.FONT_ID_PATRICK_HAND -> PatrickHandFontFamily
+            AppFontConstants.FONT_ID_GOCHI_HAND -> GochiHandFontFamily
             else -> {
                 val file = File(fontKeyOrPath)
                 if (file.exists()) {
@@ -164,6 +209,8 @@ object AppFontHelper {
         return when (fontKeyOrPath) {
             AppFontConstants.FONT_ID_PLAYWRITE -> "Playwrite USA Modern"
             AppFontConstants.FONT_ID_COMFORTAA -> "Comfortaa"
+            AppFontConstants.FONT_ID_PATRICK_HAND -> "Patrick Hand"
+            AppFontConstants.FONT_ID_GOCHI_HAND -> "Gochi Hand"
             else -> {
                 val file = File(fontKeyOrPath)
                 if (file.exists()) {

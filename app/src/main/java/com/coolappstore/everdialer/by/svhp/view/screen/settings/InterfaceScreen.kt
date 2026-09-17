@@ -1839,10 +1839,10 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         }
                     }
 
-                // ── Custom Font ─────────────────────────────────────────
+                // ── Fonts ───────────────────────────────────────────────
                     RivoAnimatedSection(delayMs = 70L) {
                         Column {
-                            Text("Custom Font", style = MaterialTheme.typography.labelLarge,
+                            Text("Fonts", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
@@ -1856,7 +1856,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         )
                                         Spacer(Modifier.width(16.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("Custom Font", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                            Text("Fonts", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                                             val currentFontName = AppFontHelper.getFontDisplayName(prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null))
                                             Text(
                                                 currentFontName,

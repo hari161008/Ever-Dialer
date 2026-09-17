@@ -120,7 +120,7 @@ fun CustomFontScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             SettingsPillTopAppBar(
-                title = "Custom Font",
+                title = "Fonts",
                 onBackClick = { navigator.navigateUp() }
             )
         },
