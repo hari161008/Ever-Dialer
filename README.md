@@ -454,5 +454,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 # Fonts Used
 
 ┈➤ [Playwrite USA Modern](https://fonts.google.com/specimen/Playwrite+US+Modern)<br><br>
-┈➤ [Comfortaa](https://fonts.google.com/specimen/Comfortaa)
+┈➤ [Comfortaa](https://fonts.google.com/specimen/Comfortaa)<br><br>
+┈➤ [Patrick Hand](https://fonts.google.com/specimen/Patrick+Hand)<br><br>
+┈➤ [Gochi Hand](https://fonts.google.com/specimen/Gochi+Hand)
 
