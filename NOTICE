@@ -1,0 +1,26 @@
+Ever Dialer
+Copyright (c) 2024-2026 Ever Dialer Contributors
+
+This project is licensed under the GNU General Public License v3.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-Party Fonts and Licenses
+--------------------------------------------------------------------------------
+
+1. Playwrite USA Modern
+   Designed by: TypeTogether, Veronika Burian, José Scaglione
+   Source: https://fonts.google.com/specimen/Playwrite+US+Modern
+   Repository: https://github.com/TypeTogether/Playwrite
+   Website: https://primarium.info/countries/united-states-of-america
+   Copyright 2023 The Playwrite Project Authors (https://github.com/TypeTogether/Playwrite)
+   License: SIL Open Font License, Version 1.1 (see THIRD_PARTY_LICENSES/OFL-1.1.txt)
+
+2. Comfortaa
+   Designed by: Johan Aakerlund
+   Source: https://fonts.google.com/specimen/Comfortaa
+   Repository: https://github.com/alexeiva/comfortaa
+   Copyright 2011 The Comfortaa Project Authors (https://github.com/alexeiva/comfortaa), with Reserved Font Name "Comfortaa".
+   License: SIL Open Font License, Version 1.1 (see THIRD_PARTY_LICENSES/OFL-1.1.txt)
+
+The full text of the SIL Open Font License Version 1.1 is available in:
+THIRD_PARTY_LICENSES/OFL-1.1.txt

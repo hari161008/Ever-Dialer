@@ -1,5 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
+import com.ramcosta.composedestinations.generated.destinations.CustomFontScreenDestination
+import com.coolappstore.everdialer.by.svhp.view.theme.AppFontHelper
 import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -453,31 +455,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var hexInput by remember { mutableStateOf(String.format("%06X", 0xFFFFFF and customPrimaryColor)) }
     var hexError by remember { mutableStateOf(false) }
 
-    // Font & Display Scaling state
-    val savedFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
-    var hasFontSet    by remember { mutableStateOf(savedFontPath != null) }
-    var fontSizeScale by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)) }
     var displayScale  by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)) }
-
-    val fontPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                try {
-                    val fontFile = File(context.filesDir, "custom_font.ttf")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        fontFile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    prefs.setString(PreferenceManager.KEY_CUSTOM_FONT_PATH, fontFile.absolutePath)
-                    hasFontSet = true
-                    (context as? Activity)?.let { activity ->
-                        val intent = activity.intent
-                        activity.finish()
-                        activity.startActivity(intent)
-                    }
-                } catch (_: Exception) {}
-            }
-        }
-    }
+    var fontSizeScale by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)) }
 
     val presetColors = listOf(
         Color(0xFF6750A4), Color(0xFF0061A4), Color(0xFF006A60), Color(0xFF436916),
@@ -1868,8 +1847,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 Column(modifier = Modifier
-                                    .clickable { fontPickerLauncher.launch("font/ttf") }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                    .clickable { navigator.navigate(CustomFontScreenDestination()) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                         com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
                                             icon = Icons.Outlined.TextFormat,
@@ -1878,31 +1857,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         Spacer(Modifier.width(16.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text("Custom Font", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                            val currentFontName = AppFontHelper.getFontDisplayName(prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null))
                                             Text(
-                                                if (hasFontSet) "Custom font active · tap to change" else "Pick a .ttf file to use across the app",
+                                                currentFontName,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
-                                        Spacer(Modifier.width(8.dp))
-                                        if (hasFontSet) {
-                                            IconButton(onClick = {
-                                                prefs.setString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
-                                                prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
-                                                fontSizeScale = 1.0f
-                                                hasFontSet = false
-                                                val file = File(context.filesDir, "custom_font.ttf")
-                                                file.delete()
-                                                (context as? Activity)?.let { a ->
-                                                    val intent = a.intent
-                                                    a.finish()
-                                                    a.startActivity(intent)
-                                                }
-                                            }) { Icon(Icons.Default.Refresh, "Revert font", tint = MaterialTheme.colorScheme.error) }
-                                        }
-                                        IconButton(onClick = { fontPickerLauncher.launch("font/ttf") }) {
-                                            Icon(Icons.Default.FolderOpen, "Pick font", tint = MaterialTheme.colorScheme.primary)
-                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = "Choose font",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
                                     }
                                 }
                             }

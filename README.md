@@ -446,5 +446,13 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
 ┈➤ [Network Switch](https://github.com/aunchagaonkar/NetworkSwitch)<br><br>
 ┈➤ [Raise To Answer](https://github.com/TheLastProject/RaiseToAnswer)<br><br>
-┈➤ [Wallpaper Export](ttps://github.com/cvzi/WallpaperExport)<br><br>
+┈➤ [Wallpaper Export](https://github.com/cvzi/WallpaperExport)<br><br>
 ┈➤ [LineageOS Dialer](https://github.com/Lineageos/android_packages_apps_Dialer)
+
+<br>
+
+# Fonts Used
+
+┈➤ [Playwrite USA Modern](https://fonts.google.com/specimen/Playwrite+US+Modern)<br><br>
+┈➤ [Comfortaa](https://fonts.google.com/specimen/Comfortaa)
+

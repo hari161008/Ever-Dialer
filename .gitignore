@@ -18,3 +18,4 @@ local.properties
 *.aab
 captures/
 .navigation/
+.kotlin/
