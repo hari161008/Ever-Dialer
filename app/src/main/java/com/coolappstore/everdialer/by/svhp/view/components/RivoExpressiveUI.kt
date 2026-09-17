@@ -274,12 +274,14 @@ fun RivoAnimatedSection(
 
 // ─── Card ──────────────────────────────────────────────────────────────────────
 
+val LocalCardCornerRadius = compositionLocalOf { 28.dp }
+
 @Composable
 fun RivoExpressiveCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     icon: ImageVector? = null,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(28.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(LocalCardCornerRadius.current),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     trailingContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit

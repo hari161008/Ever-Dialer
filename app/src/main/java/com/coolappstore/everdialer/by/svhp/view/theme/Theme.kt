@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,10 +20,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.view.components.LocalCardCornerRadius
 import org.koin.compose.koinInject
 import java.io.File
+import kotlin.math.roundToInt
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80
@@ -290,6 +294,11 @@ fun Rivo4Theme(
     val customPrimaryInt = prefs.getInt("custom_primary_color", 0)
     val customFontPath = prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null)
     val fontSizeScale  = prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
+    val fontHeightScale = prefs.getFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f)
+    val fontWidthScale  = prefs.getFloat(PreferenceManager.KEY_FONT_WIDTH_SCALE, 1.0f)
+    val fontWeightOverride = prefs.getFloat(PreferenceManager.KEY_FONT_WEIGHT_OVERRIDE, 400f)
+    val fontOrientation = prefs.getFloat(PreferenceManager.KEY_FONT_ORIENTATION, 0f)
+    val cornerRadius    = prefs.getFloat(PreferenceManager.KEY_CORNER_RADIUS, 28f)
 
     val darkTheme = when (themeMode) {
         "light", "white"  -> false
@@ -370,15 +379,29 @@ fun Rivo4Theme(
         AppFontHelper.resolveFontFamily(customFontPath)
     }
 
-    val typography = remember(customFontFamily, fontSizeScale) {
-        buildTypography(customFontFamily, fontSizeScale)
+    val weightOffset = remember(fontWeightOverride) { (fontWeightOverride - 400f).roundToInt() }
+    val skewX = remember(fontOrientation) { -fontOrientation / 60f }
+
+    val typography = remember(customFontFamily, fontSizeScale, fontHeightScale, fontWidthScale, weightOffset, skewX) {
+        buildTypography(
+            fontFamily = customFontFamily,
+            scale = fontSizeScale,
+            heightScale = fontHeightScale,
+            widthScale = fontWidthScale,
+            weightOffset = weightOffset,
+            skewX = skewX
+        )
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography  = typography
+    CompositionLocalProvider(
+        LocalCardCornerRadius provides cornerRadius.dp
     ) {
-        ProvideScaledDensity(prefs = prefs, content = content)
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography  = typography
+        ) {
+            ProvideScaledDensity(prefs = prefs, content = content)
+        }
     }
 }
 

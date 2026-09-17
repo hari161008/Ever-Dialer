@@ -4,24 +4,55 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.unit.sp
 
 val Typography = buildTypography(FontFamily.Default, 1.0f)
 
-fun buildTypography(fontFamily: FontFamily, scale: Float = 1.0f) = Typography(
-    displayLarge  = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Bold,      fontSize = (57 * scale).sp,  lineHeight = (64 * scale).sp,  letterSpacing = (-0.25).sp),
-    displayMedium = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Bold,      fontSize = (45 * scale).sp,  lineHeight = (52 * scale).sp,  letterSpacing = 0.sp),
-    displaySmall  = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Bold,      fontSize = (36 * scale).sp,  lineHeight = (44 * scale).sp,  letterSpacing = 0.sp),
-    headlineLarge = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Bold,      fontSize = (32 * scale).sp,  lineHeight = (40 * scale).sp,  letterSpacing = 0.sp),
-    headlineMedium= TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Bold,      fontSize = (28 * scale).sp,  lineHeight = (36 * scale).sp,  letterSpacing = 0.sp),
-    headlineSmall = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (24 * scale).sp,  lineHeight = (32 * scale).sp,  letterSpacing = 0.sp),
-    titleLarge    = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (22 * scale).sp,  lineHeight = (28 * scale).sp,  letterSpacing = 0.sp),
-    titleMedium   = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (16 * scale).sp,  lineHeight = (24 * scale).sp,  letterSpacing = 0.15.sp),
-    titleSmall    = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Medium,    fontSize = (14 * scale).sp,  lineHeight = (20 * scale).sp,  letterSpacing = 0.1.sp),
-    bodyLarge     = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Normal,    fontSize = (16 * scale).sp,  lineHeight = (24 * scale).sp,  letterSpacing = 0.5.sp),
-    bodyMedium    = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Normal,    fontSize = (14 * scale).sp,  lineHeight = (20 * scale).sp,  letterSpacing = 0.25.sp),
-    bodySmall     = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Normal,    fontSize = (12 * scale).sp,  lineHeight = (16 * scale).sp,  letterSpacing = 0.4.sp),
-    labelLarge    = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (14 * scale).sp,  lineHeight = (20 * scale).sp,  letterSpacing = 0.1.sp),
-    labelMedium   = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (12 * scale).sp,  lineHeight = (16 * scale).sp,  letterSpacing = 0.5.sp),
-    labelSmall    = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.SemiBold,  fontSize = (11 * scale).sp,  lineHeight = (16 * scale).sp,  letterSpacing = 0.5.sp)
-)
+fun buildTypography(
+    fontFamily: FontFamily,
+    scale: Float = 1.0f,
+    heightScale: Float = 1.0f,
+    widthScale: Float = 1.0f,
+    weightOffset: Int = 0,
+    skewX: Float = 0.0f
+): Typography {
+    val effectiveScaleX = if (heightScale > 0.01f) widthScale / heightScale else widthScale
+    val transform = if (effectiveScaleX != 1.0f || skewX != 0.0f) {
+        TextGeometricTransform(scaleX = effectiveScaleX, skewX = skewX)
+    } else {
+        null
+    }
+
+    fun style(baseWeight: FontWeight, baseSize: Int, baseLine: Int, baseSpacing: Double): TextStyle {
+        val effectiveWeight = FontWeight((baseWeight.weight + weightOffset).coerceIn(100, 900))
+        val effectiveFontSize = (baseSize * scale * heightScale).sp
+        val effectiveLineHeight = (baseLine * scale * heightScale).sp
+        return TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = effectiveWeight,
+            fontSize = effectiveFontSize,
+            lineHeight = effectiveLineHeight,
+            letterSpacing = baseSpacing.sp,
+            textGeometricTransform = transform
+        )
+    }
+
+    return Typography(
+        displayLarge   = style(FontWeight.Bold, 57, 64, -0.25),
+        displayMedium  = style(FontWeight.Bold, 45, 52, 0.0),
+        displaySmall   = style(FontWeight.Bold, 36, 44, 0.0),
+        headlineLarge  = style(FontWeight.Bold, 32, 40, 0.0),
+        headlineMedium = style(FontWeight.Bold, 28, 36, 0.0),
+        headlineSmall  = style(FontWeight.SemiBold, 24, 32, 0.0),
+        titleLarge     = style(FontWeight.SemiBold, 22, 28, 0.0),
+        titleMedium    = style(FontWeight.SemiBold, 16, 24, 0.15),
+        titleSmall     = style(FontWeight.Medium, 14, 20, 0.1),
+        bodyLarge      = style(FontWeight.Normal, 16, 24, 0.5),
+        bodyMedium     = style(FontWeight.Normal, 14, 20, 0.25),
+        bodySmall      = style(FontWeight.Normal, 12, 16, 0.4),
+        labelLarge     = style(FontWeight.SemiBold, 14, 20, 0.1),
+        labelMedium    = style(FontWeight.SemiBold, 12, 16, 0.5),
+        labelSmall     = style(FontWeight.SemiBold, 11, 16, 0.5)
+    )
+}

@@ -136,6 +136,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var saturatedModes      by remember { mutableStateOf(prefs.getSaturatedModesSet()) }
     var saturationLevelLight by remember { mutableFloatStateOf(prefs.getSaturationLevel(false)) }
     var saturationLevelDark  by remember { mutableFloatStateOf(prefs.getSaturationLevel(true)) }
+    var cornerRadius        by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CORNER_RADIUS, 28f)) }
+    var isRoundnessExpanded by remember { mutableStateOf(false) }
     var solidIcons          by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false)) }
     var solidIconsDynamic   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false)) }
     var solidIconsLightStyle by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_SOLID_ICONS_LIGHT, PreferenceManager.SOLID_ICONS_STYLE_DIM) ?: PreferenceManager.SOLID_ICONS_STYLE_DIM) }
@@ -1869,6 +1871,122 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             contentDescription = "Choose font",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                // ── Roundness ───────────────────────────────────────────
+                    RivoAnimatedSection(delayMs = 75L) {
+                        Column {
+                            Text("Roundness", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                    val radiusInt = cornerRadius.roundToInt()
+                                    val cornerLabel = when {
+                                        radiusInt == 0 -> "0 dp (Sharp)"
+                                        radiusInt >= 28 -> "$radiusInt dp (Curved)"
+                                        else -> "$radiusInt dp (Rounded)"
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isRoundnessExpanded = !isRoundnessExpanded }
+                                    ) {
+                                        com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
+                                            icon = Icons.Outlined.RoundedCorner,
+                                            iconContainerColor = ColorTeal
+                                        )
+                                        Spacer(Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("App Roundness", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                            Text(
+                                                cornerLabel,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                cornerRadius = 28f
+                                                prefs.setFloat(PreferenceManager.KEY_CORNER_RADIUS, 28f)
+                                            },
+                                            modifier = Modifier.size(28.dp),
+                                            shape = CircleShape,
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Refresh,
+                                                contentDescription = "Reset roundness",
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = { isRoundnessExpanded = !isRoundnessExpanded },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isRoundnessExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = if (isRoundnessExpanded) "Collapse" else "Expand",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    AnimatedVisibility(
+                                        visible = isRoundnessExpanded,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 16.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    "Corner Radius",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    "$radiusInt dp",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                "Adjust sharpness or roundness across the whole app",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                            Slider(
+                                                value = cornerRadius,
+                                                onValueChange = { cornerRadius = it },
+                                                onValueChangeFinished = {
+                                                    prefs.setFloat(PreferenceManager.KEY_CORNER_RADIUS, cornerRadius)
+                                                },
+                                                valueRange = 0f..36f,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
                                     }
                                 }
                             }

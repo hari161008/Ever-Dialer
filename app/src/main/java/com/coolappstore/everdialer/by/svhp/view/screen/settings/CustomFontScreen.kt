@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +52,44 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import android.os.Build
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import com.coolappstore.everdialer.by.svhp.view.components.LocalCardCornerRadius
 import java.io.File
+
+private fun Modifier.fontCornerRoundingEffect(roundness: Float): Modifier = this.then(
+    if (roundness > 0.01f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val blurRadius = roundness * 2.5f
+        val alphaMultiplier = 1.0f + roundness * 8.0f
+        val alphaBias = -roundness * 3.5f
+        val colorMatrix = android.graphics.ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, 0f,
+            0f, 1f, 0f, 0f, 0f,
+            0f, 0f, 1f, 0f, 0f,
+            0f, 0f, 0f, alphaMultiplier, alphaBias * 255f
+        ))
+        Modifier.graphicsLayer {
+            val blurEffect = android.graphics.RenderEffect.createBlurEffect(
+                blurRadius,
+                blurRadius,
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            val colorFilterEffect = android.graphics.RenderEffect.createColorFilterEffect(
+                android.graphics.ColorMatrixColorFilter(colorMatrix)
+            )
+            val chainEffect = android.graphics.RenderEffect.createChainEffect(
+                colorFilterEffect,
+                blurEffect
+            )
+            renderEffect = chainEffect.asComposeRenderEffect()
+        }
+    } else {
+        Modifier
+    }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
@@ -82,6 +120,46 @@ fun CustomFontScreen(
     var fontSizeScale by remember(settingsVersion) {
         mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f))
     }
+
+    var fontHeightScale by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f))
+    }
+
+    var fontWidthScale by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_FONT_WIDTH_SCALE, 1.0f))
+    }
+
+    var fontWeightOverride by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_FONT_WEIGHT_OVERRIDE, 400f))
+    }
+
+    var fontOrientation by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_FONT_ORIENTATION, 0f))
+    }
+
+    var fontRoundness by remember(settingsVersion) {
+        mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_FONT_ROUNDNESS, 0.0f))
+    }
+
+    var isFontAdjustmentsExpanded by remember { mutableStateOf(false) }
+    var isDisplaySizeExpanded by remember { mutableStateOf(false) }
+
+    val activeTransform = remember(fontHeightScale, fontWidthScale, fontOrientation) {
+        val effectiveScaleX = if (fontHeightScale > 0.01f) fontWidthScale / fontHeightScale else fontWidthScale
+        if (effectiveScaleX != 1.0f || fontOrientation != 0f) {
+            TextGeometricTransform(
+                scaleX = effectiveScaleX,
+                skewX = -fontOrientation / 60f
+            )
+        } else {
+            null
+        }
+    }
+
+    val weightOffset = remember(fontWeightOverride) { (fontWeightOverride - 400f).roundToInt() }
+    val previewHeadingWeight = remember(weightOffset) { FontWeight((FontWeight.Bold.weight + weightOffset).coerceIn(100, 900)) }
+    val previewBodyWeight = remember(weightOffset) { FontWeight((FontWeight.Normal.weight + weightOffset).coerceIn(100, 900)) }
+    val previewPrimaryWeight = remember(weightOffset) { FontWeight((FontWeight.SemiBold.weight + weightOffset).coerceIn(100, 900)) }
 
     // Selected font family for live preview
     val activePreviewFamily: FontFamily = remember(selectedFontId) {
@@ -139,7 +217,7 @@ fun CustomFontScreen(
             // ── Live Preview Container ───────────────────────────────────────────
             RivoAnimatedSection(delayMs = 0L) {
                 Card(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(LocalCardCornerRadius.current),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     ),
@@ -194,15 +272,17 @@ fun CustomFontScreen(
                         Text(
                             text = "The quick brown fox jumps over the lazy dog.",
                             fontFamily = activePreviewFamily,
-                            fontSize = (19 * fontSizeScale).sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = (19 * fontSizeScale * fontHeightScale).sp,
+                            fontWeight = previewHeadingWeight,
                             color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = (26 * fontSizeScale).sp
+                            lineHeight = (26 * fontSizeScale * fontHeightScale).sp,
+                            style = LocalTextStyle.current.copy(textGeometricTransform = activeTransform),
+                            modifier = Modifier.fontCornerRoundingEffect(fontRoundness)
                         )
 
                         // Preview Body Paragraph
                         Surface(
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(LocalCardCornerRadius.current.coerceAtMost(22.dp)),
                             color = MaterialTheme.colorScheme.surfaceContainerLowest,
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -210,19 +290,290 @@ fun CustomFontScreen(
                                 Text(
                                     text = "Sphinx of black quartz, judge my vow. Ever Dialer pairs Material You expressive typography with dynamic color theming across all screens.",
                                     fontFamily = activePreviewFamily,
-                                    fontSize = (14 * fontSizeScale).sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = (14 * fontSizeScale * fontHeightScale).sp,
+                                    fontWeight = previewBodyWeight,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = (21 * fontSizeScale).sp
+                                    lineHeight = (21 * fontSizeScale * fontHeightScale).sp,
+                                    style = LocalTextStyle.current.copy(textGeometricTransform = activeTransform),
+                                    modifier = Modifier.fontCornerRoundingEffect(fontRoundness)
                                 )
                                 Text(
                                     text = "+1 (555) 019-2834 • 0123456789",
                                     fontFamily = activePreviewFamily,
-                                    fontSize = (15 * fontSizeScale).sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = (15 * fontSizeScale * fontHeightScale).sp,
+                                    fontWeight = previewPrimaryWeight,
                                     color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 0.5.sp
+                                    letterSpacing = 0.5.sp,
+                                    lineHeight = (22 * fontSizeScale * fontHeightScale).sp,
+                                    style = LocalTextStyle.current.copy(textGeometricTransform = activeTransform),
+                                    modifier = Modifier.fontCornerRoundingEffect(fontRoundness)
                                 )
+                            }
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+
+                        // ── Font Adjustments (Height, Width, Weight, Orientation, Corner Rounding) ─
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isFontAdjustmentsExpanded = !isFontAdjustmentsExpanded }
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Font Adjustments",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (!isFontAdjustmentsExpanded) {
+                                        Text(
+                                            "Height ${(fontHeightScale * 100).roundToInt()}%, Width ${(fontWidthScale * 100).roundToInt()}%, Weight ${fontWeightOverride.roundToInt()}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            fontHeightScale = 1.0f
+                                            fontWidthScale = 1.0f
+                                            fontWeightOverride = 400f
+                                            fontOrientation = 0f
+                                            fontRoundness = 0.0f
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f)
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_WIDTH_SCALE, 1.0f)
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_WEIGHT_OVERRIDE, 400f)
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_ORIENTATION, 0f)
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_ROUNDNESS, 0.0f)
+                                        },
+                                        modifier = Modifier.size(28.dp),
+                                        shape = CircleShape,
+                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "Reset adjustments",
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { isFontAdjustmentsExpanded = !isFontAdjustmentsExpanded },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isFontAdjustmentsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = if (isFontAdjustmentsExpanded) "Collapse" else "Expand",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = isFontAdjustmentsExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                                    // Height Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Height",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(fontHeightScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontHeightScale,
+                                        onValueChange = { fontHeightScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, fontHeightScale)
+                                        },
+                                        valueRange = 0.70f..1.50f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Width Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Width",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(fontWidthScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontWidthScale,
+                                        onValueChange = { fontWidthScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_WIDTH_SCALE, fontWidthScale)
+                                        },
+                                        valueRange = 0.70f..1.50f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Weight Slider
+                                    val weightLabel = when (fontWeightOverride.roundToInt()) {
+                                        in 100..150 -> "Thin (100)"
+                                        in 151..250 -> "Extra Light (200)"
+                                        in 251..350 -> "Light (300)"
+                                        in 351..450 -> "Normal (400)"
+                                        in 451..550 -> "Medium (500)"
+                                        in 551..650 -> "Semi Bold (600)"
+                                        in 651..750 -> "Bold (700)"
+                                        in 751..850 -> "Extra Bold (800)"
+                                        else -> "Black (900)"
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Weight",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            weightLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontWeightOverride,
+                                        onValueChange = { fontWeightOverride = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_WEIGHT_OVERRIDE, fontWeightOverride)
+                                        },
+                                        valueRange = 100f..900f,
+                                        steps = 7,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Orientation Slider
+                                    val orientationDeg = fontOrientation.roundToInt()
+                                    val orientationLabel = when {
+                                        orientationDeg == 0 -> "0° (Upright)"
+                                        orientationDeg > 0 -> "+${orientationDeg}° (Italic)"
+                                        else -> "${orientationDeg}° (Reverse)"
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Orientation",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            orientationLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontOrientation,
+                                        onValueChange = { fontOrientation = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_ORIENTATION, fontOrientation)
+                                        },
+                                        valueRange = -30f..30f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Font Corner Rounding Slider
+                                    val fontRoundPercent = (fontRoundness * 100).roundToInt()
+                                    val fontRoundLabel = when {
+                                        fontRoundPercent == 0 -> "0% (Sharp)"
+                                        fontRoundPercent >= 75 -> "$fontRoundPercent% (Curved)"
+                                        else -> "$fontRoundPercent% (Rounded)"
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            Text(
+                                                "Font Corner Rounding",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                "Round sharp corners in font letters",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Text(
+                                            fontRoundLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontRoundness,
+                                        onValueChange = { fontRoundness = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_FONT_ROUNDNESS, fontRoundness)
+                                        },
+                                        valueRange = 0f..1f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
 
@@ -236,96 +587,130 @@ fun CustomFontScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isDisplaySizeExpanded = !isDisplaySizeExpanded }
                             ) {
-                                Text(
-                                    "Display & Font Size",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                FilledTonalIconButton(
-                                    onClick = {
-                                        displayScale = 1.0f
-                                        fontSizeScale = 1.0f
-                                        prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)
-                                        prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
-                                    },
-                                    modifier = Modifier.size(28.dp),
-                                    shape = CircleShape,
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Display & Font Size",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
+                                    if (!isDisplaySizeExpanded) {
+                                        Text(
+                                            "Display ${(displayScale * 100).roundToInt()}%, Font ${(fontSizeScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Refresh,
-                                        contentDescription = "Reset scale",
-                                        modifier = Modifier.size(15.dp)
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            displayScale = 1.0f
+                                            fontSizeScale = 1.0f
+                                            prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f)
+                                            prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f)
+                                        },
+                                        modifier = Modifier.size(28.dp),
+                                        shape = CircleShape,
+                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "Reset scale",
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { isDisplaySizeExpanded = !isDisplaySizeExpanded },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isDisplaySizeExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = if (isDisplaySizeExpanded) "Collapse" else "Expand",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = isDisplaySizeExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                                    // Display Scaling Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Display Scaling",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(displayScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = displayScale,
+                                        onValueChange = { displayScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, displayScale)
+                                        },
+                                        valueRange = 0.70f..1.40f,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Font Size Slider
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Font Size",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            "${(fontSizeScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Slider(
+                                        value = fontSizeScale,
+                                        onValueChange = { fontSizeScale = it },
+                                        onValueChangeFinished = {
+                                            prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, fontSizeScale)
+                                        },
+                                        valueRange = 0.70f..1.40f,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(14.dp))
-
-                            // Display Scaling Slider
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    "Display Scaling",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    "${(displayScale * 100).roundToInt()}%",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Slider(
-                                value = displayScale,
-                                onValueChange = { displayScale = it },
-                                onValueChangeFinished = {
-                                    prefs.setFloat(PreferenceManager.KEY_DISPLAY_SCALE, displayScale)
-                                },
-                                valueRange = 0.70f..1.40f,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(Modifier.height(8.dp))
-
-                            // Font Size Slider
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    "Font Size",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    "${(fontSizeScale * 100).roundToInt()}%",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Slider(
-                                value = fontSizeScale,
-                                onValueChange = { fontSizeScale = it },
-                                onValueChangeFinished = {
-                                    prefs.setFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, fontSizeScale)
-                                },
-                                valueRange = 0.70f..1.40f,
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
                     }
                 }
