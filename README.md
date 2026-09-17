@@ -449,8 +449,6 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 ┈➤ [Wallpaper Export](https://github.com/cvzi/WallpaperExport)<br><br>
 ┈➤ [LineageOS Dialer](https://github.com/Lineageos/android_packages_apps_Dialer)
 
-<br>
-
 # Fonts Used
 
 ┈➤ [Playwrite USA Modern](https://fonts.google.com/specimen/Playwrite+US+Modern)<br><br>
