@@ -54,7 +54,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
-import com.ramcosta.composedestinations.generated.destinations.ContactPfpCustomizationScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -194,6 +193,7 @@ fun ContactDetailsScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
     var showChooseSimDialog by remember { mutableStateOf(false) }
+    var showBackgroundPfpChoiceDialog by remember { mutableStateOf(false) }
     // Contact Info → "Ringtone" — per-contact custom ringtone (ContactsContract CUSTOM_RINGTONE),
     // same mechanism the system Contacts app and Telecom's incoming-call ringer use. Bumped after
     // the ringtone picker returns so the current-value query below re-runs.
@@ -250,7 +250,6 @@ fun ContactDetailsScreen(
     val showRecentActivity = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY, true) }
     val showChooseSim = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_SIM, true) }
     val showCallingBackgrounds = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS, true) }
-    val showAdvancedPfp = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_ADVANCED_PFP, true) }
     val showRingtone = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true) }
     val showChooseDefaultNumber = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true) }
     val showSavedIn = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true) }
@@ -831,6 +830,141 @@ fun ContactDetailsScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                             contentColor = MaterialTheme.colorScheme.onSurface
                         )
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+
+    if (showBackgroundPfpChoiceDialog) {
+        com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity {
+            AlertDialog(
+                onDismissRequest = { showBackgroundPfpChoiceDialog = false },
+                shape = RoundedCornerShape(28.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                icon = {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Wallpaper,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                },
+                title = {
+                    Text(
+                        "Background & PFP",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "Choose which call screen to customize for this contact:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Surface(
+                            onClick = {
+                                showBackgroundPfpChoiceDialog = false
+                                navigator.navigate(
+                                    CustomBackgroundPickerScreenDestination(
+                                        isIncoming = true,
+                                        contactKey = contactSimKey,
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.AutoMirrored.Filled.CallReceived, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Incoming Call", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text("Background & Contact PFP", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Surface(
+                            onClick = {
+                                showBackgroundPfpChoiceDialog = false
+                                navigator.navigate(
+                                    CustomBackgroundPickerScreenDestination(
+                                        isIncoming = false,
+                                        contactKey = contactSimKey,
+                                        contactDisplayName = contact?.name ?: displayName
+                                    )
+                                )
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.PhoneInTalk, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Ongoing Call", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text("Background & Contact PFP", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    FilledTonalButton(
+                        onClick = { showBackgroundPfpChoiceDialog = false },
+                        shape = RoundedCornerShape(100)
                     ) {
                         Text("Cancel")
                     }
@@ -2301,120 +2435,25 @@ fun ContactDetailsScreen(
                                 val ongoingContactBgType = remember(settingsVer, contactSimKey) {
                                     prefs.getString("contact_${contactSimKey}_ongoing_bg_type", null)
                                 }
-                                val incomingSupporting = when (incomingContactBgType) {
-                                    "wallpaper" -> "Device Wallpaper (Customized)"
-                                    "picture" -> "Custom Picture"
-                                    "video" -> "Custom Video"
-                                    "none" -> "None (Solid Background)"
-                                    else -> "According to Settings (Default)"
-                                }
-                                val ongoingSupporting = when (ongoingContactBgType) {
-                                    "wallpaper" -> "Device Wallpaper (Customized)"
-                                    "picture" -> "Custom Picture"
-                                    "video" -> "Custom Video"
-                                    "none" -> "None (Solid Background)"
-                                    else -> "According to Settings (Default)"
-                                }
-
-                                RivoExpressiveCard(title = "Calling Backgrounds", icon = Icons.Default.Wallpaper) {
-                                    RivoListItem(
-                                        headline = "Incoming Call Background",
-                                        supporting = incomingSupporting,
-                                        leadingIcon = Icons.Default.CallReceived,
-                                        trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = {
-                                            navigator.navigate(
-                                                CustomBackgroundPickerScreenDestination(
-                                                    isIncoming = true,
-                                                    contactKey = contactSimKey.toString(),
-                                                    contactDisplayName = contact?.name ?: displayName
-                                                )
-                                            )
-                                        }
-                                    )
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                    )
-                                    RivoListItem(
-                                        headline = "Ongoing Call Background",
-                                        supporting = ongoingSupporting,
-                                        leadingIcon = Icons.Default.PhoneInTalk,
-                                        trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = {
-                                            navigator.navigate(
-                                                CustomBackgroundPickerScreenDestination(
-                                                    isIncoming = false,
-                                                    contactKey = contactSimKey.toString(),
-                                                    contactDisplayName = contact?.name ?: displayName
-                                                )
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Advanced PFP — per-contact override for incoming and ongoing call custom contact PFP
-                    "advanced_pfp" -> {
-                        if (showAdvancedPfp) {
-                            item {
                                 val incomingContactPfpType = remember(settingsVer, contactSimKey) {
                                     prefs.getString("contact_${contactSimKey}_incoming_custom_pfp_type", null)
                                 }
                                 val ongoingContactPfpType = remember(settingsVer, contactSimKey) {
                                     prefs.getString("contact_${contactSimKey}_ongoing_custom_pfp_type", null)
                                 }
-                                val incomingPfpSupporting = when (incomingContactPfpType) {
-                                    "wallpaper" -> "Device Wallpaper (Customized)"
-                                    "picture" -> "Custom Picture"
-                                    "video" -> "Custom Video"
-                                    "none" -> "None (Default Face Icon)"
-                                    else -> "According to Settings (Default)"
-                                }
-                                val ongoingPfpSupporting = when (ongoingContactPfpType) {
-                                    "wallpaper" -> "Device Wallpaper (Customized)"
-                                    "picture" -> "Custom Picture"
-                                    "video" -> "Custom Video"
-                                    "none" -> "None (Default Face Icon)"
-                                    else -> "According to Settings (Default)"
-                                }
+                                val isCustomized = (incomingContactBgType != null && incomingContactBgType != "none" && incomingContactBgType != "default") ||
+                                    (ongoingContactBgType != null && ongoingContactBgType != "none" && ongoingContactBgType != "default") ||
+                                    (incomingContactPfpType != null && incomingContactPfpType != "none" && incomingContactPfpType != "default") ||
+                                    (ongoingContactPfpType != null && ongoingContactPfpType != "none" && ongoingContactPfpType != "default")
+                                val customSupporting = if (isCustomized) "Custom background & PFP configured" else "According to Settings (Default)"
 
-                                RivoExpressiveCard(title = "Advanced PFP", icon = Icons.Default.AccountCircle) {
+                                RivoExpressiveCard(title = "Background And Contact PFP Customisation", icon = Icons.Default.Wallpaper) {
                                     RivoListItem(
-                                        headline = "Incoming Call PFP",
-                                        supporting = incomingPfpSupporting,
-                                        leadingIcon = Icons.Default.CallReceived,
+                                        headline = "Background And Contact PFP Customisation",
+                                        supporting = customSupporting,
+                                        leadingIcon = Icons.Default.Wallpaper,
                                         trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = {
-                                            navigator.navigate(
-                                                ContactPfpCustomizationScreenDestination(
-                                                    isIncoming = true,
-                                                    contactKey = contactSimKey.toString(),
-                                                    contactDisplayName = contact?.name ?: displayName
-                                                )
-                                            )
-                                        }
-                                    )
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                    )
-                                    RivoListItem(
-                                        headline = "Ongoing Call PFP",
-                                        supporting = ongoingPfpSupporting,
-                                        leadingIcon = Icons.Default.PhoneInTalk,
-                                        trailingIcon = Icons.Default.ChevronRight,
-                                        onClick = {
-                                            navigator.navigate(
-                                                ContactPfpCustomizationScreenDestination(
-                                                    isIncoming = false,
-                                                    contactKey = contactSimKey.toString(),
-                                                    contactDisplayName = contact?.name ?: displayName
-                                                )
-                                            )
-                                        }
+                                        onClick = { showBackgroundPfpChoiceDialog = true }
                                     )
                                 }
                             }

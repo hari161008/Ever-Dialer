@@ -165,26 +165,13 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         RivoListItem(
-                            headline = "Choose Custom Background",
+                            headline = "Background And Contact PFP Customisation",
                             supporting = "Currently: $bgLabel",
                             leadingIcon = Icons.Outlined.Wallpaper,
                             iconContainerColor = Color(0xFF9C27B0),
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("incoming_custom_background", highlightedKey) { highlightedKey = null },
                             onClick = { navigator.navigate(CustomBackgroundPickerScreenDestination(isIncoming = true)) }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        RivoListItem(
-                            headline = "Contact PFP Customisation",
-                            supporting = "Customize avatar photo for contacts and unknown numbers",
-                            leadingIcon = Icons.Outlined.AccountBox,
-                            iconContainerColor = Color(0xFF00BCD4),
-                            trailingIcon = Icons.Default.ChevronRight,
-                            modifier = Modifier.settingsSearchHighlight("incoming_contact_pfp_customisation", highlightedKey) { highlightedKey = null },
-                            onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.ContactPfpCustomizationScreenDestination(isIncoming = true)) }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),

@@ -1209,22 +1209,20 @@ fun ExpressiveCallScreen(
         val defaultPfpShape = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
 
         val isContactSpecific = prefix.startsWith("contact_")
-        val contactSpecificPfpType = if (isContactSpecific) prefs?.getString("${prefix}_custom_pfp_type", null) else null
-        val hasPerContactPfpConfigured = !contactSpecificPfpType.isNullOrEmpty() && contactSpecificPfpType != "none"
 
-        val pfpType = if (hasPerContactPfpConfigured) contactSpecificPfpType!! else (defaultPfpType ?: "none")
-        val pfpPath = if (hasPerContactPfpConfigured) prefs?.getString("${prefix}_custom_pfp_path", "") ?: "" else (defaultPfpPath ?: "")
-        val pfpZoom = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_zoom", 1f) ?: 1f else (defaultPfpZoom ?: 1f)
-        val pfpPanX = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_pan_x", 0f) ?: 0f else (defaultPfpPanX ?: 0f)
-        val pfpPanY = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_pan_y", 0f) ?: 0f else (defaultPfpPanY ?: 0f)
-        val pfpDim = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_dim", 0f) ?: 0f else (defaultPfpDim ?: 0f)
-        val pfpBlur = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_blur", 0f) ?: 0f else (defaultPfpBlur ?: 0f)
-        val pfpVideoSpeed = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_video_speed", 1.0f) ?: 1.0f else (defaultPfpVideoSpeed ?: 1.0f)
-        val pfpOverrideExisting = if (hasPerContactPfpConfigured) prefs?.getBoolean("${prefix}_custom_pfp_override_existing", true) ?: true else (defaultPfpOverride ?: true)
-        val pfpExceptPfp = if (hasPerContactPfpConfigured) false else (defaultPfpExceptPfp ?: false)
-        val pfpShowForNoPfp = if (hasPerContactPfpConfigured) prefs?.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true) ?: true else (defaultPfpShowForNoPfp ?: true)
-        val pfpSize = if (hasPerContactPfpConfigured) prefs?.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) ?: (defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)
-        val pfpShape = if (hasPerContactPfpConfigured) prefs?.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")
+        val pfpType = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_type") == true) prefs.getString("${prefix}_custom_pfp_type", defaultPfpType ?: "none") ?: (defaultPfpType ?: "none") else (defaultPfpType ?: "none")
+        val pfpPath = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_path") == true) prefs.getString("${prefix}_custom_pfp_path", defaultPfpPath ?: "") ?: (defaultPfpPath ?: "") else (defaultPfpPath ?: "")
+        val pfpZoom = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_zoom") == true) prefs.getFloat("${prefix}_custom_pfp_zoom", defaultPfpZoom ?: 1f) else (defaultPfpZoom ?: 1f)
+        val pfpPanX = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_pan_x") == true) prefs.getFloat("${prefix}_custom_pfp_pan_x", defaultPfpPanX ?: 0f) else (defaultPfpPanX ?: 0f)
+        val pfpPanY = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_pan_y") == true) prefs.getFloat("${prefix}_custom_pfp_pan_y", defaultPfpPanY ?: 0f) else (defaultPfpPanY ?: 0f)
+        val pfpDim = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_dim") == true) prefs.getFloat("${prefix}_custom_pfp_dim", defaultPfpDim ?: 0f) else (defaultPfpDim ?: 0f)
+        val pfpBlur = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_blur") == true) prefs.getFloat("${prefix}_custom_pfp_blur", defaultPfpBlur ?: 0f) else (defaultPfpBlur ?: 0f)
+        val pfpVideoSpeed = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_video_speed") == true) prefs.getFloat("${prefix}_custom_pfp_video_speed", defaultPfpVideoSpeed ?: 1.0f) else (defaultPfpVideoSpeed ?: 1.0f)
+        val pfpOverrideExisting = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_override_existing") == true) prefs.getBoolean("${prefix}_custom_pfp_override_existing", defaultPfpOverride ?: true) else (defaultPfpOverride ?: true)
+        val pfpExceptPfp = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_except_pfp") == true) prefs.getBoolean("${prefix}_custom_pfp_except_pfp", defaultPfpExceptPfp ?: false) else (defaultPfpExceptPfp ?: false)
+        val pfpShowForNoPfp = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_show_for_no_pfp") == true) prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", defaultPfpShowForNoPfp ?: true) else (defaultPfpShowForNoPfp ?: true)
+        val pfpSize = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_size") == true) prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)
+        val pfpShape = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_shape") == true) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")
 
         val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
         val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()

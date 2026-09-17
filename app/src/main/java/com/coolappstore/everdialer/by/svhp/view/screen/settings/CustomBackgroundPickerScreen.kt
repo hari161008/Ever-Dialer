@@ -71,11 +71,15 @@ fun CustomBackgroundPickerScreen(
     navigator: DestinationsNavigator,
     isIncoming: Boolean = true,
     contactKey: String? = null,
-    contactDisplayName: String? = null
+    contactDisplayName: String? = null,
+    initialTab: Int = 0
 ) {
     val context = LocalContext.current
     val prefs: PreferenceManager = koinInject()
     val scope = rememberCoroutineScope()
+
+    var selectedTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
+    var isEditingPfp by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         BackgroundMediaManager.autoCleanInBackground(context, prefs)
@@ -88,29 +92,98 @@ fun CustomBackgroundPickerScreen(
     // Track reactive settings
     val settingsVersion by prefs.settingsChanged.collectAsState()
 
+    val isContactSpecific = !contactKey.isNullOrEmpty()
+
+    // ── Global Defaults from Settings (Settings -> Appearance -> Incoming / Ongoing Call UI) ──
+    val defaultBgType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") ?: "none" else prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") ?: "none"
+    val defaultBgPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "") ?: "" else prefs.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "") ?: ""
+    val defaultBgZoom = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_ZOOM, 1f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_ZOOM, 1f)
+    val defaultBgPanX = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_X, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_X, 0f)
+    val defaultBgPanY = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_PAN_Y, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_PAN_Y, 0f)
+    val defaultBgDim = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_DIM, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_DIM, 0f)
+    val defaultBgBlur = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_BLUR, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_BLUR, 0f)
+    val defaultBgVideoSpeed = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_BG_VIDEO_SPEED, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_BG_VIDEO_SPEED, 1.0f)
+    val defaultElementsTheme = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto" else "auto"
+
+    val defaultPfpType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_TYPE, "none") ?: "none" else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_TYPE, "none") ?: "none"
+    val defaultPfpPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "") ?: "" else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "") ?: ""
+    val defaultPfpZoom = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_ZOOM, 1f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_ZOOM, 1f)
+    val defaultPfpPanX = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_X, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_X, 0f)
+    val defaultPfpPanY = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_Y, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_Y, 0f)
+    val defaultPfpDim = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_DIM, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_DIM, 0f)
+    val defaultPfpBlur = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_BLUR, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_BLUR, 0f)
+    val defaultPfpVideoSpeed = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
+    val defaultPfpOverride = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, true)
+    val defaultPfpExceptPfp = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_EXCEPT_PFP, false) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_EXCEPT_PFP, false)
+    val defaultPfpShowForNoPfp = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
+    val defaultPfpSize = (if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)).coerceIn(0.1f, 1.0f)
+    val defaultPfpShape = (if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")) ?: "circle"
+
+    val defaultFontColorMode = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default" else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
+    val defaultFontColorInt = if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
+    val defaultFontShadow = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, false) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, false)
+    val defaultFontSizeScale = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE, 1.0f)
+
+    val fontColorModeKey = if (isContactSpecific) "${prefix}_font_color_mode" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE)
+    val fontColorKey = if (isContactSpecific) "${prefix}_font_color" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR)
+    val fontShadowKey = if (isContactSpecific) "${prefix}_font_shadow" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SHADOW else PreferenceManager.KEY_ONGOING_FONT_SHADOW)
+    val fontSizeScaleKey = if (isContactSpecific) "${prefix}_font_size_scale" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE else PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE)
+
     var bgType by remember(settingsVersion) {
-        mutableStateOf(prefs.getString("${prefix}_bg_type", "none") ?: "none")
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_type")) prefs.getString("${prefix}_bg_type", "none") ?: "none"
+            else if (isContactSpecific) defaultBgType
+            else prefs.getString("${prefix}_bg_type", "none") ?: "none"
+        )
     }
     var bgPath by remember(settingsVersion) {
-        mutableStateOf(prefs.getString("${prefix}_bg_path", "") ?: "")
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_path")) prefs.getString("${prefix}_bg_path", "") ?: ""
+            else if (isContactSpecific) defaultBgPath
+            else prefs.getString("${prefix}_bg_path", "") ?: ""
+        )
     }
     var bgZoom by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_zoom", 1f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_zoom")) prefs.getFloat("${prefix}_bg_zoom", 1f)
+            else if (isContactSpecific) defaultBgZoom
+            else prefs.getFloat("${prefix}_bg_zoom", 1f)
+        )
     }
     var bgPanX by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_pan_x", 0f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_pan_x")) prefs.getFloat("${prefix}_bg_pan_x", 0f)
+            else if (isContactSpecific) defaultBgPanX
+            else prefs.getFloat("${prefix}_bg_pan_x", 0f)
+        )
     }
     var bgPanY by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_pan_y", 0f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_pan_y")) prefs.getFloat("${prefix}_bg_pan_y", 0f)
+            else if (isContactSpecific) defaultBgPanY
+            else prefs.getFloat("${prefix}_bg_pan_y", 0f)
+        )
     }
     var bgDim by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_dim", 0f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_dim")) prefs.getFloat("${prefix}_bg_dim", 0f)
+            else if (isContactSpecific) defaultBgDim
+            else prefs.getFloat("${prefix}_bg_dim", 0f)
+        )
     }
     var bgBlur by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_blur", 0f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_blur")) prefs.getFloat("${prefix}_bg_blur", 0f)
+            else if (isContactSpecific) defaultBgBlur
+            else prefs.getFloat("${prefix}_bg_blur", 0f)
+        )
     }
     var bgVideoSpeed by remember(settingsVersion) {
-        mutableFloatStateOf(prefs.getFloat("${prefix}_bg_video_speed", 1.0f))
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_bg_video_speed")) prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
+            else if (isContactSpecific) defaultBgVideoSpeed
+            else prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
+        )
     }
     val showContactPfp = remember(settingsVersion) {
         if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, true)
@@ -125,58 +198,96 @@ fun CustomBackgroundPickerScreen(
         prefs.getString(PreferenceManager.KEY_INCOMING_ANSWER_STYLE, PreferenceManager.ANSWER_STYLE_MODERN) ?: PreferenceManager.ANSWER_STYLE_MODERN
     }
 
-    val defaultPfpType = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_TYPE, "none") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_TYPE, "none")
-    val defaultPfpPath = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PATH, "")
-    val defaultPfpZoom = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_ZOOM, 1f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_ZOOM, 1f)
-    val defaultPfpPanX = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_X, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_X, 0f)
-    val defaultPfpPanY = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PAN_Y, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_PAN_Y, 0f)
-    val defaultPfpDim = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_DIM, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_DIM, 0f)
-    val defaultPfpBlur = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_BLUR, 0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_BLUR, 0f)
-    val defaultPfpVideoSpeed = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_VIDEO_SPEED, 1.0f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_VIDEO_SPEED, 1.0f)
-    val defaultPfpOverride = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_OVERRIDE_EXISTING, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_OVERRIDE_EXISTING, true)
-    val defaultPfpShowForNoPfp = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
-    val defaultPfpSize = if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)
-    val defaultPfpShape = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
-
-    val isContactSpecific = !contactKey.isNullOrEmpty()
-    val contactSpecificPfpType = if (isContactSpecific) prefs.getString("${prefix}_custom_pfp_type", null) else null
-    val hasPerContactPfpConfigured = !contactSpecificPfpType.isNullOrEmpty() && contactSpecificPfpType != "none"
-
-    val pfpType = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) contactSpecificPfpType!! else (defaultPfpType ?: "none")
+    var pfpType by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_type")) prefs.getString("${prefix}_custom_pfp_type", "none") ?: "none"
+            else if (isContactSpecific) defaultPfpType
+            else prefs.getString("${prefix}_custom_pfp_type", "none") ?: "none"
+        )
     }
-    val pfpPath = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getString("${prefix}_custom_pfp_path", "") ?: "" else (defaultPfpPath ?: "")
+    var pfpPath by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_path")) prefs.getString("${prefix}_custom_pfp_path", "") ?: ""
+            else if (isContactSpecific) defaultPfpPath
+            else prefs.getString("${prefix}_custom_pfp_path", "") ?: ""
+        )
     }
-    val pfpZoom = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_zoom", 1f) else (defaultPfpZoom ?: 1f)
+    var pfpZoom by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_zoom")) prefs.getFloat("${prefix}_custom_pfp_zoom", 1f)
+            else if (isContactSpecific) defaultPfpZoom
+            else prefs.getFloat("${prefix}_custom_pfp_zoom", 1f)
+        )
     }
-    val pfpPanX = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f) else (defaultPfpPanX ?: 0f)
+    var pfpPanX by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_pan_x")) prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f)
+            else if (isContactSpecific) defaultPfpPanX
+            else prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f)
+        )
     }
-    val pfpPanY = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f) else (defaultPfpPanY ?: 0f)
+    var pfpPanY by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_pan_y")) prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f)
+            else if (isContactSpecific) defaultPfpPanY
+            else prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f)
+        )
     }
-    val pfpDim = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_dim", 0f) else (defaultPfpDim ?: 0f)
+    var pfpDim by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_dim")) prefs.getFloat("${prefix}_custom_pfp_dim", 0f)
+            else if (isContactSpecific) defaultPfpDim
+            else prefs.getFloat("${prefix}_custom_pfp_dim", 0f)
+        )
     }
-    val pfpBlur = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_blur", 0f) else (defaultPfpBlur ?: 0f)
+    var pfpBlur by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_blur")) prefs.getFloat("${prefix}_custom_pfp_blur", 0f)
+            else if (isContactSpecific) defaultPfpBlur
+            else prefs.getFloat("${prefix}_custom_pfp_blur", 0f)
+        )
     }
-    val pfpVideoSpeed = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f) else (defaultPfpVideoSpeed ?: 1.0f)
+    var pfpVideoSpeed by remember(settingsVersion) {
+        mutableFloatStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_video_speed")) prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f)
+            else if (isContactSpecific) defaultPfpVideoSpeed
+            else prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f)
+        )
     }
-    val pfpOverrideExisting = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getBoolean("${prefix}_custom_pfp_override_existing", true) else (defaultPfpOverride ?: true)
+    var overrideExisting by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_override_existing")) prefs.getBoolean("${prefix}_custom_pfp_override_existing", true)
+            else if (isContactSpecific) defaultPfpOverride
+            else prefs.getBoolean("${prefix}_custom_pfp_override_existing", true)
+        )
     }
-    val pfpShowForNoPfp = remember(settingsVersion) {
-        if (hasPerContactPfpConfigured) prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true) else (defaultPfpShowForNoPfp ?: true)
+    var exceptPfp by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_except_pfp")) prefs.getBoolean("${prefix}_custom_pfp_except_pfp", false)
+            else if (isContactSpecific) defaultPfpExceptPfp
+            else prefs.getBoolean("${prefix}_custom_pfp_except_pfp", false)
+        )
     }
-    val pfpSize = remember(settingsVersion) {
-        (if (hasPerContactPfpConfigured) prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)).coerceIn(0.1f, 1.0f)
+    var showForNoPfp by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_show_for_no_pfp")) prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
+            else if (isContactSpecific) defaultPfpShowForNoPfp
+            else prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", true)
+        )
     }
-    val pfpShape = remember(settingsVersion) {
-        (if (hasPerContactPfpConfigured) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")) ?: "circle"
+    var pfpSize by remember(settingsVersion) {
+        mutableFloatStateOf(
+            (if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_size")) prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize)
+            else if (isContactSpecific) defaultPfpSize
+            else prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize)).coerceIn(0.1f, 1.0f)
+        )
+    }
+    var pfpShape by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_shape")) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape) ?: defaultPfpShape
+            else if (isContactSpecific) defaultPfpShape
+            else prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape) ?: defaultPfpShape
+        )
     }
     val previewAvatarSize = if (pfpSize <= 0.50f) {
         (80.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
@@ -186,15 +297,24 @@ fun CustomBackgroundPickerScreen(
     val previewIconSize = (previewAvatarSize * 0.50f).coerceAtLeast(12.dp)
     val isPfpCircle = pfpShape != "square"
     val pfpAvatarShape = if (isPfpCircle) CircleShape else RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)
-    val customPfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
-    val hasPreviewCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && customPfpFile != null && customPfpFile.exists() && (pfpShowForNoPfp || pfpOverrideExisting)
+    val pfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
+    val customPfpFile = pfpFile
+    val hasCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && pfpFile != null && pfpFile.exists()
+    val hasPreviewCustomPfp = hasCustomPfp && (showForNoPfp || overrideExisting)
+    val pfpLabel = when (pfpType) {
+        "wallpaper" -> "Device Wallpaper"
+        "picture"   -> "Custom Picture"
+        "video"     -> "Custom Video"
+        else        -> "None (Default Face Icon)"
+    }
+
+    var showPfpOptionsPopup by remember { mutableStateOf(false) }
+    var showShapeDialog by remember { mutableStateOf(false) }
 
     var elementsThemeMode by remember(settingsVersion) {
         mutableStateOf(
-            prefs.getString(
-                "${prefix}_elements_theme",
-                prefs.getString(PreferenceManager.KEY_INCOMING_ELEMENTS_THEME, "auto") ?: "auto"
-            ) ?: "auto"
+            if (isContactSpecific && prefs.contains("${prefix}_elements_theme")) prefs.getString("${prefix}_elements_theme", defaultElementsTheme) ?: defaultElementsTheme
+            else defaultElementsTheme
         )
     }
     var showElementsThemePopup by remember { mutableStateOf(false) }
@@ -204,43 +324,32 @@ fun CustomBackgroundPickerScreen(
         mutableStateOf(prefs.getBoolean(autoRefreshKey, false))
     }
 
-    val fontShadowKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_shadow" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SHADOW else PreferenceManager.KEY_ONGOING_FONT_SHADOW)
-    val fontSizeScaleKey = if (!contactKey.isNullOrEmpty()) "${prefix}_font_size_scale" else (if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE else PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE)
-
     var fontColorMode by remember(settingsVersion) {
         mutableStateOf(
-            prefs.getString(
-                "${prefix}_font_color_mode",
-                if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default"
-                else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
-            ) ?: "default"
+            if (isContactSpecific && prefs.contains(fontColorModeKey)) prefs.getString(fontColorModeKey, defaultFontColorMode) ?: defaultFontColorMode
+            else if (isContactSpecific) defaultFontColorMode
+            else prefs.getString(fontColorModeKey, "default") ?: "default"
         )
     }
     var customFontColorInt by remember(settingsVersion) {
         mutableIntStateOf(
-            prefs.getInt(
-                "${prefix}_font_color",
-                if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE)
-                else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
-            )
+            if (isContactSpecific && prefs.contains(fontColorKey)) prefs.getInt(fontColorKey, defaultFontColorInt)
+            else if (isContactSpecific) defaultFontColorInt
+            else prefs.getInt(fontColorKey, android.graphics.Color.WHITE)
         )
     }
     var fontShadow by remember(settingsVersion) {
         mutableStateOf(
-            prefs.getBoolean(
-                "${prefix}_font_shadow",
-                if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_FONT_SHADOW, false)
-                else prefs.getBoolean(PreferenceManager.KEY_ONGOING_FONT_SHADOW, false)
-            )
+            if (isContactSpecific && prefs.contains(fontShadowKey)) prefs.getBoolean(fontShadowKey, defaultFontShadow)
+            else if (isContactSpecific) defaultFontShadow
+            else prefs.getBoolean(fontShadowKey, false)
         )
     }
     var fontSizeScale by remember(settingsVersion) {
         mutableFloatStateOf(
-            prefs.getFloat(
-                "${prefix}_font_size_scale",
-                if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_FONT_SIZE_SCALE, 1.0f)
-                else prefs.getFloat(PreferenceManager.KEY_ONGOING_FONT_SIZE_SCALE, 1.0f)
-            )
+            if (isContactSpecific && prefs.contains(fontSizeScaleKey)) prefs.getFloat(fontSizeScaleKey, defaultFontSizeScale)
+            else if (isContactSpecific) defaultFontSizeScale
+            else prefs.getFloat(fontSizeScaleKey, 1.0f)
         )
     }
 
@@ -339,29 +448,41 @@ fun CustomBackgroundPickerScreen(
             isVideo = isVideo,
             bgType = type,
             prefixOverride = prefix,
-            initialZoom = bgZoom,
-            initialPanX = bgPanX,
-            initialPanY = bgPanY,
-            initialDim = bgDim,
-            initialBlur = bgBlur,
-            initialVideoSpeed = bgVideoSpeed,
+            isPfpEditor = isEditingPfp,
+            initialZoom = if (isEditingPfp) pfpZoom else bgZoom,
+            initialPanX = if (isEditingPfp) pfpPanX else bgPanX,
+            initialPanY = if (isEditingPfp) pfpPanY else bgPanY,
+            initialDim = if (isEditingPfp) pfpDim else bgDim,
+            initialBlur = if (isEditingPfp) pfpBlur else bgBlur,
+            initialVideoSpeed = if (isEditingPfp) pfpVideoSpeed else bgVideoSpeed,
             onDismiss = {
-                editorMediaState?.let { (file, _, _) ->
+                editorMediaState?.let { (f, _, _) ->
                     scope.launch(Dispatchers.IO) {
-                        BackgroundMediaManager.cleanupFileIfInCache(context, file)
+                        BackgroundMediaManager.cleanupFileIfInCache(context, f)
                     }
                 }
                 editorMediaState = null
             },
             onSaveSuccess = {
-                bgType = type
-                bgPath = prefs.getString("${prefix}_bg_path", "") ?: ""
-                bgZoom = prefs.getFloat("${prefix}_bg_zoom", 1f)
-                bgPanX = prefs.getFloat("${prefix}_bg_pan_x", 0f)
-                bgPanY = prefs.getFloat("${prefix}_bg_pan_y", 0f)
-                bgDim = prefs.getFloat("${prefix}_bg_dim", 0f)
-                bgBlur = prefs.getFloat("${prefix}_bg_blur", 0f)
-                bgVideoSpeed = prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
+                if (isEditingPfp) {
+                    pfpType = type
+                    pfpPath = prefs.getString("${prefix}_custom_pfp_path", "") ?: ""
+                    pfpZoom = prefs.getFloat("${prefix}_custom_pfp_zoom", 1f)
+                    pfpPanX = prefs.getFloat("${prefix}_custom_pfp_pan_x", 0f)
+                    pfpPanY = prefs.getFloat("${prefix}_custom_pfp_pan_y", 0f)
+                    pfpDim = prefs.getFloat("${prefix}_custom_pfp_dim", 0f)
+                    pfpBlur = prefs.getFloat("${prefix}_custom_pfp_blur", 0f)
+                    pfpVideoSpeed = prefs.getFloat("${prefix}_custom_pfp_video_speed", 1.0f)
+                } else {
+                    bgType = type
+                    bgPath = prefs.getString("${prefix}_bg_path", "") ?: ""
+                    bgZoom = prefs.getFloat("${prefix}_bg_zoom", 1f)
+                    bgPanX = prefs.getFloat("${prefix}_bg_pan_x", 0f)
+                    bgPanY = prefs.getFloat("${prefix}_bg_pan_y", 0f)
+                    bgDim = prefs.getFloat("${prefix}_bg_dim", 0f)
+                    bgBlur = prefs.getFloat("${prefix}_bg_blur", 0f)
+                    bgVideoSpeed = prefs.getFloat("${prefix}_bg_video_speed", 1.0f)
+                }
                 editorMediaState = null
                 BackgroundMediaManager.autoCleanInBackground(context, prefs)
             }
@@ -438,12 +559,12 @@ fun CustomBackgroundPickerScreen(
                     Column {
                         Text(
                             if (!contactKey.isNullOrEmpty()) "${contactDisplayName ?: "Contact"} — ${if (isIncoming) "Incoming" else "Ongoing"}"
-                            else if (isIncoming) "Incoming Call Background" else "Ongoing Call Background",
+                            else "Background And Contact PFP Customisation",
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            if (!contactKey.isNullOrEmpty()) "Custom background for this contact"
-                            else if (isIncoming) "Customize incoming call screen" else "Customize ongoing call screen",
+                            if (!contactKey.isNullOrEmpty()) "Custom background and avatar for this contact"
+                            else if (isIncoming) "Incoming Call UI" else "Ongoing Call UI",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -451,19 +572,109 @@ fun CustomBackgroundPickerScreen(
                 },
                 onBackClick = { navigator.navigateUp() },
                 actions = {
-                    if (hasCustomBg) {
-                        IconButton(onClick = {
-                            prefs.remove("${prefix}_bg_type")
-                            prefs.remove("${prefix}_bg_path")
-                            bgType = "none"
-                            bgPath = ""
-                            Toast.makeText(context, "Background reset to default", Toast.LENGTH_SHORT).show()
-                        }) {
+                    if (isContactSpecific) {
+                        IconButton(
+                            onClick = {
+                                val keysToRemove = listOf(
+                                    "${prefix}_bg_type",
+                                    "${prefix}_bg_path",
+                                    "${prefix}_bg_zoom",
+                                    "${prefix}_bg_pan_x",
+                                    "${prefix}_bg_pan_y",
+                                    "${prefix}_bg_dim",
+                                    "${prefix}_bg_blur",
+                                    "${prefix}_bg_video_speed",
+                                    "${prefix}_elements_theme",
+                                    "${prefix}_custom_pfp_type",
+                                    "${prefix}_custom_pfp_path",
+                                    "${prefix}_custom_pfp_zoom",
+                                    "${prefix}_custom_pfp_pan_x",
+                                    "${prefix}_custom_pfp_pan_y",
+                                    "${prefix}_custom_pfp_dim",
+                                    "${prefix}_custom_pfp_blur",
+                                    "${prefix}_custom_pfp_video_speed",
+                                    "${prefix}_custom_pfp_override_existing",
+                                    "${prefix}_custom_pfp_except_pfp",
+                                    "${prefix}_custom_pfp_show_for_no_pfp",
+                                    "${prefix}_custom_pfp_size",
+                                    "${prefix}_custom_pfp_shape",
+                                    "${prefix}_font_color_mode",
+                                    "${prefix}_font_color",
+                                    "${prefix}_font_shadow",
+                                    "${prefix}_font_size_scale"
+                                )
+                                keysToRemove.forEach { prefs.remove(it) }
+
+                                bgType = defaultBgType
+                                bgPath = defaultBgPath
+                                bgZoom = defaultBgZoom
+                                bgPanX = defaultBgPanX
+                                bgPanY = defaultBgPanY
+                                bgDim = defaultBgDim
+                                bgBlur = defaultBgBlur
+                                bgVideoSpeed = defaultBgVideoSpeed
+                                elementsThemeMode = defaultElementsTheme
+
+                                pfpType = defaultPfpType
+                                pfpPath = defaultPfpPath
+                                pfpZoom = defaultPfpZoom
+                                pfpPanX = defaultPfpPanX
+                                pfpPanY = defaultPfpPanY
+                                pfpDim = defaultPfpDim
+                                pfpBlur = defaultPfpBlur
+                                pfpVideoSpeed = defaultPfpVideoSpeed
+                                overrideExisting = defaultPfpOverride
+                                exceptPfp = defaultPfpExceptPfp
+                                showForNoPfp = defaultPfpShowForNoPfp
+                                pfpSize = defaultPfpSize
+                                pfpShape = defaultPfpShape
+
+                                fontColorMode = defaultFontColorMode
+                                customFontColorInt = defaultFontColorInt
+                                fontShadow = defaultFontShadow
+                                fontSizeScale = defaultFontSizeScale
+
+                                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                                Toast.makeText(context, "Reset to global settings configuration", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
                             Icon(
-                                Icons.Default.DeleteOutline,
-                                contentDescription = "Reset Background",
-                                tint = MaterialTheme.colorScheme.error
+                                Icons.Default.Refresh,
+                                contentDescription = "Reset to Settings Default",
+                                tint = MaterialTheme.colorScheme.primary
                             )
+                        }
+                    } else {
+                        if (selectedTab == 0 && hasCustomBg) {
+                            IconButton(onClick = {
+                                prefs.remove("${prefix}_bg_type")
+                                prefs.remove("${prefix}_bg_path")
+                                bgType = "none"
+                                bgPath = ""
+                                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                                Toast.makeText(context, "Background reset to default", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    Icons.Default.DeleteOutline,
+                                    contentDescription = "Reset Background",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        } else if (selectedTab == 1 && hasCustomPfp) {
+                            IconButton(onClick = {
+                                pfpType = "none"
+                                pfpPath = ""
+                                prefs.setString("${prefix}_custom_pfp_type", "none")
+                                prefs.setString("${prefix}_custom_pfp_path", "")
+                                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                                Toast.makeText(context, "Contact PFP reset to default", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    Icons.Default.DeleteOutline,
+                                    contentDescription = "Reset Contact PFP",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
@@ -497,6 +708,23 @@ fun CustomBackgroundPickerScreen(
                                 .width(185.dp)
                                 .height(370.dp)
                                 .clip(RoundedCornerShape(32.dp))
+                                .clickable {
+                                    if (selectedTab == 0) {
+                                        if (hasCustomBg && bgFile != null) {
+                                            isEditingPfp = false
+                                            editorMediaState = Triple(bgFile, bgType == "video", bgType)
+                                        } else {
+                                            showOptionsPopup = true
+                                        }
+                                    } else {
+                                        if (hasCustomPfp && pfpFile != null) {
+                                            isEditingPfp = true
+                                            editorMediaState = Triple(pfpFile, pfpType == "video", pfpType)
+                                        } else {
+                                            showPfpOptionsPopup = true
+                                        }
+                                    }
+                                }
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 // Background Layer
@@ -650,7 +878,7 @@ fun CustomBackgroundPickerScreen(
                                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                                         ) {
                                                             Text(
-                                                                "Jane Doe",
+                                                                contactDisplayName ?: "Jane Doe",
                                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                                     fontWeight = FontWeight.Bold,
                                                                     shadow = textShadow,
@@ -708,7 +936,7 @@ fun CustomBackgroundPickerScreen(
 
                                             if (!isPfpLarge) {
                                                 Text(
-                                                    "Jane Doe",
+                                                    contactDisplayName ?: "Jane Doe",
                                                     style = MaterialTheme.typography.titleMedium.copy(
                                                         fontWeight = FontWeight.Bold,
                                                         shadow = textShadow,
@@ -945,7 +1173,7 @@ fun CustomBackgroundPickerScreen(
                                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                                         ) {
                                                             Text(
-                                                                "Jane Doe",
+                                                                contactDisplayName ?: "Jane Doe",
                                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                                     fontWeight = FontWeight.Bold,
                                                                     shadow = textShadow,
@@ -1003,7 +1231,7 @@ fun CustomBackgroundPickerScreen(
 
                                             if (!isPfpLarge) {
                                                 Text(
-                                                    "Jane Doe",
+                                                    contactDisplayName ?: "Jane Doe",
                                                     style = MaterialTheme.typography.titleMedium.copy(
                                                         fontWeight = FontWeight.Bold,
                                                         shadow = textShadow,
@@ -1158,32 +1386,212 @@ fun CustomBackgroundPickerScreen(
                             }
                         }
 
-                        // Customize / Adjust button if custom bg active
-                        if (hasCustomBg && bgFile != null) {
+                        // Customize / Adjust button if custom media active for selected tab
+                        val canAdjust = (selectedTab == 0 && hasCustomBg && bgFile != null) || (selectedTab == 1 && hasCustomPfp && pfpFile != null)
+                        if (canAdjust) {
                             Spacer(Modifier.height(10.dp))
                             FilledTonalButton(
                                 onClick = {
-                                    editorMediaState = Triple(bgFile, bgType == "video", bgType)
+                                    if (selectedTab == 0 && bgFile != null) {
+                                        isEditingPfp = false
+                                        editorMediaState = Triple(bgFile, bgType == "video", bgType)
+                                    } else if (selectedTab == 1 && pfpFile != null) {
+                                        isEditingPfp = true
+                                        editorMediaState = Triple(pfpFile, pfpType == "video", pfpType)
+                                    }
                                 },
                                 shape = RoundedCornerShape(16.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Adjust Zoom, Blur & Dim", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    if (selectedTab == 0) "Adjust Background Zoom, Blur & Dim" else "Adjust Contact PFP Zoom, Blur & Dim",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // ── Incoming UI Elements Theme ────────────────────────────────
-            if (isIncoming) {
+            // ── Two Pills: Ongoing / Incoming Call Background & Contact PFP Customisation ────
+            item {
+                RivoAnimatedSection(delayMs = 5L) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val bgTabLabel = if (isIncoming) "Incoming Call Background" else "Ongoing Call Background"
+                            val isBgSelected = selectedTab == 0
+                            val isPfpSelected = selectedTab == 1
+
+                            Surface(
+                                onClick = { selectedTab = 0 },
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isBgSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Wallpaper,
+                                        contentDescription = null,
+                                        tint = if (isBgSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = bgTabLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (isBgSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isBgSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                onClick = { selectedTab = 1 },
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isPfpSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.AccountCircle,
+                                        contentDescription = null,
+                                        tint = if (isPfpSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Contact PFP Customisation",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (isPfpSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isPfpSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── TAB 0: Background Source (and Elements Theme for Incoming) ───
+            if (selectedTab == 0) {
+                // ── Incoming UI Elements Theme ────────────────────────────────
+                if (isIncoming) {
+                    item {
+                        RivoAnimatedSection(delayMs = 10L) {
+                            Column {
+                                Text(
+                                    "Incoming UI Elements Theme",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                                )
+
+                                RivoExpressiveCard {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        val currentThemeTitle = when (elementsThemeMode) {
+                                            "light" -> "Light mode"
+                                            "dark" -> "Dark mode"
+                                            else -> "App preference (Default)"
+                                        }
+                                        val currentThemeSubtitle = when (elementsThemeMode) {
+                                            "light" -> "Force light styling for slider & message button"
+                                            "dark" -> "Force dark styling for slider & message button"
+                                            else -> "Follows appearance settings"
+                                        }
+                                        val currentThemeIcon = when (elementsThemeMode) {
+                                            "light" -> Icons.Outlined.LightMode
+                                            "dark" -> Icons.Outlined.DarkMode
+                                            else -> Icons.Outlined.BrightnessAuto
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                modifier = Modifier.size(48.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        currentThemeIcon,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    currentThemeTitle,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    currentThemeSubtitle,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = { showElementsThemePopup = true },
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ),
+                                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Change Elements Theme", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Background Source Options ─────────────────────────────
                 item {
-                    RivoAnimatedSection(delayMs = 10L) {
+                    RivoAnimatedSection(delayMs = 15L) {
                         Column {
                             Text(
-                                "Incoming UI Elements Theme",
+                                "Background Source",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
@@ -1191,21 +1599,26 @@ fun CustomBackgroundPickerScreen(
 
                             RivoExpressiveCard {
                                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    val currentThemeTitle = when (elementsThemeMode) {
-                                        "light" -> "Light mode"
-                                        "dark" -> "Dark mode"
-                                        else -> "App preference (Default)"
+                                    val currentSourceIcon = when (bgType) {
+                                        "wallpaper" -> Icons.Outlined.PhoneAndroid
+                                        "picture" -> Icons.Outlined.Image
+                                        "video" -> Icons.Outlined.Videocam
+                                        else -> Icons.Outlined.NotInterested
                                     }
-                                    val currentThemeSubtitle = when (elementsThemeMode) {
-                                        "light" -> "Force light styling for slider & message button"
-                                        "dark" -> "Force dark styling for slider & message button"
-                                        else -> "Follows appearance settings"
+                                    val currentSourceTitle = when (bgType) {
+                                        "wallpaper" -> "Device Wallpaper"
+                                        "picture" -> "Custom Picture"
+                                        "video" -> "Custom Video"
+                                        else -> "None (Default)"
                                     }
-                                    val currentThemeIcon = when (elementsThemeMode) {
-                                        "light" -> Icons.Outlined.LightMode
-                                        "dark" -> Icons.Outlined.DarkMode
-                                        else -> Icons.Outlined.BrightnessAuto
+                                    val currentSourceSubtitle = when (bgType) {
+                                        "wallpaper" -> "Active device system wallpaper"
+                                        "picture" -> "Custom photo selected"
+                                        "video" -> "Custom looping video selected"
+                                        else -> "Using default solid background"
                                     }
+                                    val currentContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                    val currentIconColor = MaterialTheme.colorScheme.primary
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -1214,26 +1627,26 @@ fun CustomBackgroundPickerScreen(
                                     ) {
                                         Surface(
                                             shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            color = currentContainerColor,
                                             modifier = Modifier.size(48.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
                                                 Icon(
-                                                    currentThemeIcon,
+                                                    currentSourceIcon,
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    tint = currentIconColor,
                                                     modifier = Modifier.size(24.dp)
                                                 )
                                             }
                                         }
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                currentThemeTitle,
+                                                currentSourceTitle,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                currentThemeSubtitle,
+                                                currentSourceSubtitle,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -1241,17 +1654,78 @@ fun CustomBackgroundPickerScreen(
                                     }
 
                                     Button(
-                                        onClick = { showElementsThemePopup = true },
+                                        onClick = { showOptionsPopup = true },
                                         shape = RoundedCornerShape(16.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
                                         ),
                                         modifier = Modifier.fillMaxWidth().height(48.dp)
                                     ) {
-                                        Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(8.dp))
-                                        Text("Change Elements Theme", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                        Text("Choose Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    if (bgType == "wallpaper") {
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    val next = !autoRefreshWallpaper
+                                                    autoRefreshWallpaper = next
+                                                    prefs.setBoolean(autoRefreshKey, next)
+                                                }
+                                                .padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            Icons.Outlined.Sync,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Column {
+                                                    Text(
+                                                        "Auto refresh wallpaper every app start",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                    Text(
+                                                        "Automatically refreshes the system wallpaper whenever you open the app",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            Switch(
+                                                checked = autoRefreshWallpaper,
+                                                onCheckedChange = {
+                                                    autoRefreshWallpaper = it
+                                                    prefs.setBoolean(autoRefreshKey, it)
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1260,215 +1734,355 @@ fun CustomBackgroundPickerScreen(
                 }
             }
 
-            // ── Text & Font Color Customizer ─────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 15L) {
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-                        ) {
-                            Icon(
-                                Icons.Outlined.FormatColorText,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                "Caller Info Font Color",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+            // ── TAB 1: Contact PFP Customisation (Caller Info Font Color + Contact PFP Options) ───
+            if (selectedTab == 1) {
+                // ── Text & Font Color Customizer ─────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 10L) {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.FormatColorText,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    "Caller Info Font Color",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
 
-                        RivoExpressiveCard {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                // 2 Options: Default vs Custom
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    // Default Option
-                                    Surface(
-                                        onClick = {
-                                            fontColorMode = "default"
-                                            val keyMode = if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE
-                                            prefs.setString(keyMode, "default")
-                                        },
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = if (fontColorMode == "default") MaterialTheme.colorScheme.primaryContainer
-                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        border = if (fontColorMode == "default") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                                        modifier = Modifier.weight(1f).height(48.dp)
+                            RivoExpressiveCard {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    // 2 Options: Default vs Custom
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        // Default Option
+                                        Surface(
+                                            onClick = {
+                                                fontColorMode = "default"
+                                                prefs.setString(fontColorModeKey, "default")
+                                            },
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (fontColorMode == "default") MaterialTheme.colorScheme.primaryContainer
+                                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            border = if (fontColorMode == "default") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                            modifier = Modifier.weight(1f).height(48.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.AutoAwesome,
+                                                    contentDescription = null,
+                                                    tint = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    "Default (Adaptive)",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = if (fontColorMode == "default") FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        }
+
+                                        // Custom Option
+                                        Surface(
+                                            onClick = {
+                                                fontColorMode = "custom"
+                                                prefs.setString(fontColorModeKey, "custom")
+                                                prefs.setInt(fontColorKey, customFontColorInt)
+                                            },
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primaryContainer
+                                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            border = if (fontColorMode == "custom") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                            modifier = Modifier.weight(1f).height(48.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = Color(customFontColorInt),
+                                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                                                    modifier = Modifier.size(16.dp)
+                                                ) {}
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    "Custom Color",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = if (fontColorMode == "custom") FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Interactive Color Picker (Visible when "custom" selected)
+                                    AnimatedVisibility(
+                                        visible = fontColorMode == "custom",
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                                        ) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                            InteractiveColorPicker(
+                                                initialColor = Color(customFontColorInt),
+                                                onColorChanged = { newColor ->
+                                                    val argb = newColor.toArgb()
+                                                    customFontColorInt = argb
+                                                    prefs.setString(fontColorModeKey, "custom")
+                                                    prefs.setInt(fontColorKey, argb)
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                    // Font Shadow Checkbox
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                fontShadow = !fontShadow
+                                                prefs.setBoolean(fontShadowKey, fontShadow)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Row(
-                                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.weight(1f)
                                         ) {
                                             Icon(
-                                                Icons.Outlined.AutoAwesome,
+                                                Icons.Outlined.Layers,
                                                 contentDescription = null,
-                                                tint = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp)
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
                                             )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                "Default (Adaptive)",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = if (fontColorMode == "default") FontWeight.Bold else FontWeight.Medium,
-                                                color = if (fontColorMode == "default") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
+                                            Column {
+                                                Text(
+                                                    "Text Shadow",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    "Add shadow behind caller text for better readability",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
-                                    }
-
-                                    // Custom Option
-                                    Surface(
-                                        onClick = {
-                                            fontColorMode = "custom"
-                                            val keyMode = if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE
-                                            val keyColor = if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR
-                                            prefs.setString(keyMode, "custom")
-                                            prefs.setInt(keyColor, customFontColorInt)
-                                        },
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primaryContainer
-                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        border = if (fontColorMode == "custom") androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                                        modifier = Modifier.weight(1f).height(48.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            // Color indicator dot
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = Color(customFontColorInt),
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-                                                modifier = Modifier.size(16.dp)
-                                            ) {}
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                "Custom Color",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = if (fontColorMode == "custom") FontWeight.Bold else FontWeight.Medium,
-                                                color = if (fontColorMode == "custom") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Interactive Color Picker (Visible when "custom" selected)
-                                AnimatedVisibility(
-                                    visible = fontColorMode == "custom",
-                                    enter = fadeIn() + expandVertically(),
-                                    exit = fadeOut() + shrinkVertically()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                                    ) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                                        InteractiveColorPicker(
-                                            initialColor = Color(customFontColorInt),
-                                            onColorChanged = { newColor ->
-                                                val argb = newColor.toArgb()
-                                                customFontColorInt = argb
-                                                val keyMode = if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE else PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE
-                                                val keyColor = if (isIncoming) PreferenceManager.KEY_INCOMING_FONT_COLOR else PreferenceManager.KEY_ONGOING_FONT_COLOR
-                                                prefs.setString(keyMode, "custom")
-                                                prefs.setInt(keyColor, argb)
+                                        Checkbox(
+                                            checked = fontShadow,
+                                            onCheckedChange = { isChecked ->
+                                                fontShadow = isChecked
+                                                prefs.setBoolean(fontShadowKey, isChecked)
                                             }
                                         )
                                     }
+
+                                    // Font Size Scale Slider
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.FormatSize,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Text(
+                                                    "Text Size",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                            ) {
+                                                Text(
+                                                    "${(fontSizeScale * 100).roundToInt()}%",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Slider(
+                                            value = fontSizeScale,
+                                            onValueChange = { newScale ->
+                                                fontSizeScale = newScale
+                                                prefs.setFloat(fontSizeScaleKey, newScale)
+                                            },
+                                            valueRange = 0.70f..1.50f,
+                                            steps = 15,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Contact PFP Container & Options ──────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 15L) {
+                        Column {
+                            Text(
+                                "Contact PFP Customisation",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                            )
+
+                            RivoExpressiveCard {
+                                // Clickable container for Contact PFP
+                                RivoListItem(
+                                    headline = "Contact PFP",
+                                    supporting = "Currently: $pfpLabel",
+                                    leadingIcon = Icons.Outlined.AccountCircle,
+                                    iconContainerColor = Color(0xFF00BCD4),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showPfpOptionsPopup = true }
+                                )
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // Checkbox 1: Override if contact has a PFP (default: checked)
+                                RivoCheckboxListItem(
+                                    headline = "Override if the contact has a PFP",
+                                    supporting = "Show custom contact PFP or apply custom styles even when the contact has their own photo",
+                                    leadingIcon = Icons.Outlined.AccountCircle,
+                                    iconContainerColor = Color(0xFF9C27B0),
+                                    checked = overrideExisting,
+                                    onCheckedChange = {
+                                        overrideExisting = it
+                                        prefs.setBoolean("${prefix}_custom_pfp_override_existing", it)
+                                    }
+                                )
+
+                                // Indented Sub-Checkbox: All configurations Except the custom pfp
+                                AnimatedVisibility(
+                                    visible = overrideExisting,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Column {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 32.dp, end = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                        )
+                                        RivoCheckboxListItem(
+                                            headline = "All configurations Except the custom pfp",
+                                            supporting = "Apply size, shape, zoom, blur, and font styling to the contact's original photo without replacing it",
+                                            leadingIcon = Icons.Outlined.AutoAwesome,
+                                            iconContainerColor = Color(0xFF009688),
+                                            checked = exceptPfp,
+                                            onCheckedChange = {
+                                                exceptPfp = it
+                                                prefs.setBoolean("${prefix}_custom_pfp_except_pfp", it)
+                                            },
+                                            modifier = Modifier.padding(start = 24.dp)
+                                        )
+                                    }
                                 }
 
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
 
-                                // Font Shadow Checkbox
-                                Row(
+                                // Checkbox 2: If contact/number has no PFP then show custom contact PFP
+                                RivoCheckboxListItem(
+                                    headline = "If the number or contact has no PFP then show the custom contact PFP",
+                                    supporting = "Apply custom contact PFP for callers and numbers without a profile photo",
+                                    leadingIcon = Icons.Outlined.Face,
+                                    iconContainerColor = Color(0xFF4CAF50),
+                                    checked = showForNoPfp,
+                                    onCheckedChange = {
+                                        showForNoPfp = it
+                                        prefs.setBoolean("${prefix}_custom_pfp_show_for_no_pfp", it)
+                                    }
+                                )
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // Feature 3: PFP Size Slider
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            fontShadow = !fontShadow
-                                            prefs.setBoolean(fontShadowKey, fontShadow)
-                                        }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.Layers,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Column {
-                                            Text(
-                                                "Text Shadow",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                "Add shadow behind caller text for better readability",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    Checkbox(
-                                        checked = fontShadow,
-                                        onCheckedChange = { isChecked ->
-                                            fontShadow = isChecked
-                                            prefs.setBoolean(fontShadowKey, isChecked)
-                                        }
-                                    )
-                                }
-
-                                // Font Size Scale Slider
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.FormatSize,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "PFP Size",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                "Text Size",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                "Adjust display size (50% is standard, 100% touches screen edges)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                            modifier = Modifier.padding(start = 8.dp)
                                         ) {
                                             Text(
-                                                "${(fontSizeScale * 100).roundToInt()}%",
+                                                "${(pfpSize * 100).roundToInt()}%",
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary,
@@ -1476,165 +2090,61 @@ fun CustomBackgroundPickerScreen(
                                             )
                                         }
                                     }
-
                                     Slider(
-                                        value = fontSizeScale,
-                                        onValueChange = { newScale ->
-                                            fontSizeScale = newScale
-                                            prefs.setFloat(fontSizeScaleKey, newScale)
+                                        value = pfpSize,
+                                        onValueChange = {
+                                            pfpSize = it
+                                            prefs.setFloat("${prefix}_custom_pfp_size", it)
                                         },
-                                        valueRange = 0.70f..1.50f,
-                                        steps = 15,
-                                        modifier = Modifier.fillMaxWidth()
+                                        valueRange = 0.10f..1.0f,
+                                        steps = 17,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                     )
                                 }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // Feature 4: PFP Shape Chooser
+                                RivoListItem(
+                                    headline = "PFP Shape",
+                                    supporting = if (pfpShape == "square") "Square" else "Circle (Default)",
+                                    leadingIcon = if (pfpShape == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                                    iconContainerColor = Color(0xFF673AB7),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showShapeDialog = true }
+                                )
                             }
                         }
                     }
                 }
-            }
 
-            // ── Background Source Options ─────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 25L) {
-                    Column {
-                        Text(
-                            "Background Source",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-                        )
-
-                        RivoExpressiveCard {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                val currentSourceIcon = when (bgType) {
-                                    "wallpaper" -> Icons.Outlined.PhoneAndroid
-                                    "picture" -> Icons.Outlined.Image
-                                    "video" -> Icons.Outlined.Videocam
-                                    else -> Icons.Outlined.NotInterested
-                                }
-                                val currentSourceTitle = when (bgType) {
-                                    "wallpaper" -> "Device Wallpaper"
-                                    "picture" -> "Custom Picture"
-                                    "video" -> "Custom Video"
-                                    else -> "None (Default)"
-                                }
-                                val currentSourceSubtitle = when (bgType) {
-                                    "wallpaper" -> "Active device system wallpaper"
-                                    "picture" -> "Custom photo selected"
-                                    "video" -> "Custom looping video selected"
-                                    else -> "Using default solid background"
-                                }
-                                val currentContainerColor = MaterialTheme.colorScheme.primaryContainer
-                                val currentIconColor = MaterialTheme.colorScheme.primary
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = currentContainerColor,
-                                        modifier = Modifier.size(48.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                currentSourceIcon,
-                                                contentDescription = null,
-                                                tint = currentIconColor,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            currentSourceTitle,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            currentSourceSubtitle,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { showOptionsPopup = true },
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
-                                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Choose Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                                }
-
-                                if (bgType == "wallpaper") {
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                        modifier = Modifier.padding(vertical = 2.dp)
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                val next = !autoRefreshWallpaper
-                                                autoRefreshWallpaper = next
-                                                prefs.setBoolean(autoRefreshKey, next)
-                                            }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.weight(1f),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.primaryContainer,
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        Icons.Outlined.Sync,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            }
-                                            Column {
-                                                Text(
-                                                    "Auto refresh wallpaper every app start",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                                Text(
-                                                    "Automatically refreshes the system wallpaper whenever you open the app",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                        Spacer(Modifier.width(8.dp))
-                                        Switch(
-                                            checked = autoRefreshWallpaper,
-                                            onCheckedChange = {
-                                                autoRefreshWallpaper = it
-                                                prefs.setBoolean(autoRefreshKey, it)
-                                            }
-                                        )
-                                    }
-                                }
+                // ── Information & Explanation Box ────────────────────────────────────
+                item {
+                    RivoAnimatedSection(delayMs = 20L) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Text(
+                                    "When Contact PFP is set to None, contacts and numbers without a profile picture will show the default face vector icon.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -1656,8 +2166,92 @@ fun CustomBackgroundPickerScreen(
                 Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
             },
             onOpenEditor = { file, isVideo, type ->
+                isEditingPfp = false
                 editorMediaState = Triple(file, isVideo, type)
                 showOptionsPopup = false
+            }
+        )
+    }
+
+    if (showPfpOptionsPopup) {
+        CustomBackgroundOptionsPopup(
+            target = target,
+            currentType = pfpType,
+            dialogTitle = "Choose Contact PFP",
+            dialogSubtitle = if (isIncoming) "Incoming Call Screen" else "Ongoing Call Screen",
+            noneSubtitle = "Default face vector icon",
+            onDismiss = { showPfpOptionsPopup = false },
+            onSelectNone = {
+                pfpType = "none"
+                pfpPath = ""
+                prefs.setString("${prefix}_custom_pfp_type", "none")
+                prefs.setString("${prefix}_custom_pfp_path", "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Default face icon applied", Toast.LENGTH_SHORT).show()
+            },
+            onOpenEditor = { file, isVideo, type ->
+                isEditingPfp = true
+                editorMediaState = Triple(file, isVideo, type)
+                showPfpOptionsPopup = false
+            }
+        )
+    }
+
+    if (showShapeDialog) {
+        AlertDialog(
+            onDismissRequest = { showShapeDialog = false },
+            title = { Text("Choose PFP Shape", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Pair("circle", "Circle (Default)"),
+                        Pair("square", "Square")
+                    ).forEach { (shapeKey, shapeLabel) ->
+                        val isSelected = pfpShape == shapeKey
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    pfpShape = shapeKey
+                                    prefs.setString("${prefix}_custom_pfp_shape", shapeKey)
+                                    showShapeDialog = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Icon(
+                                        if (shapeKey == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                                        null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        shapeLabel,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showShapeDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }

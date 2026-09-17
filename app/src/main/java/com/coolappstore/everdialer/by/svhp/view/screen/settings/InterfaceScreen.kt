@@ -289,26 +289,24 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var contactInfoShowRecentActivity      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY, true)) }
     var contactInfoShowChooseSim           by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_SIM, true)) }
     var contactInfoShowCallingBackgrounds  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS, true)) }
-    var contactInfoShowAdvancedPfp         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_ADVANCED_PFP, true)) }
     var contactInfoShowRingtone            by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true)) }
     var contactInfoShowChooseDefaultNumber by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true)) }
     var contactInfoShowSavedIn             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true)) }
 
     data class ContactInfoElementOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val contactInfoElementOptions = listOf(
-        ContactInfoElementOption("quick_actions",         "Quick Actions",              Icons.Default.Call),
-        ContactInfoElementOption("contact_info",          "Contact Info",               Icons.Default.Info),
-        ContactInfoElementOption("social",                "Social",                     Icons.Default.Share),
-        ContactInfoElementOption("description",           "Description (Synced Notes)", Icons.Default.Description),
-        ContactInfoElementOption("notes",                 "Note (Phone Only)",          Icons.Default.Note),
-        ContactInfoElementOption("events",                "Events & More",              Icons.Default.Event),
-        ContactInfoElementOption("recent_activity",       "Recent Activity",            Icons.Default.History),
-        ContactInfoElementOption("choose_sim",            "Choose Sim",                 Icons.Default.SimCard),
-        ContactInfoElementOption("calling_backgrounds",   "Calling Backgrounds",        Icons.Default.Wallpaper),
-        ContactInfoElementOption("advanced_pfp",          "Advanced PFP",               Icons.Default.AccountCircle),
-        ContactInfoElementOption("ringtone",              "Ringtone",                   Icons.Default.MusicNote),
-        ContactInfoElementOption("choose_default_number", "Choose Default Number",      Icons.Default.Numbers),
-        ContactInfoElementOption("saved_in",              "Saved In",                   Icons.Default.Storage)
+        ContactInfoElementOption("quick_actions",         "Quick Actions",                                Icons.Default.Call),
+        ContactInfoElementOption("contact_info",          "Contact Info",                                 Icons.Default.Info),
+        ContactInfoElementOption("social",                "Social",                                       Icons.Default.Share),
+        ContactInfoElementOption("description",           "Description (Synced Notes)",                   Icons.Default.Description),
+        ContactInfoElementOption("notes",                 "Note (Phone Only)",                            Icons.Default.Note),
+        ContactInfoElementOption("events",                "Events & More",                                Icons.Default.Event),
+        ContactInfoElementOption("recent_activity",       "Recent Activity",                              Icons.Default.History),
+        ContactInfoElementOption("choose_sim",            "Choose Sim",                                   Icons.Default.SimCard),
+        ContactInfoElementOption("calling_backgrounds",   "Background And Contact PFP Customisation",     Icons.Default.Wallpaper),
+        ContactInfoElementOption("ringtone",              "Ringtone",                                     Icons.Default.MusicNote),
+        ContactInfoElementOption("choose_default_number", "Choose Default Number",                        Icons.Default.Numbers),
+        ContactInfoElementOption("saved_in",              "Saved In",                                     Icons.Default.Storage)
     )
 
     val contactInfoElementOrder = remember {
@@ -335,7 +333,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         contactInfoShowRecentActivity      = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY, true)
         contactInfoShowChooseSim           = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_SIM, true)
         contactInfoShowCallingBackgrounds  = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS, true)
-        contactInfoShowAdvancedPfp         = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_ADVANCED_PFP, true)
         contactInfoShowRingtone            = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true)
         contactInfoShowChooseDefaultNumber = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true)
         contactInfoShowSavedIn             = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true)
@@ -951,7 +948,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             "recent_activity"       -> contactInfoShowRecentActivity
             "choose_sim"            -> contactInfoShowChooseSim
             "calling_backgrounds"   -> contactInfoShowCallingBackgrounds
-            "advanced_pfp"          -> contactInfoShowAdvancedPfp
             "ringtone"              -> contactInfoShowRingtone
             "choose_default_number" -> contactInfoShowChooseDefaultNumber
             "saved_in"              -> contactInfoShowSavedIn
@@ -968,7 +964,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 "recent_activity"       -> { contactInfoShowRecentActivity = value;      prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RECENT_ACTIVITY, value) }
                 "choose_sim"            -> { contactInfoShowChooseSim = value;           prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_SIM, value) }
                 "calling_backgrounds"   -> { contactInfoShowCallingBackgrounds = value;  prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CALLING_BACKGROUNDS, value) }
-                "advanced_pfp"          -> { contactInfoShowAdvancedPfp = value;         prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_ADVANCED_PFP, value) }
                 "ringtone"              -> { contactInfoShowRingtone = value;            prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, value) }
                 "choose_default_number" -> { contactInfoShowChooseDefaultNumber = value; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, value) }
                 "saved_in"              -> { contactInfoShowSavedIn = value;             prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, value) }
