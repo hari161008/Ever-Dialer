@@ -99,6 +99,14 @@ class PreferenceManager(context: Context) {
     fun setContactSimChoice(contactKey: String, choice: String) =
         setString(KEY_CONTACT_SIM_CHOICE_PREFIX + contactKey, choice)
 
+    fun getDefaultSwipeAction(section: String, direction: String): String = "none"
+
+    fun getSwipeAction(section: String, direction: String): String =
+        getString("swipe_action_${section}_${direction}", getDefaultSwipeAction(section, direction)) ?: getDefaultSwipeAction(section, direction)
+
+    fun setSwipeAction(section: String, direction: String, action: String) =
+        setString("swipe_action_${section}_${direction}", action)
+
     /** Per-contact "Choose Default Number" preference (Contact Info, just below "Choose Sim") for
      *  contacts saved with 2+ phone numbers. When set to one of the contact's numbers, the header
      *  call button calls that number directly instead of prompting with the number picker every
@@ -402,6 +410,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SATURATION_LEVEL_LIGHT = "saturation_level_light"
         const val KEY_SATURATION_LEVEL_DARK  = "saturation_level_dark"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
+        const val KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS = "show_blocked_calls_in_call_logs"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
         const val KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS = "show_fullscreen_call_ui_on_any_apps"

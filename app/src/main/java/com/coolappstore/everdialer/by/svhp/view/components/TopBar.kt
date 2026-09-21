@@ -15,8 +15,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
+import com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,12 +62,16 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
         animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "searchScale"
     )
+    val voiceSearchLauncher = rememberVoiceSearchLauncher { spokenText ->
+        navigator.navigate(SearchScreenDestination(initialQuery = spokenText))
+    }
+
     Surface(
         onClick = {
             if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                 performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
             }
-            navigator.navigate(SearchScreenDestination)
+            navigator.navigate(SearchScreenDestination())
         },
         modifier = modifier.height(52.dp).scale(searchScale),
         shape = CircleShape,
@@ -74,7 +81,7 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
@@ -87,6 +94,20 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
                 color = searchBarFg,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(
+                onClick = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
+                    }
+                    VoiceSearchHelper.launchVoiceSearch(context, voiceSearchLauncher)
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice Search",
+                    tint = searchBarFg
+                )
+            }
         }
     }
 }

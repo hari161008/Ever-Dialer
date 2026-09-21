@@ -52,6 +52,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.RainModeScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RaiseToAnswerScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.VolumeDndScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SwipeActionsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -568,6 +569,24 @@ fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // ── Swipe Actions ─────────────────────────────────────────────────
+            RivoAnimatedSection(delayMs = 20L) {
+                Column {
+                    AppSettingsSectionLabel("Swipe Actions")
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "Swipe Actions",
+                            supporting = "Configure left and right swipe gestures for Call Logs, Contacts, Call Recordings, and Notes",
+                            leadingIcon = Icons.Outlined.Swipe,
+                            iconContainerColor = Color(0xFF673AB7),
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("swipe_actions", highlightedKey) { highlightedKey = null },
+                            onClick = { navigator.navigate(SwipeActionsScreenDestination()) }
+                        )
                     }
                 }
             }

@@ -168,9 +168,13 @@ class CallLogRepository(
         val dedupedCalls = dedupeDuplicateProviderRows(rawCalls)
 
         val hiddenIds = ContactsHiderManager.getHiddenIds(prefs)
+        val showBlockedInCallLogs = prefs.getBoolean(PreferenceManager.KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS, false)
 
         val callLogs = mutableListOf<CallLogEntry>()
         for (raw in dedupedCalls) {
+            if (!showBlockedInCallLogs && raw.type == CallLog.Calls.BLOCKED_TYPE) {
+                continue
+            }
             val match = resolveContact(raw.digits, exactIndex, suffixIndex)
             val contactIdStr = match?.contactId?.toString()
             if (hiddenIds.isNotEmpty() && contactIdStr != null && contactIdStr in hiddenIds) {
@@ -264,7 +268,15 @@ class CallLogRepository(
                 val type = cursor.getInt(typeIdx)
                 val date = cursor.getLong(dateIdx)
                 var duration = cursor.getLong(durationIdx)
-                if (type == CallLog.Calls.MISSED_TYPE && duration <= 0L) {
+
+                val isBlockedNumber = com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.isBlocked(context, prefs, number)
+                val effectiveType = if (type == CallLog.Calls.BLOCKED_TYPE || ((type == CallLog.Calls.MISSED_TYPE || type == 5 /* REJECTED */) && isBlockedNumber)) {
+                    CallLog.Calls.BLOCKED_TYPE
+                } else {
+                    type
+                }
+
+                if ((effectiveType == CallLog.Calls.MISSED_TYPE || effectiveType == CallLog.Calls.BLOCKED_TYPE) && duration <= 0L) {
                     duration = com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.getDuration(context, number, date)
                 }
 
@@ -274,7 +286,7 @@ class CallLogRepository(
                         number = number,
                         digits = number.filter { it.isDigit() },
                         cachedName = cursor.getString(cachedNameIdx)?.takeIf { it.isNotBlank() },
-                        type = type,
+                        type = effectiveType,
                         date = date,
                         duration = duration,
                         simSlot = simSlot,

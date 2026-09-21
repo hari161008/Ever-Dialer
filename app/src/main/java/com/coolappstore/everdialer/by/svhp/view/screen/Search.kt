@@ -65,6 +65,9 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
 
+import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
+import com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher
+
 /**
  * Matches note text against a query loosely: words can appear in any order and punctuation is
  * ignored, so a note like "today 5:30 pm" is still found by "pm today" or "5 30". Falls back to
@@ -82,7 +85,11 @@ private fun matchesNoteQuery(text: String, query: String): Boolean {
 @OptIn(ExperimentalPermissionsApi::class)
 @Destination<RootGraph>(style = com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle::class)
 @Composable
-fun SearchScreen(navController: NavController, navigator: DestinationsNavigator) {
+fun SearchScreen(
+    navController: NavController,
+    navigator: DestinationsNavigator,
+    initialQuery: String? = null
+) {
     val permState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -104,7 +111,8 @@ fun SearchScreen(navController: NavController, navigator: DestinationsNavigator)
                 navController = navController,
                 isGranted = permState.status == PermissionStatus.Granted,
                 onRequestPermission = { permState.launchPermissionRequest() },
-                listState = listState
+                listState = listState,
+                initialQuery = initialQuery
             )
         }
     }
@@ -128,7 +136,8 @@ fun ContactSearchContent(
     navController: NavController,
     isGranted: Boolean,
     onRequestPermission: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    initialQuery: String? = null
 ) {
     if (!isGranted) {
         PermissionDeniedView(
@@ -174,7 +183,8 @@ fun ContactSearchContent(
     // String, re-requesting focus on the freshly recomposed field always snapped the cursor
     // back to index 0 instead of staying at the end of the restored text.
     var queryFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(""))
+        val q = initialQuery ?: ""
+        mutableStateOf(TextFieldValue(q, TextRange(q.length)))
     }
     val query = queryFieldValue.text
     val searchHistory = remember(settingsVer) {
@@ -183,6 +193,12 @@ fun ContactSearchContent(
     fun saveSearchQuery() {
         if (query.isNotBlank()) {
             SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.UNIVERSAL, query)
+        }
+    }
+    val voiceSearchLauncher = rememberVoiceSearchLauncher { spokenText ->
+        queryFieldValue = TextFieldValue(spokenText, TextRange(spokenText.length))
+        if (spokenText.isNotBlank()) {
+            SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.UNIVERSAL, spokenText)
         }
     }
     val focusRequester = remember { FocusRequester() }
@@ -370,9 +386,16 @@ fun ContactSearchContent(
                         }
                     },
                     trailingIcon = {
-                        if (query.isNotEmpty()) {
-                            IconButton(onClick = { queryFieldValue = TextFieldValue("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = searchBarFg)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { queryFieldValue = TextFieldValue("") }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = searchBarFg)
+                                }
+                            }
+                            IconButton(onClick = {
+                                VoiceSearchHelper.launchVoiceSearch(context, voiceSearchLauncher)
+                            }) {
+                                Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = searchBarFg)
                             }
                         }
                     },

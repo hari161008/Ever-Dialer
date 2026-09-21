@@ -41,6 +41,8 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import androidx.compose.material3.ButtonDefaults
@@ -150,6 +152,65 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
     var noteToDelete by remember { mutableStateOf<NoteEntry?>(null) }
 
     fun refreshNotes() { notes = NoteManager.getAllNotes(context) }
+
+    val colorScheme = MaterialTheme.colorScheme
+    val settingsVer by prefs.settingsChanged.collectAsState(initial = 0)
+    val rightSwipeKey = remember(settingsVer) { prefs.getSwipeAction("notes", "right") }
+    val leftSwipeKey = remember(settingsVer) { prefs.getSwipeAction("notes", "left") }
+    val rightSwipeAction = remember(rightSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(rightSwipeKey, colorScheme) }
+    val leftSwipeAction = remember(leftSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(leftSwipeKey, colorScheme) }
+
+    fun executeNoteAction(actionKey: String, note: NoteEntry) {
+        when (actionKey) {
+            "share" -> {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "Note: ${note.contactName}")
+                    putExtra(Intent.EXTRA_TEXT, note.content)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Note"))
+            }
+            "delete", "delete_call_log", "delete_contact" -> {
+                noteToDelete = note
+                showDeleteConfirm = true
+            }
+            "select" -> {
+                selectionMode = true
+                selectedNotes = setOf(note.file.absolutePath)
+            }
+            "call", "call_back" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val dialIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(note.phoneNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(dialIntent)
+                    } catch (e: Exception) {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(note.phoneNumber)}")).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                }
+            }
+            "send_text" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${Uri.encode(note.phoneNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(smsIntent)
+                    } catch (e: Exception) {}
+                }
+            }
+            "copy_number" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone Number", note.phoneNumber))
+                    android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     if (showEditor && editorNote != null) {
         NoteEditorDialog(
@@ -287,27 +348,37 @@ fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, 
                         val photoUri = phoneToPhotoUri[safePhone]
                         val isHighlighted = matchedNote?.file?.absolutePath == note.file.absolutePath
                         RivoScrollAnimatedItem {
-                        NoteCard(
-                            note = note,
-                            photoUri = photoUri,
-                            isSelected = selectedNotes.contains(note.file.absolutePath),
-                            selectionMode = selectionMode,
-                            highlightQuery = if (isHighlighted) highlightQuery else null,
-                            onClick = {
-                                if (selectionMode) {
-                                    val key = note.file.absolutePath
-                                    selectedNotes = if (selectedNotes.contains(key)) selectedNotes - key else selectedNotes + key
-                                } else {
-                                    editorNote = note
-                                    editorHighlightQuery = if (isHighlighted) highlightQuery else null
-                                    showEditor = true
-                                }
-                            },
-                            onLongClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                selectedNote = note
+                            SwipeableItemContainer(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                enabled = !selectionMode,
+                                leftAction = leftSwipeAction,
+                                rightAction = rightSwipeAction,
+                                onSwipeLeft = { executeNoteAction(leftSwipeKey, note) },
+                                onSwipeRight = { executeNoteAction(rightSwipeKey, note) }
+                            ) {
+                                NoteCard(
+                                    note = note,
+                                    photoUri = photoUri,
+                                    isSelected = selectedNotes.contains(note.file.absolutePath),
+                                    selectionMode = selectionMode,
+                                    highlightQuery = if (isHighlighted) highlightQuery else null,
+                                    onClick = {
+                                        if (selectionMode) {
+                                            val key = note.file.absolutePath
+                                            selectedNotes = if (selectedNotes.contains(key)) selectedNotes - key else selectedNotes + key
+                                        } else {
+                                            editorNote = note
+                                            editorHighlightQuery = if (isHighlighted) highlightQuery else null
+                                            showEditor = true
+                                        }
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        selectedNote = note
+                                    }
+                                )
                             }
-                        )
                         }
                     }
                     item { Spacer(Modifier.height(80.dp)) }

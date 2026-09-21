@@ -9,7 +9,8 @@ enum class CallLogFilter(val displayName: String) {
     Unknown("Unknown"),
     Missed("Missed"),
     Incoming("Incoming"),
-    Outgoing("Outgoing");
+    Outgoing("Outgoing"),
+    Blocked("Blocked");
 
     companion object {
         public fun filter(logs: List<CallLogEntry>, type: CallLogFilter): List<List<CallLogEntry>> {
@@ -21,6 +22,7 @@ enum class CallLogFilter(val displayName: String) {
                 Incoming -> logs.filter { it.type == android.provider.CallLog.Calls.INCOMING_TYPE }
                 Outgoing -> logs.filter { it.type == android.provider.CallLog.Calls.OUTGOING_TYPE }
                 Missed -> logs.filter { it.type == android.provider.CallLog.Calls.MISSED_TYPE }
+                Blocked -> logs.filter { it.type == android.provider.CallLog.Calls.BLOCKED_TYPE }
             }
             return filteredList.groupBy { formatDateHeader(it.date) }.values.toList()
         }

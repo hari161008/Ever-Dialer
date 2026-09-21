@@ -20,6 +20,8 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -497,11 +499,18 @@ private fun RecordingGroupCard(
     ) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) {
             items.forEachIndexed { index, item ->
+                val rowShape = RoundedCornerShape(
+                    topStart = if (index == 0) 20.dp else 0.dp,
+                    topEnd = if (index == 0) 20.dp else 0.dp,
+                    bottomStart = if (index == items.lastIndex) 20.dp else 0.dp,
+                    bottomEnd = if (index == items.lastIndex) 20.dp else 0.dp
+                )
                 RecordingRow(
                     item            = item,
                     searchQuery     = searchQuery,
                     isSelectionMode = isSelectionMode,
                     isSelected      = item.uri in selectedUris,
+                    shape           = rowShape,
                     onFavouriteToggle = { onFavouriteToggle(item) },
                     onClick         = {
                         if (isSelectionMode) onToggleSelect(item)
@@ -517,6 +526,63 @@ private fun RecordingGroupCard(
     }
 }
 
+private fun resolveRecordingSwipeAction(
+    actionKey: String,
+    colorScheme: androidx.compose.material3.ColorScheme
+): SwipeActionItem? {
+    return when (actionKey) {
+        "share" -> SwipeActionItem(
+            key = actionKey,
+            label = "Share",
+            icon = Icons.Outlined.Share,
+            backgroundColor = colorScheme.tertiary,
+            contentColor = colorScheme.onTertiary,
+            isDestructive = false
+        )
+        "delete" -> SwipeActionItem(
+            key = actionKey,
+            label = "Delete",
+            icon = Icons.Outlined.Delete,
+            backgroundColor = colorScheme.error,
+            contentColor = colorScheme.onError,
+            isDestructive = true
+        )
+        "toggle_favourite", "toggle_favorite" -> SwipeActionItem(
+            key = actionKey,
+            label = "Favourite",
+            icon = Icons.Rounded.Favorite,
+            backgroundColor = colorScheme.primary,
+            contentColor = colorScheme.onPrimary,
+            isDestructive = false
+        )
+        "view_info" -> SwipeActionItem(
+            key = actionKey,
+            label = "Info",
+            icon = Icons.Outlined.Info,
+            backgroundColor = colorScheme.secondary,
+            contentColor = colorScheme.onSecondary,
+            isDestructive = false
+        )
+        "select" -> SwipeActionItem(
+            key = actionKey,
+            label = "Select",
+            icon = Icons.Outlined.CheckCircle,
+            backgroundColor = colorScheme.secondary,
+            contentColor = colorScheme.onSecondary,
+            isDestructive = false
+        )
+        "call", "call_back" -> SwipeActionItem(
+            key = actionKey,
+            label = "Call",
+            icon = Icons.Outlined.Call,
+            backgroundColor = colorScheme.primary,
+            contentColor = colorScheme.onPrimary,
+            isDestructive = false
+        )
+        else -> null
+    }
+}
+
 // ── Single recording row ──────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -526,12 +592,39 @@ private fun RecordingRow(
     searchQuery: String,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(0.dp),
     onFavouriteToggle: () -> Unit,
     onClick: () -> Unit,
     onEnterSelectionMode: () -> Unit
 ) {
     val vm: HomeViewModel = viewModel()
     val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
+    val sharedPrefs = remember(context) { context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE) }
+    var leftSwipeKey by remember {
+        mutableStateOf(sharedPrefs.getString("swipe_action_recordings_left", "none") ?: "none")
+    }
+    var rightSwipeKey by remember {
+        mutableStateOf(sharedPrefs.getString("swipe_action_recordings_right", "none") ?: "none")
+    }
+
+    DisposableEffect(sharedPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "swipe_action_recordings_left") {
+                leftSwipeKey = sp.getString("swipe_action_recordings_left", "none") ?: "none"
+            } else if (key == "swipe_action_recordings_right") {
+                rightSwipeKey = sp.getString("swipe_action_recordings_right", "none") ?: "none"
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val leftSwipeAction = remember(leftSwipeKey, colorScheme) { resolveRecordingSwipeAction(leftSwipeKey, colorScheme) }
+    val rightSwipeAction = remember(rightSwipeKey, colorScheme) { resolveRecordingSwipeAction(rightSwipeKey, colorScheme) }
+
     val isIncoming = item.direction == "in"
     val accentColor = if (isIncoming) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
     val directionIcon  = if (isIncoming) Icons.Rounded.CallReceived else Icons.Rounded.CallMade
@@ -542,6 +635,45 @@ private fun RecordingRow(
     var showMenu        by remember { mutableStateOf(false) }
     var showInfoDialog  by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    fun executeRecordingAction(actionKey: String) {
+        when (actionKey) {
+            "share" -> {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "audio/*"
+                    putExtra(Intent.EXTRA_STREAM, item.uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Recording"))
+            }
+            "delete" -> {
+                showDeleteConfirm = true
+            }
+            "toggle_favourite", "toggle_favorite" -> {
+                onFavouriteToggle()
+            }
+            "view_info" -> {
+                showInfoDialog = true
+            }
+            "select" -> {
+                onEnterSelectionMode()
+            }
+            "call", "call_back" -> {
+                if (item.phoneNumber.isNotBlank()) {
+                    val dialIntent = Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:${android.net.Uri.encode(item.phoneNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(dialIntent)
+                    } catch (e: Exception) {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:${android.net.Uri.encode(item.phoneNumber)}")).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                }
+            }
+        }
+    }
 
     var photoBitmap by remember(item.phoneNumber) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item.phoneNumber) { photoBitmap = vm.loadContactPhoto(context, item.phoneNumber) }
@@ -554,12 +686,21 @@ private fun RecordingRow(
 
     // Animated selection background
     val rowBg by animateColorAsState(
-        targetValue  = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f) else Color.Transparent,
+        targetValue  = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f) else MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = tween(220),
         label = "rowBg"
     )
 
-    Box(modifier = Modifier.background(rowBg)) {
+    SwipeableItemContainer(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        enabled = !isSelectionMode,
+        leftAction = leftSwipeAction,
+        rightAction = rightSwipeAction,
+        onSwipeLeft = { executeRecordingAction(leftSwipeKey) },
+        onSwipeRight = { executeRecordingAction(rightSwipeKey) }
+    ) {
+    Box(modifier = Modifier.fillMaxWidth().background(rowBg)) {
         ListItem(
             modifier = Modifier.combinedClickable(
                 onLongClick = { if (isSelectionMode) showMenu = true else onEnterSelectionMode() },
@@ -740,6 +881,7 @@ private fun RecordingRow(
                 onClick = { showMenu = false; showDeleteConfirm = true }
             )
         }
+    }
     }
 
     if (showDeleteConfirm) {

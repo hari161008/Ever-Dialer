@@ -113,4 +113,49 @@ object MissedCallDurationStore {
         handler.postDelayed(updateWork, 600)
         handler.postDelayed(updateWork, 1500)
     }
+
+    fun updateProviderBlockedCall(context: Context, number: String, durationSec: Long, callDate: Long) {
+        val finalDuration = durationSec.coerceAtLeast(1L)
+        val handler = Handler(Looper.getMainLooper())
+        var updateCount = 0
+        val updateWork = object : Runnable {
+            override fun run() {
+                updateCount++
+                var matched = false
+                try {
+                    val values = ContentValues().apply {
+                        put(CallLog.Calls.DURATION, finalDuration)
+                        put(CallLog.Calls.TYPE, CallLog.Calls.BLOCKED_TYPE)
+                    }
+                    val where = "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} >= ?"
+                    val args = arrayOf(
+                        number,
+                        (System.currentTimeMillis() - 90000L).toString()
+                    )
+                    val rowsUpdated = context.contentResolver.update(CallLog.Calls.CONTENT_URI, values, where, args)
+                    if (rowsUpdated > 0) {
+                        matched = true
+                    }
+                } catch (_: Throwable) {}
+
+                // If after retries still no matching row was found in provider, insert directly as fallback
+                if (!matched && updateCount >= 3) {
+                    try {
+                        val values = ContentValues().apply {
+                            put(CallLog.Calls.NUMBER, number)
+                            put(CallLog.Calls.DATE, callDate)
+                            put(CallLog.Calls.DURATION, finalDuration)
+                            put(CallLog.Calls.TYPE, CallLog.Calls.BLOCKED_TYPE)
+                            put(CallLog.Calls.NEW, 1)
+                        }
+                        context.contentResolver.insert(CallLog.Calls.CONTENT_URI, values)
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+
+        updateWork.run()
+        handler.postDelayed(updateWork, 600)
+        handler.postDelayed(updateWork, 1600)
+    }
 }

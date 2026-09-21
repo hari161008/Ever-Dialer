@@ -10,7 +10,9 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
@@ -45,6 +47,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
@@ -175,7 +179,11 @@ private fun nationalNumberDigits(number: String): String {
 }
 
 @Composable
-fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
+fun CallLogTileSimple(
+    log: CallLogEntry,
+    use24HourTime: Boolean? = null,
+    onCallClick: ((CallLogEntry) -> Unit)? = null
+) {
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val is24H = if (use24HourTime != null) {
@@ -184,11 +192,12 @@ fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
         remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
     }
     val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+    val isBlocked = log.type == CallLog.Calls.BLOCKED_TYPE
 
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
 
-    val trailingContainerColor = if (isMissed) {
+    val trailingContainerColor = if (isMissed || isBlocked) {
         if (isSaturatedActive) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.errorContainer
     } else {
@@ -196,7 +205,7 @@ fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
         else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
     }
 
-    val trailingTint = if (isMissed) {
+    val trailingTint = if (isMissed || isBlocked) {
         if (isSaturatedActive) MaterialTheme.colorScheme.onError
         else MaterialTheme.colorScheme.onErrorContainer
     } else {
@@ -208,23 +217,48 @@ fun CallLogTileSimple(log: CallLogEntry, use24HourTime: Boolean? = null) {
         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
         CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
         CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
+        CallLog.Calls.BLOCKED_TYPE  -> Icons.Default.Block
         else                        -> Icons.Default.Call
     }
-    val ringDurationText = if (isMissed && log.duration > 0) "${log.duration}s rang" else null
-    val durationText = if (isMissed) ringDurationText else if (log.duration > 0) android.text.format.DateUtils.formatElapsedTime(log.duration) else null
+    val ringDurationText = if ((isMissed || isBlocked) && log.duration > 0) "${log.duration}s rang" else null
+    val durationText = if (isMissed || isBlocked) ringDurationText else if (log.duration > 0) android.text.format.DateUtils.formatElapsedTime(log.duration) else null
 
     RivoListItem(
         headline = when (log.type) {
             CallLog.Calls.INCOMING_TYPE -> "Incoming"
             CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
             CallLog.Calls.MISSED_TYPE   -> "Missed"
+            CallLog.Calls.BLOCKED_TYPE  -> "Blocked"
             else                        -> "Call"
         },
         supporting = "${formatDate(log.date, is24H)}${if (durationText != null) " • $durationText" else ""}",
+        trailingStartContent = if (onCallClick != null) {
+            {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { onCallClick(log) }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Call",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+            }
+        } else null,
         trailingIcon = icon,
         trailingIconTint = trailingTint,
         trailingIconContainerColor = trailingContainerColor,
-        onClick = { }
+        onClick = {
+            onCallClick?.invoke(log)
+        }
     )
 }
 
@@ -274,8 +308,9 @@ fun CallLogTile(
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
     val isMissed = log.type == CallLog.Calls.MISSED_TYPE
+    val isBlocked = log.type == CallLog.Calls.BLOCKED_TYPE
 
-    val trailingContainerColor = if (isMissed) {
+    val trailingContainerColor = if (isMissed || isBlocked) {
         if (isSaturatedActive) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.errorContainer
     } else {
@@ -283,7 +318,7 @@ fun CallLogTile(
         else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
     }
 
-    val trailingTint = if (isMissed) {
+    val trailingTint = if (isMissed || isBlocked) {
         if (isSaturatedActive) MaterialTheme.colorScheme.onError
         else MaterialTheme.colorScheme.onErrorContainer
     } else {
@@ -405,60 +440,177 @@ fun CallLogTile(
                 }
             }
         } else null
-        RivoListItem(
-            headline = buildString {
-                append(displayName)
-                if (log.count > 1 && !showTotalCallsMade) append(" (${log.count})")
-            },
-            headlineMaxLines = 2,
-            supporting = if (showNumberOnSupportingLine) log.number else null,
-            avatarName  = avatarSourceName,
-            avatarForcePersonIcon = !isContact,
-            photoUri    = resolvedPhotoUri,
-            headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
-            headlineEndContent = totalCallsBadge,
-            supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
-            trailingText = formatTimeOnly(log.date, use24HourTime),
-            trailingTextColor = if (isMissed) MaterialTheme.colorScheme.error else null,
-            trailingSubText = if (groupCallsByLatest) {
-                val dateText = formatCallLogDate(log.date)
-                if (showTalkTime && !isMissed) {
-                    val durationText = formatDuration(log.duration)
-                    "$dateText • $durationText"
-                } else {
-                    dateText
+        val colorScheme = MaterialTheme.colorScheme
+        val leftSwipeKey = remember(settingsVer) { prefs.getSwipeAction("call_logs", "left") }
+        val rightSwipeKey = remember(settingsVer) { prefs.getSwipeAction("call_logs", "right") }
+        val leftSwipeAction = remember(leftSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(leftSwipeKey, colorScheme) }
+        val rightSwipeAction = remember(rightSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(rightSwipeKey, colorScheme) }
+
+        val handleSwipeAction: (String) -> Unit = { actionKey ->
+            when (actionKey) {
+                "call", "call_back" -> onButtonClick(log)
+                "send_text" -> {
+                    if (log.number.isNotBlank()) {
+                        try {
+                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${log.number}"))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
                 }
-            } else {
-                if (isMissed) {
-                    if (log.duration > 0) "${log.duration}s" else null
-                } else if (showTalkTime) {
-                    formatDuration(log.duration)
-                } else null
-            },
-            trailingSubTextColor = if (groupCallsByLatest) {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            } else {
-                if (isMissed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            },
-            trailingIcon = when (log.type) {
-                CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
-                CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
-                CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
-                else                        -> Icons.Default.Call
-            },
-            trailingIconTint = trailingTint,
-            trailingIconContainerColor = trailingContainerColor,
-            onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log.copy(contactId = matchedContact?.id ?: log.contactId, photoUri = resolvedPhotoUri)) }) else null,
-            onLongClick = {
-                if (selectionMode) onSelectToggle?.invoke(log)
-                else showMenu = true
-            },
-            isMenuOpen  = showMenu && !selectionMode,
-            onClick     = {
-                if (selectionMode) onSelectToggle?.invoke(log)
-                else onTileClick(log)
+                "delete", "delete_call_log" -> {
+                    try {
+                        val allIds = log.callIds.filter { it > 0 }.distinct()
+                        if (allIds.isNotEmpty()) {
+                            allIds.chunked(500).forEach { chunk ->
+                                val inClause = chunk.joinToString(",")
+                                context.contentResolver.delete(
+                                    CallLog.Calls.CONTENT_URI,
+                                    "${CallLog.Calls._ID} IN ($inClause)",
+                                    null
+                                )
+                            }
+                        }
+                        val targetDates = (log.dates + log.date).distinct()
+                        targetDates.chunked(100).forEach { dateChunk ->
+                            val placeholders = dateChunk.map { "?" }.joinToString(",")
+                            val args = (listOf(log.number) + dateChunk.map { it.toString() }).toTypedArray()
+                            context.contentResolver.delete(
+                                CallLog.Calls.CONTENT_URI,
+                                "${CallLog.Calls.NUMBER} = ? AND ${CallLog.Calls.DATE} IN ($placeholders)",
+                                args
+                            )
+                        }
+                        onDelete?.invoke()
+                        Toast.makeText(context, "Deleted from call log", Toast.LENGTH_SHORT).show()
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                "select" -> onSelectMode?.invoke(log)
+                "copy_number" -> {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("phone_number", log.number))
+                    Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                }
+                "view_contact" -> {
+                    if (isContact) {
+                        if (navigator != null) {
+                            navigator.navigate(
+                                ContactDetailsScreenDestination(
+                                    contactId = matchedContact?.id ?: log.contactId ?: "null",
+                                    phoneNumber = log.number
+                                )
+                            )
+                        } else {
+                            onTileClick(log)
+                        }
+                    } else {
+                        showAddContactChoiceDialog = true
+                    }
+                }
+                "edit_contact" -> {
+                    if (isContact && navigator != null) {
+                        navigator.navigate(ContactEditScreenDestination(contactId = matchedContact?.id ?: log.contactId ?: "null"))
+                    } else {
+                        showAddContactChoiceDialog = true
+                    }
+                }
+                "add_to_contacts" -> showAddContactChoiceDialog = true
+                "share", "share_contact" -> {
+                    val shareText = if (isContact) "${displayName}: ${log.number}" else log.number
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share"))
+                }
+                "call_chat_via" -> showCallChatViaPicker = true
+                "fake_call" -> showFakeCallSheet = true
+                "toggle_favorite" -> matchedContact?.let { contactsVM.toggleFavorite(it) }
+                "block_number" -> {
+                    val isNumberBlocked = BlockedNumbersManager.isBlocked(context, prefs, log.number)
+                    BlockedNumbersManager.toggle(context, prefs, log.number)
+                    Toast.makeText(
+                        context,
+                        if (isNumberBlocked) "Number unblocked" else "Number blocked",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                "search_truecaller" -> {
+                    try {
+                        val uri = Uri.parse("https://www.truecaller.com/search/in/${log.number}")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } catch (_: Exception) {}
+                }
             }
-        )
+        }
+
+        SwipeableItemContainer(
+            leftAction = leftSwipeAction,
+            rightAction = rightSwipeAction,
+            onSwipeLeft = { handleSwipeAction(leftSwipeKey) },
+            onSwipeRight = { handleSwipeAction(rightSwipeKey) },
+            enabled = !selectionMode,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            RivoListItem(
+                headline = buildString {
+                    append(displayName)
+                    if (log.count > 1 && !showTotalCallsMade) append(" (${log.count})")
+                },
+                headlineMaxLines = 2,
+                supporting = if (showNumberOnSupportingLine) log.number else null,
+                avatarName  = avatarSourceName,
+                avatarForcePersonIcon = !isContact,
+                photoUri    = resolvedPhotoUri,
+                headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
+                headlineEndContent = totalCallsBadge,
+                supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
+                trailingText = formatTimeOnly(log.date, use24HourTime),
+                trailingTextColor = if (isMissed || isBlocked) MaterialTheme.colorScheme.error else null,
+                trailingSubText = if (groupCallsByLatest) {
+                    val dateText = formatCallLogDate(log.date)
+                    if (isBlocked && log.duration > 0) {
+                        "$dateText • ${log.duration}s"
+                    } else if (showTalkTime && !isMissed) {
+                        val durationText = formatDuration(log.duration)
+                        "$dateText • $durationText"
+                    } else {
+                        dateText
+                    }
+                } else {
+                    if (isMissed || isBlocked) {
+                        if (log.duration > 0) "${log.duration}s" else null
+                    } else if (showTalkTime) {
+                        formatDuration(log.duration)
+                    } else null
+                },
+                trailingSubTextColor = if (groupCallsByLatest) {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                } else {
+                    if (isMissed || isBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                },
+                trailingIcon = when (log.type) {
+                    CallLog.Calls.MISSED_TYPE   -> Icons.AutoMirrored.Filled.CallMissed
+                    CallLog.Calls.BLOCKED_TYPE  -> Icons.Default.Block
+                    CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
+                    CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
+                    else                        -> Icons.Default.Call
+                },
+                trailingIconTint = trailingTint,
+                trailingIconContainerColor = trailingContainerColor,
+                onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log.copy(contactId = matchedContact?.id ?: log.contactId, photoUri = resolvedPhotoUri)) }) else null,
+                onLongClick = {
+                    if (selectionMode) onSelectToggle?.invoke(log)
+                    else showMenu = true
+                },
+                isMenuOpen  = showMenu && !selectionMode,
+                onClick     = {
+                    if (selectionMode) onSelectToggle?.invoke(log)
+                    else onTileClick(log)
+                }
+            )
+        }
 
         if (showMenu) {
             val prefs = koinInject<PreferenceManager>()

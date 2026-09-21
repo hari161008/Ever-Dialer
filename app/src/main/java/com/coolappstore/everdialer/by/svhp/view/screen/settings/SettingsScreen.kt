@@ -67,6 +67,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
 import com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
+import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
+import com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
@@ -1146,6 +1148,28 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             }
                         }
 
+                        // Show blocked numbers in call logs toggle
+                        var showBlockedCallsInLogs by remember(showBlockListDialog) {
+                            mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS, false))
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            RivoSwitchListItem(
+                                headline = "Show blocked numbers in call logs",
+                                supporting = "Display calls from blocked numbers in call history",
+                                leadingIcon = Icons.Outlined.History,
+                                iconContainerColor = ColorBluGrey,
+                                checked = showBlockedCallsInLogs,
+                                onCheckedChange = {
+                                    showBlockedCallsInLogs = it
+                                    prefs.setBoolean(PreferenceManager.KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS, it)
+                                }
+                            )
+                        }
+
                         // Search when there are multiple blocked numbers
                         if (blockedContactsList.size > 3) {
                             Surface(
@@ -1463,6 +1487,10 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.SETTINGS, q)
         }
     }
+    val voiceSearchLauncher = rememberVoiceSearchLauncher { spokenText ->
+        settingsSearchQuery = spokenText
+        saveSettingsSearchQuery(spokenText)
+    }
     val settingsSearchEntries = globalSettingsSearchEntries
     val filteredSettingsResults = remember(settingsSearchQuery) {
         val q = settingsSearchQuery.trim()
@@ -1583,9 +1611,16 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             placeholder = { Text("Search settings") },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                             trailingIcon = {
-                                AnimatedVisibility(visible = settingsSearchQuery.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-                                    IconButton(onClick = { settingsSearchQuery = "" }) {
-                                        Icon(Icons.Default.Close, contentDescription = "Clear")
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedVisibility(visible = settingsSearchQuery.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                                        IconButton(onClick = { settingsSearchQuery = "" }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                    IconButton(onClick = {
+                                        VoiceSearchHelper.launchVoiceSearch(context, voiceSearchLauncher)
+                                    }) {
+                                        Icon(Icons.Default.Mic, contentDescription = "Voice Search")
                                     }
                                 }
                             },

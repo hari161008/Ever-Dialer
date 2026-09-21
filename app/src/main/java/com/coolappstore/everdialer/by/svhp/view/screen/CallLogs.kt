@@ -64,6 +64,7 @@ fun CallLogFullScreen(
     }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
     val prefs = koinInject<PreferenceManager>()
+    val simPref = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
     var showSimPicker by remember { mutableStateOf(false) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
@@ -194,6 +195,7 @@ fun CallLogFullScreen(
                             CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
                             CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                             CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                            CallLogFilter.Blocked -> filteredLogsByContact.filter { it.type == CallLog.Calls.BLOCKED_TYPE }
                         }
                     }
 
@@ -248,7 +250,19 @@ fun CallLogFullScreen(
                                                     thickness = 0.5.dp
                                                 )
                                             }
-                                            CallLogTileSimple(lg, use24HourTime = use24HourTime)
+                                            CallLogTileSimple(
+                                                lg,
+                                                use24HourTime = use24HourTime,
+                                                onCallClick = { entry ->
+                                                    val targetNumber = entry.number
+                                                    if (targetNumber.isNotBlank()) {
+                                                        placeCallWithSimPreference(context, targetNumber, simPref) {
+                                                            pendingNumber = targetNumber
+                                                            showSimPicker = true
+                                                        }
+                                                    }
+                                                }
+                                            )
                                         }
                                     }
                                 }

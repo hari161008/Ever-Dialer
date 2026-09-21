@@ -851,7 +851,16 @@ class CallService : InCallService() {
             call.disconnect(); return
         }
         if (number.isNotBlank() && call.state == Call.STATE_RINGING && isNumberBlocked(number)) {
-            call.disconnect(); return
+            val callDate = call.details?.creationTimeMillis?.takeIf { it > 0 } ?: System.currentTimeMillis()
+            val ringDurationSec = ((System.currentTimeMillis() - callDate) / 1000L).coerceIn(1L, 60L)
+            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.saveDuration(
+                this, number, callDate, ringDurationSec
+            )
+            com.coolappstore.everdialer.by.svhp.controller.util.MissedCallDurationStore.updateProviderBlockedCall(
+                this, number, ringDurationSec, callDate
+            )
+            call.disconnect()
+            return
         }
 
         if (call.state == Call.STATE_RINGING) {

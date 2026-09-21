@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbers
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
@@ -370,78 +372,136 @@ fun ContactListItem(
         )
     }
 
+        val colorScheme = MaterialTheme.colorScheme
+        val leftSwipeKey = remember(settingsVer) { prefs.getSwipeAction("contacts", "left") }
+        val rightSwipeKey = remember(settingsVer) { prefs.getSwipeAction("contacts", "right") }
+        val leftSwipeAction = remember(leftSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(leftSwipeKey, colorScheme) }
+        val rightSwipeAction = remember(rightSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(rightSwipeKey, colorScheme) }
+
+        val handleSwipeAction: (String) -> Unit = { actionKey ->
+            val primaryNumber = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+            val numToCall = primaryNumber ?: contact.phoneNumbers.firstOrNull().orEmpty()
+            when (actionKey) {
+                "call", "call_back" -> {
+                    if (numToCall.isNotBlank()) makeCall(context, numToCall)
+                }
+                "send_text" -> {
+                    if (numToCall.isNotBlank()) {
+                        try {
+                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$numToCall"))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                }
+                "delete", "delete_contact" -> {
+                    showDeleteConfirm = true
+                }
+                "select" -> onSelectMode()
+                "view_contact" -> {
+                    navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                }
+                "edit_contact" -> {
+                    navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                }
+                "copy_number" -> {
+                    if (numToCall.isNotBlank()) {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("phone_number", numToCall))
+                        Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                "share", "share_contact" -> {
+                    val shareText = if (numToCall.isNotBlank()) "${contact.name}: $numToCall" else contact.name
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share contact"))
+                }
+                "toggle_favorite" -> contactsVM.toggleFavorite(contact)
+                "block_contact" -> {
+                    val number = contact.phoneNumbers.firstOrNull()
+                    if (!number.isNullOrBlank()) {
+                        val isBlocked = BlockedNumbersManager.isBlocked(context, prefs, number)
+                        BlockedNumbersManager.toggle(context, prefs, number)
+                        Toast.makeText(
+                            context,
+                            if (isBlocked) "Contact unblocked" else "Contact blocked",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                "call_chat_via" -> showCallChatViaPicker = true
+                "fake_call" -> showFakeCallSheet = true
+                "move_contact" -> showMoveDialog = true
+            }
+        }
+
     Box(modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        if (horizontalDragDetected) return@combinedClickable
-                        if (selectionMode) {
-                            onSelectToggle()
-                        } else {
-                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                                performAppHaptic(
-                                    context,
-                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                                )
-                            }
-                            navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
-                        }
-                    },
-                    onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMenu = true
-                    }
-                )
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        horizontalDragDetected = false
-                        val downPos = down.position
-                        do {
-                            val event = awaitPointerEvent()
-                            val current = event.changes.firstOrNull() ?: break
-                            val dx = kotlin.math.abs(current.position.x - downPos.x)
-                            val dy = kotlin.math.abs(current.position.y - downPos.y)
-                            if (dx > 28.dp.toPx() && dx > dy * 1.3f) horizontalDragDetected = true
-                            if (!current.pressed) break
-                        } while (true)
-                    }
-                }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        SwipeableItemContainer(
+            leftAction = leftSwipeAction,
+            rightAction = rightSwipeAction,
+            onSwipeLeft = { handleSwipeAction(leftSwipeKey) },
+            onSwipeRight = { handleSwipeAction(rightSwipeKey) },
+            enabled = !selectionMode,
+            shape = RoundedCornerShape(16.dp)
         ) {
-            RivoAvatar(
-                name = headline,
-                photoUri = contact.photoUri,
-                size = 48.dp,
-                modifier = Modifier.size(48.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = headline,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            if (selectionMode) {
+                                onSelectToggle()
+                            } else {
+                                if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                    performAppHaptic(
+                                        context,
+                                        prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                        prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                    )
+                                }
+                                navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                            }
+                        },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showMenu = true
+                        }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RivoAvatar(
+                    name = headline,
+                    photoUri = contact.photoUri,
+                    size = 48.dp,
+                    modifier = Modifier.size(48.dp)
                 )
-                val primaryNumber = remember(settingsVer, contact.id, contact.phoneNumbers) {
-                    prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
-                }
-                val numberToDisplay = primaryNumber ?: contact.phoneNumbers.firstOrNull()
-                if (!numberToDisplay.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = numberToDisplay,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = headline,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
+                    val primaryNumber = remember(settingsVer, contact.id, contact.phoneNumbers) {
+                        prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                    }
+                    val numberToDisplay = primaryNumber ?: contact.phoneNumbers.firstOrNull()
+                    if (!numberToDisplay.isNullOrEmpty()) {
+                        Text(
+                            text = numberToDisplay,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

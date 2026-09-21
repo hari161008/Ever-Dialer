@@ -23,5 +23,5 @@ val appModule = module {
         CallLogRepository(androidContext(), androidContext().contentResolver, get())
     }
     viewModel { ContactsViewModel(androidApplication(), get(), get()) }
-    viewModel { CallLogViewModel(androidApplication(), get()) }
+    viewModel { CallLogViewModel(androidApplication(), get(), get()) }
 }

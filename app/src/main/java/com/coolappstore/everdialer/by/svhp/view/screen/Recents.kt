@@ -346,6 +346,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                             val dy = change.position.y - startY
                             val elapsed = System.currentTimeMillis() - startTime
                             if (!triggered &&
+                                !change.isConsumed &&
                                 !childHScrolling &&
                                 elapsed >= 150L &&
                                 kotlin.math.abs(dx) > 700f &&
@@ -598,6 +599,7 @@ fun CallLogFullContent(
                 CallLogFilter.Missed -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
                 CallLogFilter.Incoming -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
                 CallLogFilter.Outgoing -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                CallLogFilter.Blocked -> base.filter { it.type == CallLog.Calls.BLOCKED_TYPE }
             }
         }
         val totalCallsMap = remember(logs) {

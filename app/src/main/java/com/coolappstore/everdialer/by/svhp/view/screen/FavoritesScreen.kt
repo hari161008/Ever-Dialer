@@ -234,7 +234,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                             val dx = change.position.x - startX
                             val dy = change.position.y - startY
                             val elapsed = System.currentTimeMillis() - startTime
-                            if (!triggered && elapsed >= 150L &&
+                            if (!triggered && elapsed >= 150L && !change.isConsumed &&
                                 abs(dx) > 700f &&
                                 abs(dx) > abs(dy) * 5.5f
                             ) {

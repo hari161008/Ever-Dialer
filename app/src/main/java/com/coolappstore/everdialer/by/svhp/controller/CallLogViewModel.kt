@@ -23,10 +23,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+
 class CallLogViewModel(
     application: Application,
-    private val callLogRepo: ICallLogRepository
+    private val callLogRepo: ICallLogRepository,
+    private val prefs: PreferenceManager
 ) : AndroidViewModel(application) {
+
+    fun fetchCallLogs() {
+        fetchLogs(forceRefresh = true)
+    }
 
     private val _allCallLogs = MutableStateFlow<List<CallLogEntry>>(emptyList())
     val allCallLogs: StateFlow<List<CallLogEntry>> = _allCallLogs.asStateFlow()
@@ -117,6 +124,12 @@ class CallLogViewModel(
             }
             // Step 2: refresh from provider in background
             fetchLogsInternal()
+        }
+
+        viewModelScope.launch {
+            prefs.settingsChanged.collect {
+                fetchLogs(forceRefresh = true)
+            }
         }
 
         // The call log provider writes the finished call's row right around when the call

@@ -2386,10 +2386,32 @@ fun ContactDetailsScreen(
                     "recent_activity" -> {
                         if (showRecentActivity && contactLogs.isNotEmpty()) {
                             item {
-                                RivoExpressiveCard(title = "Recent Activity", icon = Icons.Default.History) {
+                                RivoExpressiveCard(
+                                    title = "Recent Activity",
+                                    icon = Icons.Default.History,
+                                    trailingContent = {
+                                        val targetNum = contactLogs.firstOrNull()?.number ?: displayPhone
+                                        if (targetNum.isNotBlank() && targetNum != "Unknown") {
+                                            IconButton(
+                                                onClick = { initiateCall(targetNum) },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Call,
+                                                    contentDescription = "Call",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
                                     Column(modifier = Modifier.animateContentSize()) {
                                         contactLogs.take(3).forEachIndexed { index, log ->
-                                            CallLogTileSimple(log)
+                                            CallLogTileSimple(
+                                                log = log,
+                                                onCallClick = { initiateCall(it.number) }
+                                            )
                                             if (index < 2 && index < contactLogs.size - 1) {
                                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                             }

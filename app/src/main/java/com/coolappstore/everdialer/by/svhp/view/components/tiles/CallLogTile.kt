@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +38,7 @@ fun CallLogTile(
     displayNameOverride: String? = null
 ) {
     val isMissed = log.types.any { it == CallLog.Calls.MISSED_TYPE } || (log.types.isEmpty() && log.type == CallLog.Calls.MISSED_TYPE)
+    val isBlocked = log.types.any { it == CallLog.Calls.BLOCKED_TYPE } || (log.types.isEmpty() && log.type == CallLog.Calls.BLOCKED_TYPE)
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
@@ -59,7 +61,7 @@ fun CallLogTile(
         titleMaxLines = 2,
         photoUri = log.photoUri,
         forcePersonIcon = log.name.isNullOrEmpty(),
-        isMissedCall = isMissed,
+        isMissedCall = isMissed || isBlocked,
         modifier = modifier,
         titleTrailing = if (log.isCallerIdName) {
             {
@@ -92,9 +94,10 @@ fun CallLogTile(
                         CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Filled.CallReceived
                         CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Filled.CallMade
                         CallLog.Calls.MISSED_TYPE -> Icons.AutoMirrored.Filled.CallMissed
+                        CallLog.Calls.BLOCKED_TYPE -> Icons.Default.Block
                         else -> Icons.Rounded.Call
                     }
-                    val tint = if (type == CallLog.Calls.MISSED_TYPE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    val tint = if (type == CallLog.Calls.MISSED_TYPE || type == CallLog.Calls.BLOCKED_TYPE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = tint)
                 }
 
@@ -104,7 +107,7 @@ fun CallLogTile(
 
                 Spacer(modifier = Modifier.width(4.dp))
                 val dateStr = formatDate(log.date, use24HourTime)
-                val durationStr = if (showTalkTime && !isMissed) " • ${formatDuration(log.duration)}" else ""
+                val durationStr = if (isBlocked && log.duration > 0) " • ${log.duration}s" else if (showTalkTime && !isMissed) " • ${formatDuration(log.duration)}" else ""
                 Text(text = "$dateStr$durationStr", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },

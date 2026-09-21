@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Reviews
@@ -230,6 +231,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
         GlobalSettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, GsColorRed),
         GlobalSettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, GsColorBluGrey),
+        GlobalSettingsSearchEntry("Show blocked numbers in call logs", "Display calls from blocked numbers in your call history", "show_blocked_calls_in_call_logs", Icons.Outlined.PersonOff, GsColorBluGrey),
         GlobalSettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, GsColorAmber) { it.navigate(UpdatesScreenDestination) },
         GlobalSettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, GsColorGreen),
         GlobalSettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, GsColorBrown),
@@ -406,6 +408,7 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
     }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var isFocused by remember { mutableStateOf(false) }
     val prefs: PreferenceManager = koinInject()
@@ -417,6 +420,11 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
         if (q.isNotBlank()) {
             SearchHistoryManager.addHistory(prefs, SearchHistoryManager.Type.SETTINGS, q)
         }
+    }
+
+    val voiceSearchLauncher = com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher { spokenText ->
+        query = spokenText
+        saveQuery(spokenText)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -434,9 +442,20 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
                 placeholder = { Text("Search settings") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
-                    AnimatedVisibility(visible = query.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-                        IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AnimatedVisibility(visible = query.isNotEmpty(), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        }
+                        IconButton(onClick = {
+                            com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper.launchVoiceSearch(context, voiceSearchLauncher)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Voice Search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 },
