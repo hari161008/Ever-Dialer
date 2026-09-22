@@ -1110,11 +1110,11 @@ class MainActivity : FragmentActivity() {
                     if (target != null && target.number.isNotBlank()) {
                         placeDirectCall(target.number, target.contactId)
                     } else if (data?.scheme == "tel") {
-                        val number = data.schemeSpecificPart
+                        val number = data.schemeSpecificPart?.let { Uri.decode(it) }?.trim() ?: ""
                         navController.navigate(DialPadScreenDestination(initialNumber = number).route)
                     }
                 } else if (data?.scheme == "tel") {
-                    val number = data.schemeSpecificPart
+                    val number = data.schemeSpecificPart?.let { Uri.decode(it) }?.trim() ?: ""
                     navController.navigate(DialPadScreenDestination(initialNumber = number).route)
                 } else if (data?.toString()?.contains("contacts") == true ||
                     data?.toString()?.contains("com.android.contacts") == true ||
@@ -1135,7 +1135,7 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 if (data?.scheme == "tel") {
-                    val number = data.schemeSpecificPart
+                    val number = data.schemeSpecificPart?.let { Uri.decode(it) }?.trim() ?: ""
                     navController.navigate(DialPadScreenDestination(initialNumber = number).route)
                 } else if (data != null) {
                     val target = resolveCallTargetFromUri(this, data)

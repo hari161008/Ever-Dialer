@@ -172,7 +172,8 @@ fun BottomBar(navController: NavController) {
         visibleTabRoutes.none { currentRoute.contains(it, ignoreCase = true) } &&
         !NavBarVisibilityState.hideForSettingsEntry &&
         !NavBarVisibilityState.hideForSearchResult &&
-        !currentRoute.contains(GroupsScreenDestination.route, ignoreCase = true)
+        !currentRoute.contains(GroupsScreenDestination.route, ignoreCase = true) &&
+        !currentRoute.contains(DialPadScreenDestination.baseRoute, ignoreCase = true)
 
     LaunchedEffect(isOnHiddenTab) {
         if (isOnHiddenTab) {

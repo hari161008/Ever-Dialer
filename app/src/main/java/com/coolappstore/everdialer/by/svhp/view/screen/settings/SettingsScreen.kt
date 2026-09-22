@@ -1668,7 +1668,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     // no gap between rows either.
                     itemsIndexed(
                         items = filteredSettingsResults,
-                        key = { _, entry -> "settings_search_${entry.key}" }
+                        key = { index, entry -> "settings_search_${entry.key}_$index" }
                     ) { index, entry ->
                         Surface(
                             modifier = Modifier.fillMaxWidth().wpTurnstileItem(index),

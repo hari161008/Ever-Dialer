@@ -347,7 +347,12 @@ fun DialPadScreen(
     var didNavigateAway by remember { mutableStateOf(false) }
 
     fun finishDismiss() {
-        if (!didNavigateAway) navigator.navigateUp()
+        if (!didNavigateAway) {
+            didNavigateAway = true
+            if (navController.currentDestination?.route?.contains("dial_pad_screen") == true) {
+                navigator.navigateUp()
+            }
+        }
     }
 
     // Used by swipe-down / scrim tap / predictive back — sheetState has already played its own
@@ -512,7 +517,7 @@ fun DialPadContent(
         if (onNavigateToContact != null) onNavigateToContact(contactId, phoneNumber)
         else navigator?.navigate(ContactDetailsScreenDestination(contactId = contactId, phoneNumber = phoneNumber))
     }
-    var number by remember {
+    var number by remember(initialNumber) {
         mutableStateOf(initialNumber ?: if (dialpadMemoryEnabled) DialpadDraftHolder.pendingNumber else "")
     }
     var showAddContactChoiceDialog by remember { mutableStateOf(false) }
@@ -520,7 +525,7 @@ fun DialPadContent(
     // Where new digits get inserted / backspace deletes from. Defaults to the end of the number
     // (normal typing behaviour), but the user can tap anywhere in the number to move it, so they
     // can fill in a missing digit in the middle without having to delete and retype everything.
-    var cursorPosition by remember { mutableIntStateOf(number.length) }
+    var cursorPosition by remember(initialNumber) { mutableIntStateOf(number.length) }
 
     // Route every edit through these so the cursor position stays correct and consistent no
     // matter where the edit originates from (dialpad keys, backspace, paste, clipboard banner,

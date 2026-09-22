@@ -583,7 +583,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = filteredContacts,
-                                        key = { _, contact -> "contact_${contact.id}" }
+                                        key = { index, contact -> "contact_${contact.id}_$index" }
                                     ) { index, contact ->
                                         Surface(
                                             modifier = Modifier
@@ -621,7 +621,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = nonContactResults,
-                                        key = { _, entry -> "noncontact_${entry.number}_${entry.date}" }
+                                        key = { index, entry -> "noncontact_${entry.number}_${entry.date}_$index" }
                                     ) { index, entry ->
                                         Surface(
                                             modifier = Modifier
@@ -674,7 +674,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = recordingResults,
-                                        key = { _, rec -> "recording_${rec.uri}" }
+                                        key = { index, rec -> "recording_${rec.uri}_$index" }
                                     ) { index, rec ->
                                         Surface(
                                             modifier = Modifier
@@ -726,7 +726,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = groupResults,
-                                        key = { _, group -> "group_${group.id}" }
+                                        key = { index, group -> "group_${group.id}_$index" }
                                     ) { index, group ->
                                         Surface(
                                             modifier = Modifier
@@ -774,7 +774,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = contactNoteResults,
-                                        key = { _, note -> "note_${note.file.absolutePath}" }
+                                        key = { index, note -> "note_${note.file.absolutePath}_$index" }
                                     ) { index, note ->
                                         Surface(
                                             modifier = Modifier
@@ -830,7 +830,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = recordingNoteResults,
-                                        key = { _, rec -> "recordingnote_${rec.uri}" }
+                                        key = { index, rec -> "recordingnote_${rec.uri}_$index" }
                                     ) { index, rec ->
                                         Surface(
                                             modifier = Modifier
@@ -891,7 +891,7 @@ fun ContactSearchContent(
                                     }
                                     itemsIndexed(
                                         items = settingResults,
-                                        key = { _, entry -> "setting_${entry.key}_${entry.title}" }
+                                        key = { index, entry -> "setting_${entry.key}_${entry.title}_$index" }
                                     ) { index, entry ->
                                         Surface(
                                             modifier = Modifier
