@@ -16,8 +16,15 @@ object MissedCallDurationStore {
         return number.filter { it.isDigit() }.takeLast(10)
     }
 
+    @Volatile
+    private var cachedPrefs: SharedPreferences? = null
+
     private fun getPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return cachedPrefs ?: synchronized(this) {
+            cachedPrefs ?: context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).also {
+                cachedPrefs = it
+            }
+        }
     }
 
     fun saveDuration(context: Context, number: String, dateMillis: Long, durationSec: Long) {
@@ -58,6 +65,8 @@ object MissedCallDurationStore {
 
         try {
             val prefs = getPrefs(context)
+            if (prefs.all.isEmpty()) return 0L
+
             val exact = prefs.getLong(keyExact, 0L)
             if (exact > 0) {
                 memoryCache[keyExact] = exact

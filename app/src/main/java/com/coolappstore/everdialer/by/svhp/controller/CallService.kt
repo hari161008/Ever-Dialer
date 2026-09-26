@@ -695,9 +695,12 @@ class CallService : InCallService() {
 
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             try {
+                org.koin.core.context.GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel>()?.refreshLogs()
+            } catch (_: Throwable) {}
+            try {
                 com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.updateBadge(this)
             } catch (_: Exception) {}
-        }, 600)
+        }, 300)
     }
 
     private fun removeForeground() {

@@ -244,6 +244,9 @@ class CallLogRepository(
             CallLog.Calls.PHONE_ACCOUNT_ID
         )
 
+        val blockedList = com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.getBlockedList(context, prefs)
+        val blockedNormalized = blockedList.map { it.replace(" ", "").replace("-", "").trim() }.filter { it.isNotEmpty() }
+
         contentResolver.query(
             CallLog.Calls.CONTENT_URI,
             projection,
@@ -269,7 +272,10 @@ class CallLogRepository(
                 val date = cursor.getLong(dateIdx)
                 var duration = cursor.getLong(durationIdx)
 
-                val isBlockedNumber = com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.isBlocked(context, prefs, number)
+                val targetNum = number.replace(" ", "").replace("-", "").trim()
+                val isBlockedNumber = targetNum.isNotEmpty() && blockedNormalized.any { blocked ->
+                    targetNum.endsWith(blocked) || blocked.endsWith(targetNum)
+                }
                 val effectiveType = if (type == CallLog.Calls.BLOCKED_TYPE || ((type == CallLog.Calls.MISSED_TYPE || type == 5 /* REJECTED */) && isBlockedNumber)) {
                     CallLog.Calls.BLOCKED_TYPE
                 } else {

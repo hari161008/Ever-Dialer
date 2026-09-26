@@ -1199,6 +1199,9 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED) {
             com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(this)
+            try {
+                org.koin.core.context.GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel>()?.refreshLogs()
+            } catch (_: Throwable) {}
         }
     }
 }
