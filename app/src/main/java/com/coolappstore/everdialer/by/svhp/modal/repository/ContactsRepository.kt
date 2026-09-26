@@ -108,7 +108,10 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             ContactsContract.Data.DATA2,
             ContactsContract.Data.DATA3,
             ContactsContract.Data.STARRED,
-            ContactsContract.Data.RAW_CONTACT_ID
+            ContactsContract.Data.RAW_CONTACT_ID,
+            ContactsContract.Data.TIMES_CONTACTED,
+            ContactsContract.Data.LAST_TIME_CONTACTED,
+            ContactsContract.Data.CONTACT_LAST_UPDATED_TIMESTAMP
         )
 
         contentResolver.query(
@@ -126,6 +129,9 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             val data2Idx = cursor.getColumnIndex(ContactsContract.Data.DATA2)
             val data3Idx = cursor.getColumnIndex(ContactsContract.Data.DATA3)
             val starredIdx = cursor.getColumnIndex(ContactsContract.Data.STARRED)
+            val timesContactedIdx = cursor.getColumnIndex(ContactsContract.Data.TIMES_CONTACTED)
+            val lastContactedIdx = cursor.getColumnIndex(ContactsContract.Data.LAST_TIME_CONTACTED)
+            val lastUpdatedIdx = cursor.getColumnIndex(ContactsContract.Data.CONTACT_LAST_UPDATED_TIMESTAMP)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getString(idIdx) ?: continue
@@ -138,12 +144,17 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 val isStarred = cursor.getInt(starredIdx) == 1
 
                 val contact = contactsMap.getOrPut(id) {
+                    val rawLastUpdated = if (lastUpdatedIdx >= 0) cursor.getLong(lastUpdatedIdx) else 0L
+                    val dateAddedVal = if (rawLastUpdated > 0L) rawLastUpdated else (id.toLongOrNull() ?: 0L)
                     Contact(
                         id = id,
                         name = cursor.getString(nameIdx) ?: "Unknown",
                         photoUri = cursor.getString(photoIdx),
                         isFavorite = isStarred,
-                        sourceAccounts = sourceAccountsByContactId[id]?.toList() ?: emptyList()
+                        sourceAccounts = sourceAccountsByContactId[id]?.toList() ?: emptyList(),
+                        timesContacted = if (timesContactedIdx >= 0) cursor.getInt(timesContactedIdx) else 0,
+                        lastTimeContacted = if (lastContactedIdx >= 0) cursor.getLong(lastContactedIdx) else 0L,
+                        dateAdded = dateAddedVal
                     )
                 }
 

@@ -147,6 +147,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var circleIcons         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false)) }
     var showFirstLetter     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)) }
     var colorfulAvatars     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)) }
+    var showAvatarsInCalls    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CALLS, true)) }
+    var showAvatarsInContacts by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CONTACTS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
@@ -2544,13 +2546,24 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 RivoSwitchListItem(
-                                    headline = "Show First Letter in Avatar",
-                                    supporting = "Displays letter when picture is missing",
-                                    leadingIcon = Icons.Outlined.TextFields,
-                                    iconContainerColor = ColorAmber,
-                                    checked = showFirstLetter,
-                                    modifier = Modifier.settingsSearchHighlight("avatar_first_letter", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = { showFirstLetter = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it) }
+                                    headline = "Show Avatars in Calls",
+                                    supporting = "Displays avatars in call history and logs",
+                                    leadingIcon = Icons.Outlined.Call,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = showAvatarsInCalls,
+                                    modifier = Modifier.settingsSearchHighlight("avatar_calls", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { showAvatarsInCalls = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_AVATARS_CALLS, it) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show Avatars in Contacts",
+                                    supporting = "Displays avatars in contacts list",
+                                    leadingIcon = Icons.Outlined.Person,
+                                    iconContainerColor = ColorTeal,
+                                    checked = showAvatarsInContacts,
+                                    modifier = Modifier.settingsSearchHighlight("avatar_contacts", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { showAvatarsInContacts = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_AVATARS_CONTACTS, it) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -2562,6 +2575,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     checked = showPicture,
                                     modifier = Modifier.settingsSearchHighlight("avatar_picture", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = { showPicture = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_PICTURE, it) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show First Letter in Avatar",
+                                    supporting = "Displays letter when picture is missing",
+                                    leadingIcon = Icons.Outlined.TextFields,
+                                    iconContainerColor = ColorAmber,
+                                    checked = showFirstLetter,
+                                    modifier = Modifier.settingsSearchHighlight("avatar_first_letter", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { showFirstLetter = it; prefs.setBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, it) }
                                 )
                             }
                         }

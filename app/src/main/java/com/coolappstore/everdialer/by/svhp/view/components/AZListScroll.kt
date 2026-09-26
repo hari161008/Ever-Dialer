@@ -86,7 +86,9 @@ fun AZListScroll(
     selectedContacts: Set<String> = emptySet(),
     onSelectionModeChange: (Boolean) -> Unit = {},
     onSelectedContactsChange: (Set<String>) -> Unit = {},
-    topContent: (@Composable () -> Unit)? = null
+    topContent: (@Composable () -> Unit)? = null,
+    isAlphabetical: Boolean = true,
+    isAlphabeticalReversed: Boolean = false
 ) {
     AZListContent(
         contacts = contacts,
@@ -96,6 +98,8 @@ fun AZListScroll(
         selectionMode = selectionMode,
         selectedContacts = selectedContacts,
         topContent = topContent,
+        isAlphabetical = isAlphabetical,
+        isAlphabeticalReversed = isAlphabeticalReversed,
         onSelectMode = { contact ->
             onSelectionModeChange(true)
             onSelectedContactsChange(setOf(contact.id))
@@ -119,16 +123,23 @@ fun AZListContent(
     selectedContacts: Set<String> = emptySet(),
     onSelectMode: (Contact) -> Unit = {},
     onSelectToggle: (Contact) -> Unit = {},
-    topContent: (@Composable () -> Unit)? = null
+    topContent: (@Composable () -> Unit)? = null,
+    isAlphabetical: Boolean = true,
+    isAlphabeticalReversed: Boolean = false
 ) {
-    val grouped = remember(contacts) {
+    val grouped = remember(contacts, isAlphabeticalReversed) {
         val mainGroups = contacts.groupBy {
             val firstChar = it.name.firstOrNull()?.uppercaseChar() ?: '#'
             if (firstChar.isLetter()) firstChar else '#'
         }.toMutableMap()
 
         val finalMap = linkedMapOf<Char, List<Contact>>()
-        mainGroups.keys.filter { it.isLetter() }.sorted().forEach { char ->
+        val letterKeys = if (isAlphabeticalReversed) {
+            mainGroups.keys.filter { it.isLetter() }.sortedDescending()
+        } else {
+            mainGroups.keys.filter { it.isLetter() }.sorted()
+        }
+        letterKeys.forEach { char ->
             finalMap[char] = mainGroups[char]!!
         }
         val hashGroup = mainGroups['#']
@@ -172,34 +183,92 @@ fun AZListContent(
                     topContent()
                 }
             }
-            grouped.forEach { (initial, contactsForChar) ->
-                // ── Letter header ──────────────────────────────────────────
-                stickyHeader(key = "header_$initial", contentType = "letterHeader") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = initial.toString(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
+            if (isAlphabetical) {
+                grouped.forEach { (initial, contactsForChar) ->
+                    // ── Letter header ──────────────────────────────────────────
+                    stickyHeader(key = "header_$initial", contentType = "letterHeader") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = initial.toString(),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+
+                    // ── One lazy item per contact for smooth scrolling ─────────
+                    itemsIndexed(
+                        items = contactsForChar,
+                        key = { _, contact -> "${initial}_${contact.id}" },
+                        contentType = { _, _ -> "contact" }
+                    ) { index, contact ->
+                        val isOnly   = contactsForChar.size == 1
+                        val isFirst  = index == 0
+                        val isLast   = index == contactsForChar.lastIndex
+
+                        val shape = when {
+                            isOnly  -> RoundedCornerShape(CARD_RADIUS)
+                            isFirst -> RoundedCornerShape(
+                                topStart = CARD_RADIUS, topEnd = CARD_RADIUS,
+                                bottomStart = INNER_RADIUS, bottomEnd = INNER_RADIUS
+                            )
+                            isLast  -> RoundedCornerShape(
+                                topStart = INNER_RADIUS, topEnd = INNER_RADIUS,
+                                bottomStart = CARD_RADIUS, bottomEnd = CARD_RADIUS
+                            )
+                            else    -> RoundedCornerShape(INNER_RADIUS)
+                        }
+
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            RivoScrollAnimatedItem(delayMs = 0L) {
+                                Surface(
+                                    shape = shape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column {
+                                        ContactListItem(
+                                            contact = contact,
+                                            navigator = navigator,
+                                            selectionMode = selectionMode,
+                                            isSelected = selectedContacts.contains(contact.id),
+                                            onSelectMode = { onSelectMode(contact) },
+                                            onSelectToggle = { onSelectToggle(contact) }
+                                        )
+                                        if (!isLast) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Gap between letter groups
+                        if (isLast) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
                     }
                 }
-
-                // ── One lazy item per contact for smooth scrolling ─────────
+            } else {
+                // Non-alphabetical sort order (Date added or Frequently)
                 itemsIndexed(
-                    items = contactsForChar,
-                    key = { _, contact -> "${initial}_${contact.id}" },
+                    items = contacts,
+                    key = { _, contact -> "sorted_${contact.id}" },
                     contentType = { _, _ -> "contact" }
                 ) { index, contact ->
-                    val isOnly   = contactsForChar.size == 1
+                    val isOnly   = contacts.size == 1
                     val isFirst  = index == 0
-                    val isLast   = index == contactsForChar.lastIndex
+                    val isLast   = index == contacts.lastIndex
 
                     val shape = when {
                         isOnly  -> RoundedCornerShape(CARD_RADIUS)
@@ -216,32 +285,31 @@ fun AZListContent(
 
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         RivoScrollAnimatedItem(delayMs = 0L) {
-                        Surface(
-                            shape = shape,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column {
-                                ContactListItem(
-                                    contact = contact,
-                                    navigator = navigator,
-                                    selectionMode = selectionMode,
-                                    isSelected = selectedContacts.contains(contact.id),
-                                    onSelectMode = { onSelectMode(contact) },
-                                    onSelectToggle = { onSelectToggle(contact) }
-                                )
-                                if (!isLast) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            Surface(
+                                shape = shape,
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    ContactListItem(
+                                        contact = contact,
+                                        navigator = navigator,
+                                        selectionMode = selectionMode,
+                                        isSelected = selectedContacts.contains(contact.id),
+                                        onSelectMode = { onSelectMode(contact) },
+                                        onSelectToggle = { onSelectToggle(contact) }
                                     )
+                                    if (!isLast) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        )
+                                    }
                                 }
                             }
                         }
-                        }
                     }
 
-                    // Gap between letter groups
                     if (isLast) {
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -249,35 +317,37 @@ fun AZListContent(
             }
         }
 
-        AlphabetSideBar(
-            alphabet = alphabetIndices.keys.toList(),
-            selectedCharProvider = { draggingChar ?: scrollingChar },
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 4.dp),
-            onLetterSelected = { char ->
-                draggingChar = char
-                val index = alphabetIndices[char] ?: return@AlphabetSideBar
-                scope.launch { listState.scrollToItem(index) }
-            },
-            onDragEnd = { draggingChar = null }
-        )
-
-        if (draggingChar != null) {
-            Surface(
+        if (isAlphabetical) {
+            AlphabetSideBar(
+                alphabet = alphabetIndices.keys.toList(),
+                selectedCharProvider = { draggingChar ?: scrollingChar },
                 modifier = Modifier
-                    .size(100.dp)
-                    .align(Alignment.Center),
-                shape = RoundedCornerShape(40.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 8.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = draggingChar.toString(),
-                        style = MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp),
+                onLetterSelected = { char ->
+                    draggingChar = char
+                    val index = alphabetIndices[char] ?: return@AlphabetSideBar
+                    scope.launch { listState.scrollToItem(index) }
+                },
+                onDragEnd = { draggingChar = null }
+            )
+
+            if (draggingChar != null) {
+                Surface(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .align(Alignment.Center),
+                    shape = RoundedCornerShape(40.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 8.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = draggingChar.toString(),
+                            style = MaterialTheme.typography.displayLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
         }
@@ -311,6 +381,9 @@ fun ContactListItem(
     var horizontalDragDetected by remember { mutableStateOf(false) }
 
     val settingsVer by prefs.settingsChanged.collectAsState()
+    val showAvatarsInContacts = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CONTACTS, true)
+    }
     val fakeCallInContextMenu = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
@@ -474,13 +547,15 @@ fun ContactListItem(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                RivoAvatar(
-                    name = headline,
-                    photoUri = contact.photoUri,
-                    size = 48.dp,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
+                if (showAvatarsInContacts) {
+                    RivoAvatar(
+                        name = headline,
+                        photoUri = contact.photoUri,
+                        size = 48.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = headline,

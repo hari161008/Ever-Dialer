@@ -53,6 +53,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import com.coolappstore.everdialer.by.svhp.view.components.ContactSortButton
+import com.coolappstore.everdialer.by.svhp.view.components.ContactSortOption
+import com.coolappstore.everdialer.by.svhp.view.components.sortContacts
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
@@ -112,6 +115,13 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
     val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    var favsSortBy by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_FAVORITES_SORT_BY, "name") ?: "name")
+    }
+    var favsSortAscending by remember(settingsVer) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FAVORITES_SORT_ASCENDING, true))
+    }
     val hiddenIds by remember(prefs) {
         derivedStateOf {
             val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
@@ -131,6 +141,14 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
 
     // Ordered favorites — persists custom drag-to-reorder order
     val orderedFavorites = remember { mutableStateListOf<Contact>() }
+
+    fun applyFavoritesSort(sortBy: String, ascending: Boolean) {
+        val sorted = orderedFavorites.toList().sortContacts(ContactSortOption.fromId(sortBy), ascending)
+        orderedFavorites.clear()
+        orderedFavorites.addAll(sorted)
+        prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
+    }
+
     LaunchedEffect(favorites) {
         // Don't touch the list while the user is actively dragging
         if (draggedContactId != null) return@LaunchedEffect
@@ -138,7 +156,12 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
             ?.split(",")?.filter { it.isNotEmpty() } ?: emptyList()
         val favMap   = favorites.associateBy { it.id }
         val ordered  = savedIds.mapNotNull { favMap[it] }
-        val newList  = ordered + favorites.filter { it.id !in savedIds.toSet() }
+        val rawList  = ordered + favorites.filter { it.id !in savedIds.toSet() }
+        val newList  = if (savedIds.isEmpty()) {
+            rawList.sortContacts(ContactSortOption.fromId(favsSortBy), favsSortAscending)
+        } else {
+            rawList
+        }
         val toRemove = orderedFavorites.filter { o -> newList.none { it.id == o.id } }
         toRemove.forEach { orderedFavorites.remove(it) }
         newList.filter { n -> orderedFavorites.none { it.id == n.id } }
@@ -273,10 +296,29 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     Text("Star a contact to add them here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
                 }
             } else {
-                val settingsVer by prefs.settingsChanged.collectAsState()
                 val favoritesInList = remember(settingsVer) {
                     prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)
                 }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ContactSortButton(
+                        sortBy = favsSortBy,
+                        ascending = favsSortAscending,
+                        onSortChanged = { newSortBy, newAscending ->
+                            favsSortBy = newSortBy
+                            favsSortAscending = newAscending
+                            prefs.setString(PreferenceManager.KEY_FAVORITES_SORT_BY, newSortBy)
+                            prefs.setBoolean(PreferenceManager.KEY_FAVORITES_SORT_ASCENDING, newAscending)
+                            applyFavoritesSort(newSortBy, newAscending)
+                        }
+                    )
+                }
+
                 val gridState = rememberLazyGridState()
                 ScrollHapticsGridEffect(gridState = gridState)
                 val gridColumns = if (favoritesInList) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 100.dp)

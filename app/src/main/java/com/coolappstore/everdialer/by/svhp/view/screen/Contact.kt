@@ -342,6 +342,17 @@ fun ContactContent(
             val contacts = contactsVM.displayedContacts.collectAsState().value
             val isLoadingContacts by contactsVM.isLoading.collectAsState()
 
+            var contactsSortBy by remember(settingsVersion) {
+                mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACTS_SORT_BY, "name") ?: "name")
+            }
+            var contactsSortAscending by remember(settingsVersion) {
+                mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACTS_SORT_ASCENDING, true))
+            }
+
+            val sortedContacts = remember(contacts, contactsSortBy, contactsSortAscending) {
+                contacts.sortContacts(ContactSortOption.fromId(contactsSortBy), contactsSortAscending)
+            }
+
             // ── Contact count / account-switcher pill ─────────────────────
             // This row (and the sheet it opens) must always stay visible whenever contacts
             // permission is granted — regardless of whether the current filter is still loading
@@ -537,6 +548,17 @@ fun ContactContent(
                         )
                     }
                 }
+
+                ContactSortButton(
+                    sortBy = contactsSortBy,
+                    ascending = contactsSortAscending,
+                    onSortChanged = { newSortBy, newAscending ->
+                        contactsSortBy = newSortBy
+                        contactsSortAscending = newAscending
+                        prefs.setString(PreferenceManager.KEY_CONTACTS_SORT_BY, newSortBy)
+                        prefs.setBoolean(PreferenceManager.KEY_CONTACTS_SORT_ASCENDING, newAscending)
+                    }
+                )
             }
 
             if (showAccountSheet) {
@@ -594,22 +616,24 @@ fun ContactContent(
             } else {
                 ScrollHapticsEffect(listState = listState)
                 AZListScroll(
-                                contacts = contacts,
+                    contacts = sortedContacts,
+                    navigator = navigator,
+                    listState = listState,
+                    selectionMode = selectionMode,
+                    selectedContacts = selectedContacts,
+                    onSelectionModeChange = onSelectionModeChange,
+                    onSelectedContactsChange = onSelectedContactsChange,
+                    isAlphabetical = (contactsSortBy == "name"),
+                    isAlphabeticalReversed = (contactsSortBy == "name" && !contactsSortAscending),
+                    topContent = if (isLandscape) {
+                        {
+                            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
                                 navigator = navigator,
-                                listState = listState,
-                                selectionMode = selectionMode,
-                                selectedContacts = selectedContacts,
-                                onSelectionModeChange = onSelectionModeChange,
-                                onSelectedContactsChange = onSelectedContactsChange,
-                                topContent = if (isLandscape) {
-                                    {
-                                        com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
-                                            navigator = navigator,
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                                        )
-                                    }
-                                } else null
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                             )
+                        }
+                    } else null
+                )
             }
         } else {
             if (isLandscape) {

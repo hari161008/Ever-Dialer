@@ -652,6 +652,7 @@ fun CallLogFullContent(
             val sim1Color = Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM1_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM1_COLOR))
             val sim2Color = Color(prefs.getInt(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SIM2_COLOR, com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.DEFAULT_SIM2_COLOR))
             val isScrollAnimEnabled = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SCROLL_ANIMATION, true)
+            val showAvatarsInCalls = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_SHOW_AVATARS_CALLS, true)
 
             com.coolappstore.everdialer.by.svhp.view.components.CallLogDisplayConfig(
                 use24HourTime = use24HourTime,
@@ -663,6 +664,7 @@ fun CallLogFullContent(
                 hiddenIds = hiddenIds,
                 nameNonContactsAsUnknown = nameNonContactsAsUnknown,
                 fakeCallInContextMenu = fakeCallInContextMenu,
+                showAvatars = showAvatarsInCalls,
                 sim1Color = sim1Color,
                 sim2Color = sim2Color,
                 isScrollAnimEnabled = isScrollAnimEnabled

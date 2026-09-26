@@ -55,6 +55,7 @@ fun SingleTile(
     isMissedCall: Boolean = false,
     phoneNumber: String? = null,
     forcePersonIcon: Boolean = false,
+    showAvatar: Boolean = true,
     onAvatarClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     isMenuOpen: Boolean = false,
@@ -140,34 +141,36 @@ fun SingleTile(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            RivoAvatar(
-                name               = title,
-                photoUri           = photoUri,
-                forcePersonIcon    = forcePersonIcon,
-                icon               = icon,
-                iconContainerColor = iconContainerColor,
-                modifier           = Modifier
-                    .size(42.dp)
-                    .then(
-                        if (onAvatarClick != null)
-                            Modifier.combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {
-                                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                                        performAppHaptic(
-                                            context,
-                                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                                        )
+            if (showAvatar) {
+                RivoAvatar(
+                    name               = title,
+                    photoUri           = photoUri,
+                    forcePersonIcon    = forcePersonIcon,
+                    icon               = icon,
+                    iconContainerColor = iconContainerColor,
+                    modifier           = Modifier
+                        .size(42.dp)
+                        .then(
+                            if (onAvatarClick != null)
+                                Modifier.combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                            performAppHaptic(
+                                                context,
+                                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                            )
+                                        }
+                                        onAvatarClick()
                                     }
-                                    onAvatarClick()
-                                }
-                            )
-                        else Modifier
-                    ),
-                shape              = if (circleIcons) CircleShape else RoundedCornerShape(14.dp)
-            )
+                                )
+                            else Modifier
+                        ),
+                    shape              = if (circleIcons) CircleShape else RoundedCornerShape(14.dp)
+                )
+            }
 
             Column(
                 modifier            = Modifier.weight(1f).padding(horizontal = 16.dp),

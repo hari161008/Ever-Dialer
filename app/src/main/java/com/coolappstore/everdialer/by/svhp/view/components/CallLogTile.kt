@@ -99,6 +99,7 @@ data class CallLogDisplayConfig(
     val hiddenIds: Set<String> = emptySet(),
     val nameNonContactsAsUnknown: Boolean = true,
     val fakeCallInContextMenu: Boolean = false,
+    val showAvatars: Boolean = true,
     val sim1Color: Color = Color(PreferenceManager.DEFAULT_SIM1_COLOR),
     val sim2Color: Color = Color(PreferenceManager.DEFAULT_SIM2_COLOR),
     val isScrollAnimEnabled: Boolean = true
@@ -327,6 +328,7 @@ fun CallLogTile(
     }
 
     val fakeCallInContextMenu: Boolean
+    val showAvatars: Boolean
     val use24HourTime: Boolean
     val showTalkTime: Boolean
     val groupCallsByLatest: Boolean
@@ -340,6 +342,7 @@ fun CallLogTile(
 
     if (config != null) {
         fakeCallInContextMenu = config.fakeCallInContextMenu
+        showAvatars = config.showAvatars
         use24HourTime = config.use24HourTime
         showTalkTime = config.showTalkTime
         groupCallsByLatest = config.groupCallsByLatest
@@ -353,6 +356,9 @@ fun CallLogTile(
     } else {
         fakeCallInContextMenu = remember(settingsVer) {
             prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+        }
+        showAvatars = remember(settingsVer) {
+            prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CALLS, true)
         }
         use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
         showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
@@ -560,9 +566,9 @@ fun CallLogTile(
                 },
                 headlineMaxLines = 2,
                 supporting = if (showNumberOnSupportingLine) log.number else null,
-                avatarName  = avatarSourceName,
+                avatarName  = if (showAvatars) avatarSourceName else null,
                 avatarForcePersonIcon = !isContact,
-                photoUri    = resolvedPhotoUri,
+                photoUri    = if (showAvatars) resolvedPhotoUri else null,
                 headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
                 headlineEndContent = totalCallsBadge,
                 supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,
@@ -599,7 +605,7 @@ fun CallLogTile(
                 },
                 trailingIconTint = trailingTint,
                 trailingIconContainerColor = trailingContainerColor,
-                onAvatarClick = if (onAvatarClick != null) ({ onAvatarClick(log.copy(contactId = matchedContact?.id ?: log.contactId, photoUri = resolvedPhotoUri)) }) else null,
+                onAvatarClick = if (showAvatars && onAvatarClick != null) ({ onAvatarClick(log.copy(contactId = matchedContact?.id ?: log.contactId, photoUri = resolvedPhotoUri)) }) else null,
                 onLongClick = {
                     if (selectionMode) onSelectToggle?.invoke(log)
                     else showMenu = true

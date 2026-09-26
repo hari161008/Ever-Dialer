@@ -59,6 +59,9 @@ data class Contact(
     val sourceAccounts: List<String> = emptyList(),
     // Custom note/description synced with Microsoft Exchange / Google Contacts / ContactsContract
     val note: String? = null,
+    val timesContacted: Int = 0,
+    val lastTimeContacted: Long = 0L,
+    val dateAdded: Long = 0L
 )
 
 @Serializable

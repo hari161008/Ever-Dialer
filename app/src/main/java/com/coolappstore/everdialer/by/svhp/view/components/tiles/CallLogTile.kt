@@ -44,6 +44,7 @@ fun CallLogTile(
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
     val showTalkTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_TALK_TIME_IN_CALL_LOGS, false) }
     val nameNonContactsAsUnknown = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true) }
+    val showAvatarsInCalls = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CALLS, true) }
     val displayTitle = displayNameOverride ?: (
         if (!log.name.isNullOrBlank() && log.name != log.number) {
             log.name
@@ -59,9 +60,10 @@ fun CallLogTile(
     SingleTile(
         title = displayTitle,
         titleMaxLines = 2,
-        photoUri = log.photoUri,
+        photoUri = if (showAvatarsInCalls) log.photoUri else null,
         forcePersonIcon = log.name.isNullOrEmpty(),
         isMissedCall = isMissed || isBlocked,
+        showAvatar = showAvatarsInCalls,
         modifier = modifier,
         titleTrailing = if (log.isCallerIdName) {
             {
