@@ -13,10 +13,12 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupContent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -118,6 +120,8 @@ class CallActivity : FragmentActivity() {
         val isInForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
         /** Keep the activity alive while an auto-redial dialog or job is pending. */
         val keepAliveForRedial = kotlinx.coroutines.flow.MutableStateFlow(false)
+        /** Keep the activity alive while the calling card popup is displayed. */
+        val keepAliveForCallingCard = kotlinx.coroutines.flow.MutableStateFlow(false)
     }
 
     // Pocket mode prevention
@@ -211,17 +215,24 @@ class CallActivity : FragmentActivity() {
                 val audioState by CallService.audioState.collectAsState()
                 val settingsVersion by prefs.settingsChanged.collectAsState()
 
-                val call = session?.call
-                val callState = session?.state
+                val isCallingCardActive by CallActivity.keepAliveForCallingCard.collectAsState()
+                var lastKnownSession by remember { mutableStateOf<com.coolappstore.everdialer.by.svhp.controller.CallSession?>(null) }
+                if (session != null) {
+                    lastKnownSession = session
+                }
+                val effectiveSession = session ?: if (isCallingCardActive) lastKnownSession else null
+                val call = effectiveSession?.call
+                val isCallEnded = session == null || session?.state == Call.STATE_DISCONNECTED || call?.state == Call.STATE_DISCONNECTED
+                val callState = if (isCallEnded) Call.STATE_DISCONNECTED else (session?.state ?: effectiveSession?.state ?: Call.STATE_ACTIVE)
 
-                LaunchedEffect(callState) {
+                LaunchedEffect(session, callState) {
                     // Real near-ear screen-off (plain + orientation-gated) is now handled
                     // entirely by CallService regardless of which Activity is on top — this
                     // effect only needs to worry about auto-closing the call screen.
                     if (session == null || callState == Call.STATE_DISCONNECTED) {
                         delay(800)
-                        // Wait for any pending auto-redial dialog or job to complete before closing
-                        while (keepAliveForRedial.value) {
+                        // Wait for any pending auto-redial dialog or job or calling card popup to complete before closing
+                        while (keepAliveForRedial.value || keepAliveForCallingCard.value) {
                             delay(300)
                         }
                         finishAndRemoveTask()
@@ -229,7 +240,7 @@ class CallActivity : FragmentActivity() {
                 }
 
 
-                if (call != null && session != null) {
+                if (call != null && effectiveSession != null) {
                     val number = call.details?.handle?.schemeSpecificPart ?: ""
                     val simSlot = remember(call) { getSimSlotForAccountHandle(this@CallActivity, call.details?.accountHandle) }
                     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
@@ -338,7 +349,7 @@ class CallActivity : FragmentActivity() {
                     val answeredFromNotification = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
                     ExpressiveCallScreen(
                         call = call,
-                        callState = session?.state ?: Call.STATE_ACTIVE,
+                        callState = callState,
                         contactName = contactName,
                         contactId = contactId,
                         phoneNumber = number,
@@ -438,6 +449,7 @@ class CallActivity : FragmentActivity() {
         super.onDestroy()
         sensorManager?.unregisterListener(proxSensorListener)
         keepAliveForRedial.value = false
+        keepAliveForCallingCard.value = false
     }
 
     override fun onPause() {
@@ -813,14 +825,25 @@ fun ExpressiveCallScreen(
 ) {
     val context = LocalView.current.context
     val ctx = context
+    var showCallingCardPopup by remember { mutableStateOf(false) }
+    var callingCardDismissCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var callingCardBackHandler by remember { mutableStateOf<(() -> Boolean)?>(null) }
     var showMessageAppPicker by remember { mutableStateOf(false) }
     val onMessageButtonClick: () -> Unit = {
-        val pref = prefs?.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "sms") ?: "sms"
-        if (pref == "ask") {
-            showMessageAppPicker = true
-        } else {
-            try { call.disconnect() } catch (_: Exception) {}
-            openMessageApp(context, phoneNumber, pref)
+        com.coolappstore.everdialer.by.svhp.controller.util.silenceRingingCall(context)
+        val pref = prefs?.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "calling_card") ?: "calling_card"
+        when (pref) {
+            "calling_card" -> {
+                CallActivity.keepAliveForCallingCard.value = true
+                showCallingCardPopup = true
+            }
+            "ask" -> {
+                showMessageAppPicker = true
+            }
+            else -> {
+                try { call.disconnect() } catch (_: Exception) {}
+                openMessageApp(context, phoneNumber, pref)
+            }
         }
     }
     val isMuted = audioState?.isMuted ?: false
@@ -1076,7 +1099,8 @@ fun ExpressiveCallScreen(
         }
     }
 
-    val isIncomingMode = (callState == Call.STATE_RINGING || (wasRinging && !callAnswered)) && !skipIncomingScreen
+    val isCallEnded = callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING || (call.state == Call.STATE_DISCONNECTED)
+    val isIncomingMode = !isCallEnded && (callState == Call.STATE_RINGING || (wasRinging && !callAnswered)) && !skipIncomingScreen
 
     val answerProgress by animateFloatAsState(
         targetValue = if (wasRinging && !callAnswered) 0f else 1f,
@@ -2492,6 +2516,48 @@ fun ExpressiveCallScreen(
             }
         }
     }
+    }
+
+    if (showCallingCardPopup) {
+        if (isCallEnded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            )
+        }
+        val dismissCallingCard: () -> Unit = {
+            showCallingCardPopup = false
+            CallActivity.keepAliveForCallingCard.value = false
+            if (isCallEnded || call.state == Call.STATE_DISCONNECTED) {
+                (context as? Activity)?.finishAndRemoveTask()
+            }
+        }
+        BackHandler(enabled = true) {
+            val handled = callingCardBackHandler?.invoke() ?: false
+            if (!handled) {
+                callingCardDismissCallback?.invoke() ?: dismissCallingCard()
+            }
+        }
+
+        MissedCallPopupContent(
+            phoneNumber = phoneNumber,
+            contactName = contactName.ifBlank { phoneNumber },
+            photoUri = photoUri,
+            callDate = System.currentTimeMillis(),
+            ringDurationSec = 0L,
+            contactId = contactId,
+            isMissedCall = false,
+            showCallButton = false,
+            onDismiss = {
+                dismissCallingCard()
+            },
+            onRegisterDismiss = { callingCardDismissCallback = it },
+            onRegisterBackHandler = { callingCardBackHandler = it },
+            onPreAction = {
+                try { call.disconnect() } catch (_: Exception) {}
+            }
+        )
     }
     }
 }

@@ -63,11 +63,12 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
         else        -> "None (Default)"
     }
 
-    val messageAppLabel = when (prefs.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "sms")) {
-        "whatsapp" -> "WhatsApp"
-        "telegram" -> "Telegram"
-        "ask"      -> "Always ask"
-        else       -> "Messages / SMS"
+    val messageAppLabel = when (prefs.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "calling_card")) {
+        "calling_card" -> "Calling Card"
+        "whatsapp"     -> "WhatsApp"
+        "telegram"     -> "Telegram"
+        "ask"          -> "Always ask"
+        else           -> "Messages / SMS"
     }
 
     Scaffold(

@@ -471,6 +471,20 @@ fun silenceRingingCall(context: Context) {
         val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         tm?.silenceRinger()
     } catch (_: Exception) {}
+    try {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+        am?.adjustStreamVolume(android.media.AudioManager.STREAM_RING, android.media.AudioManager.ADJUST_MUTE, 0)
+    } catch (_: Exception) {}
+    try {
+        val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+            vm?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        }
+        vibrator?.cancel()
+    } catch (_: Exception) {}
 }
 
 fun deduplicatePhoneNumbers(numbers: List<String>): List<String> {

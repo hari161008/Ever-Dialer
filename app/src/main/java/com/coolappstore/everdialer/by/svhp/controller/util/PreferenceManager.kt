@@ -587,7 +587,7 @@ class PreferenceManager(context: Context) {
         const val KEY_FAKE_CALL_LAST_TIMER_AMOUNT   = "fake_call_last_timer_amount"
         const val KEY_FAKE_CALL_LAST_TIMER_UNIT     = "fake_call_last_timer_unit"   // "seconds" | "minutes"
         // Default Message app for the incoming-call screen's Message quick action.
-        // Values: "sms" (default), "whatsapp", "telegram", "ask"
+        // Values: "calling_card" (default), "sms", "whatsapp", "telegram", "ask"
         const val KEY_DEFAULT_MESSAGE_APP = "default_message_app"
         const val KEY_APP_NAME_PRESET = "app_name_preset"
 

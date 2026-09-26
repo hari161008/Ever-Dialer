@@ -376,20 +376,23 @@ class MissedCallPopupService : Service() {
         scope.cancel()
         super.onDestroy()
     }
+}
 
-    @Composable
-    private fun MissedCallPopupContent(
-        phoneNumber: String,
-        contactName: String,
-        photoUri: String?,
-        callDate: Long,
-        ringDurationSec: Long,
-        contactId: String?,
-        isMissedCall: Boolean = true,
-        onDismiss: () -> Unit,
-        onRegisterDismiss: (() -> Unit) -> Unit,
-        onRegisterBackHandler: (() -> Boolean) -> Unit
-    ) {
+@Composable
+fun MissedCallPopupContent(
+    phoneNumber: String,
+    contactName: String,
+    photoUri: String?,
+    callDate: Long,
+    ringDurationSec: Long,
+    contactId: String?,
+    isMissedCall: Boolean = true,
+    showCallButton: Boolean = true,
+    onDismiss: () -> Unit,
+    onRegisterDismiss: (() -> Unit) -> Unit = {},
+    onRegisterBackHandler: (() -> Boolean) -> Unit = {},
+    onPreAction: (() -> Unit)? = null
+) {
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
         var visible by remember { mutableStateOf(false) }
@@ -557,6 +560,7 @@ class MissedCallPopupService : Service() {
             val globalSimPref = remember(prefs) { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
 
             fun initiateCall() {
+                onPreAction?.invoke()
                 performAppHaptic(context, "light")
                 val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
                 val hasPhoneState = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
@@ -590,6 +594,7 @@ class MissedCallPopupService : Service() {
             }
 
             fun sendViaSms(msg: String?) {
+                onPreAction?.invoke()
                 performAppHaptic(context, "light")
                 val clean = phoneNumber.filter { it.isDigit() || it == '+' }
                 val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$clean")).apply {
@@ -603,6 +608,7 @@ class MissedCallPopupService : Service() {
             }
 
             fun sendViaWhatsApp(msg: String?) {
+                onPreAction?.invoke()
                 performAppHaptic(context, "light")
                 val messageToSend = if (msg != "Type custom...") msg else null
                 openWhatsAppChat(context, phoneNumber, messageToSend)
@@ -610,6 +616,7 @@ class MissedCallPopupService : Service() {
             }
 
             fun sendViaWhatsAppBusiness(msg: String?) {
+                onPreAction?.invoke()
                 performAppHaptic(context, "light")
                 val messageToSend = if (msg != "Type custom...") msg else null
                 openWhatsAppBusinessChat(context, phoneNumber, messageToSend)
@@ -617,6 +624,7 @@ class MissedCallPopupService : Service() {
             }
 
             fun sendViaTelegram(msg: String?) {
+                onPreAction?.invoke()
                 performAppHaptic(context, "light")
                 val messageToSend = if (msg != "Type custom...") msg else null
                 openTelegramChat(context, phoneNumber, messageToSend)
@@ -1136,15 +1144,17 @@ class MissedCallPopupService : Service() {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     // 1. Call Button (triggers real phone call honoring SIM settings)
-                                    ActionButtonItem(
-                                        iconVector = Icons.Default.Call,
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        label = "CALL",
-                                        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        onClick = {
-                                            initiateCall()
-                                        }
-                                    )
+                                    if (showCallButton) {
+                                        ActionButtonItem(
+                                            iconVector = Icons.Default.Call,
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            label = "CALL",
+                                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            onClick = {
+                                                initiateCall()
+                                            }
+                                        )
+                                    }
 
                                     // 2. SMS Button
                                     ActionButtonItem(
@@ -1216,6 +1226,7 @@ class MissedCallPopupService : Service() {
                                             iconVector = Icons.Default.Search,
                                             label = "Truecaller",
                                             onClick = {
+                                                onPreAction?.invoke()
                                                 performAppHaptic(context, "light")
                                                 openTruecaller(context, phoneNumber)
                                                 triggerDismiss()
@@ -1592,6 +1603,7 @@ class MissedCallPopupService : Service() {
                                             icon = Icons.AutoMirrored.Filled.Chat,
                                             title = "Chat",
                                             onClick = {
+                                                onPreAction?.invoke()
                                                 performAppHaptic(context, "light")
                                                 if (app == "whatsapp") {
                                                     openWhatsAppChat(context, phoneNumber)
@@ -1609,6 +1621,7 @@ class MissedCallPopupService : Service() {
                                         icon = Icons.Default.Call,
                                         title = "Voice Call",
                                         onClick = {
+                                            onPreAction?.invoke()
                                             performAppHaptic(context, "light")
                                             val started = when (app) {
                                                 "whatsapp" -> startWhatsAppVoiceCall(context, phoneNumber)
@@ -1627,6 +1640,7 @@ class MissedCallPopupService : Service() {
                                         icon = Icons.Default.Videocam,
                                         title = "Video Call",
                                         onClick = {
+                                            onPreAction?.invoke()
                                             performAppHaptic(context, "light")
                                             val started = when (app) {
                                                 "whatsapp" -> startWhatsAppVideoCall(context, phoneNumber)
@@ -1715,6 +1729,7 @@ class MissedCallPopupService : Service() {
 
                                         Surface(
                                             onClick = {
+                                                onPreAction?.invoke()
                                                 performAppHaptic(context, "light")
                                                 makeCall(context, phoneNumber, accountHandle)
                                                 triggerDismiss()
@@ -1985,4 +2000,3 @@ class MissedCallPopupService : Service() {
             text
         }
     }
-}

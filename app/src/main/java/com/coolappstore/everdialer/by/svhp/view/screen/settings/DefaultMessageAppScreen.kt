@@ -28,6 +28,7 @@ import org.koin.compose.koinInject
 private data class MessageAppOption(val key: String, val label: String, val description: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color)
 
 private val messageAppOptions = listOf(
+    MessageAppOption("calling_card", "Calling Card", "Show floating calling card popup over incoming call screen", Icons.Outlined.ContactPhone, Color(0xFFFF9800)),
     MessageAppOption("sms", "Messages / SMS", "Use the system's default messaging app", Icons.Outlined.Sms, Color(0xFF2196F3)),
     MessageAppOption("whatsapp", "WhatsApp", "Open a WhatsApp chat with this number", Icons.Outlined.Chat, Color(0xFF25D366)),
     MessageAppOption("telegram", "Telegram", "Open a Telegram chat with this number", Icons.Default.Send, Color(0xFF29B6F6)),
@@ -39,7 +40,7 @@ private val messageAppOptions = listOf(
 @Composable
 fun DefaultMessageAppScreen(navigator: DestinationsNavigator) {
     val prefs: PreferenceManager = koinInject()
-    var selected by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "sms") ?: "sms") }
+    var selected by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_MESSAGE_APP, "calling_card") ?: "calling_card") }
 
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
@@ -137,6 +138,7 @@ fun DefaultMessageAppScreen(navigator: DestinationsNavigator) {
                             )
                             Text(
                                 "This controls the Message button on the incoming call screen. " +
+                                    "\"Calling Card\" shows a floating popup with actions directly over the call screen. " +
                                     "\"Always ask\" shows a quick popup to pick an app each time " +
                                     "instead of opening one automatically.",
                                 style = MaterialTheme.typography.bodySmall,
