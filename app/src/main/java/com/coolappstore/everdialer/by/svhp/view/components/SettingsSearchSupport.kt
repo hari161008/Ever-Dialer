@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.outlined.*
@@ -369,7 +369,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Default Message App", "Choose default messaging app for quick replies", "default_message_app", Icons.Outlined.Message, GsColorBlue) { it.navigate(DefaultMessageAppScreenDestination) },
 
         // ── Ongoing Call UI screen ───────────────────────────────────────────────
-        GlobalSettingsSearchEntry("Show ongoing call UI when the call is answered", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, GsColorBlue) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_when_answered")) },
+        GlobalSettingsSearchEntry("Show ongoing call UI when the call is answered when phone is unlocked", "Display full screen in-call screen after answering", "show_ongoing_call_ui_when_answered", Icons.Outlined.Call, GsColorBlue) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_when_answered")) },
         GlobalSettingsSearchEntry("Show ongoing call UI screen in lockscreen when the call is answered", "Display in-call screen on lockscreen after answering", "show_ongoing_call_ui_on_lockscreen_when_answered", Icons.Outlined.Lock, GsColorIndigo) { it.navigate(CallerUIScreenDestination(highlightKey = "show_ongoing_call_ui_on_lockscreen_when_answered")) },
         GlobalSettingsSearchEntry("Background And Contact PFP Customisation (Ongoing)", "Customize background and avatar photo for ongoing in-call screen", "ongoing_custom_background", Icons.Outlined.Wallpaper, GsColorPurple) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_custom_background")) },
         GlobalSettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, GsColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
@@ -428,11 +428,14 @@ fun SettingsSearchEntryPoint(navigator: DestinationsNavigator, modifier: Modifie
         saveQuery(spokenText)
     }
 
+    val appRoundness = LocalCardCornerRadius.current.value.coerceAtLeast(0f).dp
+    val searchShape = RoundedCornerShape(appRoundness)
+
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = searchShape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().clip(searchShape)
         ) {
             TextField(
                 value = query,

@@ -188,13 +188,19 @@ class CallActivity : FragmentActivity() {
         val isLocked = km?.isKeyguardLocked == true
         val showOnLock = prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true)
         val showOngoing = prefs.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
-        if (answeredFromNotif && (!showOngoing || (isLocked && !showOnLock))) {
+        val shouldShow = if (isLocked) showOnLock else showOngoing
+        if (answeredFromNotif && !shouldShow) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
                 setShowWhenLocked(false)
             }
             window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
             finishAndRemoveTask()
             return
+        } else if (answeredFromNotif && !showOnLock) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(false)
+            }
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
         }
 
         setContent {
@@ -448,7 +454,8 @@ private fun handleOngoingUiAfterAnswer(context: Context, prefs: PreferenceManage
     val isLocked = km?.isKeyguardLocked == true
     val showOnLock = prefs?.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true) ?: true
     val act = context as? Activity
-    if (!showOngoingUI || (isLocked && !showOnLock)) {
+    val shouldShow = if (isLocked) showOnLock else showOngoingUI
+    if (!shouldShow) {
         act?.let {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
                 it.setShowWhenLocked(false)

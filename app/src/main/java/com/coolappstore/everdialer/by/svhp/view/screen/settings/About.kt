@@ -101,6 +101,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var highlightedKey by remember { mutableStateOf(highlightKey) }
     var showDonateDialog by remember { mutableStateOf(false) }
     var showBmacDialog by remember { mutableStateOf(false) }
+    var showGithubSponsorDialog by remember { mutableStateOf(false) }
 
     var visible by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -320,7 +321,8 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     DonateContainer(
                         modifier = Modifier.settingsSearchHighlight("donate", highlightedKey) { highlightedKey = null },
                         onDonateClick = { showDonateDialog = true },
-                        onBuyMeACoffeeClick = { showBmacDialog = true }
+                        onBuyMeACoffeeClick = { showBmacDialog = true },
+                        onGitHubSponsorClick = { showGithubSponsorDialog = true }
                     )
 
                     RivoExpressiveCard {
@@ -441,6 +443,29 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             )
         }
+
+        if (showGithubSponsorDialog) {
+            DonateOptionDialog(
+                title = "GitHub Sponsors",
+                description = "Choose how you'd like to open GitHub Sponsors:",
+                icon = Icons.Default.Favorite,
+                iconTint = Color(0xFFEA4AAA),
+                onDismiss = { showGithubSponsorDialog = false },
+                onOpenBrowser = {
+                    showGithubSponsorDialog = false
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.GITHUB_SPONSORS_URL)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                },
+                onOpenInApp = {
+                    showGithubSponsorDialog = false
+                    DonateWebViewConfig.targetUrl = DonateWebViewConfig.GITHUB_SPONSORS_URL
+                    DonateWebViewConfig.targetTitle = "GitHub Sponsors"
+                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
+                }
+            )
+        }
     }
 }
 
@@ -449,7 +474,8 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 private fun DonateContainer(
     modifier: Modifier = Modifier,
     onDonateClick: () -> Unit,
-    onBuyMeACoffeeClick: () -> Unit
+    onBuyMeACoffeeClick: () -> Unit,
+    onGitHubSponsorClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "donateLandscapeMotion")
     val cloud1Offset by infiniteTransition.animateFloat(
@@ -886,6 +912,10 @@ private fun DonateContainer(
                     BuyMeACoffeeButton(
                         onClick = onBuyMeACoffeeClick
                     )
+
+                    GitHubSponsorButton(
+                        onClick = onGitHubSponsorClick
+                    )
                 }
             }
         }
@@ -999,6 +1029,121 @@ fun BuyMeACoffeeButton(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
                     tint = Color(0xFF231600),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Modern animated "GitHub Sponsor" button with:
+ * - Dynamic favorite heart icon
+ * - Satin shimmer sweep gliding across the surface periodically
+ * - Tactile spring-based press physics
+ * - Vibrant GitHub Sponsors signature pink/rose gradient
+ */
+@Composable
+fun GitHubSponsorButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Smooth spring press scale micro-interaction
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "ghSponsorPressScale"
+    )
+
+    // Specular satin shimmer sweep animation
+    val infiniteTransition = rememberInfiniteTransition(label = "ghSponsorShimmer")
+    val shimmerPhase by infiniteTransition.animateFloat(
+        initialValue = -0.6f,
+        targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ghSponsorShimmerSweep"
+    )
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(50),
+        color = Color.Transparent,
+        border = BorderStroke(
+            width = 1.dp,
+            color = Color.White.copy(alpha = 0.28f)
+        ),
+        interactionSource = interactionSource
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFEA4AAA),
+                            Color(0xFFD63384),
+                            Color(0xFFBE185D)
+                        )
+                    )
+                )
+                .drawWithContent {
+                    drawContent()
+                    // Satin sheen sweep reflection band
+                    if (shimmerPhase in -0.3f..1.3f) {
+                        val sweepWidth = size.width * 0.45f
+                        val startX = size.width * shimmerPhase - sweepWidth / 2
+                        val shimmerBrush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.10f),
+                                Color.Transparent
+                            ),
+                            start = Offset(startX, 0f),
+                            end = Offset(startX + sweepWidth, size.height)
+                        )
+                        drawRect(brush = shimmerBrush)
+                    }
+                }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+
+                Text(
+                    text = "GitHub Sponsor",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    letterSpacing = 0.2.sp
+                )
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = Color.White,
                     modifier = Modifier.size(15.dp)
                 )
             }

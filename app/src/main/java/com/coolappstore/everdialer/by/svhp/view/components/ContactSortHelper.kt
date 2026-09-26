@@ -11,7 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.*
@@ -23,52 +23,144 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.coolappstore.everdialer.by.svhp.controller.util.CallLogsCache
+import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 
 enum class ContactSortOption(val id: String, val label: String, val icon: ImageVector) {
     NAME("name", "Name", Icons.Outlined.SortByAlpha),
-    DATE_ADDED("date_added", "Date added", Icons.Outlined.AccessTime),
+    RECENTLY_CALLED("recently_called", "Recently called", Icons.Outlined.History),
     FREQUENTLY("frequently", "Frequently", Icons.Outlined.TrendingUp);
 
     companion object {
-        fun fromId(id: String?): ContactSortOption =
-            entries.find { it.id.equals(id, ignoreCase = true) } ?: NAME
+        fun fromId(id: String?): ContactSortOption = when (id?.lowercase()) {
+            "recently_called", "date_added" -> RECENTLY_CALLED
+            "frequently" -> FREQUENTLY
+            else -> NAME
+        }
     }
 }
 
-fun List<Contact>.sortContacts(option: ContactSortOption, ascending: Boolean): List<Contact> {
+data class ContactCallStats(
+    var callCount: Int = 0,
+    var lastCallTime: Long = 0L
+)
+
+fun buildContactCallStatsMap(
+    contacts: List<Contact>,
+    callLogs: List<CallLogEntry>
+): Map<String, ContactCallStats> {
+    if (callLogs.isEmpty()) {
+        return emptyMap()
+    }
+
+    val contactByNumber = HashMap<String, String>()
+    val contactBySuffix = HashMap<String, String>()
+    for (contact in contacts) {
+        for (rawPhone in contact.phoneNumbers) {
+            val digits = rawPhone.filter { it.isDigit() }
+            if (digits.isNotEmpty()) {
+                contactByNumber.putIfAbsent(digits, contact.id)
+                if (digits.length >= 7) {
+                    contactBySuffix.putIfAbsent(digits.takeLast(7), contact.id)
+                }
+            }
+        }
+    }
+
+    val statsMap = HashMap<String, ContactCallStats>()
+
+    for (log in callLogs) {
+        val targetContactId = if (!log.contactId.isNullOrBlank()) {
+            log.contactId
+        } else {
+            val logDigits = log.number.filter { it.isDigit() }
+            if (logDigits.isEmpty()) null
+            else contactByNumber[logDigits] ?: if (logDigits.length >= 7) contactBySuffix[logDigits.takeLast(7)] else null
+        }
+
+        if (targetContactId != null) {
+            val stats = statsMap.getOrPut(targetContactId) { ContactCallStats() }
+            stats.callCount += log.count
+            val latestDate = if (log.dates.isNotEmpty()) log.dates.max() else log.date
+            if (latestDate > stats.lastCallTime) {
+                stats.lastCallTime = latestDate
+            }
+        }
+    }
+
+    return statsMap
+}
+
+fun List<Contact>.sortContacts(
+    option: ContactSortOption,
+    ascending: Boolean,
+    callLogs: List<CallLogEntry> = emptyList()
+): List<Contact> {
+    val actualLogs = if (callLogs.isNotEmpty()) callLogs else (CallLogsCache.getInMemoryCache() ?: emptyList())
     return when (option) {
         ContactSortOption.NAME -> {
             if (ascending) {
-                sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.ifBlank { "zzzz" } })
+                sortedWith(
+                    compareBy<Contact> {
+                        val first = it.name.trimStart().firstOrNull()?.uppercaseChar()
+                        when {
+                            first == null -> 2
+                            first in 'A'..'Z' -> 0
+                            first.isLetter() -> 1
+                            else -> 2
+                        }
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart().ifBlank { "zzzz" } }
+                )
             } else {
-                sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name.ifBlank { "" } })
+                sortedWith(
+                    compareBy<Contact> {
+                        val first = it.name.trimStart().firstOrNull()?.uppercaseChar()
+                        when {
+                            first == null -> 2
+                            first in 'A'..'Z' -> 0
+                            first.isLetter() -> 1
+                            else -> 2
+                        }
+                    }.thenByDescending(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart().ifBlank { "" } }
+                )
             }
         }
-        ContactSortOption.DATE_ADDED -> {
+        ContactSortOption.RECENTLY_CALLED -> {
+            val statsMap = buildContactCallStatsMap(this, actualLogs)
             if (ascending) {
-                // Oldest first
-                sortedWith(compareBy<Contact> {
-                    if (it.dateAdded > 0L) it.dateAdded else (it.id.toLongOrNull() ?: 0L)
-                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                sortedWith(
+                    compareBy<Contact> {
+                        val time = statsMap[it.id]?.lastCallTime ?: if (it.lastTimeContacted > 0L) it.lastTimeContacted else 0L
+                        if (time > 0L) time else Long.MAX_VALUE
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart() }
+                )
             } else {
-                // Newest first
-                sortedWith(compareByDescending<Contact> {
-                    if (it.dateAdded > 0L) it.dateAdded else (it.id.toLongOrNull() ?: 0L)
-                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                sortedWith(
+                    compareByDescending<Contact> {
+                        statsMap[it.id]?.lastCallTime ?: if (it.lastTimeContacted > 0L) it.lastTimeContacted else 0L
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart() }
+                )
             }
         }
         ContactSortOption.FREQUENTLY -> {
+            val statsMap = buildContactCallStatsMap(this, actualLogs)
             if (ascending) {
-                // Least frequently contacted first
-                sortedWith(compareBy<Contact> { it.timesContacted }
-                    .thenBy { it.lastTimeContacted }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                sortedWith(
+                    compareBy<Contact> {
+                        statsMap[it.id]?.callCount ?: if (it.timesContacted > 0) it.timesContacted else 0
+                    }.thenBy {
+                        statsMap[it.id]?.lastCallTime ?: if (it.lastTimeContacted > 0L) it.lastTimeContacted else 0L
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart() }
+                )
             } else {
-                // Most frequently contacted first
-                sortedWith(compareByDescending<Contact> { it.timesContacted }
-                    .thenByDescending { it.lastTimeContacted }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                sortedWith(
+                    compareByDescending<Contact> {
+                        statsMap[it.id]?.callCount ?: if (it.timesContacted > 0) it.timesContacted else 0
+                    }.thenByDescending {
+                        statsMap[it.id]?.lastCallTime ?: if (it.lastTimeContacted > 0L) it.lastTimeContacted else 0L
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trimStart() }
+                )
             }
         }
     }
@@ -225,7 +317,7 @@ fun ContactSortButton(
                         } else {
                             val defaultAsc = when (option) {
                                 ContactSortOption.NAME -> true
-                                ContactSortOption.DATE_ADDED -> false
+                                ContactSortOption.RECENTLY_CALLED -> false
                                 ContactSortOption.FREQUENTLY -> false
                             }
                             onSortChanged(option.id, defaultAsc)

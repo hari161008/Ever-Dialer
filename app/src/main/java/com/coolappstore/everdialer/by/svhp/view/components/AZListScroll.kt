@@ -129,15 +129,19 @@ fun AZListContent(
 ) {
     val grouped = remember(contacts, isAlphabeticalReversed) {
         val mainGroups = contacts.groupBy {
-            val firstChar = it.name.firstOrNull()?.uppercaseChar() ?: '#'
+            val firstChar = it.name.trimStart().firstOrNull()?.uppercaseChar() ?: '#'
             if (firstChar.isLetter()) firstChar else '#'
         }.toMutableMap()
 
         val finalMap = linkedMapOf<Char, List<Contact>>()
         val letterKeys = if (isAlphabeticalReversed) {
-            mainGroups.keys.filter { it.isLetter() }.sortedDescending()
+            val latinLetters = mainGroups.keys.filter { it in 'A'..'Z' }.sortedDescending()
+            val otherLetters = mainGroups.keys.filter { it.isLetter() && it !in 'A'..'Z' }.sortedDescending()
+            latinLetters + otherLetters
         } else {
-            mainGroups.keys.filter { it.isLetter() }.sorted()
+            val latinLetters = mainGroups.keys.filter { it in 'A'..'Z' }.sorted()
+            val otherLetters = mainGroups.keys.filter { it.isLetter() && it !in 'A'..'Z' }.sorted()
+            latinLetters + otherLetters
         }
         letterKeys.forEach { char ->
             finalMap[char] = mainGroups[char]!!

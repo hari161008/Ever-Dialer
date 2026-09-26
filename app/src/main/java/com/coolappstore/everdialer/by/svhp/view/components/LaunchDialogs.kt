@@ -515,7 +515,7 @@ fun DonateDialog(
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        "Donate to this open source project using \"UPI or Buy me a coffee\"",
+                        "Donate to this open source project using \"UPI, Buy me a coffee or GitHub Sponsor\"",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,

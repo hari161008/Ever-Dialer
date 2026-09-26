@@ -325,12 +325,11 @@ class CallService : InCallService() {
 
         private fun shouldLaunchOngoingCallUi(context: Context): Boolean {
             val pm = PreferenceManager(context)
-            val showUi = pm.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
-            if (!showUi) return false
             val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
             val isLocked = km?.isKeyguardLocked == true
             val showOnLock = pm.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED, true)
-            return !isLocked || showOnLock
+            val showUiUnlocked = pm.getBoolean(PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED, true)
+            return if (isLocked) showOnLock else showUiUnlocked
         }
 
         fun answerCall() {

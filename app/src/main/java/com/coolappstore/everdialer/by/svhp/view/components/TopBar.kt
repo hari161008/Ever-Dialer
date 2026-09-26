@@ -149,8 +149,51 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
         label = "settingsScale"
     )
 
-    // Search bar press animation
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
+    val solidIconsDynamic = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false) }
+    val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
+    val solidStyle = remember(settingsVer, isDark) { prefs.getSolidIconsStyle(isDark) }
 
+    val (settingsBgColor, settingsFgColor) = when {
+        isSaturatedActive || (solidIcons && solidIconsDynamic) -> {
+            if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
+                val primary = MaterialTheme.colorScheme.primary
+                if (isSaturatedActive && isDark) {
+                    primary to Color.Black
+                } else {
+                    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(primary.toArgb()) > 0.45
+                    primary to (if (isBright) Color(0xFF1C1B1F) else Color.White)
+                }
+            } else {
+                val container = if (!isDark && isSaturatedActive) {
+                    androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.30f)
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                }
+                val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(container.toArgb()) > 0.45
+                container to (if (isBright) Color(0xFF1C1B1F) else if (isDark) Color.White else MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+        solidIcons -> {
+            val baseColor = MaterialTheme.colorScheme.primary
+            val adjusted = adjustIconColorForTheme(baseColor, isDark)
+            val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(adjusted.toArgb()) > 0.45
+            adjusted to (if (isBright) Color(0xFF1C1B1F) else Color.White)
+        }
+        else -> {
+            MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        }
+    }
+
+    val appRoundness = LocalCardCornerRadius.current.value.coerceAtLeast(0f)
+    val settingsShape = if (circleIcons) {
+        CircleShape
+    } else {
+        RoundedCornerShape((appRoundness * (16f / 28f)).dp)
+    }
 
     Surface(
         modifier = Modifier
@@ -179,15 +222,15 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
                     navigator.navigate(SettingsScreenDestination())
                 },
                 modifier = Modifier.size(52.dp).scale(settingsScale),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = settingsShape,
+                color = settingsBgColor,
                 interactionSource = settingsSource
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Tune,
                         contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = settingsFgColor,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -246,6 +289,8 @@ fun SettingsPillTopAppBar(
         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
     }
     val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
+    val appRoundness = LocalCardCornerRadius.current.value.coerceAtLeast(0f)
+    val pillCornerRadius = (appRoundness * (36f / 28f)).dp
 
     Box(
         modifier = modifier
@@ -256,7 +301,7 @@ fun SettingsPillTopAppBar(
     ) {
         Surface(
             modifier = Modifier.wrapContentSize().wpTurnstileHeader(),
-            shape = RoundedCornerShape(36.dp),
+            shape = RoundedCornerShape(pillCornerRadius),
             color = pillBackground,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,

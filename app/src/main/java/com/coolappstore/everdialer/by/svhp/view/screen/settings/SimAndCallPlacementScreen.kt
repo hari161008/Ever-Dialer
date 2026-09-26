@@ -55,10 +55,6 @@ fun SimAndCallPlacementScreen(
     val prefs = koinInject<PreferenceManager>()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-    val scope = rememberCoroutineScope()
-    val showButton by remember {
-        derivedStateOf { scrollState.value > 0 }
-    }
 
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
@@ -183,12 +179,6 @@ fun SimAndCallPlacementScreen(
             SettingsPillTopAppBar(
                 title = "Sim And Call Placement",
                 onBackClick = { navigator.navigateUp() }
-            )
-        },
-        floatingActionButton = {
-            ScrollToTopButton(
-                visible = showButton,
-                onClick = { scope.launch { scrollState.animateScrollTo(0) } }
             )
         }
     ) { padding ->

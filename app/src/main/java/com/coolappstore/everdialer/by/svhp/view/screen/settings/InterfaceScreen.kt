@@ -1981,7 +1981,10 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             Spacer(Modifier.height(8.dp))
                                             Slider(
                                                 value = cornerRadius,
-                                                onValueChange = { cornerRadius = it },
+                                                onValueChange = {
+                                                    cornerRadius = it
+                                                    prefs.setFloat(PreferenceManager.KEY_CORNER_RADIUS, it)
+                                                },
                                                 onValueChangeFinished = {
                                                     prefs.setFloat(PreferenceManager.KEY_CORNER_RADIUS, cornerRadius)
                                                 },

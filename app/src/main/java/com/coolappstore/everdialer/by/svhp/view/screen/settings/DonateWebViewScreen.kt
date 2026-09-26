@@ -40,6 +40,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 object DonateWebViewConfig {
     const val DEFAULT_DONATE_URL = "https://hariprabhu.com/#donate"
     const val BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/hariprabhu"
+    const val GITHUB_SPONSORS_URL = "https://github.com/sponsors/hari161008"
 
     var targetUrl: String = DEFAULT_DONATE_URL
     var targetTitle: String = "Donate"

@@ -61,7 +61,9 @@ data class Contact(
     val note: String? = null,
     val timesContacted: Int = 0,
     val lastTimeContacted: Long = 0L,
-    val dateAdded: Long = 0L
+    val dateAdded: Long = 0L,
+    val firstName: String? = null,
+    val lastName: String? = null
 )
 
 @Serializable

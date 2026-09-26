@@ -310,6 +310,14 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 )
 
                 contact = when (mimeType) {
+                    ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE -> {
+                        val givenName = cursor.getString(data2Idx)
+                        val familyName = cursor.getString(data3Idx)
+                        currentContact.copy(
+                            firstName = givenName,
+                            lastName = familyName
+                        )
+                    }
                     ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
                         val type = cursor.getInt(data2Idx)
                         val label = cursor.getString(data3Idx)
@@ -597,7 +605,13 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
 
     private data class ExistingDataRow(val id: Long, val value1: String?, val type: Int? = null)
 
-    private fun updateStructuredName(ops: ArrayList<ContentProviderOperation>, rawId: Long, displayName: String) {
+    private fun updateStructuredName(
+        ops: ArrayList<ContentProviderOperation>,
+        rawId: Long,
+        displayName: String,
+        givenName: String? = null,
+        familyName: String? = null
+    ) {
         var existingDataId: Long? = null
         var existingDisplayName: String? = null
         try {
@@ -622,23 +636,26 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             android.util.Log.e("ContactsRepo", "Error querying StructuredName for rawId $rawId", e)
         }
 
+        val gName = givenName?.trim()?.ifEmpty { null } ?: displayName
+        val fName = familyName?.trim()?.ifEmpty { null }
+
         if (existingDataId != null) {
-            if (existingDisplayName != displayName) {
-                ops.add(
-                    ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-                        .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingDataId.toString()))
-                        .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, displayName)
-                        .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, displayName)
-                        .build()
-                )
-            }
+            ops.add(
+                ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingDataId.toString()))
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, displayName)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, gName)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, fName)
+                    .build()
+            )
         } else {
             ops.add(
                 ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                     .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
                     .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
                     .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, displayName)
-                    .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, displayName)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, gName)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, fName)
                     .build()
             )
         }
@@ -1040,7 +1057,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
                 .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
                 .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.name)
-                .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.name)
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.firstName?.trim()?.ifEmpty { null } ?: contact.name)
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, contact.lastName?.trim()?.ifEmpty { null })
                 .build())
 
             val phonesToInsert = if (contact.phones.isNotEmpty()) {
@@ -1130,7 +1148,8 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
                     .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
                     .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.name)
-                    .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.name)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.firstName?.trim()?.ifEmpty { null } ?: contact.name)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, contact.lastName?.trim()?.ifEmpty { null })
                     .build())
 
                 val fallbackPhones = if (contact.phones.isNotEmpty()) {
@@ -1210,7 +1229,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 // without destroying row IDs (Data._ID), which preserves sync adapter anchors (e.g. WhatsApp, Google Sync).
                 val allWritableIds = writableRawContacts.map { it.id }.distinct()
                 allWritableIds.forEach { rawId ->
-                    updateStructuredName(ops, rawId, contact.name)
+                    updateStructuredName(ops, rawId, contact.name, contact.firstName, contact.lastName)
                 }
 
                 // Update data rows (phones, emails, addresses, notes) across target raw contacts in place

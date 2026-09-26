@@ -56,6 +56,7 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import android.os.Build
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
@@ -341,6 +342,8 @@ fun ContactContent(
 
             val contacts = contactsVM.displayedContacts.collectAsState().value
             val isLoadingContacts by contactsVM.isLoading.collectAsState()
+            val callLogVM: CallLogViewModel = koinActivityViewModel()
+            val allLogs by callLogVM.allCallLogs.collectAsState()
 
             var contactsSortBy by remember(settingsVersion) {
                 mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACTS_SORT_BY, "name") ?: "name")
@@ -349,8 +352,12 @@ fun ContactContent(
                 mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACTS_SORT_ASCENDING, true))
             }
 
-            val sortedContacts = remember(contacts, contactsSortBy, contactsSortAscending) {
-                contacts.sortContacts(ContactSortOption.fromId(contactsSortBy), contactsSortAscending)
+            LaunchedEffect(contactsSortBy, contactsSortAscending) {
+                listState.scrollToItem(0)
+            }
+
+            val sortedContacts = remember(contacts, contactsSortBy, contactsSortAscending, allLogs) {
+                contacts.sortContacts(ContactSortOption.fromId(contactsSortBy), contactsSortAscending, allLogs)
             }
 
             // ── Contact count / account-switcher pill ─────────────────────

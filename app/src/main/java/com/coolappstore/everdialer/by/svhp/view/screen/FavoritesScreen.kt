@@ -48,6 +48,7 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
@@ -114,6 +115,8 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
+    val callLogVM: CallLogViewModel = koinActivityViewModel()
+    val allLogs by callLogVM.allCallLogs.collectAsState()
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     var favsSortBy by remember(settingsVer) {
@@ -121,6 +124,10 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     }
     var favsSortAscending by remember(settingsVer) {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FAVORITES_SORT_ASCENDING, true))
+    }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(favsSortBy, favsSortAscending) {
+        gridState.scrollToItem(0)
     }
     val hiddenIds by remember(prefs) {
         derivedStateOf {
@@ -143,13 +150,13 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     val orderedFavorites = remember { mutableStateListOf<Contact>() }
 
     fun applyFavoritesSort(sortBy: String, ascending: Boolean) {
-        val sorted = orderedFavorites.toList().sortContacts(ContactSortOption.fromId(sortBy), ascending)
+        val sorted = orderedFavorites.toList().sortContacts(ContactSortOption.fromId(sortBy), ascending, allLogs)
         orderedFavorites.clear()
         orderedFavorites.addAll(sorted)
         prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
     }
 
-    LaunchedEffect(favorites) {
+    LaunchedEffect(favorites, allLogs) {
         // Don't touch the list while the user is actively dragging
         if (draggedContactId != null) return@LaunchedEffect
         val savedIds = prefs.getString(PreferenceManager.KEY_FAVORITES_ORDER, null)
@@ -157,8 +164,9 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         val favMap   = favorites.associateBy { it.id }
         val ordered  = savedIds.mapNotNull { favMap[it] }
         val rawList  = ordered + favorites.filter { it.id !in savedIds.toSet() }
-        val newList  = if (savedIds.isEmpty()) {
-            rawList.sortContacts(ContactSortOption.fromId(favsSortBy), favsSortAscending)
+        val isDynamicSort = favsSortBy == ContactSortOption.RECENTLY_CALLED.id || favsSortBy == ContactSortOption.FREQUENTLY.id
+        val newList  = if (savedIds.isEmpty() || isDynamicSort) {
+            rawList.sortContacts(ContactSortOption.fromId(favsSortBy), favsSortAscending, allLogs)
         } else {
             rawList
         }
@@ -319,7 +327,6 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     )
                 }
 
-                val gridState = rememberLazyGridState()
                 ScrollHapticsGridEffect(gridState = gridState)
                 val gridColumns = if (favoritesInList) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 100.dp)
                 val contentPadding = if (favoritesInList) PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp) else PaddingValues(12.dp)

@@ -702,7 +702,7 @@ fun RivoListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp))
                 .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -916,7 +916,7 @@ fun RivoSwitchListItem(
                     onCheckedChange(!checked)
                 }
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp),
         shadowElevation = 0.dp
     ) {
         Row(
@@ -1014,7 +1014,7 @@ fun RivoCheckboxListItem(
                     onCheckedChange(!checked)
                 }
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp),
         shadowElevation = 0.dp
     ) {
         Row(

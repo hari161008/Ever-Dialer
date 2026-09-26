@@ -51,7 +51,7 @@ fun SearchHistorySection(
         }
 
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (20f / 28f)).dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier
                 .fillMaxWidth()

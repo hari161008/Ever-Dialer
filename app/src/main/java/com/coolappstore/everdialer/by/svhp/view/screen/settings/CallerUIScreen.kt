@@ -218,7 +218,7 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         )
                         RivoExpressiveCard {
                             RivoSwitchListItem(
-                                headline = "Show ongoing call UI when the call is answered",
+                                headline = "Show ongoing call UI when the call is answered when phone is unlocked",
                                 supporting = "Display the full screen in-call screen when a call is answered",
                                 leadingIcon = Icons.Outlined.Call,
                                 iconContainerColor = Color(0xFF2196F3),
