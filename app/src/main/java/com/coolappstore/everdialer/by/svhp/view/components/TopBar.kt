@@ -140,7 +140,37 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     )
     LaunchedEffect(Unit) { visible = true }
 
-    // Settings button press animation
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .alpha(alpha)
+            .offset(y = offsetY),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Search bar
+            SearchBarPill(navigator = navigator, modifier = Modifier.weight(1f))
+
+            // Settings button – coloured icon background
+            SettingsIconButton(navigator = navigator)
+        }
+    }
+}
+
+@Composable
+fun SettingsIconButton(
+    navigator: DestinationsNavigator,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
     val settingsSource = remember { MutableInteractionSource() }
     val settingsPressed by settingsSource.collectIsPressedAsState()
     val settingsScale by animateFloatAsState(
@@ -196,45 +226,24 @@ fun TopBar(navController: NavController, navigator: DestinationsNavigator) {
     }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .alpha(alpha)
-            .offset(y = offsetY),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Search bar
-            SearchBarPill(navigator = navigator, modifier = Modifier.weight(1f))
-
-            // Settings button – coloured icon background
-            Surface(
-                onClick = {
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                        performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
-                    }
-                    navigator.navigate(SettingsScreenDestination())
-                },
-                modifier = Modifier.size(52.dp).scale(settingsScale),
-                shape = settingsShape,
-                color = settingsBgColor,
-                interactionSource = settingsSource
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Settings",
-                        tint = settingsFgColor,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+        onClick = {
+            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
             }
+            navigator.navigate(SettingsScreenDestination())
+        },
+        modifier = modifier.size(52.dp).scale(settingsScale),
+        shape = settingsShape,
+        color = settingsBgColor,
+        interactionSource = settingsSource
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Default.Tune,
+                contentDescription = "Settings",
+                tint = settingsFgColor,
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }

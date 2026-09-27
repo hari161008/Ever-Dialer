@@ -28,7 +28,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
+import com.coolappstore.everdialer.by.svhp.view.components.SettingsIconButton
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.AppLockScreen
@@ -214,6 +217,12 @@ fun RecordingsScreen(
                         },
                         onEverDialerSettingsClick = {
                             navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination())
+                        },
+                        everDialerSettingsButton = {
+                            SettingsIconButton(
+                                navigator = navigator,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
                         }
                     )
 

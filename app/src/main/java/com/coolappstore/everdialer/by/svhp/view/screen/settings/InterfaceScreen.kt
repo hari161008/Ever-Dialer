@@ -159,6 +159,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var nameNonContactsAsUnknown by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NAME_NON_CONTACTS_AS_UNKNOWN, true)) }
     var dialpadMemory  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
     var showCallLogsInDialpadSearchList by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, true)) }
+    var showNumbersInCallLogs by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_NUMBERS_IN_CALL_LOGS, true)) }
 
     var autoDeleteUnknownEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_ENABLED, false)) }
     var autoDeleteUnknownValue   by remember { mutableStateOf(prefs.getInt(PreferenceManager.KEY_AUTO_DELETE_UNKNOWN_CALLS_VALUE, 1).toString()) }
@@ -2385,6 +2386,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         showCallLogsInDialpadSearchList = it
                                         prefs.setBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoSwitchListItem(
+                                    headline = "Show numbers in call logs",
+                                    supporting = "Show phone numbers below contact names in call logs. When disabled, numbers are hidden for saved contacts",
+                                    leadingIcon = Icons.Outlined.Numbers,
+                                    iconContainerColor = ColorBlue,
+                                    checked = showNumbersInCallLogs,
+                                    modifier = Modifier.settingsSearchHighlight("show_numbers_in_call_logs", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        showNumbersInCallLogs = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SHOW_NUMBERS_IN_CALL_LOGS, it)
                                     }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),

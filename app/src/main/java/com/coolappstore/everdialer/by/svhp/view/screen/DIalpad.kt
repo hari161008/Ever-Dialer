@@ -1997,6 +1997,8 @@ fun DialPadContent(
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))
+                val simBtnW = (70 * scaleFactor).dp
+                val sideBtnW = if (showSimButtons) simBtnW else keyWidth
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2009,7 +2011,7 @@ fun DialPadContent(
                         icon = Icons.Default.PersonAdd,
                         contentDescription = "Add Contact",
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.width(keyWidth).height(callH),
+                        modifier = Modifier.width(sideBtnW).height(callH),
                         isLarge = true
                     )
 
@@ -2024,7 +2026,6 @@ fun DialPadContent(
                         !lgDialpadEnabled
                     }
                     if (showSimButtons) {
-                        val simBtnW = (70 * scaleFactor).dp
                         Row(
                             horizontalArrangement = Arrangement.spacedBy((8 * scaleFactor).dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -2106,7 +2107,7 @@ fun DialPadContent(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(keyWidth))
+                    Spacer(modifier = Modifier.width(sideBtnW))
                 }
             }
         }

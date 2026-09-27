@@ -459,6 +459,9 @@ class PreferenceManager(context: Context) {
         // Show Call Logs in Dialpad Search List — on by default. When on, recent call logs are
         // shown in the dialpad search list when nothing has been typed/searched yet.
         const val KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST = "show_call_logs_in_dialpad_search_list"
+        // Show Numbers in Call Logs — on by default. When on, contact phone numbers are shown
+        // below their names in call logs. When off, numbers are hidden for known contacts.
+        const val KEY_SHOW_NUMBERS_IN_CALL_LOGS = "show_numbers_in_call_logs"
         // Auto Delete Unknown No in call log — off by default. When on, call log entries from
         // numbers that aren't saved contacts get auto-deleted once older than the configured
         // threshold. Only applies going forward from the moment it's turned on (see

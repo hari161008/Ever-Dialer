@@ -104,7 +104,8 @@ data class CallLogDisplayConfig(
     val showAvatars: Boolean = true,
     val sim1Color: Color = Color(PreferenceManager.DEFAULT_SIM1_COLOR),
     val sim2Color: Color = Color(PreferenceManager.DEFAULT_SIM2_COLOR),
-    val isScrollAnimEnabled: Boolean = true
+    val isScrollAnimEnabled: Boolean = true,
+    val showNumbersInCallLogs: Boolean = true
 )
 
 @Composable
@@ -408,6 +409,7 @@ fun CallLogTile(
     val showSimsSetting: Boolean
     val sim1Color: Color
     val sim2Color: Color
+    val showNumbersInCallLogs: Boolean
 
     if (config != null) {
         fakeCallInContextMenu = config.fakeCallInContextMenu
@@ -422,6 +424,7 @@ fun CallLogTile(
         showSimsSetting = config.showSims
         sim1Color = config.sim1Color
         sim2Color = config.sim2Color
+        showNumbersInCallLogs = config.showNumbersInCallLogs
     } else {
         fakeCallInContextMenu = remember(settingsVer) {
             prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
@@ -446,6 +449,7 @@ fun CallLogTile(
         showSimsSetting = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault()) }
         sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
         sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+        showNumbersInCallLogs = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SHOW_NUMBERS_IN_CALL_LOGS, true) }
     }
 
     var showFakeCallSheet by remember { mutableStateOf(false) }
@@ -484,7 +488,7 @@ fun CallLogTile(
         }
         Box(modifier = Modifier.weight(1f)) {
         val showSimBadge = showSimsSetting && log.simSlot in 0..1
-        val showNumberOnSupportingLine = !isHiddenContact && (isContact || isCallerId || nameNonContactsAsUnknown)
+        val showNumberOnSupportingLine = !isHiddenContact && ((isContact && showNumbersInCallLogs) || (!isContact && (isCallerId || nameNonContactsAsUnknown)))
         val simBadge: (@Composable () -> Unit)? = if (showSimBadge) ({
             SimSlotBadge(
                 slot = log.simSlot,
