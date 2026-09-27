@@ -55,6 +55,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
+import com.coolappstore.everdialer.by.svhp.view.components.findMatchingRecording
+import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
@@ -135,6 +140,12 @@ fun ContactDetailsScreen(
 
     val contacts by contactsViewModel.allContacts.collectAsState()
     val allLogs by callLogViewModel.allCallLogs.collectAsState()
+    val recordingsVM: HomeViewModel = viewModel()
+    val allRecordings by recordingsVM.allRecordings.collectAsState()
+
+    LaunchedEffect(Unit) {
+        recordingsVM.refresh()
+    }
 
     val contact = remember(contactId, phoneNumber, contacts) {
         if (contactId != null && contactId != "null") contacts.find { it.id == contactId }
@@ -2408,8 +2419,21 @@ fun ContactDetailsScreen(
                                 ) {
                                     Column(modifier = Modifier.animateContentSize()) {
                                         contactLogs.take(3).forEachIndexed { index, log ->
+                                            val matchingRecording = remember(log, allRecordings, contactPhoneNumbers) {
+                                                findMatchingRecording(log, allRecordings, contactPhoneNumbers)
+                                            }
                                             CallLogTileSimple(
                                                 log = log,
+                                                matchingRecording = matchingRecording,
+                                                onRecordingClick = { rec ->
+                                                    NavBarVisibilityState.hideForSettingsEntry = true
+                                                    navigator.navigate(
+                                                        RecordingsScreenDestination(
+                                                            openedFromSettings = true,
+                                                            openedRecordingUri = rec.uri.toString()
+                                                        )
+                                                    )
+                                                },
                                                 onCallClick = { initiateCall(it.number) }
                                             )
                                             if (index < 2 && index < contactLogs.size - 1) {

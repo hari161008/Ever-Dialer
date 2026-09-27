@@ -103,8 +103,12 @@ fun RecordingsScreen(
         preferences.isAppLockEnabled() && !isAppLockUnlocked
 
     BackHandler(enabled = selectedRecording != null && !isAppLocked) {
-        selectedRecording = null
-        highlightQuery = ""
+        if (openedRecordingUri != null) {
+            navigator.navigateUp()
+        } else {
+            selectedRecording = null
+            highlightQuery = ""
+        }
     }
 
     BackHandler(enabled = openedFromSettings && selectedRecording == null && !isAppLocked) {
@@ -227,8 +231,12 @@ fun RecordingsScreen(
                             PlaybackScreen(
                                 recording = recording,
                                 onBack = {
-                                    selectedRecording = null
-                                    highlightQuery = ""
+                                    if (openedRecordingUri != null) {
+                                        navigator.navigateUp()
+                                    } else {
+                                        selectedRecording = null
+                                        highlightQuery = ""
+                                    }
                                 },
                                 highlightQuery = highlightQuery,
                                 modifier = Modifier.fillMaxSize()

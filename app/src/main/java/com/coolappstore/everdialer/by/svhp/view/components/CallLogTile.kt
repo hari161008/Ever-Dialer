@@ -58,6 +58,8 @@ import android.content.ContentUris
 import android.net.Uri
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
+import androidx.compose.material.icons.rounded.Pause
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
@@ -179,10 +181,51 @@ private fun nationalNumberDigits(number: String): String {
     return if (digits.length > 10) digits.takeLast(10) else digits
 }
 
+fun findMatchingRecording(
+    log: CallLogEntry,
+    recordings: List<RecordingItem>,
+    contactPhoneNumbers: List<String> = emptyList()
+): RecordingItem? {
+    if (recordings.isEmpty()) return null
+
+    // Call timestamps to match against (single or grouped dates)
+    val callTimestamps = if (log.dates.isNotEmpty()) log.dates else listOf(log.date)
+
+    // Filter recordings that belong to this phone number / contact
+    val candidateRecordings = recordings.filter { rec ->
+        val recDate = rec.date?.time ?: return@filter false
+        val numberMatches = numbersLikelyMatch(rec.phoneNumber, log.number) ||
+                contactPhoneNumbers.any { numbersLikelyMatch(rec.phoneNumber, it) } ||
+                ((rec.phoneNumber.isBlank() || rec.phoneNumber == "Unknown") &&
+                        !rec.contactName.isNullOrBlank() && !log.name.isNullOrBlank() &&
+                        rec.contactName.equals(log.name, ignoreCase = true))
+
+        if (!numberMatches) return@filter false
+
+        // Timing match: check if recDate is close to any of the call's timestamps
+        // Allow up to 120s (2 mins) window before/after call start, or within call duration interval
+        callTimestamps.any { callStart ->
+            val diff = kotlin.math.abs(recDate - callStart)
+            val callDurationMs = log.duration * 1000L
+            diff <= 120_000L || (recDate in (callStart - 30_000L)..(callStart + callDurationMs + 30_000L))
+        }
+    }
+
+    if (candidateRecordings.isEmpty()) return null
+
+    // Pick the best match with the smallest timing difference to the closest call timestamp
+    return candidateRecordings.minByOrNull { rec ->
+        val recDate = rec.date!!.time
+        callTimestamps.minOf { callStart -> kotlin.math.abs(recDate - callStart) }
+    }
+}
+
 @Composable
 fun CallLogTileSimple(
     log: CallLogEntry,
     use24HourTime: Boolean? = null,
+    matchingRecording: RecordingItem? = null,
+    onRecordingClick: ((RecordingItem) -> Unit)? = null,
     onCallClick: ((CallLogEntry) -> Unit)? = null
 ) {
     val prefs = koinInject<PreferenceManager>()
@@ -233,23 +276,49 @@ fun CallLogTileSimple(
             else                        -> "Call"
         },
         supporting = "${formatDate(log.date, is24H)}${if (durationText != null) " • $durationText" else ""}",
-        trailingStartContent = if (onCallClick != null) {
+        trailingStartContent = if (onCallClick != null || (matchingRecording != null && onRecordingClick != null)) {
             {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable { onCallClick(log) }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Call",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(17.dp)
-                        )
+                    if (matchingRecording != null && onRecordingClick != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable { onRecordingClick(matchingRecording) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Pause,
+                                    contentDescription = "Recording",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (onCallClick != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable { onCallClick(log) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Call",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

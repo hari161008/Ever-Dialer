@@ -42,6 +42,9 @@ import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import java.util.Locale
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
+import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 
 @Destination<RootGraph>(route = "call_log_detail_screen", style = SettingsTransitionStyle::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +58,9 @@ fun CallLogFullScreen(
     val contactsViewModel: ContactsViewModel = koinActivityViewModel()
     val allLogs by viewModel.allCallLogs.collectAsState()
     val contacts by contactsViewModel.allContacts.collectAsState()
+    val recordingsVM: HomeViewModel = viewModel()
+    val allRecordings by recordingsVM.allRecordings.collectAsState()
+    LaunchedEffect(Unit) { recordingsVM.refresh() }
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -250,9 +256,22 @@ fun CallLogFullScreen(
                                                     thickness = 0.5.dp
                                                 )
                                             }
+                                            val matchingRecording = remember(lg, allRecordings, matchedContact) {
+                                                findMatchingRecording(lg, allRecordings, matchedContact?.phoneNumbers ?: emptyList())
+                                            }
                                             CallLogTileSimple(
                                                 lg,
                                                 use24HourTime = use24HourTime,
+                                                matchingRecording = matchingRecording,
+                                                onRecordingClick = { rec ->
+                                                    NavBarVisibilityState.hideForSettingsEntry = true
+                                                    navigator.navigate(
+                                                        RecordingsScreenDestination(
+                                                            openedFromSettings = true,
+                                                            openedRecordingUri = rec.uri.toString()
+                                                        )
+                                                    )
+                                                },
                                                 onCallClick = { entry ->
                                                     val targetNumber = entry.number
                                                     if (targetNumber.isNotBlank()) {

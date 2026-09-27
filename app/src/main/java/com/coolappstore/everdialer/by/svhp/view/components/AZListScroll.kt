@@ -166,7 +166,7 @@ fun AZListContent(
     val scope = rememberCoroutineScope()
     var draggingChar by remember { mutableStateOf<Char?>(null) }
 
-    val scrollingChar by remember {
+    val scrollingChar by remember(alphabetIndices) {
         derivedStateOf {
             val firstVisible = listState.firstVisibleItemIndex
             alphabetIndices.entries
@@ -897,23 +897,26 @@ fun AlphabetSideBar(
             .wrapContentHeight()
             .onGloballyPositioned { columnHeight = it.size.height }
             .pointerInput(alphabet) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        if (columnHeight > 0) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val pickLetter: (Float) -> Unit = { y ->
+                        if (columnHeight > 0 && alphabet.isNotEmpty()) {
                             val itemHeight = columnHeight.toFloat() / alphabet.size
-                            val index = (offset.y / itemHeight).toInt()
-                            val char = alphabet.getOrNull(index.coerceIn(0, alphabet.lastIndex))
-                            if (char != null) onLetterSelected(char)
+                            val index = (y / itemHeight).toInt().coerceIn(0, alphabet.lastIndex)
+                            alphabet.getOrNull(index)?.let { onLetterSelected(it) }
                         }
-                    },
-                    onDragEnd = { onDragEnd() },
-                    onDragCancel = { onDragEnd() }
-                ) { change, _ ->
-                    if (columnHeight > 0) {
-                        val itemHeight = columnHeight.toFloat() / alphabet.size
-                        val index = (change.position.y / itemHeight).toInt()
-                        val char = alphabet.getOrNull(index.coerceIn(0, alphabet.lastIndex))
-                        if (char != null) onLetterSelected(char)
+                    }
+                    pickLetter(down.position.y)
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            pickLetter(change.position.y)
+                            change.consume()
+                        }
+                    } finally {
+                        onDragEnd()
                     }
                 }
             },
