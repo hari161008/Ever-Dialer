@@ -70,7 +70,8 @@ object RecordingFileNameFormatter {
         metadata: RecordingMetadata,
         codec: ScrcpyAudioCodec,
         customFormat: String? = null,
-        startTimeMillis: Long = System.currentTimeMillis()
+        startTimeMillis: Long = System.currentTimeMillis(),
+        fallbackContactName: String? = null
     ): String {
         val template = customFormat ?: AppPreferences(context).getFileNameTemplate()
 
@@ -84,8 +85,12 @@ object RecordingFileNameFormatter {
         val phoneStr = metadata.getBestNumber() ?: ""
         var contactStr = ""
 
-        if (template.contains(FileNamePlaceholder.CONTACT_NAME.tag) && phoneStr.isNotEmpty()) {
-            contactStr = getContactName(context, phoneStr) ?: ""
+        if (template.contains(FileNamePlaceholder.CONTACT_NAME.tag)) {
+            val resolvedContact = if (phoneStr.isNotEmpty()) getContactName(context, phoneStr) else null
+            contactStr = resolvedContact ?: fallbackContactName ?: ""
+            if (contactStr.isEmpty() && phoneStr.isNotEmpty() && !template.contains(FileNamePlaceholder.PHONE_NUMBER.tag)) {
+                contactStr = phoneStr
+            }
         }
 
         val crossCountryStr = metadata.isCrossCountry.toString()
@@ -108,19 +113,7 @@ object RecordingFileNameFormatter {
             baseName
         }
 
-        // Bug fix: the real phone number used to only end up in the filename when the user's
-        // template happened to contain {phone_number}. Templates that omit it (including the
-        // app's own default, "{contact_name}_{date}_{direction}") had no way of getting the
-        // number back afterwards, so the player and recordings list permanently showed
-        // "Unknown" for the number — and, since the contact-photo/name lookups both key off
-        // that number, the contact's photo (and sometimes even their name) silently disappeared
-        // too. A short hidden suffix carrying the real number is now always appended (unless the
-        // template already surfaces it), independent of what the visible template looks like, so
-        // it can always be recovered when the recordings list is parsed back — without changing
-        // how the filename looks to the user. See HomeViewModel.extractHiddenPhoneSuffix().
-        if (phoneStr.isNotEmpty() && !template.contains(FileNamePlaceholder.PHONE_NUMBER.tag)) {
-            finalName = "$finalName$HIDDEN_NUMBER_MARKER${sanitizeForFileName(phoneStr)}"
-        }
+        finalName = sanitizeBaseName(finalName)
 
         AppLogger.v(TAG, "Formatted base filename: '$finalName' with template '$template'")
         return "$finalName${codec.containerExtension}"
@@ -150,6 +143,9 @@ object RecordingFileNameFormatter {
      */
     private fun sanitizeForFileName(value: String): String =
         value.replace(Regex("""[/\\:*?"<>|\x00-\x1F]"""), "_").trim()
+
+    private fun sanitizeBaseName(name: String): String =
+        name.replace(Regex("_+"), "_").trim('_', '-', ' ')
 
 
 

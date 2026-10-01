@@ -83,6 +83,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         @Volatile private var cachedExactIndex: Map<String, ContactIndexEntry> = emptyMap()
         @Volatile private var cachedSuffixIndex: Map<String, MutableList<ContactIndexEntry>> = emptyMap()
+        @Volatile private var cachedNameIndex: Map<String, ContactIndexEntry> = emptyMap()
         @Volatile private var contactIndexTimestamp: Long = 0L
 
         @Volatile private var cachedRecordings: List<RecordingItem> = emptyList()
@@ -656,6 +657,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             var contactName: String? = null
             var photoUri: String? = null
 
+            val contactFromFile = if (template.contains("{contact_name}"))
+                parsed.contactName.ifBlank { null } else null
+
+            var nameMatchedEntry: ContactIndexEntry? = null
+            if (phoneNumber == "Unknown" || phoneNumber.isBlank()) {
+                if (!contactFromFile.isNullOrBlank()) {
+                    nameMatchedEntry = cachedNameIndex[contactFromFile.lowercase().trim()]
+                    if (nameMatchedEntry != null) {
+                        phoneNumber = nameMatchedEntry.savedDigits
+                        if (photoUri == null) photoUri = nameMatchedEntry.photoUri
+                    } else if (contactFromFile.any { it.isDigit() } && contactFromFile.filter { it.isDigit() }.length >= 7) {
+                        phoneNumber = contactFromFile
+                    }
+                }
+            }
+
             if (phoneNumber != "Unknown" && phoneNumber.isNotBlank()) {
                 val match = resolveContactFromIndex(phoneNumber, exactContactIndex, suffixContactIndex)
                 if (match != null) {
@@ -665,9 +682,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (contactName.isNullOrBlank()) {
-                val contactFromFile = if (template.contains("{contact_name}"))
-                    parsed.contactName.ifBlank { null } else null
-                contactName = contactFromFile ?: callLogMatch?.cachedName
+                contactName = contactFromFile ?: nameMatchedEntry?.name ?: callLogMatch?.cachedName
             }
 
             if (photoUri != null && phoneNumber != "Unknown") {
@@ -802,6 +817,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         val exact = HashMap<String, ContactIndexEntry>()
         val suffix = HashMap<String, MutableList<ContactIndexEntry>>()
+        val byName = HashMap<String, ContactIndexEntry>()
         try {
             context.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -839,11 +855,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     if (digits.length >= 7) {
                         suffix.getOrPut(digits.takeLast(7)) { mutableListOf() }.add(entry)
                     }
+                    if (!entry.name.isNullOrBlank()) {
+                        byName.putIfAbsent(entry.name.lowercase().trim(), entry)
+                    }
                 }
             }
         } catch (_: Exception) {}
         cachedExactIndex = exact
         cachedSuffixIndex = suffix
+        cachedNameIndex = byName
         contactIndexTimestamp = System.currentTimeMillis()
         return exact to suffix
     }

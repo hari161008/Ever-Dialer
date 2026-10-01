@@ -95,7 +95,9 @@ fun RecordingsScreen(
     LaunchedEffect(directEntryUriToOpen, recordingsForLookup) {
         val uri = directEntryUriToOpen
         if (!uri.isNullOrEmpty() && selectedRecording == null) {
-            recordingsForLookup.firstOrNull { it.uri.toString() == uri }?.let {
+            recordingsForLookup.firstOrNull {
+                it.uri.toString() == uri || android.net.Uri.decode(it.uri.toString()) == android.net.Uri.decode(uri)
+            }?.let {
                 selectedRecording = it
                 directEntryUriToOpen = null
             }
@@ -106,12 +108,8 @@ fun RecordingsScreen(
         preferences.isAppLockEnabled() && !isAppLockUnlocked
 
     BackHandler(enabled = selectedRecording != null && !isAppLocked) {
-        if (openedRecordingUri != null) {
-            navigator.navigateUp()
-        } else {
-            selectedRecording = null
-            highlightQuery = ""
-        }
+        selectedRecording = null
+        highlightQuery = ""
     }
 
     BackHandler(enabled = openedFromSettings && selectedRecording == null && !isAppLocked) {
@@ -199,6 +197,7 @@ fun RecordingsScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     HomeScreen(
                         appVersion = appVersion,
+                        onBackClick = if (openedFromSettings) { { navigator.navigateUp() } } else null,
                         onSettingsClick = {
                             // Opens the bundled Ever Call Recorder app directly on its
                             // Call Recording settings screen (storage location, filename
@@ -240,12 +239,8 @@ fun RecordingsScreen(
                             PlaybackScreen(
                                 recording = recording,
                                 onBack = {
-                                    if (openedRecordingUri != null) {
-                                        navigator.navigateUp()
-                                    } else {
-                                        selectedRecording = null
-                                        highlightQuery = ""
-                                    }
+                                    selectedRecording = null
+                                    highlightQuery = ""
                                 },
                                 highlightQuery = highlightQuery,
                                 modifier = Modifier.fillMaxSize()

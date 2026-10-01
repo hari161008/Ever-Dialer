@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
@@ -64,6 +65,7 @@ fun HomeScreen(
     onGlobalSearchClick: () -> Unit = {},
     onEverDialerSettingsClick: () -> Unit = {},
     everDialerSettingsButton: (@Composable () -> Unit)? = null,
+    onBackClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val vm: HomeViewModel = viewModel()
@@ -116,6 +118,16 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Ever Call Recorder", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    if (onBackClick != null && !isSelectionMode) {
+                        IconButton(onClick = onBackClick) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    }
+                },
                 actions = {
                     AnimatedVisibility(visible = !isSelectionMode, enter = fadeIn(), exit = fadeOut()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

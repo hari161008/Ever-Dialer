@@ -71,7 +71,8 @@ fun FileNameFormatDialog(
             isEnriched = true
         )
         val result = RecordingFileNameFormatter.formatFileName(
-            context, fakeMetadata, ScrcpyAudioCodec.OPUS, customFormat = text
+            context, fakeMetadata, ScrcpyAudioCodec.OPUS, customFormat = text,
+            fallbackContactName = "John Doe"
         )
         result
     }

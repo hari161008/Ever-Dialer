@@ -64,6 +64,9 @@ import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestination
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.outlined.Chat
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import androidx.compose.ui.platform.LocalConfiguration
@@ -82,6 +85,7 @@ private val TAB_ROUTES = setOf(
     FavoritesScreenDestination.route,
     RecentScreenDestination.route,
     ContactScreenDestination.route,
+    SmsScreenDestination.route,
     GroupsScreenDestination.route,
     RecordingsScreenDestination.route,
     NotesScreenDestination.route,
@@ -123,6 +127,7 @@ fun BottomBar(navController: NavController) {
     val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
     val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
+    val showSmsTab        = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS,        true) }
     val showGroupsTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false) }
     val showRecordingsTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
     val showNotesTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true) }
@@ -137,17 +142,19 @@ fun BottomBar(navController: NavController) {
     val isFavoritesSelected  = currentDestination?.hierarchy?.any { it.route == FavoritesScreenDestination.route } == true
     val isRecentsSelected    = currentDestination?.hierarchy?.any { it.route == RecentScreenDestination.route } == true
     val isContactsSelected   = currentDestination?.hierarchy?.any { it.route == ContactScreenDestination.route } == true
+    val isSmsSelected        = currentDestination?.hierarchy?.any { it.route == SmsScreenDestination.route } == true
     val isGroupsSelected     = currentDestination?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true
     val isRecordingsSelected = currentDestination?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true
     val isNotesSelected      = currentDestination?.hierarchy?.any { it.route == NotesScreenDestination.route } == true
     val isDialpadSelected    = currentDestination?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true
 
     // Build visible tab routes dynamically based on prefs
-    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab) {
+    val visibleTabRoutes = remember(showFavoritesTab, showCallsTab, showContactsTab, showSmsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab) {
         buildSet {
             if (showFavoritesTab)  add(FavoritesScreenDestination.route)
             if (showCallsTab)      add(RecentScreenDestination.route)
             if (showContactsTab)   add(ContactScreenDestination.route)
+            if (showSmsTab)        add(SmsScreenDestination.route)
             if (showGroupsTab)     add(GroupsScreenDestination.route)
             if (showRecordingsTab) add(RecordingsScreenDestination.route)
             if (showNotesTab)      add(NotesScreenDestination.route)
@@ -217,8 +224,8 @@ fun BottomBar(navController: NavController) {
     }
 
     val orderedTabs: List<TabSpec> = remember(
-        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab,
-        isFavoritesSelected, isRecentsSelected, isContactsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected, isDialpadSelected
+        tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showSmsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab,
+        isFavoritesSelected, isRecentsSelected, isContactsSelected, isSmsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected, isDialpadSelected
     ) {
         tabOrder.mapNotNull { key ->
             when (key) {
@@ -239,6 +246,12 @@ fun BottomBar(navController: NavController) {
                     selectedIcon = Icons.Filled.Person, unselectedIcon = Icons.Outlined.Person,
                     selected = isContactsSelected,
                     onClick = { doHaptic(); navigate(ContactScreenDestination.route) }
+                ) else null
+                "sms" -> if (showSmsTab) TabSpec(
+                    key = key, route = SmsScreenDestination.route, label = "SMS",
+                    selectedIcon = Icons.Filled.Chat, unselectedIcon = Icons.Outlined.Chat,
+                    selected = isSmsSelected,
+                    onClick = { doHaptic(); navigate(SmsScreenDestination.route) }
                 ) else null
                 "groups" -> if (showGroupsTab) TabSpec(
                     key = key, route = GroupsScreenDestination.route, label = "Groups",

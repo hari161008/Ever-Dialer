@@ -242,6 +242,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var tabShowFavorites  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)) }
     var tabShowCalls      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)) }
     var tabShowContacts   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)) }
+    var tabShowSms        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS,        true)) }
     var tabShowGroups     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)) }
     var tabShowRecordings by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)) }
     var tabShowNotes      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)) }
@@ -251,6 +252,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
         TabOption("calls",      "Calls",      Icons.Outlined.History),
         TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
+        TabOption("sms",        "SMS",        Icons.Outlined.Chat),
         TabOption("groups",     "Groups",     Icons.Outlined.Group),
         TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
         TabOption("notes",      "Note",       Icons.Outlined.Note),
@@ -279,6 +281,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         tabShowFavorites  = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true)
         tabShowCalls      = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true)
         tabShowContacts   = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true)
+        tabShowSms        = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_SMS,        true)
         tabShowGroups     = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false)
         tabShowRecordings = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
         tabShowNotes      = true;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)
@@ -777,6 +780,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             "favorites"  -> tabShowFavorites
             "calls"      -> tabShowCalls
             "contacts"   -> tabShowContacts
+            "sms"        -> tabShowSms
             "groups"     -> tabShowGroups
             "recordings" -> tabShowRecordings
             "notes"      -> tabShowNotes
@@ -788,6 +792,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 "favorites"  -> { tabShowFavorites = value;  prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  value) }
                 "calls"      -> { tabShowCalls = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      value) }
                 "contacts"   -> { tabShowContacts = value;   prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   value) }
+                "sms"        -> { tabShowSms = value;        prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_SMS,        value) }
                 "groups"     -> { tabShowGroups = value;     prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     value) }
                 "recordings" -> { tabShowRecordings = value; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, value) }
                 "notes"      -> { tabShowNotes = value;      prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      value) }

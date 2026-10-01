@@ -537,15 +537,16 @@ class PreferenceManager(context: Context) {
         const val KEY_TAB_SHOW_FAVORITES       = "tab_show_favorites"
         const val KEY_TAB_SHOW_CALLS           = "tab_show_calls"
         const val KEY_TAB_SHOW_CONTACTS        = "tab_show_contacts"
+        const val KEY_TAB_SHOW_SMS             = "tab_show_sms"
         const val KEY_TAB_SHOW_GROUPS          = "tab_show_groups"
         const val KEY_TAB_SHOW_RECORDINGS      = "tab_show_recordings"
         const val KEY_TAB_SHOW_NOTES           = "tab_show_notes"
         const val KEY_TAB_SHOW_DIALPAD         = "tab_show_dialpad"
-        // Comma-separated list of tab keys (favorites, calls, contacts, groups, recordings, notes, dialpad)
+        // Comma-separated list of tab keys (favorites, calls, contacts, sms, groups, recordings, notes, dialpad)
         // describing the order tabs appear in the bottom navigation bar.
         const val KEY_TAB_ORDER                = "tab_order"
         const val KEY_MISSED_CALL_RESET_TIME   = "missed_call_reset_time"
-        const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,groups,recordings,notes,dialpad"
+        const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,sms,groups,recordings,notes,dialpad"
         // Biometrics
         const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | ""
         const val KEY_BIOMETRICS_PIN           = "biometrics_pin"

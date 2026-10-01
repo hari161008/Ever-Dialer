@@ -1,4 +1,4 @@
-﻿package com.coolappstore.everdialer.by.svhp.view.components
+package com.coolappstore.everdialer.by.svhp.view.components
 
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -11,6 +11,7 @@ import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestination
 
 object TabNavigationHelper {
 
@@ -18,6 +19,7 @@ object TabNavigationHelper {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route
         "contacts"   -> ContactScreenDestination.route
+        "sms"        -> SmsScreenDestination.route
         "groups"     -> GroupsScreenDestination.route
         "recordings" -> RecordingsScreenDestination.route
         "notes"      -> NotesScreenDestination.route
@@ -32,6 +34,7 @@ object TabNavigationHelper {
             base.contains(FavoritesScreenDestination.route, ignoreCase = true) -> "favorites"
             base.contains(RecentScreenDestination.route, ignoreCase = true)    -> "calls"
             base.contains(ContactScreenDestination.route, ignoreCase = true)   -> "contacts"
+            base.contains(SmsScreenDestination.route, ignoreCase = true)       -> "sms"
             base.contains(GroupsScreenDestination.route, ignoreCase = true)    -> "groups"
             base.contains(RecordingsScreenDestination.route, ignoreCase = true)-> "recordings"
             base.contains(NotesScreenDestination.route, ignoreCase = true)     -> "notes"
@@ -44,6 +47,7 @@ object TabNavigationHelper {
         "favorites"  -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)
         "calls"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
         "contacts"   -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
+        "sms"        -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
         "groups"     -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
         "recordings" -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
         "notes"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)

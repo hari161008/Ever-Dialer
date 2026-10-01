@@ -105,6 +105,10 @@ import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.outlined.Chat
 import com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDestination
 import org.koin.core.context.GlobalContext
 
@@ -244,6 +248,7 @@ class MainActivity : FragmentActivity() {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
                         "favorites"  -> FavoritesScreenDestination
                         "contacts"   -> ContactScreenDestination
+                        "sms"        -> SmsScreenDestination()
                         "groups"     -> GroupsScreenDestination
                         "recordings" -> RecordingsScreenDestination()
                         "notes"      -> NotesScreenDestination()
@@ -593,6 +598,7 @@ class MainActivity : FragmentActivity() {
                                         val showFavoritesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)
                                         val showCallsRail     = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
                                         val showContactsRail  = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
+                                        val showSmsRail       = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
                                         val showGroupsRail    = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
                                         val showDialpadRail   = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false)
                                         val railTabOrder = remember(settingsVer) {
@@ -625,6 +631,14 @@ class MainActivity : FragmentActivity() {
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
                                                         onClick = { navTo(ContactScreenDestination.route) }
+                                                    )
+                                                    "sms" -> if (showSmsRail) RailItem(
+                                                        selected = currentDest?.hierarchy?.any { it.route == SmsScreenDestination.route } == true,
+                                                        icon = { sel -> Icon(if (sel) Icons.Filled.Chat else Icons.Outlined.Chat, "SMS", modifier = Modifier.size(24.dp)) },
+                                                        label = "SMS",
+                                                        paddingStart = railPaddingStart,
+                                                        paddingEnd = railPaddingEnd,
+                                                        onClick = { navTo(SmsScreenDestination.route) }
                                                     )
                                                     "groups" -> if (showGroupsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true,
@@ -1074,6 +1088,23 @@ class MainActivity : FragmentActivity() {
             return
         }
 
+        val smsAddressExtra = intent.getStringExtra("sms_address")
+        if (!smsAddressExtra.isNullOrBlank()) {
+            navController.navigate(SmsChatScreenDestination(threadId = -1L, address = smsAddressExtra, contactName = null).route)
+            return
+        }
+
+        if (action == Intent.ACTION_SENDTO || action == Intent.ACTION_SEND) {
+            val scheme = data?.scheme
+            if (scheme == "sms" || scheme == "smsto" || scheme == "mms" || scheme == "mmsto") {
+                val targetNumber = data.schemeSpecificPart?.substringBefore("?")?.trim() ?: ""
+                if (targetNumber.isNotBlank()) {
+                    navController.navigate(SmsChatScreenDestination(threadId = -1L, address = targetNumber, contactName = null).route)
+                    return
+                }
+            }
+        }
+
         when (action) {
             "com.coolappstore.everdialer.OPEN_RECENTS" -> {
                 navController.navigate(RecentScreenDestination.route) {
@@ -1123,6 +1154,59 @@ class MainActivity : FragmentActivity() {
                     if (id != null) {
                         navController.navigate(ContactDetailsScreenDestination(contactId = id).route)
                     }
+                } else if (data?.scheme in listOf("sms", "smsto", "mms", "mmsto")) {
+                    val (address, text) = extractSmsData(intent)
+                    if (!address.isNullOrBlank()) {
+                        navController.navigate(
+                            SmsChatScreenDestination(
+                                threadId = -1L,
+                                address = address,
+                                initialText = text
+                            ).route
+                        )
+                    } else {
+                        navController.navigate(
+                            SmsScreenDestination(
+                                initialSharedText = text
+                            ).route
+                        )
+                    }
+                }
+            }
+            Intent.ACTION_SENDTO -> {
+                val (address, text) = extractSmsData(intent)
+                if (!address.isNullOrBlank()) {
+                    navController.navigate(
+                        SmsChatScreenDestination(
+                            threadId = -1L,
+                            address = address,
+                            initialText = text
+                        ).route
+                    )
+                } else {
+                    navController.navigate(
+                        SmsScreenDestination(
+                            initialSharedText = text
+                        ).route
+                    )
+                }
+            }
+            Intent.ACTION_SEND -> {
+                val (address, text) = extractSmsData(intent)
+                if (!address.isNullOrBlank()) {
+                    navController.navigate(
+                        SmsChatScreenDestination(
+                            threadId = -1L,
+                            address = address,
+                            initialText = text
+                        ).route
+                    )
+                } else {
+                    navController.navigate(
+                        SmsScreenDestination(
+                            initialSharedText = text
+                        ).route
+                    )
                 }
             }
             Intent.ACTION_DIAL -> {
@@ -1165,6 +1249,38 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    private fun extractSmsData(intent: Intent): Pair<String?, String?> {
+        val data = intent.data
+        var address: String? = null
+        var body: String? = null
+
+        if (data != null && data.scheme in listOf("sms", "smsto", "mms", "mmsto")) {
+            val ssp = data.schemeSpecificPart ?: ""
+            val splitIndex = ssp.indexOf('?')
+            address = if (splitIndex >= 0) {
+                ssp.substring(0, splitIndex)
+            } else {
+                ssp
+            }
+            address = Uri.decode(address).trim()
+
+            body = data.getQueryParameter("body") ?: data.getQueryParameter("sms_body")
+        }
+
+        if (address.isNullOrBlank()) {
+            address = intent.getStringExtra("address")
+                ?: intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
+                ?: intent.getStringArrayExtra(Intent.EXTRA_EMAIL)?.firstOrNull()
+        }
+
+        if (body.isNullOrBlank()) {
+            body = intent.getStringExtra(Intent.EXTRA_TEXT)
+                ?: intent.getStringExtra("sms_body")
+        }
+
+        return Pair(address?.ifBlank { null }, body?.ifBlank { null })
     }
 
     fun requestDefaultDialer() {
