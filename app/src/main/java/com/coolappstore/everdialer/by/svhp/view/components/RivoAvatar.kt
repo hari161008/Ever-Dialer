@@ -109,6 +109,8 @@ fun RivoAvatar(
     /** Optional explicit tint colour for vector icon tiles. */
     iconContainerColor: Color? = null,
     forcePersonIcon: Boolean = false,
+    autoColorAvatars: Boolean? = null,
+    obeySolidIcons: Boolean = true,
     modifier: Modifier = Modifier,
     shape: Shape = CircleShape,
     size: androidx.compose.ui.unit.Dp? = null
@@ -167,12 +169,15 @@ fun RivoAvatar(
         solidContentColor = sFg
     }
 
+    val effectiveColorfulAvatars = autoColorAvatars ?: colorfulAvatars
+    val effectiveSolidIcons = if (obeySolidIcons) solidIcons else false
+
     val hasName  = name.trim().isNotEmpty()
     val colorKey = if (hasName) name else "unknown_caller"
 
     val (backgroundColor, contentColor) = when {
         iconContainerColor != null -> {
-            if (solidIcons) {
+            if (effectiveSolidIcons) {
                 if (solidIconsDynamic) solidBgColor to solidContentColor
                 else {
                     val adjusted = adjustIconColorForTheme(iconContainerColor, isDark)
@@ -185,7 +190,7 @@ fun RivoAvatar(
             }
         }
         icon != null -> {
-            if (solidIcons) {
+            if (effectiveSolidIcons) {
                 if (solidIconsDynamic) solidBgColor to solidContentColor
                 else {
                     val fallbackCol = avatarColors[abs(colorKey.hashCode()) % avatarColors.size]
@@ -194,12 +199,12 @@ fun RivoAvatar(
                 }
             } else MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         }
-        solidIcons -> {
+        effectiveSolidIcons -> {
             if (solidIconsDynamic) solidBgColor to solidContentColor
-            else if (colorfulAvatars) avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
+            else if (effectiveColorfulAvatars) avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
             else solidBgColor to solidContentColor
         }
-        colorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
+        effectiveColorfulAvatars -> avatarColors[abs(colorKey.hashCode()) % avatarColors.size] to Color.White
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
 

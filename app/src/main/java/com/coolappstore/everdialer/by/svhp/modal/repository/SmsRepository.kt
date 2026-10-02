@@ -39,6 +39,44 @@ class SmsRepository(
     // In-memory cache for contact resolution: phone number -> (displayName, photoUri)
     private val contactLookupCache = ConcurrentHashMap<String, Pair<String, String?>>()
 
+    private fun ensureContactCache() {
+        if (contactLookupCache.isNotEmpty()) return
+        try {
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.PHOTO_URI
+            )
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val numCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val nameCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val photoCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_URI)
+                while (cursor.moveToNext()) {
+                    val rawNum = if (numCol >= 0) cursor.getString(numCol) else null
+                    val name = if (nameCol >= 0) cursor.getString(nameCol) else null
+                    val photo = if (photoCol >= 0) cursor.getString(photoCol) else null
+                    if (!rawNum.isNullOrBlank() && !name.isNullOrBlank()) {
+                        val pair = Pair(name, photo)
+                        contactLookupCache[rawNum] = pair
+                        val normalized = rawNum.replace("[^0-9+]".toRegex(), "")
+                        if (normalized.isNotBlank()) {
+                            contactLookupCache[normalized] = pair
+                            if (normalized.length >= 7) {
+                                contactLookupCache[normalized.takeLast(7)] = pair
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
     private fun hasReadSmsPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
 
@@ -76,6 +114,7 @@ class SmsRepository(
 
     override suspend fun getConversations(): List<SmsConversation> = withContext(Dispatchers.IO) {
         if (!hasReadSmsPermission()) return@withContext emptyList()
+        ensureContactCache()
 
         val canonicalMap = getCanonicalAddresses()
         val result = mutableListOf<SmsConversation>()
@@ -603,6 +642,13 @@ class SmsRepository(
     private fun resolveContact(phoneNumber: String): Pair<String, String?>? {
         if (phoneNumber.isBlank()) return null
         contactLookupCache[phoneNumber]?.let { return it }
+        val normalized = phoneNumber.replace("[^0-9+]".toRegex(), "")
+        if (normalized.isNotBlank()) {
+            contactLookupCache[normalized]?.let { return it }
+            if (normalized.length >= 7) {
+                contactLookupCache[normalized.takeLast(7)]?.let { return it }
+            }
+        }
 
         return try {
             val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber))

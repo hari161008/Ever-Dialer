@@ -49,7 +49,7 @@ class SmsViewModel(
                 conv.snippet.lowercase().contains(q)
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _currentThreadMessages = MutableStateFlow<List<SmsMessage>>(emptyList())
     val currentThreadMessages: StateFlow<List<SmsMessage>> = _currentThreadMessages.asStateFlow()
@@ -103,7 +103,9 @@ class SmsViewModel(
     }
 
     private suspend fun fetchConversations() {
-        _isLoading.value = true
+        if (_conversations.value.isEmpty()) {
+            _isLoading.value = true
+        }
         try {
             val list = smsRepository.getConversations()
             _conversations.value = list

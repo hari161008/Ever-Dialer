@@ -1,10 +1,10 @@
-﻿package com.coolappstore.everdialer.by.svhp.view.components
+package com.coolappstore.everdialer.by.svhp.view.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -33,9 +33,9 @@ fun FloatingColorPickerDialog(
     val hsv = remember(initialColor) {
         FloatArray(3).also { android.graphics.Color.colorToHSV(initialColor.toArgb(), it) }
     }
-    var hue by remember { mutableFloatStateOf(hsv[0]) }
-    var sat by remember { mutableFloatStateOf(hsv[1].coerceIn(0f, 1f)) }
-    var value by remember { mutableFloatStateOf(hsv[2].coerceIn(0f, 1f)) }
+    var hue by remember(initialColor) { mutableFloatStateOf(hsv[0]) }
+    var sat by remember(initialColor) { mutableFloatStateOf(hsv[1].coerceIn(0f, 1f)) }
+    var value by remember(initialColor) { mutableFloatStateOf(hsv[2].coerceIn(0f, 1f)) }
 
     val currentColor = remember(hue, sat, value) {
         val rgb = android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value))
@@ -99,23 +99,20 @@ fun FloatingColorPickerDialog(
                         .clip(RoundedCornerShape(16.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                         .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                sat = (offset.x / size.width).coerceIn(0f, 1f)
-                                value = (1f - offset.y / size.height).coerceIn(0f, 1f)
-                            }
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    sat = (offset.x / size.width).coerceIn(0f, 1f)
-                                    value = (1f - offset.y / size.height).coerceIn(0f, 1f)
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                sat = (down.position.x / size.width).coerceIn(0f, 1f)
+                                value = (1f - down.position.y / size.height).coerceIn(0f, 1f)
+                                down.consume()
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    if (!change.pressed) break
                                     sat = (change.position.x / size.width).coerceIn(0f, 1f)
                                     value = (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                                    change.consume()
                                 }
-                            )
+                            }
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -178,20 +175,18 @@ fun FloatingColorPickerDialog(
                         .clip(RoundedCornerShape(18.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp))
                         .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                hue = (offset.x / size.width * 360f).coerceIn(0f, 360f)
-                            }
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    hue = (offset.x / size.width * 360f).coerceIn(0f, 360f)
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                hue = (down.position.x / size.width * 360f).coerceIn(0f, 360f)
+                                down.consume()
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    if (!change.pressed) break
                                     hue = (change.position.x / size.width * 360f).coerceIn(0f, 360f)
+                                    change.consume()
                                 }
-                            )
+                            }
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {

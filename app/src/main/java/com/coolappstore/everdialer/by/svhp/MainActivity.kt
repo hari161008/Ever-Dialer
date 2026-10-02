@@ -243,6 +243,9 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
+                // Pre-warm SMS ViewModel on launch so SMS tab is instant
+                val smsVM: com.coolappstore.everdialer.by.svhp.controller.SmsViewModel = org.koin.compose.viewmodel.koinActivityViewModel()
+
                 // Compute start destination from prefs — done once so no flash
                 val startDestination = remember {
                     when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {

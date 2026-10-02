@@ -120,6 +120,7 @@ private val settingsSectionKeyGroups: List<List<String>> = listOf(
     listOf("interface"),
     listOf("tap_haptics", "scroll_haptics"),
     listOf("authentication"),
+    listOf("sms_settings_link"),
     listOf("app_settings", "contacts_hider", "fake_call", "call_recording"),
     listOf("silence_unknown", "blocked_numbers"),
     listOf("create_backup", "restore_backup"),
@@ -2011,6 +2012,26 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 trailingIcon = Icons.Default.ChevronRight,
                                 modifier = Modifier.settingsSearchHighlight("authentication", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { navigator.navigate(BiometricScreenDestination()) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Message ───────────────────────────────────────────────────────
+            item {
+                RivoAnimatedSection(delayMs = 125L) {
+                    Column {
+                        SectionLabel("Message")
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "SMS",
+                                supporting = "Quik SMS settings, appearance, sending, and gestures",
+                                leadingIcon = Icons.Outlined.Sms,
+                                iconContainerColor = ColorPurple,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("sms_settings_link", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = { navigator.navigate(SmsSettingsScreenDestination()) }
                             )
                         }
                     }

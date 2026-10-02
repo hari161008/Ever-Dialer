@@ -53,6 +53,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NewMessageScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -119,13 +120,22 @@ fun SmsScreen(
         prefs.getString(PreferenceManager.KEY_SMS_SWIPE_LEFT_ACTION, "delete") ?: "delete"
     }
 
-    val conversations = remember(rawConversations, unreadAtTop) {
+    var selectedFilter by remember {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_SELECTED_FILTER, "all") ?: "all")
+    }
+
+    val conversations = remember(rawConversations, unreadAtTop, selectedFilter) {
+        val byFilter = when (selectedFilter) {
+            "contacts" -> rawConversations.filter { !it.contactName.isNullOrBlank() }
+            "unknown" -> rawConversations.filter { it.contactName.isNullOrBlank() }
+            else -> rawConversations
+        }
         if (unreadAtTop) {
-            val unread = rawConversations.filter { !it.isRead }
-            val read = rawConversations.filter { it.isRead }
+            val unread = byFilter.filter { !it.isRead }
+            val read = byFilter.filter { it.isRead }
             unread + read
         } else {
-            rawConversations
+            byFilter
         }
     }
 
@@ -142,15 +152,12 @@ fun SmsScreen(
             it.isNotBlank() && it != "{initialSharedText}" && it != "null"
         }
     }
-    var showComposeDialog by remember { mutableStateOf(!cleanSharedText.isNullOrBlank()) }
-    var composeInitialText by remember { mutableStateOf(cleanSharedText) }
     var threadToDelete by remember { mutableStateOf<SmsConversation?>(null) }
     var showDeleteMultipleDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(cleanSharedText) {
         if (!cleanSharedText.isNullOrBlank()) {
-            composeInitialText = cleanSharedText
-            showComposeDialog = true
+            navigator.navigate(NewMessageScreenDestination(initialText = cleanSharedText))
         }
     }
 
@@ -263,6 +270,40 @@ fun SmsScreen(
                             }
                         }
                     }
+
+                    // Filter Pills: All, Contacts, Unknown
+                    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                    val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "all" to "All",
+                            "contacts" to "Contacts",
+                            "unknown" to "Unknown"
+                        ).forEach { (key, label) ->
+                            val isSelected = selectedFilter == key
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedFilter = key
+                                    prefs.setString(PreferenceManager.KEY_SMS_SELECTED_FILTER, key)
+                                },
+                                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                                shape = RoundedCornerShape(50.dp),
+                                border = null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -281,8 +322,7 @@ fun SmsScreen(
 
                 FloatingActionButton(
                     onClick = {
-                        composeInitialText = null
-                        showComposeDialog = true
+                        navigator.navigate(NewMessageScreenDestination(initialText = null))
                     },
                     containerColor = fabBg,
                     contentColor = fabFg,
@@ -568,31 +608,6 @@ fun SmsScreen(
             }
         )
     }
-
-    // Compose New Message Dialog
-    if (showComposeDialog) {
-        ComposeMessageDialog(
-            contacts = allContacts,
-            mobileOnly = prefs.getBoolean(PreferenceManager.KEY_SMS_MOBILE_ONLY, false),
-            onDismiss = {
-                showComposeDialog = false
-                composeInitialText = null
-            },
-            onRecipientSelected = { number, name ->
-                showComposeDialog = false
-                val textToSend = composeInitialText
-                composeInitialText = null
-                navigator.navigate(
-                    SmsChatScreenDestination(
-                        threadId = -1L,
-                        address = number,
-                        contactName = name,
-                        initialText = textToSend
-                    )
-                )
-            }
-        )
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -649,6 +664,8 @@ private fun ConversationItemRow(
                     RivoAvatar(
                         name = conversation.contactName ?: conversation.address,
                         photoUri = conversation.photoUri,
+                        autoColorAvatars = autoColor,
+                        obeySolidIcons = false,
                         size = 48.dp
                     )
                 }
@@ -762,123 +779,4 @@ private fun ConversationItemRow(
     }
 }
 
-@Composable
-private fun ComposeMessageDialog(
-    contacts: List<Contact>,
-    mobileOnly: Boolean = false,
-    onDismiss: () -> Unit,
-    onRecipientSelected: (String, String?) -> Unit
-) {
-    var rawInput by remember { mutableStateOf("") }
 
-    val filteredContacts = remember(contacts, rawInput, mobileOnly) {
-        val q = rawInput.trim().lowercase()
-        val baseList = if (mobileOnly) {
-            contacts.filter { c -> c.phoneNumbers.any { it.isNotBlank() } }
-        } else contacts
-
-        if (q.isBlank()) {
-            baseList.take(25)
-        } else {
-            baseList.filter { c ->
-                c.name.lowercase().contains(q) ||
-                c.phoneNumbers.any { it.contains(q) }
-            }.take(25)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New Message", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-            ) {
-                OutlinedTextField(
-                    value = rawInput,
-                    onValueChange = { rawInput = it },
-                    placeholder = { Text("Type a name or phone number") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (rawInput.isNotBlank()) {
-                            IconButton(onClick = { rawInput = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear")
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // If typed input looks like a phone number, give direct send option
-                val cleanedNumber = rawInput.trim()
-                if (cleanedNumber.any { it.isDigit() }) {
-                    Surface(
-                        onClick = { onRecipientSelected(cleanedNumber, null) },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text("Send to $cleanedNumber", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
-                // Filtered contact list
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(filteredContacts, key = { it.id }) { contact ->
-                        val primaryNum = contact.phoneNumbers.firstOrNull() ?: ""
-                        Surface(
-                            onClick = {
-                                if (primaryNum.isNotBlank()) {
-                                    onRecipientSelected(primaryNum, contact.name)
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color.Transparent,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp, horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                RivoAvatar(
-                                    name = contact.name,
-                                    photoUri = contact.photoUri,
-                                    size = 40.dp
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(contact.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                    Text(primaryNum, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}

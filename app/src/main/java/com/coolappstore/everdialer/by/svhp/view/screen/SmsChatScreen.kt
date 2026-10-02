@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -115,12 +117,24 @@ fun SmsChatScreen(
     val showStt = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
     }
+    val autoColor = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, true)
+    }
 
     var messageText by remember(initialText) { mutableStateOf(initialText ?: "") }
     var showMenu by remember { mutableStateOf(false) }
     var messageToDelete by remember { mutableStateOf<SmsMessage?>(null) }
     var messageToSelect by remember { mutableStateOf<SmsMessage?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteMultipleMessagesDialog by remember { mutableStateOf(false) }
+
+    // Multi-select state
+    val selectedMessageIds = remember { mutableStateListOf<Long>() }
+    val isSelectionMode = selectedMessageIds.isNotEmpty()
+
+    BackHandler(enabled = isSelectionMode) {
+        selectedMessageIds.clear()
+    }
 
     // Quik Delayed Sending Countdown state
     var pendingSendJob by remember { mutableStateOf<Job?>(null) }
@@ -262,100 +276,220 @@ fun SmsChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                navigator.navigate(
-                                    ContactDetailsScreenDestination(
-                                        contactId = matchedContact?.id,
-                                        phoneNumber = address
-                                    )
-                                )
-                            }
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        RivoAvatar(
-                            name = contactName ?: address,
-                            photoUri = resolvedPhotoUri,
-                            size = 38.dp
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "${selectedMessageIds.size} selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                        Column {
-                            Text(
-                                text = contactName ?: address,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (!contactName.isNullOrBlank()) {
-                                Text(
-                                    text = address,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        makeCall(context, address, null)
-                    }) {
-                        Icon(
-                            Icons.Default.Call,
-                            contentDescription = "Call",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
-                        }
-                        RivoDropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
+                    },
+                    navigationIcon = {
+                        FilledIconButton(
+                            onClick = { selectedMessageIds.clear() },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(40.dp)
                         ) {
-                            RivoDropdownMenuItem(
-                                text = "Settings",
-                                icon = Icons.Outlined.Settings,
-                                onClick = {
-                                    showMenu = false
-                                    navigator.navigate(SmsSettingsScreenDestination())
+                            Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        }
+                    },
+                    actions = {
+                        FilledIconButton(
+                            onClick = {
+                                if (selectedMessageIds.size == messages.size) {
+                                    selectedMessageIds.clear()
+                                } else {
+                                    selectedMessageIds.clear()
+                                    selectedMessageIds.addAll(messages.map { it.id })
                                 }
-                            )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoDropdownMenuItem(
-                                text = "Delete conversation",
-                                icon = Icons.Outlined.Delete,
-                                isDestructive = true,
-                                onClick = {
-                                    showMenu = false
-                                    showDeleteConfirmDialog = true
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Select All")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledIconButton(
+                            onClick = {
+                                val selectedBodies = messages
+                                    .filter { selectedMessageIds.contains(it.id) }
+                                    .joinToString("\n") { it.body }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("SMS Messages", selectedBodies))
+                                Toast.makeText(context, "${selectedMessageIds.size} message(s) copied", Toast.LENGTH_SHORT).show()
+                                selectedMessageIds.clear()
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledIconButton(
+                            onClick = {
+                                showDeleteMultipleMessagesDialog = true
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    navigator.navigate(
+                                        ContactDetailsScreenDestination(
+                                            contactId = matchedContact?.id,
+                                            phoneNumber = address
+                                        )
+                                    )
                                 }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                RivoAvatar(
+                                    name = contactName ?: address,
+                                    photoUri = resolvedPhotoUri,
+                                    autoColorAvatars = autoColor,
+                                    obeySolidIcons = false,
+                                    size = 36.dp
+                                )
+                                Column(modifier = Modifier.padding(end = 12.dp)) {
+                                    Text(
+                                        text = contactName ?: address,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (!contactName.isNullOrBlank()) {
+                                        Text(
+                                            text = address,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        FilledIconButton(
+                            onClick = { navigator.navigateUp() },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(40.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        FilledIconButton(
+                            onClick = {
+                                makeCall(context, address, null)
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Call,
+                                contentDescription = "Call"
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                        Spacer(Modifier.width(8.dp))
+                        Box {
+                            FilledIconButton(
+                                onClick = { showMenu = true },
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                shape = CircleShape,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            }
+                            RivoDropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false }
+                            ) {
+                                RivoDropdownMenuItem(
+                                    text = "Settings",
+                                    icon = Icons.Outlined.Settings,
+                                    onClick = {
+                                        showMenu = false
+                                        navigator.navigate(SmsSettingsScreenDestination())
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoDropdownMenuItem(
+                                    text = "Delete conversation",
+                                    icon = Icons.Outlined.Delete,
+                                    isDestructive = true,
+                                    onClick = {
+                                        showMenu = false
+                                        showDeleteConfirmDialog = true
+                                    }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
-            )
+            }
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
@@ -396,13 +530,24 @@ fun SmsChatScreen(
                                 message = message,
                                 timeStr = timeFormat.format(Date(message.date)),
                                 fontSize = chatFontSize.sp,
+                                isSelected = selectedMessageIds.contains(message.id),
+                                isSelectionMode = isSelectionMode,
+                                onBubbleClick = {
+                                    if (isSelectionMode) {
+                                        if (selectedMessageIds.contains(message.id)) {
+                                            selectedMessageIds.remove(message.id)
+                                        } else {
+                                            selectedMessageIds.add(message.id)
+                                        }
+                                    }
+                                },
                                 onSelectClick = {
-                                    messageToSelect = message
+                                    if (!selectedMessageIds.contains(message.id)) {
+                                        selectedMessageIds.add(message.id)
+                                    }
                                 },
                                 onCopyClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", message.body))
-                                    Toast.makeText(context, "Message copied", Toast.LENGTH_SHORT).show()
+                                    messageToSelect = message
                                 },
                                 onDeleteClick = {
                                     messageToDelete = message
@@ -479,68 +624,76 @@ fun SmsChatScreen(
             // Bottom Input Bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 3.dp
+                color = Color.Transparent,
+                shadowElevation = 0.dp
             ) {
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 2.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
-                    // STT Mic Button
-                    if (showStt) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // STT Mic Button
+                        if (showStt) {
+                            IconButton(
+                                onClick = {
+                                    VoiceSearchHelper.launchVoiceSearch(context, sttLauncher)
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Speech to Text",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        TextField(
+                            value = messageText,
+                            onValueChange = { messageText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Text message") },
+                            maxLines = 5,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+
+                        val canSend = messageText.isNotBlank()
                         IconButton(
-                            onClick = {
-                                VoiceSearchHelper.launchVoiceSearch(context, sttLauncher)
-                            },
-                            modifier = Modifier.size(40.dp)
+                            onClick = { initiateSend() },
+                            enabled = canSend,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .background(
+                                    color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = CircleShape
+                                )
                         ) {
                             Icon(
-                                Icons.Default.Mic,
-                                contentDescription = "Speech to Text",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                    }
-
-                    TextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(24.dp)),
-                        placeholder = { Text("Text message") },
-                        maxLines = 5,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        )
-                    )
-
-                    val canSend = messageText.isNotBlank()
-                    IconButton(
-                        onClick = { initiateSend() },
-                        enabled = canSend,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .background(
-                                color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
             }
@@ -609,6 +762,36 @@ fun SmsChatScreen(
         )
     }
 
+    // Delete multiple messages confirmation dialog
+    if (showDeleteMultipleMessagesDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteMultipleMessagesDialog = false },
+            icon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Delete ${selectedMessageIds.size} messages?") },
+            text = { Text("The selected messages will be permanently deleted.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteMultipleMessagesDialog = false
+                        selectedMessageIds.forEach { msgId ->
+                            val msg = messages.firstOrNull { it.id == msgId }
+                            smsVM.deleteMessage(msgId, effectiveThreadId, msg?.isMms ?: false)
+                        }
+                        selectedMessageIds.clear()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteMultipleMessagesDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Delete single message confirmation dialog
     messageToDelete?.let { msg ->
         AlertDialog(
@@ -641,21 +824,40 @@ private fun ChatBubble(
     message: SmsMessage,
     timeStr: String,
     fontSize: TextUnit,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
+    onBubbleClick: () -> Unit,
     onSelectClick: () -> Unit,
     onCopyClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val isOut = message.isOutgoing
-    val bubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val baseBubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val bubbleColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else baseBubbleColor
     val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val timeColor = textColor.copy(alpha = 0.7f)
 
     var showMessageMenu by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = if (isOut) Alignment.CenterEnd else Alignment.CenterStart
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .then(
+                if (isSelected) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                else Modifier
+            ),
+        horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isSelectionMode && !isOut) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onBubbleClick() },
+                modifier = Modifier.padding(end = 4.dp)
+            )
+        }
+
         Surface(
             shape = RoundedCornerShape(
                 topStart = 16.dp,
@@ -663,13 +865,22 @@ private fun ChatBubble(
                 bottomStart = if (isOut) 16.dp else 4.dp,
                 bottomEnd = if (isOut) 4.dp else 16.dp
             ),
+            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
             color = bubbleColor,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .combinedClickable(
-                    onClick = {},
+                    onClick = {
+                        if (isSelectionMode) {
+                            onBubbleClick()
+                        }
+                    },
                     onLongClick = {
-                        showMessageMenu = true
+                        if (!isSelectionMode) {
+                            showMessageMenu = true
+                        } else {
+                            onBubbleClick()
+                        }
                     }
                 )
         ) {
@@ -758,6 +969,14 @@ private fun ChatBubble(
                     }
                 )
             }
+        }
+
+        if (isSelectionMode && isOut) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onBubbleClick() },
+                modifier = Modifier.padding(start = 4.dp)
+            )
         }
     }
 }

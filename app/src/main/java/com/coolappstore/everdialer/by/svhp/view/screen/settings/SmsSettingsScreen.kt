@@ -30,6 +30,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.DefaultSmsManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
+import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
+import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
@@ -38,6 +41,16 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+
+private val ColorBlue     = Color(0xFF2196F3)
+private val ColorGreen    = Color(0xFF4CAF50)
+private val ColorAmber    = Color(0xFFFF9800)
+private val ColorPurple   = Color(0xFF9C27B0)
+private val ColorIndigo   = Color(0xFF3F51B5)
+private val ColorTeal     = Color(0xFF009688)
+private val ColorRed      = Color(0xFFE53935)
+private val ColorCyan     = Color(0xFF00BCD4)
+private val ColorBluGrey  = Color(0xFF607D8B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
@@ -168,7 +181,7 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                 )
                             }
                             if (!isDefaultSms) {
-                                Button(
+                                FilledTonalButton(
                                     onClick = { DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context) },
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -184,54 +197,54 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             item {
                 RivoAnimatedSection(delayMs = 40L) {
                     Column {
-                        Text(
-                            "Appearance",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
+                        RivoSectionHeader("Appearance")
                         RivoExpressiveCard {
                             Column {
                                 // Text Size
-                                SettingsItem(
-                                    icon = Icons.Outlined.FormatSize,
-                                    title = "Message text size",
-                                    subtitle = when (textSize) {
+                                RivoListItem(
+                                    headline = "Message text size",
+                                    supporting = when (textSize) {
                                         14f -> "Small (14sp)"
                                         16f -> "Normal (16sp)"
                                         18f -> "Large (18sp)"
                                         22f -> "Extra Large (22sp)"
                                         else -> "${textSize.toInt()}sp"
                                     },
+                                    leadingIcon = Icons.Outlined.FormatSize,
+                                    iconContainerColor = ColorPurple,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showTextSizeDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Auto Color Avatars
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.Palette,
-                                    title = "Automatic avatar colors",
-                                    subtitle = "Generate distinct colors for contacts",
+                                RivoSwitchListItem(
+                                    headline = "Automatic avatar colors",
+                                    supporting = "Generate distinct colors for contacts",
+                                    leadingIcon = Icons.Outlined.Palette,
+                                    iconContainerColor = ColorGreen,
                                     checked = autoColorAvatars,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Speech to text button
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.Mic,
-                                    title = "Show Speech-to-Text button",
-                                    subtitle = "Display microphone button in message composer",
+                                RivoSwitchListItem(
+                                    headline = "Show Speech-to-Text button",
+                                    supporting = "Display microphone button in message composer",
+                                    leadingIcon = Icons.Outlined.Mic,
+                                    iconContainerColor = ColorAmber,
                                     checked = showStt,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_SHOW_STT, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Prevent Screenshots
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.Security,
-                                    title = "Prevent screenshots",
-                                    subtitle = "Block screen captures and screen recording in SMS",
+                                RivoSwitchListItem(
+                                    headline = "Prevent screenshots",
+                                    supporting = "Block screen captures and screen recording in SMS",
+                                    leadingIcon = Icons.Outlined.Security,
+                                    iconContainerColor = ColorRed,
                                     checked = disableScreenshots,
                                     onCheckedChange = { checked ->
                                         prefs.setBoolean(PreferenceManager.KEY_SMS_DISABLE_SCREENSHOTS, checked)
@@ -254,86 +267,92 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             item {
                 RivoAnimatedSection(delayMs = 80L) {
                     Column {
-                        Text(
-                            "Sending & Receiving",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
+                        RivoSectionHeader("Sending & Receiving")
                         RivoExpressiveCard {
                             Column {
                                 // Delayed sending
-                                SettingsItem(
-                                    icon = Icons.Outlined.Timer,
-                                    title = "Delayed sending",
-                                    subtitle = if (sendDelaySeconds == 0) "No delay" else "$sendDelaySeconds seconds countdown",
+                                RivoListItem(
+                                    headline = "Delayed sending",
+                                    supporting = if (sendDelaySeconds == 0) "No delay" else "$sendDelaySeconds seconds countdown",
+                                    leadingIcon = Icons.Outlined.Timer,
+                                    iconContainerColor = ColorBlue,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSendDelayDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Delivery Reports
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.DoneAll,
-                                    title = "Delivery reports",
-                                    subtitle = "Request SMS delivery confirmation from carrier",
+                                RivoSwitchListItem(
+                                    headline = "Delivery reports",
+                                    supporting = "Request SMS delivery confirmation from carrier",
+                                    leadingIcon = Icons.Outlined.DoneAll,
+                                    iconContainerColor = ColorTeal,
                                     checked = deliveryReports,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_DELIVERY_REPORTS, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Unread at top
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.MarkChatUnread,
-                                    title = "Unread conversations at top",
-                                    subtitle = "Pin unread chats above read conversations",
+                                RivoSwitchListItem(
+                                    headline = "Unread conversations at top",
+                                    supporting = "Pin unread chats above read conversations",
+                                    leadingIcon = Icons.Outlined.MarkChatUnread,
+                                    iconContainerColor = ColorIndigo,
                                     checked = unreadAtTop,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_UNREAD_AT_TOP, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Signature
-                                SettingsItem(
-                                    icon = Icons.Outlined.Draw,
-                                    title = "Signature",
-                                    subtitle = if (signatureEnabled && signatureText.isNotBlank()) signatureText else if (signatureEnabled) "Enabled (empty)" else "Disabled",
+                                RivoListItem(
+                                    headline = "Signature",
+                                    supporting = if (signatureEnabled && signatureText.isNotBlank()) signatureText else if (signatureEnabled) "Enabled (empty)" else "Disabled",
+                                    leadingIcon = Icons.Outlined.Draw,
+                                    iconContainerColor = ColorAmber,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSignatureDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Strip unicode
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.Translate,
-                                    title = "Strip unicode characters",
-                                    subtitle = "Convert accented characters to plain ASCII for GSM 7-bit compatibility",
+                                RivoSwitchListItem(
+                                    headline = "Strip unicode characters",
+                                    supporting = "Convert accented characters to plain ASCII for GSM 7-bit compatibility",
+                                    leadingIcon = Icons.Outlined.Translate,
+                                    iconContainerColor = ColorCyan,
                                     checked = stripUnicode,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_STRIP_UNICODE, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Long as MMS
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.Mms,
-                                    title = "Send long messages as MMS",
-                                    subtitle = "Convert messages longer than 3 SMS segments to MMS",
+                                RivoSwitchListItem(
+                                    headline = "Send long messages as MMS",
+                                    supporting = "Convert messages longer than 3 SMS segments to MMS",
+                                    leadingIcon = Icons.Outlined.Mms,
+                                    iconContainerColor = ColorPurple,
                                     checked = longAsMms,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_LONG_AS_MMS, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Max MMS size
-                                SettingsItem(
-                                    icon = Icons.Outlined.Attachment,
-                                    title = "Maximum MMS size",
-                                    subtitle = maxMmsSize,
+                                RivoListItem(
+                                    headline = "Maximum MMS size",
+                                    supporting = maxMmsSize,
+                                    leadingIcon = Icons.Outlined.Attachment,
+                                    iconContainerColor = ColorBluGrey,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showMmsSizeDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 // Mobile numbers only
-                                SettingsSwitchItem(
-                                    icon = Icons.Outlined.PhoneAndroid,
-                                    title = "Mobile numbers only",
-                                    subtitle = "Filter out landlines when composing a new message",
+                                RivoSwitchListItem(
+                                    headline = "Mobile numbers only",
+                                    supporting = "Filter out landlines when composing a new message",
+                                    leadingIcon = Icons.Outlined.PhoneAndroid,
+                                    iconContainerColor = ColorGreen,
                                     checked = mobileOnly,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_MOBILE_ONLY, it) }
                                 )
@@ -347,34 +366,33 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             item {
                 RivoAnimatedSection(delayMs = 120L) {
                     Column {
-                        Text(
-                            "Swipe Actions",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                        )
+                        RivoSectionHeader("Swipe Actions")
                         RivoExpressiveCard {
                             Column {
-                                SettingsItem(
-                                    icon = Icons.Outlined.SwipeRight,
-                                    title = "Swipe right action",
-                                    subtitle = when (swipeRightAction) {
+                                RivoListItem(
+                                    headline = "Swipe right action",
+                                    supporting = when (swipeRightAction) {
                                         "call" -> "Direct Call"
                                         "read" -> "Mark as Read / Unread"
                                         "delete" -> "Delete Conversation"
                                         else -> "None"
                                     },
+                                    leadingIcon = Icons.Outlined.SwipeRight,
+                                    iconContainerColor = ColorGreen,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSwipeRightDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                SettingsItem(
-                                    icon = Icons.Outlined.SwipeLeft,
-                                    title = "Swipe left action",
-                                    subtitle = when (swipeLeftAction) {
+                                RivoListItem(
+                                    headline = "Swipe left action",
+                                    supporting = when (swipeLeftAction) {
                                         "delete" -> "Delete Conversation"
                                         "read" -> "Mark as Read / Unread"
                                         else -> "None"
                                     },
+                                    leadingIcon = Icons.Outlined.SwipeLeft,
+                                    iconContainerColor = ColorRed,
+                                    trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSwipeLeftDialog = true }
                                 )
                             }
@@ -387,10 +405,12 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             item {
                 RivoAnimatedSection(delayMs = 160L) {
                     RivoExpressiveCard {
-                        SettingsItem(
-                            icon = Icons.Outlined.Sync,
-                            title = "Sync messages & threads",
-                            subtitle = "Force reload all SMS and MMS conversations from system telephony provider",
+                        RivoListItem(
+                            headline = "Sync messages & threads",
+                            supporting = "Force reload all SMS and MMS conversations from system telephony provider",
+                            leadingIcon = Icons.Outlined.Sync,
+                            iconContainerColor = ColorBlue,
+                            trailingIcon = Icons.Default.ChevronRight,
                             onClick = {
                                 smsVM.refreshConversations()
                                 navigator.navigateUp()
@@ -627,58 +647,5 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                 TextButton(onClick = { showSwipeLeftDialog = false }) { Text("Cancel") }
             }
         )
-    }
-}
-
-@Composable
-private fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-    }
-}
-
-@Composable
-private fun SettingsSwitchItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
