@@ -19,7 +19,7 @@ object TabNavigationHelper {
         "favorites"  -> FavoritesScreenDestination.route
         "calls"      -> RecentScreenDestination.route
         "contacts"   -> ContactScreenDestination.route
-        "sms"        -> SmsScreenDestination.route
+        "sms"        -> SmsScreenDestination().route
         "groups"     -> GroupsScreenDestination.route
         "recordings" -> RecordingsScreenDestination.route
         "notes"      -> NotesScreenDestination.route

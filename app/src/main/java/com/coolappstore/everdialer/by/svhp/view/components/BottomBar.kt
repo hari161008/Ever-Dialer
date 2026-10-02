@@ -251,7 +251,7 @@ fun BottomBar(navController: NavController) {
                     key = key, route = SmsScreenDestination.route, label = "SMS",
                     selectedIcon = Icons.Filled.Chat, unselectedIcon = Icons.Outlined.Chat,
                     selected = isSmsSelected,
-                    onClick = { doHaptic(); navigate(SmsScreenDestination.route) }
+                    onClick = { doHaptic(); navigate(SmsScreenDestination().route) }
                 ) else null
                 "groups" -> if (showGroupsTab) TabSpec(
                     key = key, route = GroupsScreenDestination.route, label = "Groups",
@@ -383,7 +383,7 @@ fun BottomBar(navController: NavController) {
         )
         if (!isOnTabScreen && navBarAlpha == 0f) return
         NavigationBar(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = if (isSmsSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             windowInsets = WindowInsets.navigationBars,
             modifier = Modifier

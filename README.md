@@ -444,6 +444,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 ┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer) <br><br>
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
+┈➤ [Quik SMS](https://github.com/quik-sms/quik)<br><br>
 ┈➤ [Network Switch](https://github.com/aunchagaonkar/NetworkSwitch)<br><br>
 ┈➤ [Raise To Answer](https://github.com/TheLastProject/RaiseToAnswer)<br><br>
 ┈➤ [Wallpaper Export](https://github.com/cvzi/WallpaperExport)<br><br>

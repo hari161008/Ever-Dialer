@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class PreferenceManager(context: Context) {
     private val appContext = context.applicationContext
+    val context: Context get() = appContext
     private val prefs: SharedPreferences =
         context.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
 
@@ -610,12 +611,32 @@ class PreferenceManager(context: Context) {
         // reopened.
         const val KEY_SEARCH_FILTER_CONTACTS        = "search_filter_contacts"
         const val KEY_SEARCH_FILTER_NON_CONTACTS    = "search_filter_non_contacts"
+        const val KEY_SEARCH_FILTER_SMS             = "search_filter_sms"
         const val KEY_SEARCH_FILTER_RECORDINGS      = "search_filter_recordings"
         const val KEY_SEARCH_FILTER_GROUPS          = "search_filter_groups"
         const val KEY_SEARCH_FILTER_CONTACT_NOTES   = "search_filter_contact_notes"
         const val KEY_SEARCH_FILTER_RECORDING_NOTES = "search_filter_recording_notes"
         const val KEY_SEARCH_FILTER_SETTINGS        = "search_filter_settings"
         const val KEY_SEARCH_FILTER_ORDER           = "search_filter_order"
+
+        const val KEY_SMS_CHAT_TEXT_SIZE            = "sms_chat_text_size"
+        const val DEFAULT_SMS_CHAT_TEXT_SIZE        = 16f
+
+        // Quik SMS Settings Keys
+        const val KEY_SMS_UNREAD_AT_TOP             = "sms_unread_at_top"
+        const val KEY_SMS_SEND_DELAY_SECONDS        = "sms_send_delay_seconds" // 0, 3, 5, 10
+        const val KEY_SMS_DELIVERY_REPORTS          = "sms_delivery_reports"
+        const val KEY_SMS_SIGNATURE                 = "sms_signature"
+        const val KEY_SMS_SIGNATURE_ENABLED         = "sms_signature_enabled"
+        const val KEY_SMS_STRIP_UNICODE             = "sms_strip_unicode"
+        const val KEY_SMS_MOBILE_ONLY               = "sms_mobile_only"
+        const val KEY_SMS_LONG_AS_MMS               = "sms_long_as_mms"
+        const val KEY_SMS_MAX_MMS_SIZE              = "sms_max_mms_size" // "100KB", "200KB", "300KB", "600KB", "1MB", "2MB"
+        const val KEY_SMS_DISABLE_SCREENSHOTS       = "sms_disable_screenshots"
+        const val KEY_SMS_AUTO_COLOR_AVATARS        = "sms_auto_color_avatars"
+        const val KEY_SMS_SHOW_STT                  = "sms_show_stt"
+        const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none"
+        const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none"
 
         const val KEY_APP_OPEN_COUNT                = "app_open_count"
         const val KEY_LAST_APP_VERSION              = "last_app_version"

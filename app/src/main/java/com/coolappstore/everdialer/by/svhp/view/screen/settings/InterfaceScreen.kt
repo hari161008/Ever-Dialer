@@ -2155,6 +2155,26 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         }
                     }
 
+                // ── Message ───────────────────────────────────────────
+                    RivoAnimatedSection(delayMs = 95L) {
+                        Column {
+                            Text("Message", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "SMS",
+                                    supporting = "Quik SMS settings, appearance, sending, and gestures",
+                                    leadingIcon = Icons.Outlined.Sms,
+                                    iconContainerColor = ColorPurple,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("sms_appearance_link", highlightedKey) { highlightedKey = null },
+                                    onClick = { navigator.navigate(com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreenDestination()) }
+                                )
+                            }
+                        }
+                    }
+
                 // ── Call UI ───────────────────────────────────────────
                     RivoAnimatedSection(delayMs = 100L) {
                         Column {

@@ -59,28 +59,41 @@ class SmsViewModel(
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean, uri: Uri?) {
+            // Immediately reload active thread messages without waiting for full conversation scan
+            activeThreadId?.let { tid ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    val msgs = smsRepository.getMessagesForThread(tid)
+                    if (_currentThreadMessages.value != msgs) {
+                        _currentThreadMessages.value = msgs
+                    }
+                    smsRepository.markThreadAsRead(tid)
+                }
+            }
+            // Debounce full conversation list refresh
             debounceJob?.cancel()
             debounceJob = viewModelScope.launch(Dispatchers.IO) {
-                delay(150)
+                delay(300)
                 fetchConversations()
-                activeThreadId?.let { tid ->
-                    loadThreadMessages(tid)
-                }
             }
         }
     }
 
     init {
-        try {
-            getApplication<Application>().contentResolver.registerContentObserver(
-                Telephony.Sms.CONTENT_URI,
-                true,
-                smsObserver
-            )
-        } catch (_: Throwable) {
-            // Ignore if permission not yet granted
-        }
+        registerObservers()
         refreshConversations()
+    }
+
+    private fun registerObservers() {
+        val cr = getApplication<Application>().contentResolver
+        try {
+            cr.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        } catch (_: Throwable) {}
+        try {
+            cr.registerContentObserver(Telephony.Mms.CONTENT_URI, true, smsObserver)
+        } catch (_: Throwable) {}
+        try {
+            cr.registerContentObserver(Uri.parse("content://mms-sms/conversations"), true, smsObserver)
+        } catch (_: Throwable) {}
     }
 
     fun refreshConversations() {
@@ -103,7 +116,9 @@ class SmsViewModel(
         activeThreadId = threadId
         viewModelScope.launch(Dispatchers.IO) {
             val msgs = smsRepository.getMessagesForThread(threadId)
-            _currentThreadMessages.value = msgs
+            if (_currentThreadMessages.value != msgs) {
+                _currentThreadMessages.value = msgs
+            }
             smsRepository.markThreadAsRead(threadId)
         }
     }
@@ -111,6 +126,10 @@ class SmsViewModel(
     fun clearActiveThread() {
         activeThreadId = null
         _currentThreadMessages.value = emptyList()
+    }
+
+    suspend fun getOrCreateThreadId(address: String): Long {
+        return smsRepository.getOrCreateThreadId(address)
     }
 
     fun sendMessage(address: String, body: String, subId: Int? = null, onResult: ((Boolean) -> Unit)? = null) {
@@ -121,7 +140,9 @@ class SmsViewModel(
                     val msgs = smsRepository.getMessagesForThread(tid)
                     _currentThreadMessages.value = msgs
                 }
-                fetchConversations()
+                launch(Dispatchers.IO) {
+                    fetchConversations()
+                }
             }
             onResult?.invoke(success)
         }
@@ -140,9 +161,9 @@ class SmsViewModel(
         }
     }
 
-    fun deleteMessage(messageId: Long, threadId: Long) {
+    fun deleteMessage(messageId: Long, threadId: Long, isMms: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            val success = smsRepository.deleteMessage(messageId)
+            val success = smsRepository.deleteMessage(messageId, isMms)
             if (success) {
                 loadThreadMessages(threadId)
                 fetchConversations()
@@ -161,8 +182,6 @@ class SmsViewModel(
         super.onCleared()
         try {
             getApplication<Application>().contentResolver.unregisterContentObserver(smsObserver)
-        } catch (_: Throwable) {
-            // Ignore
-        }
+        } catch (_: Throwable) {}
     }
 }

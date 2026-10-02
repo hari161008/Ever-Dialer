@@ -49,6 +49,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.coolappstore.everdialer.by.svhp.view.components.tiles.SingleTile
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
+import com.coolappstore.everdialer.by.svhp.controller.SmsViewModel
+import com.coolappstore.everdialer.by.svhp.modal.data.SmsConversation
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -58,6 +60,7 @@ import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestin
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -153,6 +156,7 @@ fun ContactSearchContent(
     val prefs = koinInject<PreferenceManager>()
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val callLogVM: CallLogViewModel = koinActivityViewModel()
+    val smsVM: SmsViewModel = koinActivityViewModel()
     // Owned by the bundled Ever Call Recorder module — reused here (read-only) purely to search
     // recording notes; it manages its own loading/refresh lifecycle independently.
     val recordingsVM: HomeViewModel = viewModel()
@@ -161,6 +165,7 @@ fun ContactSearchContent(
     val callLogs by callLogVM.allCallLogs.collectAsState()
     val recordings by recordingsVM.allRecordings.collectAsState()
     val contactGroups by contactsVM.contactGroups.collectAsState()
+    val smsConversations by smsVM.conversations.collectAsState()
 
     val settingsVer by prefs.settingsChanged.collectAsState()
     val hiddenGroupIds = remember(settingsVer) { prefs.getHiddenContactGroupIds() }
@@ -168,6 +173,7 @@ fun ContactSearchContent(
 
     LaunchedEffect(Unit) {
         contactsVM.fetchContactGroups()
+        smsVM.refreshConversations()
     }
 
     val visibleContactGroups = remember(contactGroups, hiddenGroupIds, enabledAccountKeys) {
@@ -262,18 +268,19 @@ fun ContactSearchContent(
     data class SearchResults(
         val contacts: List<Contact>,
         val nonContacts: List<CallLogEntry>,
+        val sms: List<SmsConversation>,
         val notes: List<NoteEntry>,
         val recordingNotes: List<RecordingItem>,
         val recordings: List<RecordingItem>,
         val groups: List<com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup>,
         val settings: List<GlobalSettingsSearchEntry>
     )
-    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
-    val searchResults = remember(query, contactIndex, callLogs, allNotes, recordings, visibleContactGroups, globalSettings, filterState) {
+    val emptySearchResults = remember { SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()) }
+    val searchResults = remember(query, contactIndex, callLogs, smsConversations, allNotes, recordings, visibleContactGroups, globalSettings, filterState) {
         val q = query
         if (q.isBlank()) {
             return@remember if (filterState.groups && visibleContactGroups.isNotEmpty()) {
-                SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), visibleContactGroups, emptyList())
+                SearchResults(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), visibleContactGroups, emptyList())
             } else {
                 emptySearchResults
             }
@@ -305,6 +312,13 @@ fun ContactSearchContent(
                 entry.number.replace(" ", "").contains(qDigits) ||
                         (entry.isCallerIdName && entry.name != null && com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.name, q))
             }
+        }
+
+        val srSms = if (!filterState.sms) emptyList()
+        else smsConversations.filter { conv ->
+            (conv.contactName != null && com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(conv.contactName, q)) ||
+                    conv.address.replace(" ", "").contains(qDigits) ||
+                    conv.snippet.contains(q, ignoreCase = true)
         }
 
         // Notes attached to a contact/number (from the call screen or contact info screen).
@@ -341,17 +355,18 @@ fun ContactSearchContent(
                     com.coolappstore.everdialer.by.svhp.controller.util.matchesFuzzySearch(entry.subtitle, q)
         }
 
-        SearchResults(fc, ncr, cnr, rnr, rr, gr, sr)
+        SearchResults(fc, ncr, srSms, cnr, rnr, rr, gr, sr)
     }
     val filteredContacts = searchResults.contacts
     val nonContactResults = searchResults.nonContacts
+    val smsResults = searchResults.sms
     val contactNoteResults = searchResults.notes
     val recordingNoteResults = searchResults.recordingNotes
     val recordingResults = searchResults.recordings
     val groupResults = searchResults.groups
     val settingResults = searchResults.settings
 
-    val totalResults = filteredContacts.size + nonContactResults.size + recordingResults.size +
+    val totalResults = filteredContacts.size + nonContactResults.size + smsResults.size + recordingResults.size +
             groupResults.size + contactNoteResults.size + recordingNoteResults.size + settingResults.size
     val hasAnyResults = totalResults > 0
 
@@ -664,6 +679,59 @@ fun ContactSearchContent(
                                         }
                                     }
                                     item(key = "section_non_contacts_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+                                }
+                            }
+                            "sms" -> {
+                                if (smsResults.isNotEmpty()) {
+                                    item(key = "section_sms_header") {
+                                        RivoSectionHeader(title = "SMS")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    itemsIndexed(
+                                        items = smsResults,
+                                        key = { index, conv -> "sms_${conv.threadId}_$index" }
+                                    ) { index, conv ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .animateItem(
+                                                    fadeInSpec = tween(320, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ),
+                                            shape = groupedRowShape(index, smsResults.size),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                                        ) {
+                                            Column {
+                                                SingleTile(
+                                                    title = conv.contactName ?: conv.address,
+                                                    subtitle = conv.snippet,
+                                                    photoUri = conv.photoUri,
+                                                    phoneNumber = conv.address,
+                                                    onAvatarClick = {
+                                                        navigator.navigate(ContactDetailsScreenDestination(phoneNumber = conv.address))
+                                                    },
+                                                    onClick = {
+                                                        saveSearchQuery()
+                                                        navigator.navigate(
+                                                            SmsChatScreenDestination(
+                                                                threadId = conv.threadId,
+                                                                address = conv.address,
+                                                                contactName = conv.contactName
+                                                            )
+                                                        )
+                                                    }
+                                                )
+                                                if (index < smsResults.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "section_sms_spacer") { Spacer(modifier = Modifier.height(16.dp)) }
                                 }
                             }
                             "recordings" -> {

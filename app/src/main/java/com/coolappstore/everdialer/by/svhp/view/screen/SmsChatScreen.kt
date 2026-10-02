@@ -3,7 +3,9 @@ package com.coolappstore.everdialer.by.svhp.view.screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.telephony.PhoneNumberUtils
 import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.widget.Toast
@@ -18,26 +20,34 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.SmsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
@@ -46,14 +56,19 @@ import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun SmsChatScreen(
@@ -61,6 +76,7 @@ fun SmsChatScreen(
     threadId: Long,
     address: String,
     contactName: String? = null,
+    photoUri: String? = null,
     initialText: String? = null
 ) {
     val context = LocalContext.current
@@ -68,39 +84,69 @@ fun SmsChatScreen(
     val smsVM: SmsViewModel = koinActivityViewModel()
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
+    DisposableEffect(Unit) {
+        onDispose {
+            smsVM.clearActiveThread()
+        }
+    }
+
+    var effectiveThreadId by remember(threadId) { mutableStateOf(threadId) }
     val messages by smsVM.currentThreadMessages.collectAsState()
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
+
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val chatFontSize = remember(settingsVer) {
+        prefs.getFloat(PreferenceManager.KEY_SMS_CHAT_TEXT_SIZE, PreferenceManager.DEFAULT_SMS_CHAT_TEXT_SIZE)
+    }
+    val sendDelaySeconds = remember(settingsVer) {
+        prefs.getInt(PreferenceManager.KEY_SMS_SEND_DELAY_SECONDS, 0)
+    }
+    val signatureEnabled = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_SIGNATURE_ENABLED, false)
+    }
+    val signatureText = remember(settingsVer) {
+        prefs.getString(PreferenceManager.KEY_SMS_SIGNATURE, "") ?: ""
+    }
+    val stripUnicode = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_STRIP_UNICODE, false)
+    }
+    val showStt = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
+    }
 
     var messageText by remember(initialText) { mutableStateOf(initialText ?: "") }
     var showMenu by remember { mutableStateOf(false) }
     var messageToDelete by remember { mutableStateOf<SmsMessage?>(null) }
+    var messageToSelect by remember { mutableStateOf<SmsMessage?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
-    // Resolve matched contact
+    // Quik Delayed Sending Countdown state
+    var pendingSendJob by remember { mutableStateOf<Job?>(null) }
+    var pendingCountdown by remember { mutableIntStateOf(0) }
+    var pendingMessagePayload by remember { mutableStateOf<String?>(null) }
+
+    // Speech to text launcher
+    val sttLauncher = rememberVoiceSearchLauncher { spokenText ->
+        messageText = if (messageText.isBlank()) spokenText else "$messageText $spokenText"
+    }
+
+    // Resolve matched contact accurately using PhoneNumberUtils
     val matchedContact = remember(allContacts, address) {
-        val norm = address.filter { it.isDigit() }
-        if (norm.isBlank()) null
+        if (address.isBlank()) null
         else allContacts.firstOrNull { c ->
             c.phoneNumbers.any { num ->
-                val n = num.filter { it.isDigit() }
-                n.isNotBlank() && (n.endsWith(norm) || norm.endsWith(n))
+                PhoneNumberUtils.compare(context, num, address)
             }
         }
     }
 
-    // Resolve contact photo
-    val photoUri = remember(allContacts, address, matchedContact) {
-        matchedContact?.photoUri ?: run {
-            val norm = address.filter { it.isDigit() }
-            allContacts.firstOrNull { c ->
-                c.phoneNumbers.any { num ->
-                    val n = num.filter { it.isDigit() }
-                    n.isNotBlank() && (n.endsWith(norm) || norm.endsWith(n))
-                }
-            }?.photoUri
-        }
+    // Resolve contact photo: use explicitly passed photoUri first, then matchedContact's photoUri.
+    // If none exists, keep null (NEVER fallback to other contacts!)
+    val resolvedPhotoUri = remember(photoUri, matchedContact) {
+        if (!photoUri.isNullOrBlank()) photoUri
+        else matchedContact?.photoUri
     }
 
     // Available SIM subscriptions
@@ -131,8 +177,19 @@ fun SmsChatScreen(
         mutableStateOf(activeSims.firstOrNull()?.subscriptionId)
     }
 
-    LaunchedEffect(threadId) {
-        smsVM.loadThreadMessages(threadId)
+    LaunchedEffect(effectiveThreadId, address) {
+        if (effectiveThreadId <= 0 && address.isNotBlank()) {
+            val resolved = smsVM.getOrCreateThreadId(address)
+            if (resolved > 0) {
+                effectiveThreadId = resolved
+            }
+        }
+        if (effectiveThreadId > 0) {
+            while (isActive) {
+                smsVM.loadThreadMessages(effectiveThreadId)
+                delay(1500)
+            }
+        }
     }
 
     LaunchedEffect(messages.size) {
@@ -141,8 +198,68 @@ fun SmsChatScreen(
         }
     }
 
+    val isImeVisible = WindowInsets.isImeVisible
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(isImeVisible, imeBottom) {
+        if (isImeVisible && messages.isNotEmpty()) {
+            delay(60)
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+
+    fun doSendMessage(rawText: String) {
+        var finalBody = rawText
+        if (signatureEnabled && signatureText.isNotBlank()) {
+            finalBody = "$finalBody\n$signatureText"
+        }
+        if (stripUnicode) {
+            finalBody = Normalizer.normalize(finalBody, Normalizer.Form.NFD)
+                .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        }
+
+        smsVM.sendMessage(address, finalBody, selectedSubId) { success ->
+            if (!success) {
+                Toast.makeText(context, "Failed to send message", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun initiateSend() {
+        if (messageText.isBlank()) return
+        val textToProcess = messageText.trim()
+        messageText = ""
+
+        if (sendDelaySeconds > 0) {
+            pendingMessagePayload = textToProcess
+            pendingCountdown = sendDelaySeconds
+            pendingSendJob?.cancel()
+            pendingSendJob = coroutineScope.launch {
+                while (pendingCountdown > 0) {
+                    delay(1000)
+                    pendingCountdown -= 1
+                }
+                val payload = pendingMessagePayload
+                pendingMessagePayload = null
+                if (!payload.isNullOrBlank()) {
+                    doSendMessage(payload)
+                }
+            }
+        } else {
+            doSendMessage(textToProcess)
+        }
+    }
+
+    fun cancelPendingSend() {
+        pendingSendJob?.cancel()
+        pendingSendJob = null
+        pendingMessagePayload?.let { restored ->
+            messageText = restored
+        }
+        pendingMessagePayload = null
+        pendingCountdown = 0
+    }
 
     Scaffold(
         topBar = {
@@ -165,7 +282,7 @@ fun SmsChatScreen(
                     ) {
                         RivoAvatar(
                             name = contactName ?: address,
-                            photoUri = photoUri,
+                            photoUri = resolvedPhotoUri,
                             size = 38.dp
                         )
                         Column {
@@ -211,6 +328,18 @@ fun SmsChatScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            RivoDropdownMenuItem(
+                                text = "Settings",
+                                icon = Icons.Outlined.Settings,
+                                onClick = {
+                                    showMenu = false
+                                    navigator.navigate(SmsSettingsScreenDestination())
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
                             RivoDropdownMenuItem(
                                 text = "Delete conversation",
                                 icon = Icons.Outlined.Delete,
@@ -262,10 +391,14 @@ fun SmsChatScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        items(messages, key = { it.id }) { message ->
+                        items(messages, key = { if (it.isMms) "mms_${it.id}" else "sms_${it.id}" }) { message ->
                             ChatBubble(
                                 message = message,
                                 timeStr = timeFormat.format(Date(message.date)),
+                                fontSize = chatFontSize.sp,
+                                onSelectClick = {
+                                    messageToSelect = message
+                                },
                                 onCopyClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", message.body))
@@ -275,6 +408,46 @@ fun SmsChatScreen(
                                     messageToDelete = message
                                 }
                             )
+                        }
+                    }
+                }
+            }
+
+            // Quik Delayed Sending Countdown Banner
+            AnimatedVisibility(
+                visible = pendingCountdown > 0,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator(
+                                progress = { (pendingCountdown.toFloat() / sendDelaySeconds.toFloat()).coerceIn(0f, 1f) },
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.5.dp
+                            )
+                            Text(
+                                "Sending in ${pendingCountdown}s...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        TextButton(onClick = { cancelPendingSend() }) {
+                            Text("UNDO", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -317,6 +490,23 @@ fun SmsChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // STT Mic Button
+                    if (showStt) {
+                        IconButton(
+                            onClick = {
+                                VoiceSearchHelper.launchVoiceSearch(context, sttLauncher)
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "Speech to Text",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
                     TextField(
                         value = messageText,
                         onValueChange = { messageText = it },
@@ -336,17 +526,7 @@ fun SmsChatScreen(
 
                     val canSend = messageText.isNotBlank()
                     IconButton(
-                        onClick = {
-                            if (canSend) {
-                                val text = messageText.trim()
-                                messageText = ""
-                                smsVM.sendMessage(address, text, selectedSubId) { success ->
-                                    if (!success) {
-                                        Toast.makeText(context, "Failed to send SMS", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                        },
+                        onClick = { initiateSend() },
                         enabled = canSend,
                         modifier = Modifier
                             .size(46.dp)
@@ -378,7 +558,7 @@ fun SmsChatScreen(
                 TextButton(
                     onClick = {
                         showDeleteConfirmDialog = false
-                        smsVM.deleteThread(threadId) {
+                        smsVM.deleteThread(effectiveThreadId) {
                             navigator.navigateUp()
                         }
                     },
@@ -395,6 +575,40 @@ fun SmsChatScreen(
         )
     }
 
+    // Select message text dialog
+    messageToSelect?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { messageToSelect = null },
+            title = { Text("Select text") },
+            text = {
+                SelectionContainer {
+                    Text(
+                        text = msg.body,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = chatFontSize.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
+                        Toast.makeText(context, "Copied all", Toast.LENGTH_SHORT).show()
+                        messageToSelect = null
+                    }
+                ) {
+                    Text("Copy all")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messageToSelect = null }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+
     // Delete single message confirmation dialog
     messageToDelete?.let { msg ->
         AlertDialog(
@@ -404,7 +618,7 @@ fun SmsChatScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        smsVM.deleteMessage(msg.id, threadId)
+                        smsVM.deleteMessage(msg.id, effectiveThreadId, msg.isMms)
                         messageToDelete = null
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -426,6 +640,8 @@ fun SmsChatScreen(
 private fun ChatBubble(
     message: SmsMessage,
     timeStr: String,
+    fontSize: TextUnit,
+    onSelectClick: () -> Unit,
     onCopyClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -458,11 +674,30 @@ private fun ChatBubble(
                 )
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(
-                    text = message.body,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor
-                )
+                // MMS Image attachments
+                if (message.isMms && message.parts.isNotEmpty()) {
+                    message.parts.filter { it.isImage && !it.uri.isNullOrBlank() }.forEach { part ->
+                        AsyncImage(
+                            model = Uri.parse(part.uri),
+                            contentDescription = "MMS Image",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 240.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .padding(bottom = 6.dp)
+                        )
+                    }
+                }
+
+                if (message.body.isNotBlank()) {
+                    Text(
+                        text = message.body,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize),
+                        color = textColor
+                    )
+                }
+
                 Spacer(Modifier.height(3.dp))
                 Row(
                     modifier = Modifier.align(Alignment.End),
@@ -475,9 +710,13 @@ private fun ChatBubble(
                         color = timeColor
                     )
                     if (isOut) {
+                        val iconVector = when (message.deliveryStatus) {
+                            0 -> Icons.Default.DoneAll // Delivered
+                            else -> Icons.Default.Check // Sent
+                        }
                         Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Sent",
+                            imageVector = iconVector,
+                            contentDescription = "Status",
                             tint = timeColor,
                             modifier = Modifier.size(12.dp)
                         )
@@ -489,6 +728,18 @@ private fun ChatBubble(
                 expanded = showMessageMenu,
                 onDismissRequest = { showMessageMenu = false }
             ) {
+                RivoDropdownMenuItem(
+                    text = "Select",
+                    icon = Icons.Default.SelectAll,
+                    onClick = {
+                        showMessageMenu = false
+                        onSelectClick()
+                    }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
                 RivoDropdownMenuItem(
                     text = "Copy text",
                     icon = Icons.Default.ContentCopy,

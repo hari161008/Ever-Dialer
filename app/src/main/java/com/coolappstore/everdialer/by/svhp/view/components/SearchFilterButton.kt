@@ -22,12 +22,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.coolappstore.everdialer.by.svhp.controller.util.DefaultSmsManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import org.koin.compose.koinInject
 
 val DEFAULT_SEARCH_FILTER_ORDER = listOf(
     "contacts",
     "non_contacts",
+    "sms",
     "recordings",
     "groups",
     "contact_notes",
@@ -37,12 +39,13 @@ val DEFAULT_SEARCH_FILTER_ORDER = listOf(
 
 /**
  * Snapshot of the persisted "Filter" checkboxes shown beside the search bar on the Dialpad,
- * Calls, Contacts, and Favourites screens. Every field defaults to true (ticked) except groups,
- * which defaults to false (unticked) per user specification.
+ * Calls, Contacts, and Favourites screens. Every field defaults to true (ticked) except groups
+ * and sms (when not default sms app), which default to false (unticked) per user specification.
  */
 data class SearchFilterState(
     val contacts: Boolean = true,
     val nonContacts: Boolean = true,
+    val sms: Boolean = false,
     val recordings: Boolean = true,
     val groups: Boolean = false,
     val contactNotes: Boolean = true,
@@ -50,10 +53,12 @@ data class SearchFilterState(
     val settings: Boolean = true,
     val order: List<String> = DEFAULT_SEARCH_FILTER_ORDER
 ) {
-    val isDefault: Boolean get() = contacts && nonContacts && recordings && !groups && contactNotes && recordingNotes && settings && order == DEFAULT_SEARCH_FILTER_ORDER
+    val isDefault: Boolean get() = contacts && nonContacts && !sms && recordings && !groups && contactNotes && recordingNotes && settings && order == DEFAULT_SEARCH_FILTER_ORDER
 }
 
-fun PreferenceManager.getSearchFilterState(): SearchFilterState {
+fun PreferenceManager.getSearchFilterState(context: android.content.Context? = null): SearchFilterState {
+    val targetContext = context ?: this.context
+    val isDefaultSms = DefaultSmsManager.isDefaultSms(targetContext)
     val savedOrder = getString(PreferenceManager.KEY_SEARCH_FILTER_ORDER, null)
     val parsedOrder = savedOrder?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
     val finalOrder = (parsedOrder.filter { it in DEFAULT_SEARCH_FILTER_ORDER } + DEFAULT_SEARCH_FILTER_ORDER.filter { it !in parsedOrder }).distinct()
@@ -61,6 +66,7 @@ fun PreferenceManager.getSearchFilterState(): SearchFilterState {
     return SearchFilterState(
         contacts = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_CONTACTS, true),
         nonContacts = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_NON_CONTACTS, true),
+        sms = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_SMS, isDefaultSms),
         recordings = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_RECORDINGS, true),
         groups = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_GROUPS, false),
         contactNotes = getBoolean(PreferenceManager.KEY_SEARCH_FILTER_CONTACT_NOTES, true),
@@ -150,6 +156,7 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
                         val label = when (key) {
                             "contacts" -> "Contacts"
                             "non_contacts" -> "Non contacts"
+                            "sms" -> "SMS"
                             "recordings" -> "Recordings"
                             "groups" -> "Groups"
                             "contact_notes" -> "Contact notes"
@@ -160,6 +167,7 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
                         val checked = when (key) {
                             "contacts" -> state.contacts
                             "non_contacts" -> state.nonContacts
+                            "sms" -> state.sms
                             "recordings" -> state.recordings
                             "groups" -> state.groups
                             "contact_notes" -> state.contactNotes
@@ -171,6 +179,7 @@ fun SearchFilterButton(modifier: Modifier = Modifier, size: androidx.compose.ui.
                             when (key) {
                                 "contacts" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_CONTACTS, newVal)
                                 "non_contacts" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_NON_CONTACTS, newVal)
+                                "sms" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_SMS, newVal)
                                 "recordings" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_RECORDINGS, newVal)
                                 "groups" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_GROUPS, newVal)
                                 "contact_notes" -> prefs.setBoolean(PreferenceManager.KEY_SEARCH_FILTER_CONTACT_NOTES, newVal)
