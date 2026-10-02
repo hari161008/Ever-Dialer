@@ -54,3 +54,13 @@ data class SmsMessage(
                 type == android.provider.Telephony.Sms.MESSAGE_TYPE_FAILED ||
                 type == android.provider.Telephony.Sms.MESSAGE_TYPE_QUEUED
 }
+
+@Serializable
+data class ScheduledSmsEntry(
+    val id: String,
+    val threadId: Long,
+    val address: String,
+    val body: String,
+    val subId: Int? = null,
+    val scheduledTime: Long
+)

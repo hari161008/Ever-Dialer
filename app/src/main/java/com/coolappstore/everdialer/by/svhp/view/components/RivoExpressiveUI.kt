@@ -670,6 +670,7 @@ fun RivoListItem(
     avatarName: String? = null,
     avatarForcePersonIcon: Boolean = false,
     photoUri: String? = null,
+    avatarObeySolidIcons: Boolean = true,
     onClick: () -> Unit,
     onAvatarClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -727,6 +728,7 @@ fun RivoListItem(
                     name = avatarName ?: "",
                     photoUri = photoUri,
                     forcePersonIcon = avatarForcePersonIcon,
+                    obeySolidIcons = avatarObeySolidIcons,
                     size = 48.dp,
                     modifier = Modifier
                         .size(48.dp)

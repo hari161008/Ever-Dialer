@@ -1079,6 +1079,10 @@
             android:exported="false" />
 
         <service
+            android:name=".controller.FloatingSmsService"
+            android:exported="false" />
+
+        <service
             android:name=".controller.MissedCallPopupService"
             android:exported="false" />
 
@@ -1131,6 +1135,15 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.coolappstore.everdialer.by.svhp.FAKE_CALL_TRIGGER" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".controller.sms.ScheduledSmsReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.coolappstore.everdialer.by.svhp.SCHEDULED_SMS_TRIGGER" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>

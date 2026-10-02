@@ -155,8 +155,10 @@ fun CallLogFullScreen(
                 val settingsVersion by prefs.settingsChanged.collectAsState()
                 val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
                 val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
-                val activeChipBg = if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
-                val activeChipFg = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                val isDynamic = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
+                val usePrimary = isSaturatedActive || !isDynamic
+                val activeChipBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                val activeChipFg = if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
                 LazyRow(
                     modifier = Modifier

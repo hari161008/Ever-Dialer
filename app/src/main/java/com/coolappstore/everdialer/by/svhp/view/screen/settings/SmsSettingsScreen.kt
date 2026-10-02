@@ -1,6 +1,9 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -110,10 +113,13 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
     }
     val swipeRightAction = remember(settingsVer) {
-        prefs.getString(PreferenceManager.KEY_SMS_SWIPE_RIGHT_ACTION, "call") ?: "call"
+        prefs.getString(PreferenceManager.KEY_SMS_SWIPE_RIGHT_ACTION, "none") ?: "none"
     }
     val swipeLeftAction = remember(settingsVer) {
-        prefs.getString(PreferenceManager.KEY_SMS_SWIPE_LEFT_ACTION, "delete") ?: "delete"
+        prefs.getString(PreferenceManager.KEY_SMS_SWIPE_LEFT_ACTION, "none") ?: "none"
+    }
+    val floatingBubble = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_FLOATING_BUBBLE, false)
     }
 
     // Dialog state controllers
@@ -143,44 +149,44 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Default App Status Card
-            item {
-                RivoAnimatedSection(delayMs = 0L) {
-                    RivoExpressiveCard {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isDefaultSms) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                                modifier = Modifier.size(44.dp)
+            // Default App Status Card (only shown when Ever Dialer is not default)
+            if (!isDefaultSms) {
+                item {
+                    RivoAnimatedSection(delayMs = 0L) {
+                        RivoExpressiveCard {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        if (isDefaultSms) Icons.Default.CheckCircle else Icons.Default.Warning,
-                                        contentDescription = null,
-                                        tint = if (isDefaultSms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(24.dp)
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Not Default SMS App",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Tap to set as default to send and receive messages",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    if (isDefaultSms) "Ever Dialer is Default SMS App" else "Not Default SMS App",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    if (isDefaultSms) "Full SMS & MMS functionality enabled" else "Tap to set as default to send and receive messages",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (!isDefaultSms) {
                                 FilledTonalButton(
                                     onClick = { DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context) },
                                     shape = RoundedCornerShape(12.dp)
@@ -255,6 +261,28 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                                             }
                                         }
+                                    }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                // Floating SMS
+                                RivoSwitchListItem(
+                                    headline = "Floating SMS",
+                                    supporting = "Float a bubble on incoming messages to chat without leaving your current app. You can also float any chat from its options menu.",
+                                    leadingIcon = Icons.Outlined.SpeakerNotes,
+                                    iconContainerColor = ColorBlue,
+                                    checked = floatingBubble,
+                                    onCheckedChange = { checked ->
+                                        if (checked && !Settings.canDrawOverlays(context)) {
+                                            try {
+                                                val intent = Intent(
+                                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                    Uri.parse("package:${context.packageName}")
+                                                )
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        }
+                                        prefs.setBoolean(PreferenceManager.KEY_SMS_FLOATING_BUBBLE, checked)
                                     }
                                 )
                             }

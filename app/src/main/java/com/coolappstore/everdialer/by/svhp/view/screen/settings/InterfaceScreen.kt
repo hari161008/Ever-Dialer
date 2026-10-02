@@ -1456,6 +1456,9 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = {
                                         dynamicColors = it
                                         prefs.setBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, it)
+                                        if (!it && prefs.getInt("custom_primary_color", 0) == 0) {
+                                            prefs.setInt("custom_primary_color", customPrimaryColor)
+                                        }
                                         triggerRestartPrompt(scope, snackbarHostState, context)
                                     }
                                 )

@@ -642,6 +642,7 @@ fun CallLogTile(
                 avatarName  = if (showAvatars) avatarSourceName else null,
                 avatarForcePersonIcon = !isContact,
                 photoUri    = if (showAvatars) resolvedPhotoUri else null,
+                avatarObeySolidIcons = false,
                 headlineStartContent = if (!showNumberOnSupportingLine) simBadge else null,
                 headlineEndContent = totalCallsBadge,
                 supportingStartContent = if (showNumberOnSupportingLine) simBadge else null,

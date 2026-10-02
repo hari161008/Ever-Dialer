@@ -635,9 +635,11 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_DISABLE_SCREENSHOTS       = "sms_disable_screenshots"
         const val KEY_SMS_AUTO_COLOR_AVATARS        = "sms_auto_color_avatars"
         const val KEY_SMS_SHOW_STT                  = "sms_show_stt"
-        const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none"
-        const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none"
+        const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none" (default: "none")
+        const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none" (default: "none")
         const val KEY_SMS_SELECTED_FILTER          = "sms_selected_filter" // "all", "contacts", "unknown"
+        const val KEY_SCHEDULED_SMS                 = "scheduled_sms_list"
+        const val KEY_SMS_FLOATING_BUBBLE           = "sms_floating_bubble"
 
         const val KEY_APP_OPEN_COUNT                = "app_open_count"
         const val KEY_LAST_APP_VERSION              = "last_app_version"

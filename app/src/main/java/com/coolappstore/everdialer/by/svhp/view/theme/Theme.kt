@@ -56,17 +56,20 @@ private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.comp
     val secSat = (sat * 0.45f).coerceIn(0.18f, 0.50f)
     val tertSat = (sat * 0.55f).coerceIn(0.20f, 0.60f)
 
+    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(argb) > 0.45
+    val onPrimaryColor = if (isBright) Color(0xFF1C1B1F) else Color.White
+
     return if (dark) {
         val neutralSat = (sat * 0.28f).coerceIn(0.12f, 0.28f)
         val variantSat = (sat * 0.35f).coerceIn(0.16f, 0.35f)
         val containerSat = (sat * 0.35f).coerceIn(0.18f, 0.42f)
 
         darkColorScheme(
-            primary = hslColor(hue, sat, 0.80f),
-            onPrimary = hslColor(hue, sat, 0.20f),
+            primary = primary,
+            onPrimary = onPrimaryColor,
             primaryContainer = hslColor(hue, (sat * 0.80f).coerceIn(0.35f, 0.85f), 0.30f),
             onPrimaryContainer = hslColor(hue, (sat * 0.80f).coerceIn(0.35f, 0.85f), 0.90f),
-            inversePrimary = hslColor(hue, sat, 0.40f),
+            inversePrimary = hslColor(hue, sat, 0.80f),
 
             secondary = hslColor(secHue, secSat, 0.80f),
             onSecondary = hslColor(secHue, secSat, 0.20f),
@@ -102,11 +105,11 @@ private fun buildCustomColorScheme(primary: Color, dark: Boolean): androidx.comp
         val containerSat = (sat * 0.38f).coerceIn(0.18f, 0.45f)
 
         lightColorScheme(
-            primary = hslColor(hue, sat, 0.40f),
-            onPrimary = Color.White,
+            primary = primary,
+            onPrimary = onPrimaryColor,
             primaryContainer = hslColor(hue, (sat * 0.75f).coerceIn(0.30f, 0.85f), 0.90f),
             onPrimaryContainer = hslColor(hue, sat, 0.10f),
-            inversePrimary = hslColor(hue, sat, 0.80f),
+            inversePrimary = hslColor(hue, sat, 0.40f),
 
             secondary = hslColor(secHue, secSat, 0.40f),
             onSecondary = Color.White,
@@ -144,7 +147,8 @@ private fun applySaturatedContainers(
     seedColor: Color,
     darkTheme: Boolean,
     themeMode: String,
-    saturationScale: Float = 1.0f
+    saturationScale: Float = 1.0f,
+    isDynamic: Boolean = true
 ): androidx.compose.material3.ColorScheme {
     val argb = seedColor.toArgb()
     val hsl = FloatArray(3)
@@ -155,7 +159,11 @@ private fun applySaturatedContainers(
     val pcHsl = FloatArray(3)
     androidx.core.graphics.ColorUtils.colorToHSL(pcArgb, pcHsl)
 
-    val containerHue = if (pcHsl[1] > 0.15f) pcHsl[0] else hue
+    val containerHue = if (isDynamic) {
+        if (pcHsl[1] > 0.15f) pcHsl[0] else hue
+    } else {
+        hue
+    }
     val containerSat = maxOf(hsl[1], pcHsl[1]).coerceIn(0.60f, 0.95f)
 
     fun hslColor(h: Float, s: Float, l: Float): Color {
@@ -174,6 +182,9 @@ private fun applySaturatedContainers(
     }
     val effectiveSat = (baseEffectiveSat * minOf(scale, 1.0f)).coerceIn(0.10f, 1.0f)
 
+    val isBright = androidx.core.graphics.ColorUtils.calculateLuminance(argb) > 0.45
+    val onSeedColor = if (isBright) Color(0xFF1C1B1F) else Color.White
+
     return if (darkTheme) {
         val low = hslColor(containerHue, effectiveSat, (0.12f + boost * 0.06f).coerceIn(0.08f, 0.25f))
         val normal = hslColor(containerHue, effectiveSat, (0.15f + boost * 0.07f).coerceIn(0.10f, 0.30f))
@@ -183,8 +194,8 @@ private fun applySaturatedContainers(
         val brightWhite = Color(0xFFFFFFFF)
         val visibleGreyText = Color(0xFFD4D4D8)
         val visibleOutline = Color(0xFF9E9E9E)
-        val vibrantPrimary = hslColor(containerHue, (0.90f * minOf(scale, 1.0f) + boost * 0.10f).coerceIn(0.50f, 1.0f), (0.58f + boost * 0.08f).coerceIn(0.50f, 0.70f))
-        val vibrantOnPrimary = Color(0xFF1C1B1F)
+        val vibrantPrimary = if (isDynamic) hslColor(containerHue, (0.90f * minOf(scale, 1.0f) + boost * 0.10f).coerceIn(0.50f, 1.0f), (0.58f + boost * 0.08f).coerceIn(0.50f, 0.70f)) else seedColor
+        val vibrantOnPrimary = if (isDynamic) Color(0xFF1C1B1F) else onSeedColor
         val vibrantPrimaryContainer = hslColor(containerHue, (0.85f * minOf(scale, 1.0f) + boost * 0.15f).coerceIn(0.50f, 1.0f), (0.32f + boost * 0.10f).coerceIn(0.25f, 0.48f))
         val vibrantOnPrimaryContainer = Color.White
         when (themeMode) {
@@ -235,8 +246,8 @@ private fun applySaturatedContainers(
         val crispDark = Color(0xFF111827)
         val visibleDarkGreyText = Color(0xFF4B5563)
         val visibleLightOutline = Color(0xFF757575)
-        val vibrantPrimaryLight = hslColor(containerHue, (0.90f * minOf(scale, 1.0f) + boost * 0.10f).coerceIn(0.50f, 1.0f), (0.42f - boost * 0.04f).coerceIn(0.35f, 0.50f))
-        val vibrantOnPrimaryLight = Color.White
+        val vibrantPrimaryLight = if (isDynamic) hslColor(containerHue, (0.90f * minOf(scale, 1.0f) + boost * 0.10f).coerceIn(0.50f, 1.0f), (0.42f - boost * 0.04f).coerceIn(0.35f, 0.50f)) else seedColor
+        val vibrantOnPrimaryLight = if (isDynamic) Color.White else onSeedColor
         val vibrantPrimaryContainerLight = hslColor(containerHue, (0.75f * minOf(scale, 1.0f) + boost * 0.25f).coerceIn(0.50f, 1.0f), (0.88f - boost * 0.12f).coerceIn(0.72f, 0.94f))
         val vibrantOnPrimaryContainerLight = Color(0xFF111827)
         when (themeMode) {
@@ -330,10 +341,12 @@ fun Rivo4Theme(
         else defaultPrimary
     }
 
+    val isDynamicActive = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     val isSaturatedActive = prefs.isSaturatedForTheme(darkTheme)
 
     if (isSaturatedActive) {
-        colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode, saturationScale)
+        colorScheme = applySaturatedContainers(colorScheme, seedColor, darkTheme, themeMode, saturationScale, isDynamic = isDynamicActive)
     } else {
         colorScheme = when (themeMode) {
             "black" -> colorScheme.copy(
