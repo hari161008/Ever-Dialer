@@ -20,10 +20,22 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dialpad
@@ -80,6 +92,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScr
 import com.ramcosta.composedestinations.generated.destinations.DialPadScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -111,6 +124,8 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.outlined.Chat
 import com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDestination
 import org.koin.core.context.GlobalContext
+import com.coolappstore.everdialer.by.svhp.view.components.TabSectionsDialog
+import com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic
 
 class MainActivity : FragmentActivity() {
 
@@ -560,8 +575,8 @@ class MainActivity : FragmentActivity() {
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentDest = navBackStack?.destination
                     val prefs2 = remember { GlobalContext.get().get<PreferenceManager>() }
-                    val showNotesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
-                    val showRecordingsRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+                    val showNotesRail = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true) }
+                    val showRecordingsRail = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
 
                     fun navTo(route: String) {
                         com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper.navigateToTab(navController, route)
@@ -583,6 +598,31 @@ class MainActivity : FragmentActivity() {
                                 color = MaterialTheme.colorScheme.surfaceContainer,
                                 modifier = Modifier.fillMaxHeight()
                             ) {
+                                val railScrollState = rememberScrollState()
+                                val scrollIndication = remember(settingsVer) {
+                                    prefs2.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION, true)
+                                }
+                                var railScrollMeasured by remember { mutableStateOf(false) }
+                                LaunchedEffect(railScrollState.maxValue) {
+                                    if (railScrollState.maxValue > 0) {
+                                        railScrollMeasured = true
+                                    }
+                                }
+                                val canRailScroll = if (railScrollMeasured) railScrollState.maxValue > 0 else railScrollState.maxValue > 0
+
+                                val context = LocalContext.current
+                                var showTabSectionsDialog by remember { mutableStateOf(false) }
+
+                                fun doHaptic() {
+                                    if (prefs2.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                        performAppHaptic(
+                                            context,
+                                            prefs2.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                            prefs2.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                        )
+                                    }
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxHeight()
@@ -594,23 +634,22 @@ class MainActivity : FragmentActivity() {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
-                                        modifier = Modifier.fillMaxSize(),
-                                        // Evenly distribute every item (including the divider) across
-                                        // the full rail height so the gaps are always uniform, instead
-                                        // of clustering everything in the middle with big empty space
-                                        // above/below.
-                                        verticalArrangement = Arrangement.SpaceEvenly,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(railScrollState)
+                                            .padding(vertical = 8.dp),
+                                        verticalArrangement = if (canRailScroll) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         // Nav items — order and visibility driven by the same
                                         // Settings > Appearance > Tab Sections config as the
                                         // portrait bottom bar, never hardcoded.
-                                        val showFavoritesRail = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)
-                                        val showCallsRail     = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
-                                        val showContactsRail  = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
-                                        val showSmsRail       = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
-                                        val showGroupsRail    = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
-                                        val showDialpadRail   = prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false)
+                                        val showFavoritesRail = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true) }
+                                        val showCallsRail     = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true) }
+                                        val showContactsRail  = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true) }
+                                        val showSmsRail       = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true) }
+                                        val showGroupsRail    = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false) }
+                                        val showDialpadRail   = remember(settingsVer) { prefs2.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false) }
                                         val railTabOrder = remember(settingsVer) {
                                             PreferenceManager.parseTabOrder(prefs2.getString(PreferenceManager.KEY_TAB_ORDER, null))
                                         }
@@ -624,7 +663,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Favourites",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(FavoritesScreenDestination.route) }
+                                                        onClick = { navTo(FavoritesScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "calls" -> if (showCallsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == RecentScreenDestination.route } == true,
@@ -632,7 +675,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Calls",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(RecentScreenDestination.route) }
+                                                        onClick = { navTo(RecentScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "contacts" -> if (showContactsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == ContactScreenDestination.route } == true,
@@ -640,7 +687,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Contacts",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(ContactScreenDestination.route) }
+                                                        onClick = { navTo(ContactScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "sms" -> if (showSmsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == SmsScreenDestination.route } == true,
@@ -648,7 +699,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "SMS",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(SmsScreenDestination.route) }
+                                                        onClick = { navTo(SmsScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "groups" -> if (showGroupsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == GroupsScreenDestination.route } == true,
@@ -656,7 +711,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Groups",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(GroupsScreenDestination.route) }
+                                                        onClick = { navTo(GroupsScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "recordings" -> if (showRecordingsRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == RecordingsScreenDestination.route } == true,
@@ -664,7 +723,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Recordings",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(RecordingsScreenDestination.route) }
+                                                        onClick = { navTo(RecordingsScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "notes" -> if (showNotesRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == NotesScreenDestination.route } == true,
@@ -672,7 +735,11 @@ class MainActivity : FragmentActivity() {
                                                         label = "Notes",
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
-                                                        onClick = { navTo(NotesScreenDestination.route) }
+                                                        onClick = { navTo(NotesScreenDestination.route) },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
+                                                        }
                                                     )
                                                     "dialpad" -> if (showDialpadRail) RailItem(
                                                         selected = currentDest?.hierarchy?.any { it.route == DialPadScreenDestination.route } == true,
@@ -681,7 +748,11 @@ class MainActivity : FragmentActivity() {
                                                         paddingStart = railPaddingStart,
                                                         paddingEnd = railPaddingEnd,
                                                         onClick = {
-                                                            navTo(DialPadScreenDestination().route)
+                                                             navTo(DialPadScreenDestination().route)
+                                                        },
+                                                        onLongClick = {
+                                                            doHaptic()
+                                                            showTabSectionsDialog = true
                                                         }
                                                     )
                                                 }
@@ -705,13 +776,33 @@ class MainActivity : FragmentActivity() {
                                             label = "Settings",
                                             paddingStart = railPaddingStart,
                                             paddingEnd = railPaddingEnd,
-                                            onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination().route) }
+                                            onClick = { navTo(com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination().route) },
+                                            onLongClick = {
+                                                doHaptic()
+                                                showTabSectionsDialog = true
+                                            }
+                                        )
+                                    }
+
+                                    if (canRailScroll && scrollIndication) {
+                                        RailVerticalScrollIndicator(
+                                            scrollState = railScrollState,
+                                            modifier = Modifier
+                                                .align(Alignment.CenterStart)
+                                                .padding(start = 4.dp)
                                         )
                                     }
                                 }
+
+                                if (showTabSectionsDialog) {
+                                    TabSectionsDialog(
+                                        onDismissRequest = { showTabSectionsDialog = false }
+                                    )
+                                }
                             }
                             // ── Main content fills the rest, edge-to-edge ──────────────────────
-                            Box(
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
@@ -1332,6 +1423,7 @@ class MainActivity : FragmentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @androidx.compose.runtime.Composable
 private fun RailItem(
     selected: Boolean,
@@ -1339,7 +1431,8 @@ private fun RailItem(
     label: String,
     paddingStart: androidx.compose.ui.unit.Dp = 0.dp,
     paddingEnd: androidx.compose.ui.unit.Dp = 0.dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     val bgColor = if (selected)
         androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
@@ -1350,13 +1443,24 @@ private fun RailItem(
     else
         androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
 
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(selected) {
+        if (selected) {
+            try {
+                bringIntoViewRequester.bringIntoView()
+            } catch (_: Throwable) {}
+        }
+    }
+
     androidx.compose.foundation.layout.Column(
         modifier = androidx.compose.ui.Modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
             .fillMaxWidth()
-            .clickable(
+            .combinedClickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick
             )
             .padding(start = paddingStart, end = paddingEnd, top = 4.dp, bottom = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1385,5 +1489,93 @@ private fun RailItem(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = androidx.compose.ui.Modifier.fillMaxWidth()
         )
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun RailVerticalScrollIndicator(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    val indicatorColor = remember(primaryColor, isDark) {
+        val argb = primaryColor.toArgb()
+        val hsl = FloatArray(3)
+        androidx.core.graphics.ColorUtils.colorToHSL(argb, hsl)
+        if (isDark) {
+            hsl[2] = hsl[2].coerceAtLeast(0.72f)
+        } else {
+            hsl[2] = hsl[2].coerceAtMost(0.38f)
+        }
+        Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
+    }
+
+    val trackColor = if (isDark) {
+        Color.White.copy(alpha = 0.18f)
+    } else {
+        Color.Black.copy(alpha = 0.12f)
+    }
+
+    val indicatorPillShape = RoundedCornerShape(percent = 50)
+    val trackHeight = 44.dp
+    val trackWidth = 3.5.dp
+
+    val viewport = scrollState.viewportSize.toFloat()
+    val total = (scrollState.maxValue + scrollState.viewportSize).toFloat()
+    val visibleRatio = if (total > 0f) (viewport / total).coerceIn(0.2f, 0.8f) else 0.5f
+    val thumbHeight = trackHeight * visibleRatio
+    val maxTravel = trackHeight - thumbHeight
+    val scrollFraction = if (scrollState.maxValue > 0) {
+        (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val thumbOffset = maxTravel * scrollFraction
+    val animatedOffset by animateDpAsState(
+        targetValue = thumbOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "railIndicatorThumbOffset"
+    )
+
+    Surface(
+        shape = indicatorPillShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 4.dp,
+        tonalElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(trackWidth)
+                    .height(trackHeight)
+                    .clip(indicatorPillShape)
+                    .background(trackColor)
+                    .pointerInput(scrollState.maxValue) {
+                        detectTapGestures { tapOffset ->
+                            if (scrollState.maxValue > 0 && size.height > 0) {
+                                val targetFraction = (tapOffset.y / size.height.toFloat()).coerceIn(0f, 1f)
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo((targetFraction * scrollState.maxValue).toInt())
+                                }
+                            }
+                        }
+                    }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(y = animatedOffset)
+                        .width(trackWidth)
+                        .height(thumbHeight)
+                        .clip(indicatorPillShape)
+                        .background(indicatorColor)
+                )
+            }
+        }
     }
 }

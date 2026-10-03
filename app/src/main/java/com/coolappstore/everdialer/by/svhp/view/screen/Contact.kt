@@ -205,7 +205,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             val baseModifier = Modifier
                 .scale(fabScale)
                 .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier)
-                .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
+                .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp, end = 32.dp) else Modifier)
             val fabOnClick: () -> Unit = {
                 val intent = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI)
                 context.startActivity(intent)
@@ -425,151 +425,162 @@ fun ContactContent(
                 }
             }
 
-            // ── 1. Contact Groups Section (ABOVE Contacts to Display) ─────────
-            if (visibleContactGroups.isNotEmpty()) {
-                androidx.compose.foundation.lazy.LazyRow(
+            // ── 1. Contact Groups Section Composable ─────────
+            val groupsContent: @Composable () -> Unit = {
+                if (visibleContactGroups.isNotEmpty()) {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .alpha(chipAlpha)
+                            .scale(chipScale),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // "All" group chip
+                        item(key = "group_all") {
+                            FilterChip(
+                                selected = selectedGroupId == null,
+                                onClick = { contactsVM.clearFilters() },
+                                label = { Text("All") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.People,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+
+                        // Contact groups in user-ordered sequence
+                        items(visibleContactGroups, key = { it.id }) { grp ->
+                            val isSelected = selectedGroupId == grp.id
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (isSelected) contactsVM.clearFilters()
+                                    else contactsVM.setGroupFilter(grp.id)
+                                },
+                                label = { Text(grp.name) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.People,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+
+                        // "Ungrouped" group chip
+                        item(key = "group_ungrouped") {
+                            val isSelected = selectedGroupId == ContactsViewModel.GROUP_ID_UNGROUPED
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (isSelected) contactsVM.clearFilters()
+                                    else contactsVM.setGroupFilter(ContactsViewModel.GROUP_ID_UNGROUPED)
+                                },
+                                label = { Text("Ungrouped") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.People,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── 2. Contacts to Display Button Composable ─────────
+            val displayButtonContent: @Composable () -> Unit = {
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                         .alpha(chipAlpha)
                         .scale(chipScale),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // "All" group chip
-                    item(key = "group_all") {
-                        FilterChip(
-                            selected = selectedGroupId == null,
-                            onClick = { contactsVM.clearFilters() },
-                            label = { Text("All") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.People,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp)
-                        )
-                    }
-
-                    // Contact groups in user-ordered sequence
-                    items(visibleContactGroups, key = { it.id }) { grp ->
-                        val isSelected = selectedGroupId == grp.id
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                if (isSelected) contactsVM.clearFilters()
-                                else contactsVM.setGroupFilter(grp.id)
-                            },
-                            label = { Text(grp.name) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.People,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp)
-                        )
-                    }
-
-                    // "Ungrouped" group chip
-                    item(key = "group_ungrouped") {
-                        val isSelected = selectedGroupId == ContactsViewModel.GROUP_ID_UNGROUPED
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                if (isSelected) contactsVM.clearFilters()
-                                else contactsVM.setGroupFilter(ContactsViewModel.GROUP_ID_UNGROUPED)
-                            },
-                            label = { Text("Ungrouped") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.People,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp)
-                        )
-                    }
-                }
-            }
-
-            // ── 2. Contacts to Display Button (BELOW Contact Groups) ─────────
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .alpha(chipAlpha)
-                    .scale(chipScale),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    onClick = { showAccountSheet = true },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (selectedAccountKey != null)
-                        MaterialTheme.colorScheme.secondaryContainer
-                    else
-                        activePillBg
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Surface(
+                        onClick = { showAccountSheet = true },
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (selectedAccountKey != null)
+                            MaterialTheme.colorScheme.secondaryContainer
+                        else
+                            activePillBg
                     ) {
-                        if (isLoadingContacts) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                strokeWidth = 2.dp,
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isLoadingContacts) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = if (selectedAccountKey != null)
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    else
+                                        activePillFg
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (selectedAccountKey != null)
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    else
+                                        activePillFg
+                                )
+                            }
+                            Text(
+                                text = contactsCountText,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
                                 color = if (selectedAccountKey != null)
                                     MaterialTheme.colorScheme.onSecondaryContainer
                                 else
                                     activePillFg
                             )
-                        } else {
                             Icon(
-                                Icons.Default.Person,
+                                Icons.Default.ArrowDropDown,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(16.dp),
                                 tint = if (selectedAccountKey != null)
-                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                                 else
-                                    activePillFg
+                                    activePillFg.copy(alpha = 0.7f)
                             )
                         }
-                        Text(
-                            text = contactsCountText,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (selectedAccountKey != null)
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            else
-                                activePillFg
-                        )
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = if (selectedAccountKey != null)
-                                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            else
-                                activePillFg.copy(alpha = 0.7f)
-                        )
                     }
-                }
 
-                ContactSortButton(
-                    sortBy = contactsSortBy,
-                    ascending = contactsSortAscending,
-                    onSortChanged = { newSortBy, newAscending ->
-                        contactsSortBy = newSortBy
-                        contactsSortAscending = newAscending
-                        prefs.setString(PreferenceManager.KEY_CONTACTS_SORT_BY, newSortBy)
-                        prefs.setBoolean(PreferenceManager.KEY_CONTACTS_SORT_ASCENDING, newAscending)
-                    }
-                )
+                    ContactSortButton(
+                        sortBy = contactsSortBy,
+                        ascending = contactsSortAscending,
+                        onSortChanged = { newSortBy, newAscending ->
+                            contactsSortBy = newSortBy
+                            contactsSortAscending = newAscending
+                            prefs.setString(PreferenceManager.KEY_CONTACTS_SORT_BY, newSortBy)
+                            prefs.setBoolean(PreferenceManager.KEY_CONTACTS_SORT_ASCENDING, newAscending)
+                        }
+                    )
+                }
+            }
+
+            // In portrait, keep groups and display button fixed above the list.
+            // In landscape, they are rendered inside topContent so they scroll with the list.
+            if (!isLandscape) {
+                groupsContent()
+                displayButtonContent()
             }
 
             if (showAccountSheet) {
@@ -595,18 +606,26 @@ fun ContactContent(
             // ── Body: loading indicator, empty state, or the actual list ──
             if (isLoadingContacts) {
                 if (isLandscape) {
-                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
-                        navigator = navigator,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                            navigator = navigator,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                        groupsContent()
+                        displayButtonContent()
+                    }
                 }
                 RivoLoadingIndicatorView()
             } else if (contacts.isEmpty()) {
                 if (isLandscape) {
-                    com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
-                        navigator = navigator,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                            navigator = navigator,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                        groupsContent()
+                        displayButtonContent()
+                    }
                 }
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -638,10 +657,14 @@ fun ContactContent(
                     isAlphabeticalReversed = (contactsSortBy == "name" && !contactsSortAscending),
                     topContent = if (isLandscape) {
                         {
-                            com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
-                                navigator = navigator,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                            )
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                com.coolappstore.everdialer.by.svhp.view.components.SearchBarPill(
+                                    navigator = navigator,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                                )
+                                groupsContent()
+                                displayButtonContent()
+                            }
                         }
                     } else null
                 )

@@ -153,6 +153,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var showAvatarsInContacts by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CONTACTS, true)) }
     var showPicture         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)) }
     var iconOnlyNav         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false)) }
+    var scrollIndication    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION, true)) }
     var pillNav             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true)) }
     var groupCallsByLatest  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)) }
     var showSimsInCallLogs  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_SIMS_IN_CALL_LOGS, prefs.getShowSimsInCallLogsDefault())) }
@@ -2113,6 +2114,20 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
+                                RivoSwitchListItem(
+                                    headline = "Scroll Indication",
+                                    supporting = "Show a floating line indicator below tabs when horizontally scrollable",
+                                    leadingIcon = Icons.Outlined.LinearScale,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = scrollIndication,
+                                    modifier = Modifier.settingsSearchHighlight("scroll_indication", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        scrollIndication = it
+                                        prefs.setBoolean(PreferenceManager.KEY_SCROLL_INDICATION, it)
+                                    }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 RivoSwitchListItem(
                                     headline = "Pill Style Navigation",
                                     supporting = "Show a floating pill-style nav bar instead of the standard bottom bar",

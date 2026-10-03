@@ -516,7 +516,7 @@ fun SmsScreen(
                 }
             }
         },
-        containerColor = Color.Transparent,
+        containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { paddingValues ->
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -969,6 +969,7 @@ private fun ConversationItemRow(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = animatedBgColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -1021,6 +1022,7 @@ private fun ConversationItemRow(
                         text = conversation.contactName ?: conversation.address,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (!conversation.isRead) FontWeight.Bold else FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)

@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -80,6 +81,7 @@ import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestinat
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.outlined.Chat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import androidx.compose.ui.platform.LocalConfiguration
@@ -131,8 +133,9 @@ fun BottomBar(navController: NavController) {
     @Suppress("UNUSED_VARIABLE")
     val settingsState by prefs.settingsChanged.collectAsState()
 
-    val pillNav      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
-    val iconOnly     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false) }
+    val pillNav          = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    val scrollIndication = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION, true) }
+    val iconOnly         = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false) }
     val liquidGlass  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
     val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false) }
     val blurEffects  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
@@ -340,7 +343,7 @@ fun BottomBar(navController: NavController) {
             val canScroll = if (scrollStateMeasured) scrollState.maxValue > 0 else (likelyCanScroll || scrollState.maxValue > 0)
 
             val indicatorProgress by animateFloatAsState(
-                targetValue   = if (canScroll) 1f else 0f,
+                targetValue   = if (canScroll && scrollIndication) 1f else 0f,
                 animationSpec = tween(durationMillis = 350, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
                 label         = "pillIndicatorProgress"
             )
@@ -349,6 +352,27 @@ fun BottomBar(navController: NavController) {
             // When indicator hides: pill smoothly settles slightly DOWN by 10.dp (back to 18.dp above nav bar)
             val currentBottomPadding = 18.dp - (8.dp * indicatorProgress)
             val indicatorSlotHeight = 18.dp * indicatorProgress
+
+            val coroutineScope = rememberCoroutineScope()
+            val pillWidthScale = remember { Animatable(1f) }
+            var pillAnimJob by remember { mutableStateOf<Job?>(null) }
+
+            fun triggerPillWidthAnimation() {
+                pillAnimJob?.cancel()
+                pillAnimJob = coroutineScope.launch {
+                    pillWidthScale.animateTo(
+                        targetValue = 1.07f,
+                        animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing)
+                    )
+                    pillWidthScale.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            stiffness = Spring.StiffnessMediumLow,
+                            dampingRatio = Spring.DampingRatioMediumBouncy
+                        )
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier
@@ -383,7 +407,10 @@ fun BottomBar(navController: NavController) {
                                     unselectedIcon = tab.unselectedIcon,
                                     label          = tab.label,
                                     iconOnly       = iconOnly,
-                                    onClick        = tab.onClick,
+                                    onClick        = {
+                                        triggerPillWidthAnimation()
+                                        tab.onClick()
+                                    },
                                     onLongClick    = {
                                         doHaptic()
                                         showTabSectionsDialog = true
@@ -395,6 +422,15 @@ fun BottomBar(navController: NavController) {
                 }
 
                 val mainPillModifier = Modifier
+                    .graphicsLayer {
+                        scaleX = pillWidthScale.value
+                    }
+                    .animateContentSize(
+                        animationSpec = spring(
+                            stiffness = Spring.StiffnessMediumLow,
+                            dampingRatio = Spring.DampingRatioMediumBouncy
+                        )
+                    )
                     .widthIn(max = maxPillWidth)
                     .clip(pillShape)
 
@@ -484,7 +520,7 @@ fun BottomBar(navController: NavController) {
         val itemWidth = if (canStandardScroll) minItemWidth else naturalItemWidth.coerceAtLeast(minItemWidth)
 
         val standardIndicatorProgress by animateFloatAsState(
-            targetValue   = if (canStandardScroll) 1f else 0f,
+            targetValue   = if (canStandardScroll && scrollIndication) 1f else 0f,
             animationSpec = tween(durationMillis = 320, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
             label         = "standardIndicatorProgress"
         )

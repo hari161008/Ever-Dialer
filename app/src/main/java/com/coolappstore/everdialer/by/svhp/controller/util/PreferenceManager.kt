@@ -459,6 +459,7 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_CONTACTS  = "call_ui_show_contacts"
         const val KEY_CALL_UI_SHOW_GROUPS    = "call_ui_show_groups"
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
+        const val KEY_SCROLL_INDICATION     = "scroll_indication"
         const val KEY_PILL_NAV              = "pill_style_nav"
         const val KEY_GROUP_CALLS_BY_LATEST = "group_calls_by_latest"
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
