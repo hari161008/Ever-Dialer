@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ever Dialer</string>
+    <string name="widget_description">விரைவு டயலுடன் சமீபத்திய அழைப்புகள்</string>
+    <string name="widget_direct_call_title">நேரடி டயல்</string>
+    <string name="widget_direct_call_description">ஒரு தட்டலில் தொடர்பை அழைக்கவும்</string>
+    <string name="widget_contact_info_title">தொடர்பு தகவல்</string>
+    <string name="widget_contact_info_description">தொடர்பின் விவரங்களுக்கான விரைவு அணுகல்</string>
+    <string name="volume_dnd_accessibility_description">டிஎன்டி (DND) பயன்முறையை மாற்ற ஒலி பொத்தான் சேர்க்கைகளைக் கண்டறிய எவர் டயலரை அனுமதிக்கிறது.</string>
+</resources>

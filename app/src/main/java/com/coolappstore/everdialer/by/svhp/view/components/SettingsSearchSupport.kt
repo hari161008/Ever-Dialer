@@ -103,6 +103,7 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Favorite
 import com.ramcosta.composedestinations.generated.destinations.AboutAppScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.LanguageSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AnswerStyleScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AppSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.BiometricScreenDestination
@@ -376,6 +377,9 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Show Contact PFP in Ongoing Call", "Display contact avatar photo on ongoing call screen", "ongoing_show_contact_pfp", Icons.Outlined.Contacts, GsColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_contact_pfp")) },
         GlobalSettingsSearchEntry("Show PFP for Non-Contacts (Ongoing)", "Display avatar on ongoing call screen for callers without photo", "ongoing_custom_pfp_show_for_no_pfp", Icons.Outlined.Contacts, GsColorCyan) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_custom_pfp_show_for_no_pfp")) },
         GlobalSettingsSearchEntry("Show Phone Number in Ongoing Call", "Display phone number on ongoing call screen", "ongoing_show_phone_number", Icons.Outlined.Call, GsColorGreen) { it.navigate(CallerUIScreenDestination(highlightKey = "ongoing_show_phone_number")) },
+
+        // ── Languages ────────────────────────────────────────────────────────
+        GlobalSettingsSearchEntry("Languages", "Change app language (System, English, Arabic, Hindi, Tamil)", "app_language", Icons.Outlined.Translate, GsColorTeal) { it.navigate(LanguageSettingsScreenDestination()) },
 
         // ── About screen ──────────────────────────────────────────────────────────
         GlobalSettingsSearchEntry("Made By Hari", "Developer info", "made_by_hari", Icons.Outlined.Info, GsColorBluGrey) { it.navigate(AboutAppScreenDestination(highlightKey = "made_by_hari")) },

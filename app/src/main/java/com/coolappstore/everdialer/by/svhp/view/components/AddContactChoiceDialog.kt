@@ -99,7 +99,7 @@ fun AddContactChoiceDialog(
             modifier = Modifier.width(310.dp)
         ) {
             RivoDropdownMenuItem(
-                text = "Add a new contact",
+                text = com.coolappstore.everdialer.by.svhp.controller.util.tr("Add a new contact"),
                 icon = Icons.Default.PersonAdd,
                 iconTint = Color(0xFF4CAF50),
                 onClick = {
@@ -125,7 +125,7 @@ fun AddContactChoiceDialog(
                 }
             )
             RivoDropdownMenuItem(
-                text = "Add a new number to existing contact",
+                text = com.coolappstore.everdialer.by.svhp.controller.util.tr("Add to existing contact"),
                 icon = Icons.Default.Person,
                 iconTint = Color(0xFF2196F3),
                 maxLines = 2,

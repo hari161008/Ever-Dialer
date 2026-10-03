@@ -279,7 +279,17 @@ class PreferenceManager(context: Context) {
         setString(KEY_HIDDEN_CONTACT_GROUPS, current.joinToString(","))
     }
 
+    fun getAppLanguage(): String = getString(KEY_APP_LANGUAGE, LANGUAGE_SYSTEM) ?: LANGUAGE_SYSTEM
+    fun setAppLanguage(lang: String) = setString(KEY_APP_LANGUAGE, lang)
+
     companion object {
+        const val KEY_APP_LANGUAGE = "app_language"
+        const val LANGUAGE_SYSTEM = "system"
+        const val LANGUAGE_ENGLISH = "en"
+        const val LANGUAGE_ARABIC = "ar"
+        const val LANGUAGE_HINDI = "hi"
+        const val LANGUAGE_TAMIL = "ta"
+
         const val KEY_HIDDEN_CONTACT_GROUPS = "hidden_contact_groups"
         const val KEY_GROUPS_SORT_ORDER = "groups_sort_order"
         const val ITEM_ALL_CONTACTS = "all_contacts"

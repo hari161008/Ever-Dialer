@@ -678,8 +678,8 @@ fun CallLogFullContent(
         if (showSelectionDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { onShowSelectionDeleteConfirmChange(false) },
-                title = { Text("Delete ${selectedLogs.size} entries?") },
-                text = { Text("This will permanently delete the selected call log entries.") },
+                title = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Delete entries?")) },
+                text = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("This will permanently delete the selected call log entries.")) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -694,9 +694,9 @@ fun CallLogFullContent(
                             onSelectionModeChange(false)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) { Text("Delete") }
+                    ) { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Delete")) }
                 },
-                dismissButton = { TextButton(onClick = { onShowSelectionDeleteConfirmChange(false) }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { onShowSelectionDeleteConfirmChange(false) }) { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Cancel")) } }
             )
         }
 
@@ -814,10 +814,10 @@ fun CallLogFullContent(
                 @Composable
                 fun StatCardItem(cardKey: String, delayMs: Long) {
                     when (cardKey) {
-                        "today" -> AnimatedStatCard(delayMs, "Today", totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) }
+                        "today" -> AnimatedStatCard(delayMs, com.coolappstore.everdialer.by.svhp.controller.util.tr("Today"), totalToday.toString(), Icons.AutoMirrored.Filled.CallReceived, ColorBlue, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.All) }
                         "missed" -> AnimatedStatCard(
                             delayMs = delayMs,
-                            label = "Missed",
+                            label = com.coolappstore.everdialer.by.svhp.controller.util.tr("Missed"),
                             value = missedToday.toString(),
                             icon = Icons.AutoMirrored.Filled.CallMissed,
                             iconTint = ColorRed,
@@ -832,16 +832,16 @@ fun CallLogFullContent(
                                 com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(context)
                             }
                         )
-                        "outgoing" -> AnimatedStatCard(delayMs, "Outgoing", outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) }
-                        "call_time" -> AnimatedStatCard(delayMs, "Call Time", if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) }
-                        "contacts" -> AnimatedStatCard(delayMs, "Contacts", if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) {
+                        "outgoing" -> AnimatedStatCard(delayMs, com.coolappstore.everdialer.by.svhp.controller.util.tr("Outgoing"), outgoingToday.toString(), Icons.AutoMirrored.Filled.CallMade, ColorGreen, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Outgoing) }
+                        "call_time" -> AnimatedStatCard(delayMs, com.coolappstore.everdialer.by.svhp.controller.util.tr("Call Time"), if (totalDurationToday > 0) formatDuration(totalDurationToday) else "0s", Icons.Default.Timer, ColorOrange, Modifier.size(110.dp)) { viewModel.setFilter(CallLogFilter.Incoming) }
+                        "contacts" -> AnimatedStatCard(delayMs, com.coolappstore.everdialer.by.svhp.controller.util.tr("Contacts"), if (contactsCount > 0) contactsCount.toString() else "Open", Icons.Default.People, ColorPurple, Modifier.size(110.dp)) {
                             navController.navigate(ContactScreenDestination.route) {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
                         }
-                        "groups" -> AnimatedStatCard(delayMs, "Groups", if (groupsCount > 0) groupsCount.toString() else "Open", Icons.Default.Group, Color(0xFF00897B), Modifier.size(110.dp)) {
+                        "groups" -> AnimatedStatCard(delayMs, com.coolappstore.everdialer.by.svhp.controller.util.tr("Groups"), if (groupsCount > 0) groupsCount.toString() else "Open", Icons.Default.Group, Color(0xFF00897B), Modifier.size(110.dp)) {
                             navController.navigate(GroupsScreenDestination.route) {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
@@ -930,7 +930,7 @@ fun CallLogFullContent(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            filter.displayName,
+                                            com.coolappstore.everdialer.by.svhp.controller.util.tr(filter.displayName),
                                             color = labelColor,
                                             style = MaterialTheme.typography.labelLarge
                                         )

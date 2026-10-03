@@ -114,6 +114,13 @@ import org.koin.core.context.GlobalContext
 
 class MainActivity : FragmentActivity() {
 
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = PreferenceManager(newBase)
+        val lang = prefs.getAppLanguage()
+        val wrapped = com.coolappstore.everdialer.by.svhp.controller.util.AppLanguageManager.wrapContext(newBase, lang)
+        super.attachBaseContext(wrapped)
+    }
+
     private val requestRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { _ -> }

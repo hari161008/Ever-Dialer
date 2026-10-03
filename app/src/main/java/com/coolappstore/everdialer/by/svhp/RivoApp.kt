@@ -17,6 +17,10 @@ class RivoApp : ShizuApplication() {
             modules(appModule)
         }
         restoreSavedAppIcon()
+        try {
+            val appLang = PreferenceManager(this).getAppLanguage()
+            com.coolappstore.everdialer.by.svhp.controller.util.AppLanguageManager.applyLocale(this, appLang, recreateActivity = false)
+        } catch (_: Throwable) {}
         com.coolappstore.everdialer.by.svhp.controller.FakeCallConnectionService.ensureRegistered(this)
         initMissedCallBadgeObserver()
     }

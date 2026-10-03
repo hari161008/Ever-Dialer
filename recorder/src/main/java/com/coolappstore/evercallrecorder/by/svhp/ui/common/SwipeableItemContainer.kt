@@ -27,6 +27,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -66,6 +68,7 @@ fun SwipeableItemContainer(
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     // Reduced sensitivity: threshold is farther (125.dp) so user must swipe more deliberately
     val threshold = with(density) { 125.dp.toPx() }
@@ -194,8 +197,8 @@ fun SwipeableItemContainer(
                 modifier = Modifier
                     .matchParentSize()
                     .background(animatedBg)
-                    .padding(start = 24.dp),
-                contentAlignment = Alignment.CenterStart
+                    .then(if (isRtl) Modifier.padding(end = 24.dp) else Modifier.padding(start = 24.dp)),
+                contentAlignment = if (isRtl) Alignment.CenterEnd else Alignment.CenterStart
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -258,8 +261,8 @@ fun SwipeableItemContainer(
                 modifier = Modifier
                     .matchParentSize()
                     .background(animatedBg)
-                    .padding(end = 24.dp),
-                contentAlignment = Alignment.CenterEnd
+                    .then(if (isRtl) Modifier.padding(start = 24.dp) else Modifier.padding(end = 24.dp)),
+                contentAlignment = if (isRtl) Alignment.CenterStart else Alignment.CenterEnd
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

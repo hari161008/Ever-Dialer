@@ -22,12 +22,19 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -749,6 +756,9 @@ fun RivoListItem(
                 Spacer(modifier = Modifier.width(16.dp))
             }
 
+            val displayHeadline = com.coolappstore.everdialer.by.svhp.controller.util.tr(headline)
+            val displaySupporting = supporting?.let { com.coolappstore.everdialer.by.svhp.controller.util.tr(it) }
+
             Column(modifier = Modifier.weight(1f)) {
                 if (headlineStartContent != null || headlineEndContent != null) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -757,7 +767,7 @@ fun RivoListItem(
                             Spacer(modifier = Modifier.width(6.dp))
                         }
                         Text(
-                            text = headline,
+                            text = displayHeadline,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -772,7 +782,7 @@ fun RivoListItem(
                     }
                 } else {
                     Text(
-                        text = headline,
+                        text = displayHeadline,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -780,7 +790,7 @@ fun RivoListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (!supporting.isNullOrBlank()) {
+                if (!displaySupporting.isNullOrBlank()) {
                     if (supportingStartContent != null || supportingEndContent != null) {
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             supportingStartContent?.let {
@@ -788,7 +798,7 @@ fun RivoListItem(
                                 Spacer(modifier = Modifier.width(6.dp))
                             }
                             Text(
-                                text = supporting,
+                                text = displaySupporting,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -802,7 +812,7 @@ fun RivoListItem(
                         }
                     } else {
                         Text(
-                            text = supporting,
+                            text = displaySupporting,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -847,6 +857,14 @@ fun RivoListItem(
             }
 
             if (trailingIcon != null) {
+                val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+                val shouldMirror = isRtl && (
+                    trailingIcon == Icons.Default.ChevronRight ||
+                    trailingIcon == Icons.Outlined.ChevronRight ||
+                    trailingIcon == Icons.Default.ArrowForward ||
+                    trailingIcon == Icons.Default.KeyboardArrowRight
+                )
+                val mirrorModifier = if (shouldMirror) Modifier.graphicsLayer { scaleX = -1f } else Modifier
                 if (trailingIconContainerColor != null) {
                     Surface(
                         shape = CircleShape,
@@ -857,7 +875,7 @@ fun RivoListItem(
                             Icon(
                                 trailingIcon, null,
                                 tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(17.dp).then(mirrorModifier)
                             )
                         }
                     }
@@ -865,7 +883,7 @@ fun RivoListItem(
                     Icon(
                         trailingIcon, null,
                         tint = trailingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp).then(mirrorModifier)
                     )
                 }
             }

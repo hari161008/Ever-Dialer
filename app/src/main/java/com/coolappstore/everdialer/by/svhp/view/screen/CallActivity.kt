@@ -111,6 +111,13 @@ import androidx.compose.ui.util.lerp
 
 class CallActivity : FragmentActivity() {
 
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = PreferenceManager(newBase)
+        val lang = prefs.getAppLanguage()
+        val wrapped = com.coolappstore.everdialer.by.svhp.controller.util.AppLanguageManager.wrapContext(newBase, lang)
+        super.attachBaseContext(wrapped)
+    }
+
     private val contactsRepo: IContactsRepository by inject()
     private val callLogRepo: ICallLogRepository by inject()
     private val prefs: PreferenceManager by inject()
@@ -1996,16 +2003,16 @@ fun ExpressiveCallScreen(
                                             }
                                             Text(
                                                 text = when {
-                                                    isOnHold -> "On Hold"
-                                                    callState == Call.STATE_SELECT_PHONE_ACCOUNT -> "Choose account"
+                                                    isOnHold -> com.coolappstore.everdialer.by.svhp.controller.util.tr("On Hold")
+                                                    callState == Call.STATE_SELECT_PHONE_ACCOUNT -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Choose account")
                                                     callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                                    callState == Call.STATE_DIALING -> "Calling"
-                                                    callState == Call.STATE_RINGING -> "Incoming"
-                                                    callState == Call.STATE_CONNECTING -> "Calling"
+                                                    callState == Call.STATE_DIALING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
+                                                    callState == Call.STATE_RINGING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Incoming")
+                                                    callState == Call.STATE_CONNECTING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
                                                     callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
-                                                        if (isIncomingMode) "Declined" else "Hanging up..."
+                                                        if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Declined") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Hanging up...")
                                                     }
-                                                    else -> if (isIncomingMode) "Connecting..." else "Calling"
+                                                    else -> if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Connecting...") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
                                                 },
                                                 color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                                 style = statusStyle
@@ -2060,16 +2067,16 @@ fun ExpressiveCallScreen(
                                 }
                                 Text(
                                     text = when {
-                                        isOnHold -> "On Hold"
-                                        callState == Call.STATE_SELECT_PHONE_ACCOUNT -> "Choose account"
+                                        isOnHold -> com.coolappstore.everdialer.by.svhp.controller.util.tr("On Hold")
+                                        callState == Call.STATE_SELECT_PHONE_ACCOUNT -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Choose account")
                                         callState == Call.STATE_ACTIVE -> formatDuration(callDuration)
-                                        callState == Call.STATE_DIALING -> "Calling"
-                                        callState == Call.STATE_RINGING -> "Incoming"
-                                        callState == Call.STATE_CONNECTING -> "Calling"
+                                        callState == Call.STATE_DIALING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
+                                        callState == Call.STATE_RINGING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Incoming")
+                                        callState == Call.STATE_CONNECTING -> com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
                                         callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
-                                            if (isIncomingMode) "Declined" else "Hanging up..."
+                                            if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Declined") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Hanging up...")
                                         }
-                                        else -> if (isIncomingMode) "Connecting..." else "Calling"
+                                        else -> if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Connecting...") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                     style = statusStyle
@@ -2974,7 +2981,7 @@ fun AnimatedCallButton(
         }
         if (showLabel) {
             Text(
-                text = label,
+                text = com.coolappstore.everdialer.by.svhp.controller.util.tr(label),
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = MaterialTheme.typography.labelMedium.fontFamily,
                 color = (labelColor ?: fgColor).copy(alpha = if (labelColor != null) labelColor.alpha * 0.7f else 0.7f),
@@ -3092,7 +3099,7 @@ fun NewSwipeToAnswer(
                 ) {
                     Icon(Icons.Default.ChatBubble, null, tint = labelColor, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Message", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Message"), color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -3111,7 +3118,7 @@ fun NewSwipeToAnswer(
                     ) {
                         Icon(Icons.Default.VolumeOff, null, tint = labelColor, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Mute", color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Mute"), color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3174,21 +3181,27 @@ fun NewSwipeToAnswer(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp).alpha(labelFade),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Decline", color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text("Answer",  color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Decline"), color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Answer"),  color = labelColor, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             }
 
             // Draggable handle — the pill itself stays a fixed neutral color while
             // dragging; only the phone icon glows green/red as feedback. The icon is
             // green by default and blends to red only as the user drags toward decline.
-            val dragFraction = if (maxDrag > 0f) (offsetX.value / maxDrag).coerceIn(-1f, 1f) else 0f
+            val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+            val dragDirection = if (isRtl) -1f else 1f
+            val dragFraction = if (maxDrag > 0f) ((offsetX.value * dragDirection) / maxDrag).coerceIn(-1f, 1f) else 0f
             val iconTint = if (dragFraction < -0.45f)
                 colorLerp(Color(0xFF4CAF50), Color(0xFFF44336), ((-dragFraction - 0.45f) / 0.55f).coerceIn(0f, 1f))
             else
                 Color(0xFF4CAF50)
-            // Answer (positive drag): phone icon rotates clockwise up to 90° (stands vertical).
-            // Decline (negative drag): phone icon rotates anticlockwise up to 135°.
-            val iconRotation = if (dragFraction >= 0f) dragFraction * 90f else dragFraction * 135f
+            // Answer (positive drag towards Answer): phone icon rotates to vertical.
+            // Decline (negative drag towards Decline): phone icon rotates towards horizontal/hanging up.
+            val iconRotation = if (dragFraction >= 0f) {
+                if (isRtl) -dragFraction * 90f else dragFraction * 90f
+            } else {
+                if (isRtl) -dragFraction * 135f else dragFraction * 135f
+            }
             val handleAlpha = (1f - maxOf(answerFlash.value, declineFlash.value) * 2f).coerceIn(0f, 1f)
 
             Box(
@@ -3202,14 +3215,15 @@ fun NewSwipeToAnswer(
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 coroutineScope.launch {
+                                    val directedX = offsetX.value * dragDirection
                                     when {
-                                        offsetX.value >= maxDrag * 0.88f -> {
+                                        directedX >= maxDrag * 0.88f -> {
                                             // Animate fill then fire action
                                             launch { answerFlash.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
                                             kotlinx.coroutines.delay(180)
                                             onAnswer()
                                         }
-                                        offsetX.value <= -maxDrag * 0.88f -> {
+                                        directedX <= -maxDrag * 0.88f -> {
                                             launch { declineFlash.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
                                             kotlinx.coroutines.delay(180)
                                             onDecline()

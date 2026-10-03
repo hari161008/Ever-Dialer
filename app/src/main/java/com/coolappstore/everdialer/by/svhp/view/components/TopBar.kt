@@ -89,7 +89,7 @@ fun SearchBarPill(navigator: DestinationsNavigator, modifier: Modifier = Modifie
                 tint = searchBarFg
             )
             Text(
-                text = "Search in Ever Dialer",
+                text = com.coolappstore.everdialer.by.svhp.controller.util.tr("Search in Ever Dialer"),
                 style = MaterialTheme.typography.bodyLarge,
                 color = searchBarFg,
                 modifier = Modifier.weight(1f)

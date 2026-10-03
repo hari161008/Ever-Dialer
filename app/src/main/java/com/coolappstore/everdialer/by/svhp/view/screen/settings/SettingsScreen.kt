@@ -124,6 +124,7 @@ private val settingsSectionKeyGroups: List<List<String>> = listOf(
     listOf("app_settings", "contacts_hider", "fake_call", "call_recording"),
     listOf("silence_unknown", "blocked_numbers"),
     listOf("create_backup", "restore_backup"),
+    listOf("app_language"),
     listOf("about_app")
 )
 
@@ -1538,7 +1539,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
-                title = "Settings",
+                title = com.coolappstore.everdialer.by.svhp.controller.util.tr("Settings"),
                 onBackClick = { navigator.navigateUp() }
             )
         },
@@ -1609,7 +1610,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .onFocusChanged { isSearchFocused = it.isFocused },
-                            placeholder = { Text("Search settings") },
+                            placeholder = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("Search settings")) },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                             trailingIcon = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2181,6 +2182,33 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             }
 
+            // ── Languages ────────────────────────────────────────────────────
+            item {
+                val currentLangCode = prefs.getAppLanguage()
+                val currentLang = com.coolappstore.everdialer.by.svhp.controller.util.AppLanguageManager.getLanguageByCode(currentLangCode)
+                val langSupporting = if (currentLang.code == PreferenceManager.LANGUAGE_SYSTEM || currentLang.code == PreferenceManager.LANGUAGE_ENGLISH) {
+                    currentLang.nativeTitle
+                } else {
+                    "${currentLang.nativeTitle} (${currentLang.title})"
+                }
+                RivoAnimatedSection(delayMs = 280L) {
+                    Column {
+                        SectionLabel("Languages")
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Languages",
+                                supporting = langSupporting,
+                                leadingIcon = Icons.Default.Translate,
+                                iconContainerColor = ColorTeal,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("app_language", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = { navigator.navigate(LanguageSettingsScreenDestination()) }
+                            )
+                        }
+                    }
+                }
+            }
+
             // ── About ────────────────────────────────────────────────────────
             item {
                 RivoAnimatedSection(delayMs = 300L) {
@@ -2212,7 +2240,7 @@ private sealed class BackupDialogState {
 @Composable
 internal fun SectionLabel(text: String) {
     Text(
-        text,
+        com.coolappstore.everdialer.by.svhp.controller.util.tr(text),
         style = MaterialTheme.typography.labelLarge,
         modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
         color = MaterialTheme.colorScheme.primary

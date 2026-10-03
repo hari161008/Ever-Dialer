@@ -171,7 +171,7 @@ fun CallLogFullScreen(
                         FilterChip(
                             selected = selectedFilter == filter,
                             onClick = { viewModel.setFilter(filter) },
-                            label = { Text(filter.displayName) },
+                            label = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr(filter.displayName)) },
                             shape = RoundedCornerShape(50.dp),
                             border = null,
                             colors = FilterChipDefaults.filterChipColors(
@@ -184,7 +184,7 @@ fun CallLogFullScreen(
 
                 if (filteredLogsByContact.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No call history found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("No call history found"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     val finalLogs = remember(filteredLogsByContact, selectedFilter) {

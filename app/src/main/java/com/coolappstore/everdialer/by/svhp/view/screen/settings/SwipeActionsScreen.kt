@@ -221,7 +221,7 @@ fun SwipeActionsScreen(
                             RivoListItem(
                                 headline = "Left action",
                                 supporting = leftLabel,
-                                leadingIcon = Icons.AutoMirrored.Outlined.ArrowBack,
+                                leadingIcon = Icons.Outlined.ArrowBack,
                                 iconContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = {
@@ -236,7 +236,7 @@ fun SwipeActionsScreen(
                             RivoListItem(
                                 headline = "Right action",
                                 supporting = rightLabel,
-                                leadingIcon = Icons.AutoMirrored.Outlined.ArrowForward,
+                                leadingIcon = Icons.Outlined.ArrowForward,
                                 iconContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = {

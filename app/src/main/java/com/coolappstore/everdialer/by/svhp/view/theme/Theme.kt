@@ -18,10 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.coolappstore.everdialer.by.svhp.controller.util.AppLanguageManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.LocalCardCornerRadius
 import org.koin.compose.koinInject
@@ -322,6 +325,12 @@ fun Rivo4Theme(
 
     val context = LocalContext.current
 
+    val appLanguage = prefs.getAppLanguage()
+    val isRtl = remember(appLanguage, settingsState) {
+        AppLanguageManager.isRtl(context, appLanguage)
+    }
+    val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+
     val defaultPrimary = Color(0xFF6750A4)
 
     var colorScheme = when {
@@ -407,7 +416,9 @@ fun Rivo4Theme(
     }
 
     CompositionLocalProvider(
-        LocalCardCornerRadius provides cornerRadius.dp
+        LocalLayoutDirection provides layoutDirection,
+        LocalCardCornerRadius provides cornerRadius.dp,
+        com.coolappstore.everdialer.by.svhp.controller.util.LocalAppLanguage provides appLanguage
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

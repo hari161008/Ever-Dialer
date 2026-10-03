@@ -69,8 +69,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1286,6 +1288,7 @@ fun DialPadContent(
                 shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1400,6 +1403,7 @@ fun DialPadContent(
                             onClear = { replaceNumber("") }
                         )
                     }
+                }
                 }
             }
         }
@@ -1972,6 +1976,7 @@ fun DialPadContent(
                 }
 
 
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 // Dialpad keys
                 val keys = listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("*","0","#"))
                 val subKeys = mapOf("1" to "   ","2" to "ABC","3" to "DEF","4" to "GHI","5" to "JKL","6" to "MNO","7" to "PQRS","8" to "TUV","9" to "WXYZ","0" to "+")
@@ -2108,6 +2113,7 @@ fun DialPadContent(
                     }
 
                     Spacer(modifier = Modifier.width(sideBtnW))
+                }
                 }
             }
         }

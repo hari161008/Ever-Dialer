@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ever Dialer</string>
+    <string name="widget_description">त्वरित डायल के साथ हाल की कॉलें</string>
+    <string name="widget_direct_call_title">डायरेक्ट डायल</string>
+    <string name="widget_direct_call_description">एक टैप में संपर्क को कॉल करें</string>
+    <string name="widget_contact_info_title">संपर्क जानकारी</string>
+    <string name="widget_contact_info_description">संपर्क विवरण तक त्वरित पहुँच</string>
+    <string name="volume_dnd_accessibility_description">डू नॉट डिस्टर्ब (DND) मोड टॉगल करने के लिए वॉल्यूम बटन संयोजन का पता लगाने की अनुमति देता है।</string>
+</resources>

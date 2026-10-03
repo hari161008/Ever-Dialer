@@ -223,56 +223,58 @@ fun BottomBar(navController: NavController) {
         TabNavigationHelper.navigateToTab(navController, route)
     }
 
+    val appLang = com.coolappstore.everdialer.by.svhp.controller.util.LocalAppLanguage.current
     val orderedTabs: List<TabSpec> = remember(
         tabOrder, showFavoritesTab, showCallsTab, showContactsTab, showSmsTab, showGroupsTab, showRecordingsTab, showNotesTab, showDialpadTab,
-        isFavoritesSelected, isRecentsSelected, isContactsSelected, isSmsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected, isDialpadSelected
+        isFavoritesSelected, isRecentsSelected, isContactsSelected, isSmsSelected, isGroupsSelected, isRecordingsSelected, isNotesSelected, isDialpadSelected,
+        appLang
     ) {
         tabOrder.mapNotNull { key ->
             when (key) {
                 "favorites" -> if (showFavoritesTab) TabSpec(
-                    key = key, route = FavoritesScreenDestination.route, label = "Favourites",
+                    key = key, route = FavoritesScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Favourites", appLang),
                     selectedIcon = Icons.Filled.Favorite, unselectedIcon = Icons.Outlined.FavoriteBorder,
                     selected = isFavoritesSelected,
                     onClick = { doHaptic(); navigate(FavoritesScreenDestination.route) }
                 ) else null
                 "calls" -> if (showCallsTab) TabSpec(
-                    key = key, route = RecentScreenDestination.route, label = "Calls",
+                    key = key, route = RecentScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Calls", appLang),
                     selectedIcon = Icons.Filled.History, unselectedIcon = Icons.Outlined.History,
                     selected = isRecentsSelected,
                     onClick = { doHaptic(); navigate(RecentScreenDestination.route) }
                 ) else null
                 "contacts" -> if (showContactsTab) TabSpec(
-                    key = key, route = ContactScreenDestination.route, label = "Contacts",
+                    key = key, route = ContactScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Contacts", appLang),
                     selectedIcon = Icons.Filled.Person, unselectedIcon = Icons.Outlined.Person,
                     selected = isContactsSelected,
                     onClick = { doHaptic(); navigate(ContactScreenDestination.route) }
                 ) else null
                 "sms" -> if (showSmsTab) TabSpec(
-                    key = key, route = SmsScreenDestination.route, label = "SMS",
+                    key = key, route = SmsScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("SMS", appLang),
                     selectedIcon = Icons.Filled.Chat, unselectedIcon = Icons.Outlined.Chat,
                     selected = isSmsSelected,
                     onClick = { doHaptic(); navigate(SmsScreenDestination().route) }
                 ) else null
                 "groups" -> if (showGroupsTab) TabSpec(
-                    key = key, route = GroupsScreenDestination.route, label = "Groups",
+                    key = key, route = GroupsScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Groups", appLang),
                     selectedIcon = Icons.Filled.Group, unselectedIcon = Icons.Outlined.Group,
                     selected = isGroupsSelected,
                     onClick = { doHaptic(); navigate(GroupsScreenDestination.route) }
                 ) else null
                 "recordings" -> if (showRecordingsTab) TabSpec(
-                    key = key, route = RecordingsScreenDestination.route, label = "Recordings",
+                    key = key, route = RecordingsScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Recordings", appLang),
                     selectedIcon = Icons.Filled.FiberManualRecord, unselectedIcon = Icons.Outlined.FiberManualRecord,
                     selected = isRecordingsSelected,
                     onClick = { doHaptic(); navigate(RecordingsScreenDestination.route) }
                 ) else null
                 "notes" -> if (showNotesTab) TabSpec(
-                    key = key, route = NotesScreenDestination.route, label = "Notes",
+                    key = key, route = NotesScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Notes", appLang),
                     selectedIcon = Icons.Filled.Note, unselectedIcon = Icons.Outlined.Note,
                     selected = isNotesSelected,
                     onClick = { doHaptic(); navigate(NotesScreenDestination.route) }
                 ) else null
                 "dialpad" -> if (showDialpadTab) TabSpec(
-                    key = key, route = DialPadScreenDestination.route, label = "Dialpad",
+                    key = key, route = DialPadScreenDestination.route, label = com.coolappstore.everdialer.by.svhp.controller.util.AppStrings.get("Dialpad", appLang),
                     selectedIcon = Icons.Filled.Dialpad, unselectedIcon = Icons.Outlined.Dialpad,
                     selected = isDialpadSelected,
                     onClick = {
