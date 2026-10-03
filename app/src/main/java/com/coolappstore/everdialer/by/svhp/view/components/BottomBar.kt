@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -200,12 +201,12 @@ fun BottomBar(navController: NavController) {
     }
     val pillOffsetY by animateFloatAsState(
         targetValue   = if (pillVisible) 0f else 220f,
-        animationSpec = tween(durationMillis = 750, easing = EaseOutQuint),
+        animationSpec = tween(durationMillis = 600, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
         label         = "pillSlideIn"
     )
     val pillAlpha by animateFloatAsState(
         targetValue   = if (pillVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 550, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
         label         = "pillFadeIn"
     )
 
@@ -288,7 +289,7 @@ fun BottomBar(navController: NavController) {
     }
 
     if (pillNav) {
-        if (!isOnTabScreen && !pillVisible) return
+        if (!isOnTabScreen && pillAlpha <= 0.005f && pillOffsetY >= 210f) return
 
         Box(
             modifier = Modifier
@@ -380,10 +381,10 @@ fun BottomBar(navController: NavController) {
     } else {
         val navBarAlpha by animateFloatAsState(
             targetValue   = if (isOnTabScreen) 1f else 0f,
-            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            animationSpec = tween(durationMillis = 550, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
             label         = "navBarAlpha"
         )
-        if (!isOnTabScreen && navBarAlpha == 0f) return
+        if (!isOnTabScreen && navBarAlpha <= 0.005f) return
         NavigationBar(
             containerColor = if (isSmsSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,

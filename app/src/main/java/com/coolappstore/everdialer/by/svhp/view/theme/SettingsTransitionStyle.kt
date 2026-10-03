@@ -46,8 +46,19 @@ val SettingsSmoothEaseOut = LinearOutSlowInEasing
 const val SETTINGS_ANIM_DURATION_ENTER = 400
 const val SETTINGS_ANIM_DURATION_EXIT = 400
 
+const val CHAT_ANIM_DURATION_ENTER = 600
+const val CHAT_ANIM_DURATION_EXIT = 550
+val ChatSmoothEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+val ChatSmoothEaseOut = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+val ChatSmoothEaseIn = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+
 const val SETTINGS_SCALE_ENTER_FROM = 0.92f
 const val SETTINGS_SCALE_EXIT_TO = 0.96f
+
+fun isSmsChatRoute(route: String?): Boolean {
+    if (route == null) return false
+    return route.contains("sms_chat", ignoreCase = true)
+}
 
 /**
  * Windows Phone Metro-style turnstile page transition specifications,
@@ -116,13 +127,15 @@ val settingsRoutes = setOf(
     "about_app_screen",
     "contributors_screen",
     "more_apps_web_view_screen",
-    "ratings_web_view_screen"
+    "ratings_web_view_screen",
+    "sms_chat_screen",
+    "new_message_screen"
 )
 
 fun isSettingsRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
-    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true)
+    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true)
 }
 
 /**
@@ -134,44 +147,64 @@ fun isSettingsRoute(route: String?): Boolean {
 object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        val isChat = isSmsChatRoute(targetState.destination.route)
+        val duration = if (isChat) CHAT_ANIM_DURATION_ENTER else SETTINGS_ANIM_DURATION_ENTER
+        val easing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val easingOut = if (isChat) ChatSmoothEaseOut else SettingsSmoothEaseOut
+
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
             fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
         } else {
             scaleIn(
-                animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                animationSpec = tween(duration, easing = easing),
                 initialScale = SETTINGS_SCALE_ENTER_FROM,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
+            ) + fadeIn(tween(duration, easing = easingOut))
         }
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        val isChat = isSmsChatRoute(initialState.destination.route)
+        val duration = if (isChat) CHAT_ANIM_DURATION_EXIT else SETTINGS_ANIM_DURATION_EXIT
+        val easing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val easingIn = if (isChat) ChatSmoothEaseIn else SettingsSmoothEaseIn
+
         if (isWindowsPhoneAnimation()) {
             fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
         } else {
             scaleOut(
-                animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                animationSpec = tween(duration, easing = easing),
                 targetScale = SETTINGS_SCALE_EXIT_TO,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
+            ) + fadeOut(tween(duration, easing = easingIn))
         }
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        val isChat = isSmsChatRoute(targetState.destination.route)
+        val duration = if (isChat) CHAT_ANIM_DURATION_ENTER else SETTINGS_ANIM_DURATION_ENTER
+        val easing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val easingOut = if (isChat) ChatSmoothEaseOut else SettingsSmoothEaseOut
+
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
             fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
         } else {
             scaleIn(
-                animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                animationSpec = tween(duration, easing = easing),
                 initialScale = SETTINGS_SCALE_EXIT_TO,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
+            ) + fadeIn(tween(duration, easing = easingOut))
         }
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        val isChat = isSmsChatRoute(initialState.destination.route)
+        val duration = if (isChat) CHAT_ANIM_DURATION_EXIT else SETTINGS_ANIM_DURATION_EXIT
+        val easing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val easingIn = if (isChat) ChatSmoothEaseIn else SettingsSmoothEaseIn
+
         if (isWindowsPhoneAnimation()) {
             slideOutHorizontally(
                 animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
@@ -179,10 +212,10 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
             ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
         } else {
             scaleOut(
-                animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                animationSpec = tween(duration, easing = easing),
                 targetScale = SETTINGS_SCALE_ENTER_FROM,
                 transformOrigin = TransformOrigin.Center
-            ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
+            ) + fadeOut(tween(duration, easing = easingIn))
         }
     }
 }

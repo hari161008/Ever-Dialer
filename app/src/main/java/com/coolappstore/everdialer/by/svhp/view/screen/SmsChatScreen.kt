@@ -36,8 +36,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.TextUnit
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -59,6 +66,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
@@ -101,6 +109,20 @@ fun SmsChatScreen(
     var effectiveThreadId by remember(threadId) { mutableStateOf(threadId) }
     val messages by smsVM.currentThreadMessages.collectAsState()
     val listState = rememberLazyListState()
+
+    val chatListItems = remember(messages) {
+        val items = mutableListOf<ChatListItem>()
+        var currentDayKey = -1L
+        for (message in messages) {
+            val dayKey = getDayKey(message.date)
+            if (dayKey != currentDayKey) {
+                currentDayKey = dayKey
+                items.add(ChatListItem.DateHeader(dayKey, formatChatDateHeader(message.date)))
+            }
+            items.add(ChatListItem.Message(message))
+        }
+        items
+    }
 
     val settingsVer by prefs.settingsChanged.collectAsState()
     val chatFontSize = remember(settingsVer) {
@@ -244,21 +266,6 @@ fun SmsChatScreen(
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
-    }
-
-    val isImeVisible = WindowInsets.isImeVisible
-    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
-    LaunchedEffect(isImeVisible, imeBottom) {
-        if (isImeVisible && messages.isNotEmpty()) {
-            delay(60)
-            listState.animateScrollToItem(messages.size - 1)
-        }
-    }
-
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
 
     // Scheduled SMS state
@@ -367,6 +374,9 @@ fun SmsChatScreen(
                 Toast.makeText(context, "Failed to send message", Toast.LENGTH_SHORT).show()
             }
         }
+        coroutineScope.launch {
+            listState.animateScrollToItem(0)
+        }
     }
 
     fun initiateSend() {
@@ -405,6 +415,7 @@ fun SmsChatScreen(
     }
 
     Scaffold(
+        modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (isSelectionMode) {
@@ -648,40 +659,57 @@ fun SmsChatScreen(
                 } else {
                     LazyColumn(
                         state = listState,
+                        reverseLayout = true,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        items(messages, key = { if (it.isMms) "mms_${it.id}" else "sms_${it.id}" }) { message ->
-                            ChatBubble(
-                                message = message,
-                                timeStr = timeFormat.format(Date(message.date)),
-                                fontSize = chatFontSize.sp,
-                                isSelected = selectedMessageIds.contains(message.id),
-                                isSelectionMode = isSelectionMode,
-                                onBubbleClick = {
-                                    if (isSelectionMode) {
-                                        if (selectedMessageIds.contains(message.id)) {
-                                            selectedMessageIds.remove(message.id)
-                                        } else {
-                                            selectedMessageIds.add(message.id)
-                                        }
-                                    }
-                                },
-                                onSelectClick = {
-                                    if (!selectedMessageIds.contains(message.id)) {
-                                        selectedMessageIds.add(message.id)
-                                    }
-                                },
-                                onCopyClick = {
-                                    messageToSelect = message
-                                },
-                                onDeleteClick = {
-                                    messageToDelete = message
+                        items(
+                            items = chatListItems.asReversed(),
+                            key = { item ->
+                                when (item) {
+                                    is ChatListItem.DateHeader -> "date_${item.dayKey}"
+                                    is ChatListItem.Message -> if (item.message.isMms) "mms_${item.message.id}" else "sms_${item.message.id}"
                                 }
-                            )
+                            }
+                        ) { item ->
+                            when (item) {
+                                is ChatListItem.DateHeader -> {
+                                    ChatDateHeader(text = item.title)
+                                }
+                                is ChatListItem.Message -> {
+                                    val message = item.message
+                                    ChatBubble(
+                                        message = message,
+                                        timeStr = timeFormat.format(Date(message.date)),
+                                        fontSize = chatFontSize.sp,
+                                        isSelected = selectedMessageIds.contains(message.id),
+                                        isSelectionMode = isSelectionMode,
+                                        onBubbleClick = {
+                                            if (isSelectionMode) {
+                                                if (selectedMessageIds.contains(message.id)) {
+                                                    selectedMessageIds.remove(message.id)
+                                                } else {
+                                                    selectedMessageIds.add(message.id)
+                                                }
+                                            }
+                                        },
+                                        onSelectClick = {
+                                            if (!selectedMessageIds.contains(message.id)) {
+                                                selectedMessageIds.add(message.id)
+                                            }
+                                        },
+                                        onCopyClick = {
+                                            messageToSelect = message
+                                        },
+                                        onDeleteClick = {
+                                            messageToDelete = message
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1063,6 +1091,99 @@ fun SmsChatScreen(
     }
 }
 
+private sealed interface ChatListItem {
+    data class DateHeader(val dayKey: Long, val title: String) : ChatListItem
+    data class Message(val message: SmsMessage) : ChatListItem
+}
+
+private fun getDayKey(timestamp: Long): Long {
+    var time = timestamp
+    if (time in 1..999999999999L) {
+        time *= 1000L
+    }
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = time
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
+}
+
+private fun formatChatDateHeader(timestamp: Long): String {
+    var time = timestamp
+    if (time in 1..999999999999L) {
+        time *= 1000L
+    }
+    val cal = Calendar.getInstance()
+    val todayYear = cal.get(Calendar.YEAR)
+    val todayDay = cal.get(Calendar.DAY_OF_YEAR)
+
+    cal.timeInMillis = time
+    val msgYear = cal.get(Calendar.YEAR)
+    val msgDay = cal.get(Calendar.DAY_OF_YEAR)
+
+    return when {
+        todayYear == msgYear && todayDay == msgDay -> "Today"
+        todayYear == msgYear && todayDay - msgDay == 1 -> "Yesterday"
+        todayYear - msgYear == 1 && todayDay == 1 && msgDay >= 365 -> "Yesterday"
+        else -> SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(time))
+    }
+}
+
+@Composable
+private fun ChatDateHeader(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+            tonalElevation = 1.dp
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+private fun buildClickableMessageText(text: String, linkColor: Color): AnnotatedString {
+    val urlPattern = android.util.Patterns.WEB_URL
+    return buildAnnotatedString {
+        var lastIdx = 0
+        val matcher = urlPattern.matcher(text)
+        while (matcher.find()) {
+            val start = matcher.start()
+            val end = matcher.end()
+            append(text.substring(lastIdx, start))
+            val rawUrl = matcher.group() ?: ""
+            val fullUrl = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) rawUrl else "https://$rawUrl"
+            val link = LinkAnnotation.Url(
+                url = fullUrl,
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = linkColor,
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+            )
+            withLink(link) {
+                append(rawUrl)
+            }
+            lastIdx = end
+        }
+        append(text.substring(lastIdx))
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
@@ -1091,6 +1212,20 @@ private fun ChatBubble(
             .then(
                 if (isSelected) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                 else Modifier
+            )
+            .combinedClickable(
+                onClick = {
+                    if (isSelectionMode) {
+                        onBubbleClick()
+                    }
+                },
+                onLongClick = {
+                    if (!isSelectionMode) {
+                        showMessageMenu = true
+                    } else {
+                        onBubbleClick()
+                    }
+                }
             ),
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
@@ -1147,8 +1282,12 @@ private fun ChatBubble(
                 }
 
                 if (message.body.isNotBlank()) {
+                    val linkColor = MaterialTheme.colorScheme.primary
+                    val annotatedBody = remember(message.body, linkColor) {
+                        buildClickableMessageText(message.body, linkColor)
+                    }
                     Text(
-                        text = message.body,
+                        text = annotatedBody,
                         style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize),
                         color = textColor
                     )

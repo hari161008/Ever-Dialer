@@ -72,6 +72,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toIdx   = routeOrder(targetState.destination.route)
         val toSettings   = isSettingsRoute(targetState.destination.route)
         val fromSettings = isSettingsRoute(initialState.destination.route)
+        val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
+        val enterDuration = if (isChat) CHAT_ANIM_DURATION_ENTER else SETTINGS_ANIM_DURATION_ENTER
+        val enterEasing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val enterEasingOut = if (isChat) ChatSmoothEaseOut else SettingsSmoothEaseOut
 
         when {
             toSettings -> {
@@ -80,10 +84,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                     fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
-                        animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                        animationSpec = tween(enterDuration, easing = enterEasing),
                         initialScale = SETTINGS_SCALE_ENTER_FROM,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(enterDuration, easing = enterEasingOut))
                 }
             }
             fromSettings -> {
@@ -92,10 +96,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                     fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
-                        animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                        animationSpec = tween(enterDuration, easing = enterEasing),
                         initialScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(enterDuration, easing = enterEasingOut))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -122,6 +126,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toIdx   = routeOrder(targetState.destination.route)
         val fromSettings = isSettingsRoute(initialState.destination.route)
         val toSettings   = isSettingsRoute(targetState.destination.route)
+        val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
+        val exitDuration = if (isChat) CHAT_ANIM_DURATION_EXIT else SETTINGS_ANIM_DURATION_EXIT
+        val exitEasing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val exitEasingIn = if (isChat) ChatSmoothEaseIn else SettingsSmoothEaseIn
 
         when {
             fromSettings || toSettings -> {
@@ -129,10 +137,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                     fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
                 } else {
                     scaleOut(
-                        animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                        animationSpec = tween(exitDuration, easing = exitEasing),
                         targetScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
+                    ) + fadeOut(tween(exitDuration, easing = exitEasingIn))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -165,6 +173,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toIdx   = routeOrder(targetState.destination.route)
         val fromSettings = isSettingsRoute(initialState.destination.route)
         val toSettings   = isSettingsRoute(targetState.destination.route)
+        val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
+        val enterDuration = if (isChat) CHAT_ANIM_DURATION_ENTER else SETTINGS_ANIM_DURATION_ENTER
+        val enterEasing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val enterEasingOut = if (isChat) ChatSmoothEaseOut else SettingsSmoothEaseOut
 
         when {
             fromSettings || toSettings -> {
@@ -173,10 +185,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                     fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
-                        animationSpec = tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+                        animationSpec = tween(enterDuration, easing = enterEasing),
                         initialScale = SETTINGS_SCALE_EXIT_TO,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeIn(tween(SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEaseOut))
+                    ) + fadeIn(tween(enterDuration, easing = enterEasingOut))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {
@@ -203,6 +215,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toIdx   = routeOrder(targetState.destination.route)
         val fromSettings = isSettingsRoute(initialState.destination.route)
         val toSettings   = isSettingsRoute(targetState.destination.route)
+        val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
+        val exitDuration = if (isChat) CHAT_ANIM_DURATION_EXIT else SETTINGS_ANIM_DURATION_EXIT
+        val exitEasing = if (isChat) ChatSmoothEase else SettingsSmoothEase
+        val exitEasingIn = if (isChat) ChatSmoothEaseIn else SettingsSmoothEaseIn
 
         when {
             fromSettings || toSettings -> {
@@ -213,10 +229,10 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
                     ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
                 } else {
                     scaleOut(
-                        animationSpec = tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEase),
+                        animationSpec = tween(exitDuration, easing = exitEasing),
                         targetScale = SETTINGS_SCALE_ENTER_FROM,
                         transformOrigin = TransformOrigin.Center
-                    ) + fadeOut(tween(SETTINGS_ANIM_DURATION_EXIT, easing = SettingsSmoothEaseIn))
+                    ) + fadeOut(tween(exitDuration, easing = exitEasingIn))
                 }
             }
             fromTab && toTab && !isLandscapeMode -> {

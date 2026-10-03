@@ -667,6 +667,9 @@ fun SmsScreen(
                                     if (isSelected) selectedThreadIds.remove(conv.threadId)
                                     else selectedThreadIds.add(conv.threadId)
                                 } else {
+                                    if (conv.threadId > 0) {
+                                        smsVM.loadThreadMessages(conv.threadId)
+                                    }
                                     navigator.navigate(
                                         SmsChatScreenDestination(
                                             threadId = conv.threadId,
