@@ -1152,6 +1152,10 @@
             android:name=".controller.util.MissedCallDismissReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".controller.sms.SmsActionReceiver"
+            android:exported="false" />
+
         <!-- Default SMS App components -->
         <receiver
             android:name=".controller.sms.SmsReceiver"

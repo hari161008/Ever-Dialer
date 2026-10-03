@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsConversation
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ISmsRepository
+import com.coolappstore.everdialer.by.svhp.controller.sms.SmsEventBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -81,6 +82,20 @@ class SmsViewModel(
     init {
         registerObservers()
         refreshConversations()
+        viewModelScope.launch(Dispatchers.IO) {
+            SmsEventBus.newSmsEvent.collect { eventThreadId ->
+                activeThreadId?.let { tid ->
+                    if (eventThreadId == null || eventThreadId == tid) {
+                        val msgs = smsRepository.getMessagesForThread(tid)
+                        if (_currentThreadMessages.value != msgs) {
+                            _currentThreadMessages.value = msgs
+                        }
+                        smsRepository.markThreadAsRead(tid)
+                    }
+                }
+                fetchConversations()
+            }
+        }
     }
 
     private fun registerObservers() {

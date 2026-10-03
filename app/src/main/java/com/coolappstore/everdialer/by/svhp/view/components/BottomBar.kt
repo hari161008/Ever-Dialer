@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -15,12 +17,21 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.EaseOutQuint
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -69,6 +80,7 @@ import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestinat
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.outlined.Chat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
@@ -210,6 +222,8 @@ fun BottomBar(navController: NavController) {
         label         = "pillFadeIn"
     )
 
+    var showTabSectionsDialog by remember { mutableStateOf(false) }
+
     fun doHaptic() {
         if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
             performAppHaptic(
@@ -300,40 +314,89 @@ fun BottomBar(navController: NavController) {
                 .graphicsLayer { alpha = pillAlpha },
             contentAlignment = Alignment.Center
         ) {
-            Box(
+            val globalBackdrop = LocalLiquidGlassBackdrop.current
+            val pillShape = RoundedCornerShape(32.dp)
+
+            val useLgBottomNav = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
+            val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav
+
+            val screenWidth = configuration.screenWidthDp.dp
+            val horizontalGap = 24.dp
+            val maxPillWidth = (screenWidth - (horizontalGap * 2)).coerceAtLeast(100.dp)
+
+            val scrollState = rememberScrollState()
+
+            // Pre-calculate likely scrollable state to eliminate 1-frame startup flicker
+            val estimatedTabWidth = if (iconOnly) 56.dp else 72.dp
+            val estimatedTotalWidth = (orderedTabs.size * estimatedTabWidth.value).dp + 24.dp + ((orderedTabs.size - 1).coerceAtLeast(0) * 4).dp
+            val likelyCanScroll = estimatedTotalWidth > maxPillWidth
+
+            var scrollStateMeasured by remember { mutableStateOf(false) }
+            LaunchedEffect(scrollState.maxValue) {
+                if (scrollState.maxValue > 0) {
+                    scrollStateMeasured = true
+                }
+            }
+            val canScroll = if (scrollStateMeasured) scrollState.maxValue > 0 else (likelyCanScroll || scrollState.maxValue > 0)
+
+            val indicatorProgress by animateFloatAsState(
+                targetValue   = if (canScroll) 1f else 0f,
+                animationSpec = tween(durationMillis = 350, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+                label         = "pillIndicatorProgress"
+            )
+
+            // When indicator shows: pill smoothly moves slightly UP by 10.dp (18.dp -> 28.dp above nav bar)
+            // When indicator hides: pill smoothly settles slightly DOWN by 10.dp (back to 18.dp above nav bar)
+            val currentBottomPadding = 18.dp - (8.dp * indicatorProgress)
+            val indicatorSlotHeight = 18.dp * indicatorProgress
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(bottom = 28.dp),
-                contentAlignment = Alignment.Center
+                    .padding(horizontal = horizontalGap)
+                    .padding(bottom = currentBottomPadding),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val globalBackdrop = LocalLiquidGlassBackdrop.current
-                val pillShape = RoundedCornerShape(32.dp)
-
-                val useLgBottomNav = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-                val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav
-
                 val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
+                            .horizontalScroll(scrollState)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
                         orderedTabs.forEach { tab ->
                             key(tab.key) {
+                                val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                                LaunchedEffect(tab.selected) {
+                                    if (tab.selected) {
+                                        try {
+                                            bringIntoViewRequester.bringIntoView()
+                                        } catch (_: Throwable) {}
+                                    }
+                                }
                                 PillNavItem(
+                                    modifier       = Modifier.bringIntoViewRequester(bringIntoViewRequester),
                                     selected       = tab.selected,
                                     selectedIcon   = tab.selectedIcon,
                                     unselectedIcon = tab.unselectedIcon,
                                     label          = tab.label,
                                     iconOnly       = iconOnly,
-                                    onClick        = tab.onClick
+                                    onClick        = tab.onClick,
+                                    onLongClick    = {
+                                        doHaptic()
+                                        showTabSectionsDialog = true
+                                    }
                                 )
                             }
                         }
                     }
                 }
+
+                val mainPillModifier = Modifier
+                    .widthIn(max = maxPillWidth)
+                    .clip(pillShape)
 
                 if (useLgBottomNav && globalBackdrop != null) {
                     Surface(
@@ -341,10 +404,10 @@ fun BottomBar(navController: NavController) {
                         color           = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
                         shadowElevation = 0.dp,
                         tonalElevation  = 0.dp,
-                        modifier = Modifier.drawBackdrop(
+                        modifier        = mainPillModifier.drawBackdrop(
                             backdrop = globalBackdrop,
-                            shape = { pillShape },
-                            effects = {
+                            shape    = { pillShape },
+                            effects  = {
                                 val d = density
                                 colorControls(saturation = 1.4f)
                                 blur(2f * d)
@@ -362,7 +425,7 @@ fun BottomBar(navController: NavController) {
                         color           = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
                         shadowElevation = 0.dp,
                         tonalElevation  = 0.dp,
-                        modifier        = Modifier.drawPlainBackdrop(
+                        modifier        = mainPillModifier.drawPlainBackdrop(
                             backdrop = globalBackdrop,
                             shape    = { pillShape },
                             effects  = { blur(30f * density) }
@@ -374,7 +437,27 @@ fun BottomBar(navController: NavController) {
                         color           = MaterialTheme.colorScheme.surfaceContainerHigh,
                         shadowElevation = 8.dp,
                         tonalElevation  = 4.dp,
+                        modifier        = mainPillModifier
                     ) { pillContent() }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .height(indicatorSlotHeight)
+                        .graphicsLayer {
+                            alpha = indicatorProgress.coerceIn(0f, 1f)
+                            scaleX = 0.85f + (0.15f * indicatorProgress)
+                            scaleY = 0.85f + (0.15f * indicatorProgress)
+                        },
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    if (indicatorProgress > 0.01f) {
+                        ScrollIndicatorPill(
+                            scrollState = scrollState,
+                            useLg       = useLgBottomNav,
+                            useBlur     = useBlurBottomNav
+                        )
+                    }
                 }
             }
         }
@@ -385,43 +468,120 @@ fun BottomBar(navController: NavController) {
             label         = "navBarAlpha"
         )
         if (!isOnTabScreen && navBarAlpha <= 0.005f) return
-        NavigationBar(
-            containerColor = if (isSmsSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 0.dp,
-            windowInsets = WindowInsets.navigationBars,
-            modifier = Modifier
+
+        val standardScrollState = rememberScrollState()
+        val screenWidth = configuration.screenWidthDp.dp
+        val minItemWidth = if (iconOnly) 64.dp else 80.dp
+        val naturalItemWidth = screenWidth / orderedTabs.size.coerceAtLeast(1)
+        val likelyCanStandardScroll = (orderedTabs.size * minItemWidth.value).dp > screenWidth
+        var standardScrollMeasured by remember { mutableStateOf(false) }
+        LaunchedEffect(standardScrollState.maxValue) {
+            if (standardScrollState.maxValue > 0) {
+                standardScrollMeasured = true
+            }
+        }
+        val canStandardScroll = if (standardScrollMeasured) standardScrollState.maxValue > 0 else (likelyCanStandardScroll || standardScrollState.maxValue > 0)
+        val itemWidth = if (canStandardScroll) minItemWidth else naturalItemWidth.coerceAtLeast(minItemWidth)
+
+        val standardIndicatorProgress by animateFloatAsState(
+            targetValue   = if (canStandardScroll) 1f else 0f,
+            animationSpec = tween(durationMillis = 320, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+            label         = "standardIndicatorProgress"
+        )
+
+        Surface(
+            color          = if (isSmsSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 2.dp,
+            modifier       = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .graphicsLayer { alpha = navBarAlpha }
         ) {
-            orderedTabs.forEach { tab ->
-                key(tab.key) {
-                    AnimatedNavBarItem(
-                        selected       = tab.selected,
-                        selectedIcon   = tab.selectedIcon,
-                        unselectedIcon = tab.unselectedIcon,
-                        label          = tab.label,
-                        iconOnly       = iconOnly,
-                        labelStyle     = labelStyle,
-                        onClick        = tab.onClick
-                    )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(standardScrollState)
+                        .padding(horizontal = if (canStandardScroll) 12.dp else 0.dp),
+                    horizontalArrangement = if (canStandardScroll) Arrangement.spacedBy(4.dp) else Arrangement.Center,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    orderedTabs.forEach { tab ->
+                        key(tab.key) {
+                            val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                            LaunchedEffect(tab.selected) {
+                                if (tab.selected) {
+                                    try {
+                                        bringIntoViewRequester.bringIntoView()
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                            AnimatedNavBarItem(
+                                selected       = tab.selected,
+                                selectedIcon   = tab.selectedIcon,
+                                unselectedIcon = tab.unselectedIcon,
+                                label          = tab.label,
+                                iconOnly       = iconOnly,
+                                labelStyle     = labelStyle,
+                                modifier       = Modifier
+                                    .bringIntoViewRequester(bringIntoViewRequester)
+                                    .width(itemWidth),
+                                onClick        = tab.onClick,
+                                onLongClick    = {
+                                    doHaptic()
+                                    showTabSectionsDialog = true
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(16.dp * standardIndicatorProgress)
+                        .graphicsLayer {
+                            alpha = standardIndicatorProgress.coerceIn(0f, 1f)
+                        },
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    if (standardIndicatorProgress > 0.01f) {
+                        ScrollIndicatorPill(
+                            scrollState = standardScrollState,
+                            useLg       = false,
+                            useBlur     = false
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showTabSectionsDialog) {
+        TabSectionsDialog(onDismissRequest = { showTabSectionsDialog = false })
     }
 }
 
 // ── Animated standard nav bar item ────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RowScope.AnimatedNavBarItem(
+private fun AnimatedNavBarItem(
     selected: Boolean,
     selectedIcon: ImageVector,
     unselectedIcon: ImageVector,
     label: String,
     iconOnly: Boolean,
     labelStyle: TextStyle,
-    onClick: () -> Unit
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -462,44 +622,56 @@ private fun RowScope.AnimatedNavBarItem(
     val activeNavBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
     val activeNavFg = if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
-    CompositionLocalProvider(LocalRippleConfiguration provides null) {
-        NavigationBarItem(
-            icon = {
-                Box(
-                    modifier = Modifier
-                        .scale(scale)
-                        .clip(RoundedCornerShape(50.dp))
-                        .background(activeNavBg.copy(alpha = indicatorAlpha))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Crossfade(
-                        targetState   = selected,
-                        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
-                        label         = "${label}IconCrossfade"
-                    ) { sel ->
-                        Icon(
-                            imageVector        = if (sel) selectedIcon else unselectedIcon,
-                            contentDescription = label,
-                            modifier           = Modifier.size(iconSize)
-                        )
-                    }
-                }
-            },
-            label           = if (iconOnly) null else ({ Text(label, style = labelStyle) }),
-            alwaysShowLabel = !iconOnly,
-            selected        = selected,
-            interactionSource = interactionSource,
-            colors          = NavigationBarItemDefaults.colors(
-                selectedIconColor = activeNavFg,
-                indicatorColor    = Color.Transparent
-            ),
-            onClick = onClick
-        )
+    Column(
+        modifier = modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50.dp))
+                .background(activeNavBg.copy(alpha = indicatorAlpha))
+                .padding(horizontal = 16.dp, vertical = 5.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Crossfade(
+                targetState   = selected,
+                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                label         = "${label}IconCrossfade"
+            ) { sel ->
+                Icon(
+                    imageVector        = if (sel) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    modifier           = Modifier.size(iconSize),
+                    tint               = if (sel) activeNavFg else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (!iconOnly) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text     = label,
+                style    = labelStyle,
+                color    = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
 // ── Pill nav item ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PillNavItem(
     selected: Boolean,
@@ -508,7 +680,8 @@ private fun PillNavItem(
     label: String,
     iconOnly: Boolean,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
@@ -554,7 +727,7 @@ private fun PillNavItem(
             .scale(scale)
             .clip(RoundedCornerShape(50.dp))
             .background(activeNavBg.copy(alpha = bgAlpha))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -613,6 +786,101 @@ private fun PillNavItem(
                         softWrap = false
                     )
                 }
+            }
+        }
+    }
+}
+
+// ── Floating pill with horizontal line indicator ───────────────────────────────
+
+@Composable
+private fun ScrollIndicatorPill(
+    scrollState: ScrollState,
+    useLg: Boolean,
+    useBlur: Boolean
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    // Bright primary color in dark mode, dark primary color in light mode for high visibility
+    val indicatorColor = remember(primaryColor, isDark) {
+        val argb = primaryColor.toArgb()
+        val hsl = FloatArray(3)
+        androidx.core.graphics.ColorUtils.colorToHSL(argb, hsl)
+        if (isDark) {
+            hsl[2] = hsl[2].coerceAtLeast(0.72f)
+        } else {
+            hsl[2] = hsl[2].coerceAtMost(0.38f)
+        }
+        Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
+    }
+
+    val trackColor = if (isDark) {
+        Color.White.copy(alpha = 0.18f)
+    } else {
+        Color.Black.copy(alpha = 0.12f)
+    }
+
+    val indicatorPillShape = RoundedCornerShape(percent = 50)
+    val trackWidth = 44.dp
+    val trackHeight = 3.5.dp
+
+    val viewport = scrollState.viewportSize.toFloat()
+    val total = (scrollState.maxValue + scrollState.viewportSize).toFloat()
+    val visibleRatio = if (total > 0f) (viewport / total).coerceIn(0.2f, 0.8f) else 0.5f
+    val thumbWidth = trackWidth * visibleRatio
+    val maxTravel = trackWidth - thumbWidth
+    val scrollFraction = if (scrollState.maxValue > 0) {
+        (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val thumbOffset = maxTravel * scrollFraction
+    val animatedOffset by animateDpAsState(
+        targetValue   = thumbOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label         = "indicatorThumbOffset"
+    )
+
+    Surface(
+        shape           = indicatorPillShape,
+        color           = if (useLg) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f)
+                          else if (useBlur) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f)
+                          else MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = if (useLg || useBlur) 0.dp else 4.dp,
+        tonalElevation  = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            // Track in pill style
+            Box(
+                modifier = Modifier
+                    .width(trackWidth)
+                    .height(trackHeight)
+                    .clip(indicatorPillShape)
+                    .background(trackColor)
+                    .pointerInput(scrollState.maxValue) {
+                        detectTapGestures { tapOffset ->
+                            if (scrollState.maxValue > 0) {
+                                val targetFraction = (tapOffset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo((targetFraction * scrollState.maxValue).toInt())
+                                }
+                            }
+                        }
+                    }
+            ) {
+                // Horizontal line indicator in pill style
+                Box(
+                    modifier = Modifier
+                        .offset(x = animatedOffset)
+                        .width(thumbWidth)
+                        .fillMaxHeight()
+                        .clip(indicatorPillShape)
+                        .background(indicatorColor)
+                )
             }
         }
     }

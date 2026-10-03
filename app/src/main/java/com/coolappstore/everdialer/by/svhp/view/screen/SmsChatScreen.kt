@@ -10,6 +10,7 @@ import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.SmsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.sms.SmsEventBus
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
@@ -124,6 +127,33 @@ fun SmsChatScreen(
         items
     }
 
+    val latestMessageId = remember(messages) { messages.lastOrNull()?.id }
+    var isInitialLoad by remember { mutableStateOf(true) }
+    var previousLatestMessageId by remember { mutableStateOf<Long?>(null) }
+    var userJustSentMessage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(400)
+        isInitialLoad = false
+    }
+
+    LaunchedEffect(latestMessageId, chatListItems.size) {
+        if (latestMessageId != null) {
+            if (isInitialLoad && previousLatestMessageId == null) {
+                previousLatestMessageId = latestMessageId
+                listState.scrollToItem(0)
+            } else if (latestMessageId != previousLatestMessageId) {
+                val wasUserSend = userJustSentMessage
+                previousLatestMessageId = latestMessageId
+                userJustSentMessage = false
+                if (wasUserSend || listState.firstVisibleItemIndex <= 3) {
+                    delay(60)
+                    listState.animateScrollToItem(0)
+                }
+            }
+        }
+    }
+
     val settingsVer by prefs.settingsChanged.collectAsState()
     val chatFontSize = remember(settingsVer) {
         prefs.getFloat(PreferenceManager.KEY_SMS_CHAT_TEXT_SIZE, PreferenceManager.DEFAULT_SMS_CHAT_TEXT_SIZE)
@@ -146,6 +176,10 @@ fun SmsChatScreen(
     val autoColor = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, true)
     }
+
+    val sendButtonScale = remember { Animatable(1f) }
+    val sendIconOffset = remember { Animatable(0f) }
+    val sendIconRotation = remember { Animatable(0f) }
 
     var messageText by remember(initialText) { mutableStateOf(initialText ?: "") }
     var showMenu by remember { mutableStateOf(false) }
@@ -252,16 +286,32 @@ fun SmsChatScreen(
     }
 
     LaunchedEffect(effectiveThreadId, address) {
-        if (effectiveThreadId <= 0 && address.isNotBlank()) {
-            val resolved = smsVM.getOrCreateThreadId(address)
-            if (resolved > 0) {
-                effectiveThreadId = resolved
+        while (isActive) {
+            if (effectiveThreadId <= 0 && address.isNotBlank()) {
+                val resolved = smsVM.getOrCreateThreadId(address)
+                if (resolved > 0) {
+                    effectiveThreadId = resolved
+                }
             }
-        }
-        if (effectiveThreadId > 0) {
-            while (isActive) {
+            if (effectiveThreadId > 0) {
                 smsVM.loadThreadMessages(effectiveThreadId)
-                delay(1500)
+            }
+            delay(1500)
+        }
+    }
+
+    LaunchedEffect(address) {
+        SmsEventBus.newSmsEvent.collect { eventThreadId ->
+            if (effectiveThreadId <= 0 && address.isNotBlank()) {
+                val resolved = smsVM.getOrCreateThreadId(address)
+                if (resolved > 0) {
+                    effectiveThreadId = resolved
+                    smsVM.loadThreadMessages(resolved)
+                }
+            } else if (effectiveThreadId > 0) {
+                if (eventThreadId == null || eventThreadId == effectiveThreadId) {
+                    smsVM.loadThreadMessages(effectiveThreadId)
+                }
             }
         }
     }
@@ -369,12 +419,14 @@ fun SmsChatScreen(
             }
         }
 
+        userJustSentMessage = true
         smsVM.sendMessage(address, finalBody, selectedSubId) { success ->
             if (!success) {
                 Toast.makeText(context, "Failed to send message", Toast.LENGTH_SHORT).show()
             }
         }
         coroutineScope.launch {
+            delay(50)
             listState.animateScrollToItem(0)
         }
     }
@@ -383,6 +435,44 @@ fun SmsChatScreen(
         if (messageText.isBlank()) return
         val textToProcess = messageText.trim()
         messageText = ""
+
+        // Smooth and slow tactile animation when send button is clicked
+        coroutineScope.launch {
+            launch {
+                sendButtonScale.animateTo(
+                    targetValue = 0.72f,
+                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+                )
+                sendButtonScale.animateTo(
+                    targetValue = 1.1f,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                )
+                sendButtonScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+                )
+            }
+            launch {
+                sendIconOffset.animateTo(
+                    targetValue = -12f,
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                )
+                sendIconOffset.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 340, easing = LinearOutSlowInEasing)
+                )
+            }
+            launch {
+                sendIconRotation.animateTo(
+                    targetValue = -35f,
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                )
+                sendIconRotation.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 340, easing = LinearOutSlowInEasing)
+                )
+            }
+        }
 
         if (sendDelaySeconds > 0) {
             pendingMessagePayload = textToProcess
@@ -418,7 +508,15 @@ fun SmsChatScreen(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (isSelectionMode) {
+            AnimatedContent(
+                targetState = isSelectionMode,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(260)) + slideInVertically(animationSpec = tween(260)) { -it / 3 }) togetherWith
+                    (fadeOut(animationSpec = tween(220)) + slideOutVertically(animationSpec = tween(220)) { -it / 3 })
+                },
+                label = "ChatTopBarAnim"
+            ) { selectionMode ->
+                if (selectionMode) {
                 TopAppBar(
                     title = {
                         Text(
@@ -630,7 +728,8 @@ fun SmsChatScreen(
                     )
                 )
             }
-        },
+        }
+    },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
@@ -675,13 +774,22 @@ fun SmsChatScreen(
                                 }
                             }
                         ) { item ->
+                            val itemAnimModifier = Modifier.animateItem(
+                                fadeInSpec = tween(350, easing = FastOutSlowInEasing),
+                                placementSpec = tween(500, easing = FastOutSlowInEasing),
+                                fadeOutSpec = tween(500, easing = FastOutLinearInEasing)
+                            )
                             when (item) {
                                 is ChatListItem.DateHeader -> {
-                                    ChatDateHeader(text = item.title)
+                                    ChatDateHeader(
+                                        text = item.title,
+                                        modifier = itemAnimModifier
+                                    )
                                 }
                                 is ChatListItem.Message -> {
                                     val message = item.message
                                     ChatBubble(
+                                        modifier = itemAnimModifier,
                                         message = message,
                                         timeStr = timeFormat.format(Date(message.date)),
                                         fontSize = chatFontSize.sp,
@@ -928,6 +1036,10 @@ fun SmsChatScreen(
                                 color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier
                                     .size(42.dp)
+                                    .graphicsLayer {
+                                        scaleX = sendButtonScale.value
+                                        scaleY = sendButtonScale.value
+                                    }
                                     .clip(CircleShape)
                                     .combinedClickable(
                                         enabled = canSend,
@@ -940,7 +1052,13 @@ fun SmsChatScreen(
                                         Icons.AutoMirrored.Filled.Send,
                                         contentDescription = "Send",
                                         tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .graphicsLayer {
+                                                translationX = sendIconOffset.value * 0.7f
+                                                translationY = sendIconOffset.value * 0.7f
+                                                rotationZ = sendIconRotation.value
+                                            }
                                     )
                                 }
                             }
@@ -1133,9 +1251,9 @@ private fun formatChatDateHeader(timestamp: Long): String {
 }
 
 @Composable
-private fun ChatDateHeader(text: String) {
+private fun ChatDateHeader(text: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
@@ -1187,6 +1305,7 @@ private fun buildClickableMessageText(text: String, linkColor: Color): Annotated
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
+    modifier: Modifier = Modifier,
     message: SmsMessage,
     timeStr: String,
     fontSize: TextUnit,
@@ -1199,20 +1318,26 @@ private fun ChatBubble(
 ) {
     val isOut = message.isOutgoing
     val baseBubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    val bubbleColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else baseBubbleColor
+    val bubbleColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else baseBubbleColor,
+        animationSpec = tween(250),
+        label = "BubbleColor"
+    )
+    val rowBg by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+        animationSpec = tween(250),
+        label = "RowBg"
+    )
     val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val timeColor = textColor.copy(alpha = 0.7f)
 
     var showMessageMenu by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .then(
-                if (isSelected) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                else Modifier
-            )
+            .background(rowBg)
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
@@ -1230,7 +1355,17 @@ private fun ChatBubble(
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (isSelectionMode && !isOut) {
+        AnimatedVisibility(
+            visible = isSelectionMode && !isOut,
+            enter = fadeIn(tween(250)) + expandHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                expandFrom = Alignment.End
+            ) + scaleIn(initialScale = 0.6f, animationSpec = tween(250)),
+            exit = fadeOut(tween(200)) + shrinkHorizontally(
+                animationSpec = tween(200),
+                shrinkTowards = Alignment.End
+            ) + scaleOut(targetScale = 0.6f, animationSpec = tween(200))
+        ) {
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onBubbleClick() },
@@ -1355,7 +1490,17 @@ private fun ChatBubble(
             }
         }
 
-        if (isSelectionMode && isOut) {
+        AnimatedVisibility(
+            visible = isSelectionMode && isOut,
+            enter = fadeIn(tween(250)) + expandHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                expandFrom = Alignment.Start
+            ) + scaleIn(initialScale = 0.6f, animationSpec = tween(250)),
+            exit = fadeOut(tween(200)) + shrinkHorizontally(
+                animationSpec = tween(200),
+                shrinkTowards = Alignment.Start
+            ) + scaleOut(targetScale = 0.6f, animationSpec = tween(200))
+        ) {
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onBubbleClick() },

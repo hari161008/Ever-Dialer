@@ -7,10 +7,6 @@ import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.ContactsContract
-import android.provider.Telephony
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -18,10 +14,17 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.provider.ContactsContract
+import android.provider.Telephony
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
+import androidx.core.app.RemoteInput
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.coolappstore.everdialer.by.svhp.MainActivity
 import com.coolappstore.everdialer.by.svhp.R
-import com.coolappstore.everdialer.by.svhp.controller.util.DefaultSmsManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,13 +73,14 @@ class SmsReceiver : BroadcastReceiver() {
                     }
                 } catch (_: Throwable) {}
 
-                if (!alreadyExists) {
-                    val threadId = try {
-                        Telephony.Threads.getOrCreateThreadId(context, address)
-                    } catch (_: Throwable) {
-                        -1L
-                    }
+                var threadId = try {
+                    Telephony.Threads.getOrCreateThreadId(context, address)
+                } catch (_: Throwable) {
+                    -1L
+                }
 
+                var insertedMessageId = -1L
+                if (!alreadyExists) {
                     val values = ContentValues().apply {
                         put(Telephony.Sms.ADDRESS, address)
                         put(Telephony.Sms.BODY, fullBody)
@@ -87,14 +91,43 @@ class SmsReceiver : BroadcastReceiver() {
                             put(Telephony.Sms.THREAD_ID, threadId)
                         }
                     }
-                    try {
+                    val insertedUri = try {
                         context.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
-                    } catch (_: Throwable) {}
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    insertedMessageId = try {
+                        insertedUri?.lastPathSegment?.toLongOrNull() ?: -1L
+                    } catch (_: Throwable) {
+                        -1L
+                    }
                 }
+
+                // Explicitly notify content resolver so all observers pick it up
+                try {
+                    context.contentResolver.notifyChange(Telephony.Sms.CONTENT_URI, null)
+                    context.contentResolver.notifyChange(Telephony.Sms.Inbox.CONTENT_URI, null)
+                    context.contentResolver.notifyChange(Uri.parse("content://mms-sms/conversations"), null)
+                    if (threadId > 0) {
+                        context.contentResolver.notifyChange(Uri.parse("content://mms-sms/conversations/$threadId"), null)
+                    }
+                } catch (_: Throwable) {}
+
+                // Broadcast in-process event to instantly update active screens
+                SmsEventBus.notifyNewSms(if (threadId > 0) threadId else null)
 
                 // Resolve contact name and photo for notification
                 val (contactName, photoUri) = resolveContact(context, address)
-                showSmsNotification(context, address, contactName, photoUri, fullBody)
+                showSmsNotification(
+                    context = context,
+                    sender = address,
+                    contactName = contactName,
+                    photoUri = photoUri,
+                    message = fullBody,
+                    threadId = threadId,
+                    messageId = insertedMessageId,
+                    timestamp = timestamp
+                )
             } finally {
                 pendingResult.finish()
             }
@@ -179,7 +212,10 @@ class SmsReceiver : BroadcastReceiver() {
         sender: String,
         contactName: String?,
         photoUri: String?,
-        message: String
+        message: String,
+        threadId: Long,
+        messageId: Long,
+        timestamp: Long
     ) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val channelId = "ever_sms_channel"
@@ -196,18 +232,22 @@ class SmsReceiver : BroadcastReceiver() {
             nm.createNotificationChannel(channel)
         }
 
+        val notifId = if (threadId > 0) threadId.toInt() else sender.hashCode()
+        val displayName = contactName ?: sender
+
+        // 1. Content PendingIntent -> Opens conversation in Ever Dialer
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("sms_address", sender)
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
-            sender.hashCode(),
+            notifId,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
-        val displayName = contactName ?: sender
+        // 2. Avatar bitmap (circular, displayed on the left side)
         val avatarBitmap = try {
             if (!photoUri.isNullOrBlank()) {
                 val uri = Uri.parse(photoUri)
@@ -224,19 +264,117 @@ class SmsReceiver : BroadcastReceiver() {
             createAvatarBitmap(context, displayName, autoColor)
         }
 
+        // 3. Pending intents for actions: Reply, Mark Read, Delete
+        // Mark Read Action
+        val markReadIntent = Intent(context, SmsActionReceiver::class.java).apply {
+            action = SmsActionReceiver.ACTION_MARK_READ
+            putExtra(SmsActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(SmsActionReceiver.EXTRA_THREAD_ID, threadId)
+            putExtra(SmsActionReceiver.EXTRA_MESSAGE_ID, messageId)
+            putExtra(SmsActionReceiver.EXTRA_ADDRESS, sender)
+        }
+        val markReadPendingIntent = PendingIntent.getBroadcast(
+            context,
+            (sender + "_read").hashCode(),
+            markReadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        // Delete Action
+        val deleteIntent = Intent(context, SmsActionReceiver::class.java).apply {
+            action = SmsActionReceiver.ACTION_DELETE
+            putExtra(SmsActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(SmsActionReceiver.EXTRA_THREAD_ID, threadId)
+            putExtra(SmsActionReceiver.EXTRA_MESSAGE_ID, messageId)
+            putExtra(SmsActionReceiver.EXTRA_ADDRESS, sender)
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            context,
+            (sender + "_delete").hashCode(),
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        // Inline Reply Action (RemoteInput)
+        val replyRemoteInput = RemoteInput.Builder(SmsActionReceiver.KEY_TEXT_REPLY)
+            .setLabel("Reply to $displayName...")
+            .build()
+
+        val replyBroadcastIntent = Intent(context, SmsActionReceiver::class.java).apply {
+            action = SmsActionReceiver.ACTION_REPLY
+            putExtra(SmsActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(SmsActionReceiver.EXTRA_THREAD_ID, threadId)
+            putExtra(SmsActionReceiver.EXTRA_MESSAGE_ID, messageId)
+            putExtra(SmsActionReceiver.EXTRA_ADDRESS, sender)
+        }
+        val replyPendingIntent = PendingIntent.getBroadcast(
+            context,
+            (sender + "_reply").hashCode(),
+            replyBroadcastIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_UPDATE_CURRENT)
+        )
+
+        // Action buttons for NotificationCompat
+        val replyAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_notif_reply,
+            "Reply",
+            replyPendingIntent
+        ).addRemoteInput(replyRemoteInput).build()
+
+        val markReadAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_notif_mark_read,
+            "Mark Read",
+            markReadPendingIntent
+        ).build()
+
+        val deleteAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_notif_delete,
+            "Delete",
+            deletePendingIntent
+        ).build()
+
+        // 5. Native Material You MessagingStyle
+        val userPerson = Person.Builder()
+            .setName("Me")
+            .build()
+
+        val senderPersonBuilder = Person.Builder()
+            .setName(displayName)
+            .setKey(sender)
+        if (avatarBitmap != null) {
+            senderPersonBuilder.setIcon(IconCompat.createWithBitmap(avatarBitmap))
+        }
+        val senderPerson = senderPersonBuilder.build()
+
+        val messagingStyle = NotificationCompat.MessagingStyle(userPerson)
+            .setConversationTitle(null)
+            .addMessage(
+                NotificationCompat.MessagingStyle.Message(
+                    message,
+                    timestamp,
+                    senderPerson
+                )
+            )
+
         val notificationBuilder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notif_sms)
+            .setStyle(messagingStyle)
             .setContentTitle(displayName)
             .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setWhen(timestamp)
+            .setShowWhen(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .addAction(replyAction)
+            .addAction(markReadAction)
+            .addAction(deleteAction)
 
         if (avatarBitmap != null) {
             notificationBuilder.setLargeIcon(avatarBitmap)
         }
 
-        nm.notify(sender.hashCode(), notificationBuilder.build())
+        nm.notify(notifId, notificationBuilder.build())
     }
 }

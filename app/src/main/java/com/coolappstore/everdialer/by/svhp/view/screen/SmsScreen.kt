@@ -7,14 +7,17 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +26,12 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.SpeakerNotes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import com.coolappstore.everdialer.by.svhp.controller.sms.SmsEventBus
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -155,6 +164,11 @@ fun SmsScreen(
         }
     }
 
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+    val listStates = remember { mutableMapOf<String, LazyListState>() }
+    val chipRowState = rememberLazyListState()
+
     var selectedFilter by remember {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_SELECTED_FILTER, "all") ?: "all")
     }
@@ -166,38 +180,50 @@ fun SmsScreen(
         allContacts.filter { it.isFavorite }.map { it.name.trim().lowercase() }.toSet()
     }
 
-    val conversations = remember(rawConversations, selectedFilter, favoriteNumbers, favoriteNames) {
-        val byFilter = when (selectedFilter) {
-            "favourites" -> {
-                rawConversations.filter { conv ->
-                    favoriteNames.contains(conv.contactName?.trim()?.lowercase()) ||
-                    favoriteNumbers.any { numbersLikelyMatch(conv.address, it) }
+    val filterConversations: (String) -> List<SmsConversation> = remember(rawConversations, favoriteNumbers, favoriteNames) {
+        { filter ->
+            val byFilter = when (filter) {
+                "favourites" -> {
+                    rawConversations.filter { conv ->
+                        favoriteNames.contains(conv.contactName?.trim()?.lowercase()) ||
+                        favoriteNumbers.any { numbersLikelyMatch(conv.address, it) }
+                    }
+                }
+                "contacts" -> rawConversations.filter { !it.contactName.isNullOrBlank() }
+                "unknown" -> rawConversations.filter { it.contactName.isNullOrBlank() }
+                "otp" -> rawConversations.filter { conv ->
+                    OTP_REGEX.containsMatchIn(conv.snippet)
+                }
+                else -> rawConversations
+            }
+            byFilter.sortedByDescending { it.date }
+        }
+    }
+
+    val groupConversations: (List<SmsConversation>) -> Map<String, List<SmsConversation>> = remember(unreadAtTop) {
+        { convList ->
+            convList.groupBy { conv ->
+                if (conv.date <= 0) "Older" else formatDateHeader(conv.date)
+            }.mapValues { (_, list) ->
+                if (unreadAtTop) {
+                    val unread = list.filter { !it.isRead }
+                    val read = list.filter { it.isRead }
+                    unread + read
+                } else {
+                    list
                 }
             }
-            "contacts" -> rawConversations.filter { !it.contactName.isNullOrBlank() }
-            "unknown" -> rawConversations.filter { it.contactName.isNullOrBlank() }
-            "otp" -> rawConversations.filter { conv ->
-                OTP_REGEX.containsMatchIn(conv.snippet)
-            }
-            else -> rawConversations
         }
-        byFilter.sortedByDescending { it.date }
+    }
+
+    val conversations = remember(rawConversations, selectedFilter, favoriteNumbers, favoriteNames) {
+        filterConversations(selectedFilter)
     }
 
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
 
-    val groupedConversations = remember(conversations, unreadAtTop) {
-        conversations.groupBy { conv ->
-            if (conv.date <= 0) "Older" else formatDateHeader(conv.date)
-        }.mapValues { (_, list) ->
-            if (unreadAtTop) {
-                val unread = list.filter { !it.isRead }
-                val read = list.filter { it.isRead }
-                unread + read
-            } else {
-                list
-            }
-        }
+    LaunchedEffect(selectedFilter) {
+        listStates[selectedFilter]?.scrollToItem(0)
     }
 
     // Selection mode (Quik multi-select action mode)
@@ -226,6 +252,19 @@ fun SmsScreen(
     LaunchedEffect(Unit) {
         isDefaultSms = DefaultSmsManager.isDefaultSms(context)
         smsVM.refreshConversations()
+    }
+
+    LaunchedEffect(Unit) {
+        SmsEventBus.newSmsEvent.collect {
+            smsVM.refreshConversations()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(2500)
+            smsVM.refreshConversations()
+        }
     }
 
     Scaffold(
@@ -386,6 +425,7 @@ fun SmsScreen(
                         val isDynamic = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
                         val usePrimary = isSaturatedActive || !isDynamic
                         LazyRow(
+                            state = chipRowState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp),
@@ -399,13 +439,28 @@ fun SmsScreen(
                                 "unknown" to "Unknown",
                                 "otp" to "OTP"
                             )
-                            items(filterOptions, key = { it.first }) { (key, label) ->
+                            itemsIndexed(filterOptions, key = { _, it -> it.first }) { index, (key, label) ->
                                 val isSelected = selectedFilter == key
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = {
-                                        selectedFilter = key
-                                        prefs.setString(PreferenceManager.KEY_SMS_SELECTED_FILTER, key)
+                                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                        if (selectedFilter == key) {
+                                            coroutineScope.launch {
+                                                listStates[key]?.animateScrollToItem(0)
+                                            }
+                                        } else {
+                                            selectedFilter = key
+                                            prefs.setString(PreferenceManager.KEY_SMS_SELECTED_FILTER, key)
+                                            coroutineScope.launch {
+                                                listStates.getOrPut(key) { LazyListState() }.scrollToItem(0)
+                                            }
+                                        }
+                                        coroutineScope.launch {
+                                            chipRowState.animateScrollToItem(index)
+                                        }
                                     },
                                     label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                                     shape = RoundedCornerShape(50.dp),
@@ -464,237 +519,301 @@ fun SmsScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0)
     ) { paddingValues ->
-        val listState = rememberLazyListState()
-        ScrollHapticsEffect(listState)
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-        LazyColumn(
-            state = listState,
+        AnimatedContent(
+            targetState = selectedFilter,
+            transitionSpec = {
+                val filterKeys = listOf("all", "favourites", "contacts", "unknown", "otp")
+                val fromIdx = filterKeys.indexOf(initialState).let { if (it == -1) 0 else it }
+                val toIdx = filterKeys.indexOf(targetState).let { if (it == -1) 0 else it }
+                val isForward = toIdx >= fromIdx
+                val slideOffset = 240
+
+                if (isForward) {
+                    (slideInHorizontally(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        initialOffsetX = { slideOffset.coerceAtMost(it / 3) }
+                    ) + fadeIn(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    )) togetherWith (slideOutHorizontally(
+                        animationSpec = tween(180, easing = FastOutLinearInEasing),
+                        targetOffsetX = { -slideOffset.coerceAtMost(it / 3) }
+                    ) + fadeOut(
+                        animationSpec = tween(180, easing = FastOutLinearInEasing)
+                    ))
+                } else {
+                    (slideInHorizontally(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        initialOffsetX = { -slideOffset.coerceAtMost(it / 3) }
+                    ) + fadeIn(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    )) togetherWith (slideOutHorizontally(
+                        animationSpec = tween(180, easing = FastOutLinearInEasing),
+                        targetOffsetX = { slideOffset.coerceAtMost(it / 3) }
+                    ) + fadeOut(
+                        animationSpec = tween(180, easing = FastOutLinearInEasing)
+                    ))
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp + navBarBottom),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Default SMS App Warning Banner
-            if (!isDefaultSms) {
-                item {
-                    Surface(
-                        onClick = {
-                            DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context)
-                        },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(42.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Outlined.Sms,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Set as Default SMS App",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    "Allow Ever Dialer to send, receive, and manage your text messages seamlessly.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
-                            }
-                            Icon(
-                                Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
+            label = "SmsTabAnimatedContent"
+        ) { currentFilter ->
+            val currentListState = listStates.getOrPut(currentFilter) { LazyListState() }
+            ScrollHapticsEffect(currentListState)
+            val currentConversations = remember(rawConversations, currentFilter, favoriteNumbers, favoriteNames) {
+                filterConversations(currentFilter)
+            }
+            val currentGrouped = remember(currentConversations, unreadAtTop) {
+                groupConversations(currentConversations)
             }
 
-            // Permissions prompt banner
-            if (!hasSmsPermissions) {
-                item {
-                    Surface(
-                        onClick = {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.READ_SMS,
-                                    Manifest.permission.SEND_SMS,
-                                    Manifest.permission.RECEIVE_SMS
-                                )
-                            )
-                        },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Security,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "SMS Permission Required",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Text(
-                                    "Tap to grant SMS permissions so Ever Dialer can display your conversations.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Empty state
-            if (conversations.isEmpty() && !isLoading) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 60.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.size(72.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.Chat,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                if (searchQuery.isNotBlank()) "No conversations match '$searchQuery'" else "No messages yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                "Start a conversation by tapping the button below",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Conversation items grouped by date header
-            groupedConversations.forEach { (header, convsInGroup) ->
-                if (header.isNotBlank()) {
-                    item(key = "header_$header", contentType = "sectionHeader") {
-                        Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
-                            RivoSectionHeader(title = header)
-                        }
-                    }
-                }
-
-                items(
-                    items = convsInGroup,
-                    key = { it.threadId },
-                    contentType = { "conversationItem" }
-                ) { conv ->
-                    val isSelected = selectedThreadIds.contains(conv.threadId)
-
-                    val handleSwipeAction: (String) -> Unit = { actionKey ->
-                        when (actionKey) {
-                            "call" -> makeCall(context, conv.address, null)
-                            "read" -> smsVM.markThreadAsRead(conv.threadId)
-                            "delete" -> threadToDelete = conv
-                        }
-                    }
-
-                    SwipeableItemContainer(
-                        leftAction = leftSwipeActionItem,
-                        rightAction = rightSwipeActionItem,
-                        onSwipeLeft = { handleSwipeAction(swipeLeftAction) },
-                        onSwipeRight = { handleSwipeAction(swipeRightAction) },
-                        enabled = !isSelectionMode,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        ConversationItemRow(
-                            conversation = conv,
-                            timeStr = if (conv.date <= 0) "" else formatTimeOnly(conv.date, use24HourTime),
-                            isSelected = isSelected,
-                            isSelectionMode = isSelectionMode,
-                            autoColor = autoColor,
+            LazyColumn(
+                state = currentListState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp + navBarBottom),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Default SMS App Warning Banner
+                if (!isDefaultSms) {
+                    item(key = "banner_default_sms") {
+                        Surface(
                             onClick = {
-                                if (isSelectionMode) {
-                                    if (isSelected) selectedThreadIds.remove(conv.threadId)
-                                    else selectedThreadIds.add(conv.threadId)
-                                } else {
-                                    if (conv.threadId > 0) {
-                                        smsVM.loadThreadMessages(conv.threadId)
-                                    }
-                                    navigator.navigate(
-                                        SmsChatScreenDestination(
-                                            threadId = conv.threadId,
-                                            address = conv.address,
-                                            contactName = conv.contactName,
-                                            photoUri = conv.photoUri
+                                DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context)
+                            },
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.Sms,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(22.dp)
                                         )
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Set as Default SMS App",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "Allow Ever Dialer to send, receive, and manage your text messages seamlessly.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                     )
                                 }
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Permissions prompt banner
+                if (!hasSmsPermissions) {
+                    item(key = "banner_permissions") {
+                        Surface(
+                            onClick = {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.READ_SMS,
+                                        Manifest.permission.SEND_SMS,
+                                        Manifest.permission.RECEIVE_SMS
+                                    )
+                                )
                             },
-                            onLongClick = {
-                                if (!isSelectionMode) {
-                                    selectedThreadIds.add(conv.threadId)
-                                }
-                            },
-                            onAvatarClick = {
-                                if (!isSelectionMode) {
-                                    navigator.navigate(
-                                        ContactDetailsScreenDestination(
-                                            phoneNumber = conv.address
-                                        )
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "SMS Permission Required",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Text(
+                                        "Tap to grant SMS permissions so Ever Dialer can display your conversations.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
                                     )
                                 }
                             }
-                        )
+                        }
+                    }
+                }
+
+                // Empty state
+                if (currentConversations.isEmpty() && !isLoading) {
+                    item(key = "empty_state_$currentFilter") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 60.dp)
+                                .animateItem(
+                                    fadeInSpec = tween(260, easing = FastOutSlowInEasing),
+                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                    fadeOutSpec = tween(180, easing = FastOutLinearInEasing)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.size(72.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.AutoMirrored.Outlined.Chat,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    if (searchQuery.isNotBlank()) "No conversations match '$searchQuery'" else "No messages yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "Start a conversation by tapping the button below",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Conversation items grouped by date header
+                currentGrouped.forEach { (header, convsInGroup) ->
+                    if (header.isNotBlank()) {
+                        item(key = "header_${currentFilter}_$header", contentType = "sectionHeader") {
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                                    .animateItem(
+                                        fadeInSpec = null,
+                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                        fadeOutSpec = tween(450, easing = FastOutLinearInEasing)
+                                    )
+                            ) {
+                                RivoSectionHeader(title = header)
+                            }
+                        }
+                    }
+
+                    items(
+                        items = convsInGroup,
+                        key = { it.threadId },
+                        contentType = { "conversationItem" }
+                    ) { conv ->
+                        val isSelected = selectedThreadIds.contains(conv.threadId)
+
+                        val handleSwipeAction: (String) -> Unit = { actionKey ->
+                            when (actionKey) {
+                                "call" -> makeCall(context, conv.address, null)
+                                "read" -> smsVM.markThreadAsRead(conv.threadId)
+                                "delete" -> threadToDelete = conv
+                            }
+                        }
+
+                        SwipeableItemContainer(
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = null,
+                                placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                fadeOutSpec = tween(450, easing = FastOutLinearInEasing)
+                            ),
+                            leftAction = leftSwipeActionItem,
+                            rightAction = rightSwipeActionItem,
+                            onSwipeLeft = { handleSwipeAction(swipeLeftAction) },
+                            onSwipeRight = { handleSwipeAction(swipeRightAction) },
+                            enabled = !isSelectionMode,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            ConversationItemRow(
+                                conversation = conv,
+                                timeStr = if (conv.date <= 0) "" else formatTimeOnly(conv.date, use24HourTime),
+                                isSelected = isSelected,
+                                isSelectionMode = isSelectionMode,
+                                autoColor = autoColor,
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        if (isSelected) selectedThreadIds.remove(conv.threadId)
+                                        else selectedThreadIds.add(conv.threadId)
+                                    } else {
+                                        if (conv.threadId > 0) {
+                                            smsVM.loadThreadMessages(conv.threadId)
+                                        }
+                                        navigator.navigate(
+                                            SmsChatScreenDestination(
+                                                threadId = conv.threadId,
+                                                address = conv.address,
+                                                contactName = conv.contactName,
+                                                photoUri = conv.photoUri
+                                            )
+                                        )
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!isSelectionMode) {
+                                        selectedThreadIds.add(conv.threadId)
+                                    }
+                                },
+                                onAvatarClick = {
+                                    if (!isSelectionMode) {
+                                        navigator.navigate(
+                                            ContactDetailsScreenDestination(
+                                                phoneNumber = conv.address
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
