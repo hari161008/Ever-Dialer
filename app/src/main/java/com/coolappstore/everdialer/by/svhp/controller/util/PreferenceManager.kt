@@ -705,6 +705,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none" (default: "none")
         const val KEY_SMS_SELECTED_FILTER          = "sms_selected_filter" // "all", "contacts", "unknown"
         const val KEY_SMS_LAUNCHER_ICON_ENABLED     = "sms_launcher_icon_enabled"
+        const val KEY_SMS_LAUNCHER_APP_NAME         = "sms_launcher_app_name"
         const val KEY_PINNED_SMS_THREADS            = "pinned_sms_threads"
         const val KEY_PINNED_SMS_MESSAGES           = "pinned_sms_messages"
         const val KEY_STARRED_SMS_MESSAGES          = "starred_sms_messages"

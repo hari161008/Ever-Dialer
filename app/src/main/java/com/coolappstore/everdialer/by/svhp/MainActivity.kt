@@ -269,7 +269,7 @@ class MainActivity : FragmentActivity() {
                 val smsVM: com.coolappstore.everdialer.by.svhp.controller.SmsViewModel = org.koin.compose.viewmodel.koinActivityViewModel()
 
                 val launchedFromSmsAlias = remember {
-                    intent?.component?.className?.endsWith("SmsLauncherAlias") == true
+                    intent?.component?.className?.contains("SmsLauncherAlias") == true
                 }
 
                 // Compute start destination from prefs — done once so no flash
@@ -1214,7 +1214,7 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        if (intent.component?.className?.endsWith("SmsLauncherAlias") == true) {
+        if (intent.component?.className?.contains("SmsLauncherAlias") == true) {
             navController.navigate(SmsScreenDestination().route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true

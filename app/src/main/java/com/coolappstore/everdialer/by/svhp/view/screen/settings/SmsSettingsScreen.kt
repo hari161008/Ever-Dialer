@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -46,6 +47,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.BlockedSmsScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
@@ -59,6 +61,48 @@ private val ColorTeal     = Color(0xFF009688)
 private val ColorRed      = Color(0xFFE53935)
 private val ColorCyan     = Color(0xFF00BCD4)
 private val ColorBluGrey  = Color(0xFF607D8B)
+
+private fun updateSmsLauncherAlias(context: android.content.Context, enabled: Boolean, appName: String) {
+    val pm = context.packageManager
+    val aliasMap = mapOf(
+        "Ever SMS" to "${context.packageName}.SmsLauncherAliasEverSms",
+        "Ever Messages" to "${context.packageName}.SmsLauncherAliasEverMessages",
+        "SMS" to "${context.packageName}.SmsLauncherAliasSms",
+        "Messages" to "${context.packageName}.SmsLauncherAliasMessages",
+        "Chats" to "${context.packageName}.SmsLauncherAliasChats"
+    )
+    val oldAlias = "${context.packageName}.SmsLauncherAlias"
+    val targetAlias = aliasMap[appName] ?: aliasMap["Ever SMS"]!!
+
+    try {
+        pm.setComponentEnabledSetting(
+            ComponentName(context.packageName, oldAlias),
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
+    } catch (_: Exception) {}
+
+    aliasMap.forEach { (_, componentNameStr) ->
+        try {
+            val shouldEnable = enabled && (componentNameStr == targetAlias)
+            val newState = if (shouldEnable) {
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            } else {
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            }
+            val current = pm.getComponentEnabledSetting(ComponentName(context.packageName, componentNameStr))
+            if (current != newState) {
+                pm.setComponentEnabledSetting(
+                    ComponentName(context.packageName, componentNameStr),
+                    newState,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
@@ -127,13 +171,23 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_FLOATING_BUBBLE, false)
     }
     val smsLauncherIconEnabled = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_SMS_LAUNCHER_ICON_ENABLED, false)
+        prefs.getBoolean(PreferenceManager.KEY_SMS_LAUNCHER_ICON_ENABLED, true)
     }
-    var blockedList by remember(settingsVer) {
-        mutableStateOf(BlockedNumbersManager.getBlockedList(context, prefs))
+    val smsAppName = remember(settingsVer) {
+        prefs.getString(PreferenceManager.KEY_SMS_LAUNCHER_APP_NAME, "Ever SMS") ?: "Ever SMS"
+    }
+    var blockedCount by remember { mutableStateOf(BlockedNumbersManager.getBlockedList(prefs).size) }
+    LaunchedEffect(settingsVer) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val list = BlockedNumbersManager.getBlockedList(context, prefs)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                blockedCount = list.size
+            }
+        }
     }
 
     // Dialog state controllers
+    var showAppNameDialog by remember { mutableStateOf(false) }
     var showTextSizeDialog by remember { mutableStateOf(false) }
     var showSendDelayDialog by remember { mutableStateOf(false) }
     var showSignatureDialog by remember { mutableStateOf(false) }
@@ -301,29 +355,28 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                 // Direct App Drawer Icon for SMS
                                 RivoSwitchListItem(
                                     headline = "SMS app icon in App Drawer",
-                                    supporting = "Show a dedicated Messages icon in your app drawer to launch SMS directly",
+                                    supporting = "Show a dedicated icon in your app drawer to launch SMS directly",
                                     leadingIcon = Icons.Outlined.Apps,
                                     iconContainerColor = ColorIndigo,
                                     checked = smsLauncherIconEnabled,
                                     onCheckedChange = { enabled ->
                                         prefs.setBoolean(PreferenceManager.KEY_SMS_LAUNCHER_ICON_ENABLED, enabled)
-                                        try {
-                                            val componentName = ComponentName(
-                                                context.packageName,
-                                                "${context.packageName}.SmsLauncherAlias"
-                                            )
-                                            val newState = if (enabled) {
-                                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                                            } else {
-                                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                                            }
-                                            context.packageManager.setComponentEnabledSetting(
-                                                componentName,
-                                                newState,
-                                                PackageManager.DONT_KILL_APP
-                                            )
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
+                                        updateSmsLauncherAlias(context, enabled, smsAppName)
+                                    }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                // SMS App Name
+                                RivoListItem(
+                                    headline = "App name",
+                                    supporting = smsAppName,
+                                    leadingIcon = Icons.Outlined.Badge,
+                                    iconContainerColor = if (smsLauncherIconEnabled) ColorTeal else MaterialTheme.colorScheme.surfaceVariant,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = if (!smsLauncherIconEnabled) Modifier.alpha(0.4f) else Modifier,
+                                    onClick = {
+                                        if (smsLauncherIconEnabled) {
+                                            showAppNameDialog = true
                                         }
                                     }
                                 )
@@ -477,65 +530,17 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                     Column {
                         RivoSectionHeader("Blocked SMS")
                         RivoExpressiveCard {
-                            Column {
-                                if (blockedList.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(24.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            "No blocked SMS senders",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                } else {
-                                    blockedList.forEachIndexed { index, blockedAddress ->
-                                        if (index > 0) {
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                        }
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            RivoAvatar(
-                                                name = blockedAddress,
-                                                size = 40.dp
-                                            )
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = blockedAddress,
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    fontWeight = FontWeight.Medium,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = "Blocked from messages & notifications",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            FilledTonalButton(
-                                                onClick = {
-                                                    BlockedNumbersManager.unblock(context, prefs, blockedAddress)
-                                                    blockedList = BlockedNumbersManager.getBlockedList(context, prefs)
-                                                    smsVM.refreshConversations()
-                                                },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                shape = RoundedCornerShape(10.dp)
-                                            ) {
-                                                Text("Unblock", style = MaterialTheme.typography.labelMedium)
-                                            }
-                                        }
-                                    }
+                            RivoListItem(
+                                headline = "Blocked senders & numbers",
+                                supporting = if (blockedCount == 0) "No blocked SMS senders"
+                                             else "$blockedCount blocked sender${if (blockedCount > 1) "s" else ""}",
+                                leadingIcon = Icons.Outlined.Block,
+                                iconContainerColor = ColorRed,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    navigator.navigate(BlockedSmsScreenDestination())
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -785,6 +790,45 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             },
             confirmButton = {
                 TextButton(onClick = { showSwipeLeftDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showAppNameDialog) {
+        val appNameOptions = listOf("Ever SMS", "Ever Messages", "SMS", "Messages", "Chats")
+        AlertDialog(
+            onDismissRequest = { showAppNameDialog = false },
+            title = { Text("App Name") },
+            text = {
+                Column {
+                    appNameOptions.forEach { nameOption ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    prefs.setString(PreferenceManager.KEY_SMS_LAUNCHER_APP_NAME, nameOption)
+                                    updateSmsLauncherAlias(context, smsLauncherIconEnabled, nameOption)
+                                    showAppNameDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = smsAppName == nameOption,
+                                onClick = {
+                                    prefs.setString(PreferenceManager.KEY_SMS_LAUNCHER_APP_NAME, nameOption)
+                                    updateSmsLauncherAlias(context, smsLauncherIconEnabled, nameOption)
+                                    showAppNameDialog = false
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(nameOption, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAppNameDialog = false }) { Text("Cancel") }
             }
         )
     }
