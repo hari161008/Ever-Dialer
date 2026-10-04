@@ -117,17 +117,23 @@ class SmsReceiver : BroadcastReceiver() {
                 SmsEventBus.notifyNewSms(if (threadId > 0) threadId else null)
 
                 // Resolve contact name and photo for notification
-                val (contactName, photoUri) = resolveContact(context, address)
-                showSmsNotification(
-                    context = context,
-                    sender = address,
-                    contactName = contactName,
-                    photoUri = photoUri,
-                    message = fullBody,
-                    threadId = threadId,
-                    messageId = insertedMessageId,
-                    timestamp = timestamp
-                )
+                val prefs = PreferenceManager(context)
+                val isBlocked = com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.isBlocked(context, prefs, address)
+                val isMuted = prefs.isSmsMuted(address)
+
+                if (!isBlocked && !isMuted) {
+                    val (contactName, photoUri) = resolveContact(context, address)
+                    showSmsNotification(
+                        context = context,
+                        sender = address,
+                        contactName = contactName,
+                        photoUri = photoUri,
+                        message = fullBody,
+                        threadId = threadId,
+                        messageId = insertedMessageId,
+                        timestamp = timestamp
+                    )
+                }
             } finally {
                 pendingResult.finish()
             }

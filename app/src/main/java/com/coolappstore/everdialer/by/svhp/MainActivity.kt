@@ -268,16 +268,24 @@ class MainActivity : FragmentActivity() {
                 // Pre-warm SMS ViewModel on launch so SMS tab is instant
                 val smsVM: com.coolappstore.everdialer.by.svhp.controller.SmsViewModel = org.koin.compose.viewmodel.koinActivityViewModel()
 
+                val launchedFromSmsAlias = remember {
+                    intent?.component?.className?.endsWith("SmsLauncherAlias") == true
+                }
+
                 // Compute start destination from prefs — done once so no flash
                 val startDestination = remember {
-                    when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
-                        "favorites"  -> FavoritesScreenDestination
-                        "contacts"   -> ContactScreenDestination
-                        "sms"        -> SmsScreenDestination()
-                        "groups"     -> GroupsScreenDestination
-                        "recordings" -> RecordingsScreenDestination()
-                        "notes"      -> NotesScreenDestination()
-                        else         -> RecentScreenDestination
+                    if (launchedFromSmsAlias) {
+                        SmsScreenDestination()
+                    } else {
+                        when (prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") {
+                            "favorites"  -> FavoritesScreenDestination
+                            "contacts"   -> ContactScreenDestination
+                            "sms"        -> SmsScreenDestination()
+                            "groups"     -> GroupsScreenDestination
+                            "recordings" -> RecordingsScreenDestination()
+                            "notes"      -> NotesScreenDestination()
+                            else         -> RecentScreenDestination
+                        }
                     }
                 }
 
@@ -1204,6 +1212,14 @@ class MainActivity : FragmentActivity() {
                     return
                 }
             }
+        }
+
+        if (intent.component?.className?.endsWith("SmsLauncherAlias") == true) {
+            navController.navigate(SmsScreenDestination().route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+            }
+            return
         }
 
         when (action) {

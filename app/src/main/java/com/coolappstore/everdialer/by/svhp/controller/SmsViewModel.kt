@@ -55,6 +55,9 @@ class SmsViewModel(
     private val _currentThreadMessages = MutableStateFlow<List<SmsMessage>>(emptyList())
     val currentThreadMessages: StateFlow<List<SmsMessage>> = _currentThreadMessages.asStateFlow()
 
+    private val _starredMessages = MutableStateFlow<List<com.coolappstore.everdialer.by.svhp.modal.data.StarredMessage>>(emptyList())
+    val starredMessages: StateFlow<List<com.coolappstore.everdialer.by.svhp.modal.data.StarredMessage>> = _starredMessages.asStateFlow()
+
     private var activeThreadId: Long? = null
     private var debounceJob: Job? = null
 
@@ -192,6 +195,25 @@ class SmsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             smsRepository.markThreadAsRead(threadId)
             fetchConversations()
+        }
+    }
+
+    fun refreshStarredMessages(starredIds: Set<Long>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (starredIds.isEmpty()) {
+                _starredMessages.value = emptyList()
+                return@launch
+            }
+            val msgs = smsRepository.getMessagesByIds(starredIds)
+            val starredList = msgs.map { msg ->
+                val contactInfo = smsRepository.resolveContactInfo(msg.address)
+                com.coolappstore.everdialer.by.svhp.modal.data.StarredMessage(
+                    message = msg,
+                    contactName = contactInfo.first,
+                    photoUri = contactInfo.second
+                )
+            }
+            _starredMessages.value = starredList
         }
     }
 

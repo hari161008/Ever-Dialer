@@ -17,7 +17,7 @@ import android.provider.BlockedNumberContract
  */
 object BlockedNumbersManager {
 
-    private fun normalize(number: String) = number.replace(" ", "").replace("-", "").trim()
+    private fun normalize(number: String) = number.replace(" ", "").replace("-", "").trim().lowercase()
 
     /** True when the OS lets this app read/write the system blocked-number list (default dialer role on API 24+). */
     fun canUseSystemBlockList(context: Context): Boolean = try {
@@ -83,8 +83,8 @@ object BlockedNumbersManager {
         val target = normalize(number)
         if (target.isEmpty()) return false
 
-        // 1. Check system-wide BlockedNumberContract first if context is available
-        if (context != null && canUseSystemBlockList(context)) {
+        // 1. Check system-wide BlockedNumberContract first if context is available (for digit-containing numbers)
+        if (context != null && canUseSystemBlockList(context) && number.any { it.isDigit() }) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
                     BlockedNumberContract.isBlocked(context, number)
@@ -97,7 +97,17 @@ object BlockedNumbersManager {
         // 2. Check app-level list / cached list
         return getBlockedList(context, prefs).any { blocked ->
             val cb = normalize(blocked)
-            cb.isNotEmpty() && (target.endsWith(cb) || cb.endsWith(target))
+            if (cb.isEmpty()) false
+            else if (target == cb) true
+            else {
+                val targetDigits = target.filter { it.isDigit() }
+                val cbDigits = cb.filter { it.isDigit() }
+                if (targetDigits.length >= 7 && cbDigits.length >= 7) {
+                    targetDigits.endsWith(cbDigits) || cbDigits.endsWith(targetDigits)
+                } else {
+                    target == cb || target.endsWith(cb) || cb.endsWith(target)
+                }
+            }
         }
     }
 
@@ -147,6 +157,7 @@ object BlockedNumbersManager {
 
     private fun syncToSystem(context: Context, number: String, block: Boolean) {
         if (!canUseSystemBlockList(context)) return
+        if (!number.any { it.isDigit() }) return
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 if (block) {

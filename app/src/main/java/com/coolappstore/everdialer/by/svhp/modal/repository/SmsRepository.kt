@@ -636,6 +636,62 @@ class SmsRepository(
         } catch (_: Throwable) {}
     }
 
+    override fun resolveContactInfo(address: String): Pair<String?, String?> {
+        val result = resolveContact(address)
+        return Pair(result?.first, result?.second)
+    }
+
+    override suspend fun getMessagesByIds(messageIds: Set<Long>): List<SmsMessage> = withContext(Dispatchers.IO) {
+        if (messageIds.isEmpty() || !hasReadSmsPermission()) return@withContext emptyList()
+        val messages = mutableListOf<SmsMessage>()
+        try {
+            val projection = arrayOf(
+                Telephony.Sms._ID,
+                Telephony.Sms.THREAD_ID,
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE,
+                Telephony.Sms.TYPE,
+                Telephony.Sms.READ,
+                Telephony.Sms.STATUS
+            )
+            val inClause = messageIds.joinToString(",")
+            contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                projection,
+                "${Telephony.Sms._ID} IN ($inClause)",
+                null,
+                "${Telephony.Sms.DATE} DESC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
+                val threadCol = cursor.getColumnIndex(Telephony.Sms.THREAD_ID)
+                val addrCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+                val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
+                val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
+                val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
+                val readCol = cursor.getColumnIndex(Telephony.Sms.READ)
+                val statusCol = cursor.getColumnIndex(Telephony.Sms.STATUS)
+
+                while (cursor.moveToNext()) {
+                    messages.add(
+                        SmsMessage(
+                            id = cursor.getLong(idCol),
+                            threadId = cursor.getLong(threadCol),
+                            address = cursor.getString(addrCol) ?: "",
+                            body = cursor.getString(bodyCol) ?: "",
+                            date = cursor.getLong(dateCol),
+                            type = cursor.getInt(typeCol),
+                            isRead = cursor.getInt(readCol) == 1,
+                            isMms = false,
+                            deliveryStatus = if (statusCol >= 0) cursor.getInt(statusCol) else -1
+                        )
+                    )
+                }
+            }
+        } catch (_: Throwable) {}
+        messages
+    }
+
     /**
      * Fast contact name and photo lookup with thread-safe caching.
      */

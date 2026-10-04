@@ -1,7 +1,9 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.WindowManager
@@ -26,12 +28,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.controller.SmsViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import com.coolappstore.everdialer.by.svhp.controller.util.DefaultSmsManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
+import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
@@ -120,6 +125,12 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
     }
     val floatingBubble = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_FLOATING_BUBBLE, false)
+    }
+    val smsLauncherIconEnabled = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_LAUNCHER_ICON_ENABLED, false)
+    }
+    var blockedList by remember(settingsVer) {
+        mutableStateOf(BlockedNumbersManager.getBlockedList(context, prefs))
     }
 
     // Dialog state controllers
@@ -285,6 +296,37 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                         prefs.setBoolean(PreferenceManager.KEY_SMS_FLOATING_BUBBLE, checked)
                                     }
                                 )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                // Direct App Drawer Icon for SMS
+                                RivoSwitchListItem(
+                                    headline = "SMS app icon in App Drawer",
+                                    supporting = "Show a dedicated Messages icon in your app drawer to launch SMS directly",
+                                    leadingIcon = Icons.Outlined.Apps,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = smsLauncherIconEnabled,
+                                    onCheckedChange = { enabled ->
+                                        prefs.setBoolean(PreferenceManager.KEY_SMS_LAUNCHER_ICON_ENABLED, enabled)
+                                        try {
+                                            val componentName = ComponentName(
+                                                context.packageName,
+                                                "${context.packageName}.SmsLauncherAlias"
+                                            )
+                                            val newState = if (enabled) {
+                                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                                            } else {
+                                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                                            }
+                                            context.packageManager.setComponentEnabledSetting(
+                                                componentName,
+                                                newState,
+                                                PackageManager.DONT_KILL_APP
+                                            )
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -423,6 +465,76 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSwipeLeftDialog = true }
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Blocked SMS Section
+            item {
+                RivoAnimatedSection(delayMs = 140L) {
+                    Column {
+                        RivoSectionHeader("Blocked SMS")
+                        RivoExpressiveCard {
+                            Column {
+                                if (blockedList.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "No blocked SMS senders",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    blockedList.forEachIndexed { index, blockedAddress ->
+                                        if (index > 0) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                        }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            RivoAvatar(
+                                                name = blockedAddress,
+                                                size = 40.dp
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = blockedAddress,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "Blocked from messages & notifications",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    BlockedNumbersManager.unblock(context, prefs, blockedAddress)
+                                                    blockedList = BlockedNumbersManager.getBlockedList(context, prefs)
+                                                    smsVM.refreshConversations()
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text("Unblock", style = MaterialTheme.typography.labelMedium)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

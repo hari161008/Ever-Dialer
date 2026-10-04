@@ -64,3 +64,11 @@ data class ScheduledSmsEntry(
     val subId: Int? = null,
     val scheduledTime: Long
 )
+
+@Serializable
+data class StarredMessage(
+    val message: SmsMessage,
+    val contactName: String? = null,
+    val photoUri: String? = null
+)
+

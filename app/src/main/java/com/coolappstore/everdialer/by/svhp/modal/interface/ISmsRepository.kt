@@ -11,4 +11,7 @@ interface ISmsRepository {
     suspend fun deleteThread(threadId: Long): Boolean
     suspend fun deleteMessage(messageId: Long, isMms: Boolean = false): Boolean
     suspend fun markThreadAsRead(threadId: Long)
+    suspend fun getMessagesByIds(messageIds: Set<Long>): List<SmsMessage>
+    fun resolveContactInfo(address: String): Pair<String?, String?>
 }
+

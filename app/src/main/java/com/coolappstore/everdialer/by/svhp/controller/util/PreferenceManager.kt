@@ -120,6 +120,61 @@ class PreferenceManager(context: Context) {
     fun setContactDefaultNumber(contactKey: String, number: String?) =
         setString(KEY_CONTACT_DEFAULT_NUMBER_PREFIX + contactKey, number)
 
+    fun getPinnedSmsThreads(): Set<Long> =
+        getString(KEY_PINNED_SMS_THREADS, "")?.split(",")?.mapNotNull { it.trim().toLongOrNull() }?.toSet() ?: emptySet()
+
+    fun isSmsThreadPinned(threadId: Long): Boolean =
+        getPinnedSmsThreads().contains(threadId)
+
+    fun setSmsThreadPinned(threadId: Long, pinned: Boolean) {
+        val current = getPinnedSmsThreads().toMutableSet()
+        if (pinned) current.add(threadId) else current.remove(threadId)
+        setString(KEY_PINNED_SMS_THREADS, current.joinToString(","))
+    }
+
+    fun getPinnedSmsMessages(): Set<Long> =
+        getString(KEY_PINNED_SMS_MESSAGES, "")?.split(",")?.mapNotNull { it.trim().toLongOrNull() }?.toSet() ?: emptySet()
+
+    fun isSmsMessagePinned(messageId: Long): Boolean =
+        getPinnedSmsMessages().contains(messageId)
+
+    fun setSmsMessagePinned(messageId: Long, pinned: Boolean) {
+        val current = getPinnedSmsMessages().toMutableSet()
+        if (pinned) current.add(messageId) else current.remove(messageId)
+        setString(KEY_PINNED_SMS_MESSAGES, current.joinToString(","))
+    }
+
+    fun getStarredSmsMessages(): Set<Long> =
+        getString(KEY_STARRED_SMS_MESSAGES, "")?.split(",")?.mapNotNull { it.trim().toLongOrNull() }?.toSet() ?: emptySet()
+
+    fun isSmsMessageStarred(messageId: Long): Boolean =
+        getStarredSmsMessages().contains(messageId)
+
+    fun setSmsMessageStarred(messageId: Long, starred: Boolean) {
+        val current = getStarredSmsMessages().toMutableSet()
+        if (starred) current.add(messageId) else current.remove(messageId)
+        setString(KEY_STARRED_SMS_MESSAGES, current.joinToString(","))
+    }
+
+    fun getMutedSmsAddresses(): Set<String> =
+        getString(KEY_MUTED_SMS_ADDRESSES, "")?.split(",")?.map { it.trim().lowercase() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+
+    fun isSmsMuted(address: String): Boolean {
+        if (address.isBlank()) return false
+        val muted = getMutedSmsAddresses()
+        val clean = address.trim().lowercase()
+        return muted.any { it == clean || numbersLikelyMatch(it, clean) }
+    }
+
+    fun setSmsMuted(address: String, muted: Boolean) {
+        val clean = address.trim().lowercase()
+        if (clean.isBlank()) return
+        val current = getMutedSmsAddresses().toMutableSet()
+        if (muted) current.add(clean) else current.removeIf { it == clean || numbersLikelyMatch(it, clean) }
+        setString(KEY_MUTED_SMS_ADDRESSES, current.joinToString(","))
+    }
+
+
     /** Returns the user-configured tab order (Settings > Appearance > Tab Sections) as an
      *  ordered list of tab keys (e.g. "favorites", "calls", "contacts", "recordings", "notes").
      *  This is the single source of truth for tab ordering — both the bottom nav bar and the
@@ -649,6 +704,11 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none" (default: "none")
         const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none" (default: "none")
         const val KEY_SMS_SELECTED_FILTER          = "sms_selected_filter" // "all", "contacts", "unknown"
+        const val KEY_SMS_LAUNCHER_ICON_ENABLED     = "sms_launcher_icon_enabled"
+        const val KEY_PINNED_SMS_THREADS            = "pinned_sms_threads"
+        const val KEY_PINNED_SMS_MESSAGES           = "pinned_sms_messages"
+        const val KEY_STARRED_SMS_MESSAGES          = "starred_sms_messages"
+        const val KEY_MUTED_SMS_ADDRESSES           = "muted_sms_addresses"
         const val KEY_SCHEDULED_SMS                 = "scheduled_sms_list"
         const val KEY_SMS_FLOATING_BUBBLE           = "sms_floating_bubble"
 
