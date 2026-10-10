@@ -158,6 +158,9 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
     val autoColorAvatars = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, true)
     }
+    val showAvatar = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_AVATAR, true)
+    }
     val showStt = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
     }
@@ -296,6 +299,17 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                     iconContainerColor = ColorGreen,
                                     checked = autoColorAvatars,
                                     onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, it) }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                // Show Avatar
+                                RivoSwitchListItem(
+                                    headline = "Show avatar",
+                                    supporting = "Show contact avatars in message logs",
+                                    leadingIcon = Icons.Outlined.AccountCircle,
+                                    iconContainerColor = ColorPurple,
+                                    checked = showAvatar,
+                                    onCheckedChange = { prefs.setBoolean(PreferenceManager.KEY_SMS_SHOW_AVATAR, it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 

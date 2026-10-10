@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -221,32 +222,75 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 }
 
 /**
- * Modifier that applies a subtle dynamic motion blur during the zoom transition when opening a page.
- * Controlled by the user toggle in Settings > Appearance > Motion Blur Animation (by default off).
+ * Modifier that applies a subtle dynamic motion blur during the zoom transition when opening a page,
+ * and attaches a NestedScrollConnection to provide scroll haptics across all settings screens.
+ * Controlled by user toggles in Settings.
  */
 @Composable
 fun Modifier.settingsMotionBlur(maxBlurDp: Float = 10f): Modifier {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val motionBlurEnabled = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)
     }
-    if (!motionBlurEnabled) return this
+    val scrollHapticsEnabled = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)
+    }
+    val cmPerHaptic = remember(settingsVer) {
+        prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f)
+    }
+    val hapticAmplitude = remember(settingsVer) {
+        prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60)
+    }
 
-    var isSettled by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        isSettled = true
+    val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
+    val pxThreshold = (cmPerHaptic * pxPerCm).coerceAtLeast(8f)
+
+    val nestedScrollConnection = remember(scrollHapticsEnabled, pxThreshold, hapticAmplitude) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            private var hapticBucket = 0f
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): Offset {
+                if (scrollHapticsEnabled) {
+                    val delta = kotlin.math.abs(consumed.y)
+                    if (delta > 0f) {
+                        hapticBucket += delta
+                        if (hapticBucket >= pxThreshold) {
+                            val count = (hapticBucket / pxThreshold).toInt()
+                            hapticBucket -= count * pxThreshold
+                            com.coolappstore.everdialer.by.svhp.view.components.performScrollHaptic(context, hapticAmplitude)
+                        }
+                    }
+                }
+                return Offset.Zero
+            }
+        }
     }
-    val blurFactor by animateFloatAsState(
-        targetValue = if (isSettled) 0f else 1f,
-        animationSpec = tween(durationMillis = SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
-        label = "settingsMotionBlur"
-    )
-    val blurRadius = (blurFactor * maxBlurDp).dp
-    return if (blurRadius > 0.1.dp) {
-        this.blur(radius = blurRadius, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-    } else {
-        this
+
+    var mod: Modifier = this.nestedScroll(nestedScrollConnection)
+
+    if (motionBlurEnabled) {
+        var isSettled by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            isSettled = true
+        }
+        val blurFactor by animateFloatAsState(
+            targetValue = if (isSettled) 0f else 1f,
+            animationSpec = tween(durationMillis = SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+            label = "settingsMotionBlur"
+        )
+        val blurRadius = (blurFactor * maxBlurDp).dp
+        if (blurRadius > 0.1.dp) {
+            mod = mod.blur(radius = blurRadius, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+        }
     }
+
+    return mod
 }
 

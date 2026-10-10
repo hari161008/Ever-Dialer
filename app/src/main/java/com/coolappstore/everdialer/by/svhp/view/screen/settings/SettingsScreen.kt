@@ -149,6 +149,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
     var notesEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)) }
     var proximityBg by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)) }
     var tapHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) }
+    var triggerOnlyByTouching by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HAPTIC_TOUCH_ONLY, false)) }
     var scrollHapticsEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false)) }
     var scrollCmPerHaptic by remember { mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f)) }
     var scrollHapticStrength by remember { mutableIntStateOf(prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60)) }
@@ -328,6 +329,26 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     }
 
                     if (tapHapticsEnabled) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Trigger only by just touching screen", style = MaterialTheme.typography.bodyLarge)
+                                Text("Haptics trigger directly on touching anywhere on screen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = triggerOnlyByTouching,
+                                onCheckedChange = {
+                                    triggerOnlyByTouching = it
+                                    prefs.setBoolean(PreferenceManager.KEY_HAPTIC_TOUCH_ONLY, it)
+                                }
+                            )
+                        }
+
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.4f))
 
                         Text("Strength", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -1545,7 +1566,6 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
-        ScrollHapticsEffect(listState = listState)
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             state = listState,

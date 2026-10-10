@@ -20,6 +20,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,16 +83,32 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 // ─── App Haptics Helper ────────────────────────────────────────────────────────
 
+private var lastAppHapticTime = 0L
+private var lastScrollHapticTime = 0L
+
 /**
  * strength: "light" | "strong" | "custom"
  * customIntensity: 0f..1f, only used when strength == "custom"
+ * fromDirectTouch: true when invoked by direct touch detection (e.g. Activity.dispatchTouchEvent)
  */
 fun performAppHaptic(
     context: android.content.Context,
     strength: String,
-    customIntensity: Float = 0.5f
+    customIntensity: Float = 0.5f,
+    fromDirectTouch: Boolean = false
 ) {
     try {
+        val prefs = try { org.koin.core.context.GlobalContext.get().get<PreferenceManager>() } catch (_: Throwable) { null }
+        val touchOnly = prefs?.getBoolean(PreferenceManager.KEY_HAPTIC_TOUCH_ONLY, false) == true
+        if (touchOnly && !fromDirectTouch) {
+            // When "Trigger only by just touching screen" is enabled, suppress component-level onClick haptics to prevent duplicates
+            return
+        }
+
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastAppHapticTime < 50L) return
+        lastAppHapticTime = now
+
         val durationMs: Long
         val amplitude: Int
         when (strength) {
@@ -119,6 +136,10 @@ fun performAppHaptic(
 
 fun performScrollHaptic(context: android.content.Context, amplitude: Int = 60) {
     try {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastScrollHapticTime < 20L) return
+        lastScrollHapticTime = now
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(VibratorManager::class.java)
             val vibrator = vm?.defaultVibrator
@@ -135,6 +156,48 @@ fun performScrollHaptic(context: android.content.Context, amplitude: Int = 60) {
             }
         }
     } catch (_: Exception) {}
+}
+
+/**
+ * A composable effect that triggers scroll haptics based on physical scroll distance for ScrollState.
+ */
+@Composable
+fun ScrollHapticsScrollStateEffect(scrollState: ScrollState) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+
+    val scrollHapticsEnabled = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_HAPTICS, false) }
+    val cmPerHaptic = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_SCROLL_CM_PER_HAPTIC, 1.5f) }
+    val hapticAmplitude = remember(settingsVersion) { prefs.getInt(PreferenceManager.KEY_SCROLL_HAPTIC_STRENGTH, 60) }
+
+    val pxPerCm = with(density) { (160f / 2.54f).dp.toPx() }
+    val pxThreshold = (cmPerHaptic * pxPerCm).coerceAtLeast(8f)
+
+    LaunchedEffect(scrollHapticsEnabled, pxThreshold, hapticAmplitude) {
+        if (!scrollHapticsEnabled) return@LaunchedEffect
+
+        var lastAbsolutePx = 0f
+        var hapticBucket = 0f
+        var initialized = false
+
+        snapshotFlow { scrollState.value.toFloat() }.collect { absolutePx ->
+            if (!initialized) {
+                lastAbsolutePx = absolutePx
+                initialized = true
+                return@collect
+            }
+            val delta = kotlin.math.abs(absolutePx - lastAbsolutePx)
+            lastAbsolutePx = absolutePx
+            hapticBucket += delta
+            if (hapticBucket >= pxThreshold) {
+                val count = (hapticBucket / pxThreshold).toInt()
+                hapticBucket -= count * pxThreshold
+                performScrollHaptic(context, hapticAmplitude)
+            }
+        }
+    }
 }
 
 /**
@@ -977,7 +1040,16 @@ fun RivoSwitchListItem(
             val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Switch(
                 checked = checked && enabled,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(
+                            context,
+                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                        )
+                    }
+                    onCheckedChange(it)
+                },
                 enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
@@ -1075,7 +1147,16 @@ fun RivoCheckboxListItem(
             val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
             Checkbox(
                 checked = checked,
-                onCheckedChange = { onCheckedChange(it) },
+                onCheckedChange = {
+                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                        performAppHaptic(
+                            context,
+                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                        )
+                    }
+                    onCheckedChange(it)
+                },
                 colors = CheckboxDefaults.colors(
                     checkedColor = MaterialTheme.colorScheme.primary,
                     checkmarkColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,

@@ -81,6 +81,50 @@ class BiometricCallActivity : FragmentActivity() {
             }
         }
     }
+
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var pendingTouchHapticFired = false
+    private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev != null) {
+            val touchOnlyEnabled = prefs.getBoolean(PreferenceManager.KEY_HAPTIC_TOUCH_ONLY, false)
+            val appHapticsEnabled = prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)
+
+            if (touchOnlyEnabled && appHapticsEnabled) {
+                when (ev.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        touchDownX = ev.x
+                        touchDownY = ev.y
+                        pendingTouchHapticFired = false
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dx = ev.x - touchDownX
+                        val dy = ev.y - touchDownY
+                        if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                            pendingTouchHapticFired = true
+                        }
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        if (!pendingTouchHapticFired) {
+                            val dx = ev.x - touchDownX
+                            val dy = ev.y - touchDownY
+                            if (dx * dx + dy * dy <= touchSlop * touchSlop) {
+                                val strength = prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light"
+                                val customIntensity = prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                com.coolappstore.everdialer.by.svhp.view.components.performAppHaptic(this, strength, customIntensity, fromDirectTouch = true)
+                            }
+                        }
+                    }
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        pendingTouchHapticFired = true
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
 }
 
 @Composable

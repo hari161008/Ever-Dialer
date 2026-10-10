@@ -458,6 +458,7 @@ class PreferenceManager(context: Context) {
         const val KEY_APP_HAPTICS              = "app_haptics_enabled"
         const val KEY_APP_HAPTICS_STRENGTH     = "app_haptics_strength"
         const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"
+        const val KEY_HAPTIC_TOUCH_ONLY        = "haptic_trigger_touch_screen_only"
         const val KEY_NOTES_ENABLED         = "notes_enabled"
         // When true (default), the app's Notes section and the call recording notes
         // (inside Ever Call Recorder's recording playback screen) are kept as two
@@ -700,6 +701,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_MAX_MMS_SIZE              = "sms_max_mms_size" // "100KB", "200KB", "300KB", "600KB", "1MB", "2MB"
         const val KEY_SMS_DISABLE_SCREENSHOTS       = "sms_disable_screenshots"
         const val KEY_SMS_AUTO_COLOR_AVATARS        = "sms_auto_color_avatars"
+        const val KEY_SMS_SHOW_AVATAR               = "sms_show_avatar"
         const val KEY_SMS_SHOW_STT                  = "sms_show_stt"
         const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none" (default: "none")
         const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none" (default: "none")

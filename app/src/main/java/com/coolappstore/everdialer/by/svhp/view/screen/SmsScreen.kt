@@ -140,6 +140,9 @@ fun SmsScreen(
     val autoColor = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, true)
     }
+    val showAvatar = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_AVATAR, true)
+    }
     val swipeRightAction = remember(settingsVer) {
         prefs.getString(PreferenceManager.KEY_SMS_SWIPE_RIGHT_ACTION, "none") ?: "none"
     }
@@ -765,14 +768,16 @@ fun SmsScreen(
                                             .padding(14.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        RivoAvatar(
-                                            name = item.contactName ?: item.message.address,
-                                            photoUri = item.photoUri,
-                                            autoColorAvatars = autoColor,
-                                            obeySolidIcons = false,
-                                            size = 48.dp
-                                        )
-                                        Spacer(Modifier.width(14.dp))
+                                        if (showAvatar) {
+                                            RivoAvatar(
+                                                name = item.contactName ?: item.message.address,
+                                                photoUri = item.photoUri,
+                                                autoColorAvatars = autoColor,
+                                                obeySolidIcons = false,
+                                                size = 48.dp
+                                            )
+                                            Spacer(Modifier.width(14.dp))
+                                        }
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -954,6 +959,7 @@ fun SmsScreen(
                                         isSelected = isSelected,
                                         isSelectionMode = isSelectionMode,
                                         autoColor = autoColor,
+                                        showAvatar = showAvatar,
                                         isPinned = isPinned,
                                         isMuted = isMuted,
                                         onClick = {
@@ -1207,6 +1213,7 @@ private fun ConversationItemRow(
     isSelected: Boolean,
     isSelectionMode: Boolean,
     autoColor: Boolean,
+    showAvatar: Boolean = true,
     isPinned: Boolean = false,
     isMuted: Boolean = false,
     onClick: () -> Unit,
@@ -1255,20 +1262,22 @@ private fun ConversationItemRow(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { onAvatarClick() }
-            ) {
-                RivoAvatar(
-                    name = conversation.contactName ?: conversation.address,
-                    photoUri = conversation.photoUri,
-                    autoColorAvatars = autoColor,
-                    obeySolidIcons = false,
-                    size = 48.dp
-                )
+            if (showAvatar) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onAvatarClick() }
+                ) {
+                    RivoAvatar(
+                        name = conversation.contactName ?: conversation.address,
+                        photoUri = conversation.photoUri,
+                        autoColorAvatars = autoColor,
+                        obeySolidIcons = false,
+                        size = 48.dp
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
             }
-            Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
