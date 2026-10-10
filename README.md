@@ -440,7 +440,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
    <br><br>
    The source code of Rate and Review are open, Check it out: [Click Here](https://github.com/hari161008/Website-For-Everlasting-Android-Tweak)
 
-# Used App As the base
+# Used App As The Base And Their Licenses Available In Their Respective Repository
 
 ┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer) <br><br>
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>

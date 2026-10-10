@@ -3206,12 +3206,12 @@ fun NewSwipeToAnswer(
 
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .absoluteOffset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .size(72.dp)
                     .clip(CircleShape)
                     .background(resolvedHandleColor)
                     .alpha(handleAlpha)
-                    .pointerInput(Unit) {
+                    .pointerInput(isRtl) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 coroutineScope.launch {

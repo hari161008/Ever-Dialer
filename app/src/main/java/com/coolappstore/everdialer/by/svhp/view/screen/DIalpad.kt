@@ -2513,233 +2513,235 @@ private fun DialpadNumberDisplay(
     onCursorPositionChange: (Int) -> Unit = {},
     onLongPress: () -> Unit = {}
 ) {
-    val prefs = koinInject<PreferenceManager>()
-    val settingsState by prefs.settingsChanged.collectAsState()
-    val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
-    val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
-    val textColor   = MaterialTheme.colorScheme.onSurface
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        val prefs = koinInject<PreferenceManager>()
+        val settingsState by prefs.settingsChanged.collectAsState()
+        val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
+        val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
+        val textColor   = MaterialTheme.colorScheme.onSurface
 
-    // Progressively scale down after 6 digits so 13+ digits comfortably fit
-    val baseFontSize = fontSize.toFloat()
-    val step = (number.length - 6).coerceAtLeast(0)
-    val progressiveFactor = when {
-        step == 0 -> 1.0f
-        step <= 7 -> 1.0f - (step * 0.06f)
-        else -> (0.58f - (step - 7) * 0.025f).coerceAtLeast(0.35f)
-    }
-
-    // Stable list of (uniqueId, char) — each insertion gets a fresh monotonic id
-    // so position shifts use animateItem, not a full recompose.
-    val idCounter  = remember { mutableStateOf(0) }
-    val stableChars = remember { mutableStateListOf<Pair<Int, Char>>() }
-
-    LaunchedEffect(number) {
-        if (number.isEmpty()) {
-            stableChars.clear()
-            return@LaunchedEffect
+        // Progressively scale down after 6 digits so 13+ digits comfortably fit
+        val baseFontSize = fontSize.toFloat()
+        val step = (number.length - 6).coerceAtLeast(0)
+        val progressiveFactor = when {
+            step == 0 -> 1.0f
+            step <= 7 -> 1.0f - (step * 0.06f)
+            else -> (0.58f - (step - 7) * 0.025f).coerceAtLeast(0.35f)
         }
-        val current = stableChars.map { it.second }.joinToString("")
-        if (number == current) return@LaunchedEffect
 
-        // Diff by common prefix/suffix so an insert or delete anywhere in the middle of the
-        // string (not just at the end) only touches the characters that actually changed —
-        // everything else keeps its stable id and simply slides over.
-        val minLen = minOf(current.length, number.length)
-        var prefixLen = 0
-        while (prefixLen < minLen && current[prefixLen] == number[prefixLen]) prefixLen++
+        // Stable list of (uniqueId, char) — each insertion gets a fresh monotonic id
+        // so position shifts use animateItem, not a full recompose.
+        val idCounter  = remember { mutableStateOf(0) }
+        val stableChars = remember { mutableStateListOf<Pair<Int, Char>>() }
 
-        var suffixLen = 0
-        val maxSuffix = minLen - prefixLen
-        while (suffixLen < maxSuffix &&
-            current[current.length - 1 - suffixLen] == number[number.length - 1 - suffixLen]
-        ) suffixLen++
+        LaunchedEffect(number) {
+            if (number.isEmpty()) {
+                stableChars.clear()
+                return@LaunchedEffect
+            }
+            val current = stableChars.map { it.second }.joinToString("")
+            if (number == current) return@LaunchedEffect
 
-        val removeCount = current.length - prefixLen - suffixLen
-        repeat(removeCount) {
-            if (stableChars.size > prefixLen) stableChars.removeAt(prefixLen)
+            // Diff by common prefix/suffix so an insert or delete anywhere in the middle of the
+            // string (not just at the end) only touches the characters that actually changed —
+            // everything else keeps its stable id and simply slides over.
+            val minLen = minOf(current.length, number.length)
+            var prefixLen = 0
+            while (prefixLen < minLen && current[prefixLen] == number[prefixLen]) prefixLen++
+
+            var suffixLen = 0
+            val maxSuffix = minLen - prefixLen
+            while (suffixLen < maxSuffix &&
+                current[current.length - 1 - suffixLen] == number[number.length - 1 - suffixLen]
+            ) suffixLen++
+
+            val removeCount = current.length - prefixLen - suffixLen
+            repeat(removeCount) {
+                if (stableChars.size > prefixLen) stableChars.removeAt(prefixLen)
+            }
+            val insertText = number.substring(prefixLen, number.length - suffixLen)
+            insertText.forEachIndexed { i, ch ->
+                stableChars.add(prefixLen + i, Pair(idCounter.value++, ch))
+            }
         }
-        val insertText = number.substring(prefixLen, number.length - suffixLen)
-        insertText.forEachIndexed { i, ch ->
-            stableChars.add(prefixLen + i, Pair(idCounter.value++, ch))
-        }
-    }
 
-    // Blinking caret alpha
-    val cursorBlink = rememberInfiniteTransition(label = "cursorBlink")
-    val cursorAlpha by cursorBlink.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1000
-                1f at 0
-                1f at 499
-                0f at 500
-                0f at 1000
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "cursorAlpha"
-    )
-
-    val clampedCursor = cursorPosition.coerceIn(0, stableChars.size)
-
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        val density = LocalDensity.current
-        val systemFontScale = density.fontScale
-        val combinedScale = (fontScale * systemFontScale).coerceAtLeast(0.5f)
-        val sideSpacerWidth = when {
-            number.length <= 6 -> 24.dp
-            number.length <= 13 -> (24.dp - (number.length - 6).dp * 2).coerceAtLeast(10.dp)
-            else -> 10.dp
-        }
-        val availableWidthDp = (maxWidth - sideSpacerWidth * 2).coerceAtLeast(40.dp)
-
-        // Ensure at least 13 digits (or current length if greater) fit comfortably within available width
-        val targetDigitsToFit = maxOf(number.length, if (number.length > 6) 13 else 6)
-        val maxSafeFontSize = (availableWidthDp.value / (targetDigitsToFit * 0.58f * combinedScale)).coerceAtLeast(11f)
-
-        val targetFontSize = minOf(baseFontSize * progressiveFactor, maxSafeFontSize).coerceAtLeast(11f)
-        val animatedFontSize by animateFloatAsState(
-            targetValue = targetFontSize,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-            label = "dialpadFontSize"
+        // Blinking caret alpha
+        val cursorBlink = rememberInfiniteTransition(label = "cursorBlink")
+        val cursorAlpha by cursorBlink.animateFloat(
+            initialValue = 1f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1000
+                    1f at 0
+                    1f at 499
+                    0f at 500
+                    0f at 1000
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "cursorAlpha"
         )
 
-        val textStyle = MaterialTheme.typography.displaySmall.copy(
-            fontSize   = (animatedFontSize * fontScale).sp,
-            fontWeight = FontWeight.Light
-        )
+        val clampedCursor = cursorPosition.coerceIn(0, stableChars.size)
 
-        if (number.isEmpty() || stableChars.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(with(density) { (textStyle.fontSize.toDp() * 1.4f).coerceIn(40.dp, 58.dp) })
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onLongPress = { onLongPress() }
-                        ) { onCursorPositionChange(0) }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            val density = LocalDensity.current
+            val systemFontScale = density.fontScale
+            val combinedScale = (fontScale * systemFontScale).coerceAtLeast(0.5f)
+            val sideSpacerWidth = when {
+                number.length <= 6 -> 24.dp
+                number.length <= 13 -> (24.dp - (number.length - 6).dp * 2).coerceAtLeast(10.dp)
+                else -> 10.dp
+            }
+            val availableWidthDp = (maxWidth - sideSpacerWidth * 2).coerceAtLeast(40.dp)
+
+            // Ensure at least 13 digits (or current length if greater) fit comfortably within available width
+            val targetDigitsToFit = maxOf(number.length, if (number.length > 6) 13 else 6)
+            val maxSafeFontSize = (availableWidthDp.value / (targetDigitsToFit * 0.58f * combinedScale)).coerceAtLeast(11f)
+
+            val targetFontSize = minOf(baseFontSize * progressiveFactor, maxSafeFontSize).coerceAtLeast(11f)
+            val animatedFontSize by animateFloatAsState(
+                targetValue = targetFontSize,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                label = "dialpadFontSize"
+            )
+
+            val textStyle = MaterialTheme.typography.displaySmall.copy(
+                fontSize   = (animatedFontSize * fontScale).sp,
+                fontWeight = FontWeight.Light
+            )
+
+            if (number.isEmpty() || stableChars.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .width(2.5.dp)
-                        .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(20.dp) })
-                        .graphicsLayer { this.alpha = cursorAlpha }
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
-                )
-            }
-        } else {
-            val listState = rememberLazyListState()
-            LaunchedEffect(stableChars.size, cursorPosition) {
-                if (stableChars.isNotEmpty()) {
-                    val target = (cursorPosition + 1).coerceIn(0, stableChars.size + 1)
-                    listState.animateScrollToItem(target)
-                }
-            }
-            LazyRow(
-                state = listState,
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment     = Alignment.CenterVertically,
-                userScrollEnabled     = number.length > 12,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Leading spacer matching the trailing tap zone's width below, so the digits (and the
-                // cursor) are actually centered in the box instead of being pulled off-center by an
-                // unbalanced zone that only exists on the trailing side.
-                item(key = "leading_cursor_area") {
-                    Box(modifier = Modifier.width(sideSpacerWidth))
-                }
-                itemsIndexed(
-                    items = stableChars,
-                    key   = { _, pair -> pair.first }
-                ) { index, pair ->
-                    var appeared by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) { appeared = true }
-
-                    val offsetY by animateDpAsState(
-                        targetValue  = if (appeared) 0.dp else 28.dp,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                        label = "charOffY"
-                    )
-                    val alpha by animateFloatAsState(
-                        targetValue  = if (appeared) 1f else 0f,
-                        animationSpec = tween(220, easing = FastOutSlowInEasing),
-                        label = "charAlpha"
-                    )
-                    val scale by animateFloatAsState(
-                        targetValue  = if (appeared) 1f else 0.7f,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                        label = "charScale"
-                    )
-
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        // A thin blinking bar rendered just before this character when the cursor sits
-                        // here, so it visually sits between the two adjacent digits.
-                        if (clampedCursor == index) {
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = (-2).dp)
-                                    .width(2.5.dp)
-                                    .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(18.dp) })
-                                    .align(Alignment.CenterStart)
-                                    .graphicsLayer { this.alpha = cursorAlpha }
-                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
-                            )
-                        }
-                        Text(
-                            text     = pair.second.toString(),
-                            style    = textStyle,
-                            color    = textColor,
-                            modifier = Modifier
-                                .animateItem(
-                                    placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-                                    fadeInSpec     = tween(240, easing = FastOutSlowInEasing),
-                                    fadeOutSpec    = tween(180, easing = FastOutLinearInEasing)
-                                )
-                                .offset(y = offsetY)
-                                .alpha(alpha)
-                                .scale(scale)
-                                .pointerInput(pair.first) {
-                                    detectTapGestures(
-                                        onLongPress = { onLongPress() }
-                                    ) { tapOffset ->
-                                        // Tapping the left half of a digit places the cursor before it,
-                                        // the right half places it after — like a normal text field.
-                                        val newPos = if (tapOffset.x < size.width / 2f) index else index + 1
-                                        onCursorPositionChange(newPos)
-                                    }
-                                }
-                        )
-                    }
-                }
-                // Trailing tap target so the user can move the cursor to the very end even when there's
-                // no character there (e.g. an empty number, or after the last digit).
-                item(key = "trailing_cursor_area") {
+                        .fillMaxWidth()
+                        .height(with(density) { (textStyle.fontSize.toDp() * 1.4f).coerceIn(40.dp, 58.dp) })
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onLongPress = { onLongPress() }
+                            ) { onCursorPositionChange(0) }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
                         modifier = Modifier
-                            .width(sideSpacerWidth)
-                            .height(with(density) { (textStyle.fontSize.toDp() * 1.4f).coerceAtLeast(40.dp) })
-                            .pointerInput(stableChars.size) {
-                                detectTapGestures(
-                                    onLongPress = { onLongPress() }
-                                ) { onCursorPositionChange(stableChars.size) }
-                            },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (clampedCursor == stableChars.size) {
-                            Box(
+                            .width(2.5.dp)
+                            .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(20.dp) })
+                            .graphicsLayer { this.alpha = cursorAlpha }
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                    )
+                }
+            } else {
+                val listState = rememberLazyListState()
+                LaunchedEffect(stableChars.size, cursorPosition) {
+                    if (stableChars.isNotEmpty()) {
+                        val target = (cursorPosition + 1).coerceIn(0, stableChars.size + 1)
+                        listState.animateScrollToItem(target)
+                    }
+                }
+                LazyRow(
+                    state = listState,
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment     = Alignment.CenterVertically,
+                    userScrollEnabled     = number.length > 12,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Leading spacer matching the trailing tap zone's width below, so the digits (and the
+                    // cursor) are actually centered in the box instead of being pulled off-center by an
+                    // unbalanced zone that only exists on the trailing side.
+                    item(key = "leading_cursor_area") {
+                        Box(modifier = Modifier.width(sideSpacerWidth))
+                    }
+                    itemsIndexed(
+                        items = stableChars,
+                        key   = { _, pair -> pair.first }
+                    ) { index, pair ->
+                        var appeared by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { appeared = true }
+
+                        val offsetY by animateDpAsState(
+                            targetValue  = if (appeared) 0.dp else 28.dp,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                            label = "charOffY"
+                        )
+                        val alpha by animateFloatAsState(
+                            targetValue  = if (appeared) 1f else 0f,
+                            animationSpec = tween(220, easing = FastOutSlowInEasing),
+                            label = "charAlpha"
+                        )
+                        val scale by animateFloatAsState(
+                            targetValue  = if (appeared) 1f else 0.7f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                            label = "charScale"
+                        )
+
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            // A thin blinking bar rendered just before this character when the cursor sits
+                            // here, so it visually sits between the two adjacent digits.
+                            if (clampedCursor == index) {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = (-2).dp)
+                                        .width(2.5.dp)
+                                        .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(18.dp) })
+                                        .align(Alignment.CenterStart)
+                                        .graphicsLayer { this.alpha = cursorAlpha }
+                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                                )
+                            }
+                            Text(
+                                text     = pair.second.toString(),
+                                style    = textStyle,
+                                color    = textColor,
                                 modifier = Modifier
-                                    .width(2.5.dp)
-                                    .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(18.dp) })
-                                    .graphicsLayer { this.alpha = cursorAlpha }
-                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                                    .animateItem(
+                                        placementSpec  = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                                        fadeInSpec     = tween(240, easing = FastOutSlowInEasing),
+                                        fadeOutSpec    = tween(180, easing = FastOutLinearInEasing)
+                                    )
+                                    .offset(y = offsetY)
+                                    .alpha(alpha)
+                                    .scale(scale)
+                                    .pointerInput(pair.first) {
+                                        detectTapGestures(
+                                            onLongPress = { onLongPress() }
+                                        ) { tapOffset ->
+                                            // Tapping the left half of a digit places the cursor before it,
+                                            // the right half places it after — like a normal text field.
+                                            val newPos = if (tapOffset.x < size.width / 2f) index else index + 1
+                                            onCursorPositionChange(newPos)
+                                        }
+                                    }
                             )
+                        }
+                    }
+                    // Trailing tap target so the user can move the cursor to the very end even when there's
+                    // no character there (e.g. an empty number, or after the last digit).
+                    item(key = "trailing_cursor_area") {
+                        Box(
+                            modifier = Modifier
+                                .width(sideSpacerWidth)
+                                .height(with(density) { (textStyle.fontSize.toDp() * 1.4f).coerceIn(40.dp, 58.dp) })
+                                .pointerInput(stableChars.size) {
+                                    detectTapGestures(
+                                        onLongPress = { onLongPress() }
+                                    ) { onCursorPositionChange(stableChars.size) }
+                                },
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (clampedCursor == stableChars.size) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(2.5.dp)
+                                        .height(with(density) { (textStyle.fontSize.toDp() * 0.95f).coerceAtLeast(18.dp) })
+                                        .graphicsLayer { this.alpha = cursorAlpha }
+                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
                 }
