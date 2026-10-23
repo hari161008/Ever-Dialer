@@ -375,18 +375,31 @@ class PcBluetoothSyncManager(
                 arrayOf(
                     ContactsContract.Contacts._ID,
                     ContactsContract.Contacts.STARRED,
+                    ContactsContract.Contacts.PHOTO_ID,
                     ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP
                 ),
                 null, null,
                 "${ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP} DESC LIMIT 1"
             )?.use { c ->
-                sb.append("cnt:").append(c.count).append(",")
                 if (c.moveToFirst()) {
                     val sIdx = c.getColumnIndex(ContactsContract.Contacts.STARRED)
+                    val pIdx = c.getColumnIndex(ContactsContract.Contacts.PHOTO_ID)
                     val tIdx = c.getColumnIndex(ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
                     if (sIdx >= 0) sb.append(c.getInt(sIdx)).append(",")
+                    if (pIdx >= 0) sb.append(c.getLong(pIdx)).append(",")
                     if (tIdx >= 0) sb.append(c.getLong(tIdx)).append(";")
                 }
+            }
+        } catch (_: Exception) {}
+
+        // Total contacts count
+        try {
+            context.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                arrayOf(ContactsContract.Contacts._ID),
+                null, null, null
+            )?.use { c ->
+                sb.append("cnt:").append(c.count).append(";")
             }
         } catch (_: Exception) {}
 
@@ -482,6 +495,7 @@ class PcBluetoothSyncManager(
                         if (newFp != lastFingerprint) {
                             Log.i(TAG, "ContentObserver: data change detected on phone, syncing to PC...")
                             lastFingerprint = newFp
+                            photoCache.clear()
                             sendSyncData(writer)
                         }
                     }
@@ -526,6 +540,7 @@ class PcBluetoothSyncManager(
                 if (newFp != lastFingerprint) {
                     Log.i(TAG, "Periodic check detected data change on phone: syncing to PC...")
                     lastFingerprint = newFp
+                    photoCache.clear()
                     sendSyncData(writer)
                 }
                 ticks++
@@ -553,6 +568,7 @@ class PcBluetoothSyncManager(
                     val cmd = cmdObj.optString("cmd")
                     when (cmd) {
                         "request_sync" -> {
+                            photoCache.clear()
                             lastFingerprint = computeStateFingerprint()
                             sendSyncData(writer)
                         }
