@@ -14,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.LazyRow
@@ -129,6 +131,10 @@ private fun triggerRestartPrompt(
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
     val prefs = koinInject<PreferenceManager>()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -755,9 +761,13 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val scrollState = rememberScrollState()
         Box(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
 
@@ -780,15 +790,21 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                             rowItems.forEach { option ->
                                                 val selected = themeMode == option.key
                                                 Surface(
-                                                    onClick = {
-                                                        themeMode = option.key
-                                                        prefs.setString(PreferenceManager.KEY_THEME_MODE, option.key)
-                                                        triggerRestartPrompt(scope, snackbarHostState, context)
-                                                    },
                                                     shape = RoundedCornerShape(50),
                                                     color = if (selected) MaterialTheme.colorScheme.primary
                                                             else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    modifier = Modifier.weight(1f).height(38.dp)
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(38.dp)
+                                                        .then(
+                                                            if (isResumed) {
+                                                                Modifier.clickable {
+                                                                    themeMode = option.key
+                                                                    prefs.setString(PreferenceManager.KEY_THEME_MODE, option.key)
+                                                                    triggerRestartPrompt(scope, snackbarHostState, context)
+                                                                }
+                                                            } else Modifier
+                                                        )
                                                 ) {
                                                     val isPillBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
                                                     val selectedTextColor = if (isPillBright) Color(0xFF1C1B1F) else Color.White
@@ -953,13 +969,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                                 color = MaterialTheme.colorScheme.onSurface,
                                                                 shape = CircleShape
                                                             )
-                                                            .clickable {
-                                                                customPrimaryColor = color.toArgb()
-                                                                prefs.setInt("custom_primary_color", color.toArgb())
-                                                                hexInput = String.format("%06X", 0xFFFFFF and color.toArgb())
-                                                                hexError = false
-                                                                triggerRestartPrompt(scope, snackbarHostState, context)
-                                                            }
+                                                            .then(
+                                                                if (isResumed) {
+                                                                    Modifier.clickable {
+                                                                        customPrimaryColor = color.toArgb()
+                                                                        prefs.setInt("custom_primary_color", color.toArgb())
+                                                                        hexInput = String.format("%06X", 0xFFFFFF and color.toArgb())
+                                                                        hexError = false
+                                                                        triggerRestartPrompt(scope, snackbarHostState, context)
+                                                                    }
+                                                                } else Modifier
+                                                            )
                                                     )
                                                 }
                                             }
@@ -1382,7 +1402,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
                                 Column(modifier = Modifier
-                                    .clickable { navigator.navigate(CustomFontScreenDestination()) }
+                                    .then(if (isResumed) Modifier.clickable { navigator.navigate(CustomFontScreenDestination()) } else Modifier)
                                     .padding(horizontal = 16.dp, vertical = 14.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                         com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
@@ -1428,7 +1448,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable { isRoundnessExpanded = !isRoundnessExpanded }
+                                            .then(if (isResumed) Modifier.clickable { isRoundnessExpanded = !isRoundnessExpanded } else Modifier)
                                     ) {
                                         com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
                                             icon = Icons.Outlined.RoundedCorner,

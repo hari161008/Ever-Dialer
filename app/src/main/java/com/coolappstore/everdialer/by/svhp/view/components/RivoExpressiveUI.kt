@@ -86,6 +86,8 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
 import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 // ─── App Haptics Helper ────────────────────────────────────────────────────────
 
@@ -808,6 +810,10 @@ fun RivoListItem(
         } ?: com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordNormalized(0.12f, 0.5f)
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
     Surface(
         color = Color.Transparent,
         modifier = modifier
@@ -823,34 +829,39 @@ fun RivoListItem(
                 .fillMaxWidth()
                 .onGloballyPositioned { coords -> rowCoords = coords }
                 .clip(RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp))
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = {
-                        recordAvatarClick()
-                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                            performAppHaptic(
-                                context,
-                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                .then(
+                    if (isResumed) {
+                        Modifier
+                            .combinedClickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = {
+                                    recordAvatarClick()
+                                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                        performAppHaptic(
+                                            context,
+                                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                        )
+                                    }
+                                    onClick()
+                                },
+                                onLongClick = onLongClick
                             )
-                        }
-                        onClick()
-                    },
-                    onLongClick = onLongClick
-                )
-                .pointerInput(onLongClick) {
-                    if (onLongClick != null) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                    onLongClick()
+                            .pointerInput(onLongClick) {
+                                if (onLongClick != null) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                                onLongClick()
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
+                    } else Modifier
+                )
                 .padding(horizontal = 12.dp, vertical = if (compact) 6.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1043,26 +1054,34 @@ fun RivoSwitchListItem(
         label = "SwitchItemScale"
     )
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
     Surface(
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
             .then(if (!enabled) Modifier.alpha(0.38f) else Modifier)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = {
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                        performAppHaptic(
-                            context,
-                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                        )
-                    }
-                    onCheckedChange(!checked)
-                }
+            .then(
+                if (isResumed) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled,
+                        onClick = {
+                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                performAppHaptic(
+                                    context,
+                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                )
+                            }
+                            onCheckedChange(!checked)
+                        }
+                    )
+                } else Modifier
             ),
         shape = RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp),
         shadowElevation = 0.dp
@@ -1152,24 +1171,32 @@ fun RivoCheckboxListItem(
         label = "CheckboxItemScale"
     )
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
     Surface(
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                        performAppHaptic(
-                            context,
-                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
-                        )
-                    }
-                    onCheckedChange(!checked)
-                }
+            .then(
+                if (isResumed) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = {
+                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                performAppHaptic(
+                                    context,
+                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                )
+                            }
+                            onCheckedChange(!checked)
+                        }
+                    )
+                } else Modifier
             ),
         shape = RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp),
         shadowElevation = 0.dp
