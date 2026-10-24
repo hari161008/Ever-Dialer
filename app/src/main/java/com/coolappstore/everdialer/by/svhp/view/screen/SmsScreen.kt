@@ -86,6 +86,7 @@ import com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreen
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
@@ -179,8 +180,23 @@ fun SmsScreen(
     val listStates = remember { mutableMapOf<String, LazyListState>() }
     val chipRowState = rememberLazyListState()
 
+    val allCategories = remember(settingsVer) { prefs.getAllSmsCategories() }
+    val hiddenCategories = remember(settingsVer) { prefs.getHiddenSmsCategories() }
+    val visibleCategories = remember(allCategories, hiddenCategories) {
+        allCategories.filterNot { hiddenCategories.contains(it.id) }
+    }
+    val customCategories = remember(settingsVer) { prefs.getCustomSmsCategories() }
+
     var selectedFilter by remember {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_SELECTED_FILTER, "all") ?: "all")
+    }
+
+    LaunchedEffect(visibleCategories) {
+        if (visibleCategories.isNotEmpty() && visibleCategories.none { it.id == selectedFilter }) {
+            val fallback = visibleCategories.first().id
+            selectedFilter = fallback
+            prefs.setString(PreferenceManager.KEY_SMS_SELECTED_FILTER, fallback)
+        }
     }
 
     val favoriteNumbers = remember(allContacts) {
@@ -193,28 +209,29 @@ fun SmsScreen(
     val pinnedThreads = remember(settingsVer) { prefs.getPinnedSmsThreads() }
     val starredMessages by smsVM.starredMessages.collectAsState()
 
-    val filterConversations: (String) -> List<SmsConversation> = remember(rawConversations, favoriteNumbers, favoriteNames, pinnedThreads) {
+    val filterConversations: (String) -> List<SmsConversation> = remember(rawConversations, favoriteNumbers, favoriteNames, customCategories) {
         { filter ->
-            val byFilter = when (filter) {
-                "favourites" -> {
+            val custom = customCategories.firstOrNull { it.id == filter }
+            val byFilter = when {
+                custom != null -> {
+                    rawConversations.filter { conv ->
+                        custom.contactPhones.any { numbersLikelyMatch(conv.address, it) }
+                    }
+                }
+                filter == "favourites" -> {
                     rawConversations.filter { conv ->
                         favoriteNames.contains(conv.contactName?.trim()?.lowercase()) ||
                         favoriteNumbers.any { numbersLikelyMatch(conv.address, it) }
                     }
                 }
-                "contacts" -> rawConversations.filter { !it.contactName.isNullOrBlank() }
-                "unknown" -> rawConversations.filter { it.contactName.isNullOrBlank() }
-                "otp" -> rawConversations.filter { conv ->
+                filter == "contacts" -> rawConversations.filter { !it.contactName.isNullOrBlank() }
+                filter == "unknown" -> rawConversations.filter { it.contactName.isNullOrBlank() }
+                filter == "otp" -> rawConversations.filter { conv ->
                     OTP_REGEX.containsMatchIn(conv.snippet)
                 }
                 else -> rawConversations
             }
-            if (pinnedThreads.isEmpty()) {
-                byFilter.sortedByDescending { it.date }
-            } else {
-                val (pinned, unpinned) = byFilter.partition { pinnedThreads.contains(it.threadId) }
-                pinned.sortedByDescending { it.date } + unpinned.sortedByDescending { it.date }
-            }
+            byFilter.sortedByDescending { it.date }
         }
     }
 
@@ -450,14 +467,7 @@ fun SmsScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val filterOptions = listOf(
-                                "all" to "All",
-                                "favourites" to "Favourites",
-                                "starred" to "Starred",
-                                "contacts" to "Contacts",
-                                "unknown" to "Unknown",
-                                "otp" to "OTP"
-                            )
+                            val filterOptions = visibleCategories.map { it.id to it.name }
                             itemsIndexed(filterOptions, key = { _, it -> it.first }) { index, (key, label) ->
                                 val isSelected = selectedFilter == key
                                 FilterChip(
@@ -627,11 +637,14 @@ fun SmsScreen(
         ) { currentFilter ->
             val currentListState = listStates.getOrPut(currentFilter) { LazyListState() }
             ScrollHapticsEffect(currentListState)
-            val currentConversations = remember(rawConversations, currentFilter, favoriteNumbers, favoriteNames) {
+            val currentConversations = remember(rawConversations, currentFilter, favoriteNumbers, favoriteNames, customCategories) {
                 filterConversations(currentFilter)
             }
-            val currentGrouped = remember(currentConversations, unreadAtTop) {
-                groupConversations(currentConversations)
+            val (pinnedConvs, unpinnedConvs) = remember(currentConversations, pinnedThreads) {
+                currentConversations.partition { pinnedThreads.contains(it.threadId) }
+            }
+            val currentGrouped = remember(unpinnedConvs, unreadAtTop) {
+                groupConversations(unpinnedConvs)
             }
 
             LazyColumn(
@@ -1042,6 +1055,210 @@ fun SmsScreen(
                         }
                     }
                 }
+
+                    // Pinned conversations container (above all other containers)
+                    if (pinnedConvs.isNotEmpty()) {
+                        item(key = "header_${currentFilter}_pinned", contentType = "sectionHeader") {
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                                    .animateItem(
+                                        fadeInSpec = null,
+                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                        fadeOutSpec = tween(450, easing = FastOutLinearInEasing)
+                                    )
+                            ) {
+                                RivoSectionHeader(title = "Pinned")
+                            }
+                        }
+
+                        itemsIndexed(
+                            items = pinnedConvs,
+                            key = { _, it -> "pinned_${it.threadId}" },
+                            contentType = { _, _ -> "conversationItem" }
+                        ) { index, conv ->
+                            val isFirst = index == 0
+                            val isLast = index == pinnedConvs.size - 1
+                            val cornerRadius = 28.dp
+                            val topStart = if (isFirst) cornerRadius else 0.dp
+                            val topEnd = if (isFirst) cornerRadius else 0.dp
+                            val bottomStart = if (isLast) cornerRadius else 0.dp
+                            val bottomEnd = if (isLast) cornerRadius else 0.dp
+                            val itemShape = RoundedCornerShape(
+                                topStart = topStart,
+                                topEnd = topEnd,
+                                bottomStart = bottomStart,
+                                bottomEnd = bottomEnd
+                            )
+                            val isSelected = selectedThreadIds.contains(conv.threadId)
+                            val isPinned = true
+                            val isMuted = prefs.isSmsMuted(conv.address)
+                            var showConversationMenu by remember { mutableStateOf(false) }
+
+                            val handleSwipeAction: (String) -> Unit = { actionKey ->
+                                when (actionKey) {
+                                    "call" -> makeCall(context, conv.address, null)
+                                    "read" -> smsVM.markThreadAsRead(conv.threadId)
+                                    "delete" -> threadToDelete = conv
+                                }
+                            }
+
+                            RivoScrollAnimatedItem(enabled = isScrollAnimEnabled) {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    Surface(
+                                        shape = itemShape,
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            if (!isFirst) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                    thickness = 0.5.dp
+                                                )
+                                            }
+                                            SwipeableItemContainer(
+                                                modifier = Modifier.animateItem(
+                                                    fadeInSpec = tween(400, easing = FastOutSlowInEasing),
+                                                    placementSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+                                                    fadeOutSpec = tween(450, easing = FastOutLinearInEasing)
+                                                ),
+                                                leftAction = leftSwipeActionItem,
+                                                rightAction = rightSwipeActionItem,
+                                                onSwipeLeft = { handleSwipeAction(swipeLeftAction) },
+                                                onSwipeRight = { handleSwipeAction(swipeRightAction) },
+                                                enabled = !isSelectionMode,
+                                                shape = itemShape
+                                            ) {
+                                                ConversationItemRow(
+                                                    conversation = conv,
+                                                    timeStr = if (conv.date <= 0) "" else formatDate(conv.date, use24HourTime),
+                                                    isSelected = isSelected,
+                                                    isSelectionMode = isSelectionMode,
+                                                    autoColor = autoColor,
+                                                    showAvatar = showAvatar,
+                                                    isPinned = isPinned,
+                                                    isMuted = isMuted,
+                                                    shape = itemShape,
+                                                    onClick = {
+                                                        if (isSelectionMode) {
+                                                            if (isSelected) selectedThreadIds.remove(conv.threadId)
+                                                            else selectedThreadIds.add(conv.threadId)
+                                                        } else {
+                                                            if (conv.threadId > 0) {
+                                                                smsVM.loadThreadMessages(conv.threadId)
+                                                            }
+                                                            navigator.navigate(
+                                                                SmsChatScreenDestination(
+                                                                    threadId = conv.threadId,
+                                                                    address = conv.address,
+                                                                    contactName = conv.contactName,
+                                                                    photoUri = conv.photoUri
+                                                                )
+                                                            )
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        if (isSelectionMode) {
+                                                            if (isSelected) selectedThreadIds.remove(conv.threadId)
+                                                            else selectedThreadIds.add(conv.threadId)
+                                                        } else {
+                                                            showConversationMenu = true
+                                                        }
+                                                    },
+                                                    onAvatarClick = {
+                                                        if (!isSelectionMode) {
+                                                            navigator.navigate(
+                                                                ContactDetailsScreenDestination(
+                                                                    phoneNumber = conv.address
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    RivoDropdownMenu(
+                                        expanded = showConversationMenu,
+                                        onDismissRequest = { showConversationMenu = false }
+                                    ) {
+                                        RivoDropdownMenuItem(
+                                            text = "Unpin chat",
+                                            icon = Icons.Default.PushPin,
+                                            iconTint = MaterialTheme.colorScheme.primary,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                prefs.setSmsThreadPinned(conv.threadId, false)
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = if (isMuted) "Unmute notifications" else "Mute notifications",
+                                            icon = if (isMuted) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                            iconTint = if (isMuted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                prefs.setSmsMuted(conv.address, !isMuted)
+                                                Toast.makeText(context, if (isMuted) "Unmuted ${conv.contactName ?: conv.address}" else "Muted notifications from ${conv.contactName ?: conv.address}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Block number",
+                                            icon = Icons.Outlined.Block,
+                                            iconTint = MaterialTheme.colorScheme.error,
+                                            isDestructive = true,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.block(context, prefs, conv.address)
+                                                Toast.makeText(context, "Blocked ${conv.contactName ?: conv.address}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = if (conv.isRead) "Mark as unread" else "Mark as read",
+                                            icon = if (conv.isRead) Icons.Outlined.MarkChatUnread else Icons.Outlined.MarkChatRead,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                smsVM.markThreadAsRead(conv.threadId)
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Call",
+                                            icon = Icons.Default.Call,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                makeCall(context, conv.address, null)
+                                            }
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Select",
+                                            icon = Icons.Default.CheckBox,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                selectedThreadIds.add(conv.threadId)
+                                            }
+                                        )
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        )
+                                        RivoDropdownMenuItem(
+                                            text = "Delete",
+                                            icon = Icons.Outlined.Delete,
+                                            iconTint = MaterialTheme.colorScheme.error,
+                                            isDestructive = true,
+                                            onClick = {
+                                                showConversationMenu = false
+                                                threadToDelete = conv
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            if (isLast) Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
 
                     // Conversation items grouped by date header
                     currentGrouped.forEach { (header, convsInGroup) ->

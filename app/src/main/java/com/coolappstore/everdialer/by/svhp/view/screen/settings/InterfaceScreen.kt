@@ -133,7 +133,7 @@ private fun triggerRestartPrompt(
 fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
-    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
     val prefs = koinInject<PreferenceManager>()
     val scope = rememberCoroutineScope()
@@ -797,7 +797,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                         .weight(1f)
                                                         .height(38.dp)
                                                         .then(
-                                                            if (isResumed) {
+                                                            if (isInteractive) {
                                                                 Modifier.clickable {
                                                                     themeMode = option.key
                                                                     prefs.setString(PreferenceManager.KEY_THEME_MODE, option.key)
@@ -970,7 +970,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                                                 shape = CircleShape
                                                             )
                                                             .then(
-                                                                if (isResumed) {
+                                                                if (isInteractive) {
                                                                     Modifier.clickable {
                                                                         customPrimaryColor = color.toArgb()
                                                                         prefs.setInt("custom_primary_color", color.toArgb())
@@ -1401,31 +1401,15 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 color = rivoHeadingColor(),
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             RivoExpressiveCard {
-                                Column(modifier = Modifier
-                                    .then(if (isResumed) Modifier.clickable { navigator.navigate(CustomFontScreenDestination()) } else Modifier)
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
-                                            icon = Icons.Outlined.TextFormat,
-                                            iconContainerColor = ColorPurple
-                                        )
-                                        Spacer(Modifier.width(16.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Fonts", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                            val currentFontName = AppFontHelper.getFontDisplayName(prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null))
-                                            Text(
-                                                currentFontName,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Icon(
-                                            Icons.Default.ChevronRight,
-                                            contentDescription = "Choose font",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                }
+                                val currentFontName = AppFontHelper.getFontDisplayName(prefs.getString(PreferenceManager.KEY_CUSTOM_FONT_PATH, null))
+                                RivoListItem(
+                                    headline = "Fonts",
+                                    supporting = currentFontName,
+                                    leadingIcon = Icons.Outlined.TextFormat,
+                                    iconContainerColor = ColorPurple,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { navigator.navigate(CustomFontScreenDestination()) }
+                                )
                             }
                         }
                     }
@@ -1448,7 +1432,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .then(if (isResumed) Modifier.clickable { isRoundnessExpanded = !isRoundnessExpanded } else Modifier)
+                                            .then(if (isInteractive) Modifier.clickable { isRoundnessExpanded = !isRoundnessExpanded } else Modifier)
                                     ) {
                                         com.coolappstore.everdialer.by.svhp.view.components.RivoIconBox(
                                             icon = Icons.Outlined.RoundedCorner,

@@ -812,7 +812,8 @@ fun RivoListItem(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
-    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    var lastClickTime by remember { mutableLongStateOf(0L) }
 
     Surface(
         color = Color.Transparent,
@@ -830,12 +831,15 @@ fun RivoListItem(
                 .onGloballyPositioned { coords -> rowCoords = coords }
                 .clip(RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp))
                 .then(
-                    if (isResumed) {
+                    if (isInteractive) {
                         Modifier
                             .combinedClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
                                 onClick = {
+                                    val now = android.os.SystemClock.uptimeMillis()
+                                    if (now - lastClickTime < 400L) return@combinedClickable
+                                    lastClickTime = now
                                     recordAvatarClick()
                                     if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                                         performAppHaptic(
@@ -1056,7 +1060,7 @@ fun RivoSwitchListItem(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
-    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
     Surface(
         color = Color.Transparent,
@@ -1065,7 +1069,7 @@ fun RivoSwitchListItem(
             .scale(scale)
             .then(if (!enabled) Modifier.alpha(0.38f) else Modifier)
             .then(
-                if (isResumed) {
+                if (isInteractive) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -1173,7 +1177,7 @@ fun RivoCheckboxListItem(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
-    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
     Surface(
         color = Color.Transparent,
@@ -1181,7 +1185,7 @@ fun RivoCheckboxListItem(
             .fillMaxWidth()
             .scale(scale)
             .then(
-                if (isResumed) {
+                if (isInteractive) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
                         indication = null,

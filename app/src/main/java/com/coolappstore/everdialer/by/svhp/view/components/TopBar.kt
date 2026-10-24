@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.generated.destinations.SearchScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsScreenDestination
@@ -480,6 +482,10 @@ fun SettingsPillTopAppBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (onBackClick != null) {
+                    val lifecycleOwner = LocalLifecycleOwner.current
+                    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+                    val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+
                     val backBtnBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
                     val isBackBtnBright = androidx.core.graphics.ColorUtils.calculateLuminance(backBtnBg.toArgb()) > 0.45
                     val backBtnFg = if (usePrimary) {
@@ -489,6 +495,7 @@ fun SettingsPillTopAppBar(
                     }
                     FilledIconButton(
                         onClick = {
+                            if (!isInteractive) return@FilledIconButton
                             if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                                 performAppHaptic(
                                     context,
@@ -498,6 +505,7 @@ fun SettingsPillTopAppBar(
                             }
                             onBackClick()
                         },
+                        enabled = isInteractive,
                         modifier = Modifier.size(44.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = backBtnBg,

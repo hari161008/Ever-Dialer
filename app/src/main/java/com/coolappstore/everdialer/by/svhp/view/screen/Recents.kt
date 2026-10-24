@@ -66,6 +66,7 @@ import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
+import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogFilter
 import com.coolappstore.everdialer.by.svhp.view.components.*
@@ -661,6 +662,20 @@ fun CallLogFullContent(
         val isLoadingMore by viewModel.isLoadingMore.collectAsState()
         val contacts by contactsViewModel.allContacts.collectAsState()
         val selectedFilter by viewModel.selectedFilter.collectAsState()
+        val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
+        val allCategories = remember(settingsVersion) { prefs.getAllCallCategories() }
+        val hiddenCategories = remember(settingsVersion) { prefs.getHiddenCallCategories() }
+        val visibleCategories = remember(allCategories, hiddenCategories) {
+            allCategories.filterNot { hiddenCategories.contains(it.id) }
+        }
+        val customCategories = remember(settingsVersion) { prefs.getCustomCallCategories() }
+
+        LaunchedEffect(visibleCategories) {
+            if (visibleCategories.isNotEmpty() && visibleCategories.none { it.id == selectedCategoryId }) {
+                viewModel.setCategoryId(visibleCategories.first().id)
+            }
+        }
+
         val context = LocalContext.current
         val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
 
@@ -673,7 +688,7 @@ fun CallLogFullContent(
 
         // Track previous filter index for slide direction
         val filterEntries = CallLogFilter.entries
-        var previousFilterIndex by remember { mutableIntStateOf(filterEntries.indexOf(selectedFilter)) }
+        var previousFilterIndex by remember { mutableIntStateOf(0) }
 
         val hiddenIds = remember(settingsVersion) {
             val raw = prefs.getString(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
@@ -683,21 +698,29 @@ fun CallLogFullContent(
         val favoriteContactIds = remember(contacts) { contacts.filter { it.isFavorite }.map { it.id }.toSet() }
         val favoritePhoneNumbers = remember(contacts) { contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet() }
 
-        val filteredLogs = remember(logs, selectedFilter, hiddenIds, favoriteContactIds, favoritePhoneNumbers) {
+        val filteredLogs = remember(logs, selectedCategoryId, hiddenIds, favoriteContactIds, favoritePhoneNumbers, customCategories) {
             val base = if (hiddenIds.isEmpty()) logs else logs.filter { it.contactId == null || it.contactId !in hiddenIds }
-            when (selectedFilter) {
-                CallLogFilter.All -> base
-                CallLogFilter.Contacts -> base.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
-                CallLogFilter.Favourites -> {
-                    base.filter { log ->
-                        (log.contactId != null && log.contactId in favoriteContactIds) ||
-                        log.number in favoritePhoneNumbers
-                    }
+            val custom = customCategories.firstOrNull { it.id == selectedCategoryId }
+            if (custom != null) {
+                base.filter { entry ->
+                    custom.contactPhones.any { numbersLikelyMatch(entry.number, it) }
                 }
-                CallLogFilter.Unknown -> base.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
-                CallLogFilter.Missed -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
-                CallLogFilter.Incoming -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
-                CallLogFilter.Outgoing -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+            } else {
+                when (selectedCategoryId) {
+                    "all" -> base
+                    "contacts" -> base.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
+                    "favourites" -> {
+                        base.filter { log ->
+                            (log.contactId != null && log.contactId in favoriteContactIds) ||
+                            log.number in favoritePhoneNumbers
+                        }
+                    }
+                    "unknown" -> base.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
+                    "missed" -> base.filter { it.type == CallLog.Calls.MISSED_TYPE }
+                    "incoming" -> base.filter { it.type == CallLog.Calls.INCOMING_TYPE }
+                    "outgoing" -> base.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                    else -> base
+                }
             }
         }
         val totalCallsMap = remember(logs) {
@@ -1015,8 +1038,8 @@ fun CallLogFullContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(CallLogFilter.entries) { filter ->
-                            val isSelected = selectedFilter == filter
+                        items(visibleCategories, key = { it.id }) { cat ->
+                            val isSelected = selectedCategoryId == cat.id
                             val containerColor by animateColorAsState(
                                 targetValue = if (isSelected) activeChipBg
                                               else MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1043,10 +1066,10 @@ fun CallLogFullContent(
                                         .clip(RoundedCornerShape(50.dp))
                                         .combinedClickable(
                                             onClick = {
-                                                previousFilterIndex = filterEntries.indexOf(selectedFilter)
-                                                viewModel.setFilter(filter)
+                                                previousFilterIndex = visibleCategories.indexOfFirst { it.id == selectedCategoryId }
+                                                viewModel.setCategoryId(cat.id)
                                             },
-                                            onLongClick = if (filter == CallLogFilter.All) {
+                                            onLongClick = if (cat.id == "all") {
                                                 {
                                                     if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                                                         performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
@@ -1063,14 +1086,14 @@ fun CallLogFullContent(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            com.coolappstore.everdialer.by.svhp.controller.util.tr(filter.displayName),
+                                            com.coolappstore.everdialer.by.svhp.controller.util.tr(cat.name),
                                             color = labelColor,
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     }
                                 }
 
-                                if (filter == CallLogFilter.All) {
+                                if (cat.id == "all") {
                                     DropdownMenu(
                                         expanded = showAllGroupMenuPortrait,
                                         onDismissRequest = { showAllGroupMenuPortrait = false },
@@ -1127,7 +1150,7 @@ fun CallLogFullContent(
                 // actual filter change (All/Missed/etc.) gets the slide transition.
                 var hasLoadedOnce by remember { mutableStateOf(false) }
                 AnimatedContent(
-                    targetState = selectedFilter,
+                    targetState = selectedCategoryId,
                     transitionSpec = {
                         val filterChanged = initialState != targetState
                         if (!hasLoadedOnce) {
@@ -1138,8 +1161,8 @@ fun CallLogFullContent(
                             // Data-only refresh: instant, no animation whatsoever
                             EnterTransition.None togetherWith ExitTransition.None
                         } else {
-                            val currentIdx = filterEntries.indexOf(targetState)
-                            val prevIdx = filterEntries.indexOf(initialState)
+                            val currentIdx = visibleCategories.indexOfFirst { it.id == targetState }
+                            val prevIdx = visibleCategories.indexOfFirst { it.id == initialState }
                             val goingRight = currentIdx > prevIdx
                             if (goingRight) {
                                 slideInHorizontally(
@@ -1210,8 +1233,8 @@ fun CallLogFullContent(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(CallLogFilter.entries) { filter ->
-                                        val isSelected = selectedFilter == filter
+                                    items(visibleCategories, key = { it.id }) { cat ->
+                                        val isSelected = selectedCategoryId == cat.id
                                         val containerColor by animateColorAsState(
                                             targetValue = if (isSelected) activeChipBg
                                                           else MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1238,10 +1261,10 @@ fun CallLogFullContent(
                                                     .clip(RoundedCornerShape(50.dp))
                                                     .combinedClickable(
                                                         onClick = {
-                                                            previousFilterIndex = filterEntries.indexOf(selectedFilter)
-                                                            viewModel.setFilter(filter)
+                                                            previousFilterIndex = visibleCategories.indexOfFirst { it.id == selectedCategoryId }
+                                                            viewModel.setCategoryId(cat.id)
                                                         },
-                                                        onLongClick = if (filter == CallLogFilter.All) {
+                                                        onLongClick = if (cat.id == "all") {
                                                             {
                                                                 if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
                                                                     performAppHaptic(context, prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light", prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f))
@@ -1258,14 +1281,14 @@ fun CallLogFullContent(
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text(
-                                                        filter.displayName,
+                                                        com.coolappstore.everdialer.by.svhp.controller.util.tr(cat.name),
                                                         color = labelColor,
                                                         style = MaterialTheme.typography.labelLarge
                                                     )
                                                 }
                                             }
 
-                                            if (filter == CallLogFilter.All) {
+                                            if (cat.id == "all") {
                                                 DropdownMenu(
                                                     expanded = showAllGroupMenuLandscape,
                                                     onDismissRequest = { showAllGroupMenuLandscape = false },

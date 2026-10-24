@@ -894,6 +894,90 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         }
     }
 
+    private fun updateEvents(ops: ArrayList<ContentProviderOperation>, rawId: Long, events: List<ContactEvent>) {
+        val cleanEvents = events.filter { it.date.isNotBlank() }
+        val existingRows = mutableListOf<Triple<Long, String?, Int>>()
+        try {
+            contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.Data._ID,
+                    ContactsContract.CommonDataKinds.Event.START_DATE,
+                    ContactsContract.CommonDataKinds.Event.TYPE
+                ),
+                "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                arrayOf(rawId.toString(), ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE),
+                null
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.Data._ID)
+                val dateIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Event.START_DATE)
+                val typeIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Event.TYPE)
+                while (cursor.moveToNext()) {
+                    if (idIdx >= 0) {
+                        existingRows.add(
+                            Triple(
+                                cursor.getLong(idIdx),
+                                if (dateIdx >= 0) cursor.getString(dateIdx) else null,
+                                if (typeIdx >= 0) cursor.getInt(typeIdx) else ContactsContract.CommonDataKinds.Event.TYPE_OTHER
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ContactsRepo", "Error querying events for rawId $rawId", e)
+        }
+
+        val minCount = minOf(existingRows.size, cleanEvents.size)
+        for (i in 0 until minCount) {
+            val existing = existingRows[i]
+            val newEvent = cleanEvents[i]
+            if (existing.second?.trim() != newEvent.date.trim() || existing.third != newEvent.type) {
+                ops.add(
+                    ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                        .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existing.first.toString()))
+                        .withValue(ContactsContract.CommonDataKinds.Event.START_DATE, newEvent.date.trim())
+                        .withValue(ContactsContract.CommonDataKinds.Event.TYPE, newEvent.type)
+                        .apply {
+                            if (!newEvent.label.isNullOrBlank()) {
+                                withValue(ContactsContract.CommonDataKinds.Event.LABEL, newEvent.label)
+                            }
+                        }
+                        .build()
+                )
+            }
+        }
+
+        if (cleanEvents.size > existingRows.size) {
+            for (i in existingRows.size until cleanEvents.size) {
+                val newEvent = cleanEvents[i]
+                ops.add(
+                    ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+                        .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE)
+                        .withValue(ContactsContract.CommonDataKinds.Event.START_DATE, newEvent.date.trim())
+                        .withValue(ContactsContract.CommonDataKinds.Event.TYPE, newEvent.type)
+                        .apply {
+                            if (!newEvent.label.isNullOrBlank()) {
+                                withValue(ContactsContract.CommonDataKinds.Event.LABEL, newEvent.label)
+                            }
+                        }
+                        .build()
+                )
+            }
+        }
+
+        if (existingRows.size > cleanEvents.size) {
+            for (i in cleanEvents.size until existingRows.size) {
+                ops.add(
+                    ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection("${ContactsContract.Data._ID} = ?", arrayOf(existingRows[i].first.toString()))
+                        .build()
+                )
+            }
+        }
+    }
+
     private fun updateNote(ops: ArrayList<ContentProviderOperation>, rawId: Long, note: String?) {
         val existingRows = mutableListOf<Pair<Long, String?>>()
         try {
@@ -1197,6 +1281,20 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                         .build())
                 }
 
+                contact.events.forEach { event ->
+                    ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
+                        .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE)
+                        .withValue(ContactsContract.CommonDataKinds.Event.START_DATE, event.date)
+                        .withValue(ContactsContract.CommonDataKinds.Event.TYPE, event.type)
+                        .apply {
+                            if (!event.label.isNullOrBlank()) {
+                                withValue(ContactsContract.CommonDataKinds.Event.LABEL, event.label)
+                            }
+                        }
+                        .build())
+                }
+
                 val photoBytes = loadPhotoBytes(contact.photoUri)
                 if (photoBytes != null) {
                     ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
@@ -1258,6 +1356,7 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                     if (!isSim) {
                         updateEmails(ops, rawId, contact.emails)
                         updateAddresses(ops, rawId, contact.addresses)
+                        updateEvents(ops, rawId, contact.events)
                         updateNote(ops, rawId, contact.note)
                     }
                 }

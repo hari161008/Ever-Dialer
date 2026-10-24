@@ -702,6 +702,17 @@ class PcBluetoothSyncManager(
                                 sendSyncData(writer)
                             }
                         }
+                        "pin_sms_thread" -> {
+                            val threadId = cmdObj.optLong("threadId", -1L).takeIf { it != -1L }
+                                ?: cmdObj.optString("threadId").toLongOrNull()
+                            val pinned = cmdObj.optBoolean("pinned", true)
+                            Log.i(TAG, "Executing pin_sms_thread threadId=$threadId pinned=$pinned")
+                            if (threadId != null) {
+                                prefs.setSmsThreadPinned(threadId, pinned)
+                                lastFingerprint = computeStateFingerprint()
+                                sendSyncData(writer)
+                            }
+                        }
                         "pin_sms_message" -> {
                             val messageIdStr = cmdObj.optString("messageId").replace("msg_", "")
                             val messageId = messageIdStr.toLongOrNull()
@@ -946,6 +957,7 @@ class PcBluetoothSyncManager(
                         put("timestamp", log.date)
                         put("duration", log.duration)
                         put("simSlot", log.simSlot)
+                        put("count", log.count)
                     }
                     callLogsArray.put(lObj)
                 }
@@ -1031,11 +1043,47 @@ class PcBluetoothSyncManager(
             val pinnedMsgIds = JSONArray(prefs.getPinnedSmsMessages().map { it.toString() })
             val pinnedThreadIds = JSONArray(prefs.getPinnedSmsThreads().map { it.toString() })
 
+            val categories = prefs.getAllSmsCategories()
+            val hiddenCategories = prefs.getHiddenSmsCategories()
+            val smsCategoriesArray = JSONArray()
+            for (c in categories) {
+                val obj = JSONObject()
+                obj.put("id", c.id)
+                obj.put("name", c.name)
+                obj.put("isCustom", c.isCustom)
+                obj.put("isVisible", !hiddenCategories.contains(c.id))
+                val phones = JSONArray()
+                for (p in c.contactPhones) {
+                    phones.put(p)
+                }
+                obj.put("contactPhones", phones)
+                smsCategoriesArray.put(obj)
+            }
+
+            val callCategories = prefs.getAllCallCategories()
+            val hiddenCallCategories = prefs.getHiddenCallCategories()
+            val callCategoriesArray = JSONArray()
+            for (c in callCategories) {
+                val obj = JSONObject()
+                obj.put("id", c.id)
+                obj.put("name", c.name)
+                obj.put("isCustom", c.isCustom)
+                obj.put("isVisible", !hiddenCallCategories.contains(c.id))
+                val phones = JSONArray()
+                for (p in c.contactPhones) {
+                    phones.put(p)
+                }
+                obj.put("contactPhones", phones)
+                callCategoriesArray.put(obj)
+            }
+
             // Build wrapper payload
             val payload = JSONObject().apply {
                 put("contacts", contactsArray)
                 put("callLogs", callLogsArray)
+                put("callCategories", callCategoriesArray)
                 put("smsThreads", smsArray)
+                put("smsCategories", smsCategoriesArray)
                 put("notes", notesArray)
                 put("starredSmsMessageIds", starredMsgIds)
                 put("pinnedSmsMessageIds", pinnedMsgIds)

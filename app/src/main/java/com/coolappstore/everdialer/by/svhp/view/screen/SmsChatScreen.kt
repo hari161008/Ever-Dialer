@@ -753,6 +753,83 @@ fun SmsChatScreen(
                 .padding(paddingValues)
                 .imePadding()
         ) {
+            // Pinned message banner on top above the chat
+            val pinnedMessages = remember(messages, settingsVer) {
+                messages.filter { prefs.isSmsMessagePinned(it.id) }
+            }
+            AnimatedVisibility(
+                visible = pinnedMessages.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                val pinnedMsg = pinnedMessages.lastOrNull()
+                if (pinnedMsg != null) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clickable {
+                                val reversedItems = chatListItems.asReversed()
+                                val targetIndex = reversedItems.indexOfFirst {
+                                    it is ChatListItem.Message && it.message.id == pinnedMsg.id
+                                }
+                                if (targetIndex >= 0) {
+                                    coroutineScope.launch {
+                                        listState.animateScrollToItem(targetIndex)
+                                    }
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (pinnedMessages.size > 1) "Pinned message (${pinnedMessages.size})" else "Pinned message",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = pinnedMsg.body.ifBlank { "MMS Message" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(
+                                onClick = {
+                                    prefs.setSmsMessagePinned(pinnedMsg.id, false)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Unpin message",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Message bubbles list
             Box(
                 modifier = Modifier

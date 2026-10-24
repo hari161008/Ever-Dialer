@@ -56,6 +56,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BlockedSmsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.CreateSmsCategoryScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsAppIconScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
@@ -266,6 +267,7 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
 
     // Dialog state controllers
     var showAppNameDialog by remember { mutableStateOf(false) }
+    var showCategoriesDialog by remember { mutableStateOf(false) }
     var showTextSizeDialog by remember { mutableStateOf(false) }
     var showSendDelayDialog by remember { mutableStateOf(false) }
     var showSignatureDialog by remember { mutableStateOf(false) }
@@ -360,6 +362,24 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
                                     Text("Set Default")
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Category Section (above Appearance)
+            item {
+                RivoAnimatedSection(delayMs = 35L) {
+                    Column {
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Category",
+                                supporting = "Customize pills, reorder, visibility & custom categories",
+                                leadingIcon = Icons.Default.Category,
+                                iconContainerColor = ColorPurple,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { showCategoriesDialog = true }
+                            )
                         }
                     }
                 }
@@ -964,6 +984,16 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator) {
             },
             confirmButton = {
                 TextButton(onClick = { showAppNameDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showCategoriesDialog) {
+        com.coolappstore.everdialer.by.svhp.view.components.SmsCategoriesDialog(
+            onDismissRequest = { showCategoriesDialog = false },
+            onAddClick = {
+                showCategoriesDialog = false
+                navigator.navigate(CreateSmsCategoryScreenDestination())
             }
         )
     }

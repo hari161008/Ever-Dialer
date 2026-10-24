@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ import androidx.compose.ui.window.Dialog
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactAccountInfo
+import com.coolappstore.everdialer.by.svhp.modal.data.ContactEvent
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactPhone
 import com.coolappstore.everdialer.by.svhp.modal.data.ContactSaveTarget
 import com.coolappstore.everdialer.by.svhp.modal.data.getPhoneTypeLabel
@@ -89,6 +91,7 @@ fun ContactEditScreen(
     val emailFields = remember { mutableStateListOf<EditableField>().apply { add(EditableField(2L, "")) } }
     val addressFields = remember { mutableStateListOf<EditableField>().apply { add(EditableField(3L, "")) } }
     var description by remember { mutableStateOf("") }
+    var birthday by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val isNewContact = contactId.isNullOrBlank() || contactId == "0" || contactId == "null"
@@ -187,6 +190,8 @@ fun ContactEditScreen(
                     addressFields.add(EditableField(nextFieldId++, ""))
                 }
                 description = contact.note ?: ""
+                val bEvent = contact.events.firstOrNull { it.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY }
+                birthday = bEvent?.date ?: ""
                 isInitialized = true
             }
         }
@@ -217,6 +222,14 @@ fun ContactEditScreen(
             ContactPhone(number = it.value.trim(), type = it.type, label = it.customLabel)
         }
         val finalContactId = if (isNewContact) "0" else contactId
+        val otherEvents = resolvedContact?.events?.filter { it.type != ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY } ?: emptyList()
+        val updatedEvents = if (birthday.isNotBlank()) {
+            otherEvents + ContactEvent(
+                type = ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY,
+                label = null,
+                date = birthday.trim()
+            )
+        } else otherEvents
         val contactToSave = Contact(
             id = finalContactId,
             name = fullName,
@@ -230,7 +243,7 @@ fun ContactEditScreen(
             note = description.trim().ifBlank { null },
             isFavorite = resolvedContact?.isFavorite ?: false,
             sourceAccounts = resolvedContact?.sourceAccounts ?: emptyList(),
-            events = resolvedContact?.events ?: emptyList()
+            events = updatedEvents
         )
 
         if (isNewContact) {
@@ -644,6 +657,55 @@ fun ContactEditScreen(
                             Text("Add Address")
                         }
                     }
+                }
+            }
+
+            item {
+                RivoSectionHeader(title = "Birthday")
+                RivoExpressiveCard {
+                    OutlinedTextField(
+                        value = birthday,
+                        onValueChange = { birthday = it },
+                        label = { Text("Birthday") },
+                        placeholder = { Text("YYYY-MM-DD or tap calendar") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (birthday.isNotBlank()) {
+                                    IconButton(onClick = { birthday = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear Birthday")
+                                    }
+                                }
+                                IconButton(onClick = {
+                                    val cal = java.util.Calendar.getInstance()
+                                    val parts = birthday.split("-")
+                                    val y = parts.getOrNull(0)?.toIntOrNull() ?: cal.get(java.util.Calendar.YEAR)
+                                    val m = (parts.getOrNull(1)?.toIntOrNull()?.minus(1)) ?: cal.get(java.util.Calendar.MONTH)
+                                    val d = parts.getOrNull(2)?.toIntOrNull() ?: cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val mm = String.format("%02d", month + 1)
+                                            val dd = String.format("%02d", dayOfMonth)
+                                            birthday = "$year-$mm-$dd"
+                                        },
+                                        y, m, d
+                                    ).show()
+                                }) {
+                                    Icon(Icons.Default.CalendarToday, contentDescription = "Pick Date", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
                 }
             }
             

@@ -1376,6 +1376,24 @@ fun ContactDetailsScreen(
                                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                             }
                                         }
+
+                                        val birthdayEvents = contact.events.filter { it.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY }
+                                        if (birthdayEvents.isNotEmpty()) {
+                                            if (contactPhoneNumbers.isNotEmpty() || contact.emails.isNotEmpty() || contact.addresses.isNotEmpty()) {
+                                                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            }
+                                            birthdayEvents.forEachIndexed { bIndex, bEvent ->
+                                                RivoListItem(
+                                                    headline = bEvent.date,
+                                                    supporting = bEvent.label ?: "Birthday",
+                                                    leadingIcon = Icons.Outlined.Cake,
+                                                    onClick = {}
+                                                )
+                                                if (bIndex < birthdayEvents.size - 1) {
+                                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                                }
+                                            }
+                                        }
                                     } else if (phoneNumber != null && phoneNumber != "Unknown") {
                                         RivoListItem(
                                             headline = phoneNumber,

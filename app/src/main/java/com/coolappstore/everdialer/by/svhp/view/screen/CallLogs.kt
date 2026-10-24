@@ -149,6 +149,14 @@ fun CallLogFullScreen(
                 val activeChipBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
                 val activeChipFg = if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
+                val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
+                val allCategories = remember(settingsVersion) { prefs.getAllCallCategories() }
+                val hiddenCategories = remember(settingsVersion) { prefs.getHiddenCallCategories() }
+                val visibleCategories = remember(allCategories, hiddenCategories) {
+                    allCategories.filterNot { hiddenCategories.contains(it.id) }
+                }
+                val customCategories = remember(settingsVersion) { prefs.getCustomCallCategories() }
+
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -156,11 +164,11 @@ fun CallLogFullScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(CallLogFilter.entries, key = { it.name }) { filter ->
+                    items(visibleCategories, key = { it.id }) { cat ->
                         FilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { viewModel.setFilter(filter) },
-                            label = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr(filter.displayName)) },
+                            selected = selectedCategoryId == cat.id,
+                            onClick = { viewModel.setCategoryId(cat.id) },
+                            label = { Text(com.coolappstore.everdialer.by.svhp.controller.util.tr(cat.name)) },
                             shape = RoundedCornerShape(50.dp),
                             border = null,
                             colors = FilterChipDefaults.filterChipColors(
@@ -176,22 +184,30 @@ fun CallLogFullScreen(
                         Text(com.coolappstore.everdialer.by.svhp.controller.util.tr("No call history found"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    val finalLogs = remember(filteredLogsByContact, selectedFilter) {
-                        when (selectedFilter) {
-                            CallLogFilter.All -> filteredLogsByContact
-                            CallLogFilter.Contacts -> filteredLogsByContact.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
-                            CallLogFilter.Favourites -> {
-                                val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
-                                val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
-                                filteredLogsByContact.filter { log ->
-                                    (log.contactId != null && log.contactId in favoriteContactIds) ||
-                                    log.number in favoritePhoneNumbers
-                                }
+                    val finalLogs = remember(filteredLogsByContact, selectedCategoryId, customCategories) {
+                        val custom = customCategories.firstOrNull { it.id == selectedCategoryId }
+                        if (custom != null) {
+                            filteredLogsByContact.filter { entry ->
+                                custom.contactPhones.any { numbersLikelyMatch(entry.number, it) }
                             }
-                            CallLogFilter.Unknown -> filteredLogsByContact.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
-                            CallLogFilter.Missed -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
-                            CallLogFilter.Incoming -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
-                            CallLogFilter.Outgoing -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                        } else {
+                            when (selectedCategoryId) {
+                                "all" -> filteredLogsByContact
+                                "contacts" -> filteredLogsByContact.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
+                                "favourites" -> {
+                                    val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
+                                    val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
+                                    filteredLogsByContact.filter { log ->
+                                        (log.contactId != null && log.contactId in favoriteContactIds) ||
+                                        log.number in favoritePhoneNumbers
+                                    }
+                                }
+                                "unknown" -> filteredLogsByContact.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
+                                "missed" -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE }
+                                "incoming" -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE }
+                                "outgoing" -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE }
+                                else -> filteredLogsByContact
+                            }
                         }
                     }
 

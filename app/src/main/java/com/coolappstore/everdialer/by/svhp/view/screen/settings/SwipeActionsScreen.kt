@@ -218,6 +218,7 @@ fun SwipeActionsScreen(
                                         }
                                         FilledTonalButton(
                                             onClick = {
+                                                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordNormalized(0.7f, 0.4f)
                                                 navigator.navigate(FavouritesSettingsScreenDestination())
                                             },
                                             modifier = Modifier.align(Alignment.End),

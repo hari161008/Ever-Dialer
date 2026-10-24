@@ -65,7 +65,31 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS, false))
     }
 
-    val canUseSystem = remember(context) { BlockedNumbersManager.canUseSystemBlockList(context) }
+    var canUseSystem by remember { mutableStateOf(BlockedNumbersManager.canUseSystemBlockList(context)) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                canUseSystem = BlockedNumbersManager.canUseSystemBlockList(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val navigateToSystemBlocker = {
+        if (!BlockedNumbersManager.openSystemBlockedNumbers(context)) {
+            val intent = com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager.createDefaultDialerIntent(context)
+                ?: android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(intent)
+            } catch (_: Exception) {}
+        }
+    }
 
     val reloadBlockedList: () -> Unit = {
         val currentList = BlockedNumbersManager.getBlockedList(context, prefs)
@@ -123,7 +147,7 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // System Blocking card
+            // System Blocking card or Red Alert Container if turned off
             if (canUseSystem) {
                 item {
                     RivoAnimatedSection(delayMs = 0L) {
@@ -136,6 +160,65 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
                                 trailingIcon = Icons.Default.ChevronRight,
                                 onClick = { BlockedNumbersManager.openSystemBlockedNumbers(context) }
                             )
+                        }
+                    }
+                }
+            } else {
+                item {
+                    RivoAnimatedSection(delayMs = 0L) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            onClick = { navigateToSystemBlocker() }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.error,
+                                            RoundedCornerShape(12.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.SecurityUpdateWarning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onError,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Turn on System Blocker",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "System blocker is turned off. Tap here to turn on the system blocker and protect against unwanted calls across your device.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
                         }
                     }
                 }

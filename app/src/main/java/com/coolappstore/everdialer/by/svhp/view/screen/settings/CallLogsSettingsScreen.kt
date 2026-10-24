@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DragHandle
@@ -92,6 +93,7 @@ fun CallLogsSettingsScreen(
 
     // Call UI section checkboxes dialog
     var showCallUIDialog   by remember { mutableStateOf(false) }
+    var showCategoriesDialog by remember { mutableStateOf(false) }
     var callUIShowToday    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_TODAY, true)) }
     var callUIShowMissed   by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_MISSED, true)) }
     var callUIShowOutgoing by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_UI_SHOW_OUTGOING, true)) }
@@ -278,6 +280,16 @@ fun CallLogsSettingsScreen(
         )
     }
 
+    if (showCategoriesDialog) {
+        com.coolappstore.everdialer.by.svhp.view.components.CallCategoriesDialog(
+            onDismissRequest = { showCategoriesDialog = false },
+            onAddClick = {
+                showCategoriesDialog = false
+                navigator.navigate(com.ramcosta.composedestinations.generated.destinations.CreateCallCategoryScreenDestination())
+            }
+        )
+    }
+
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -314,6 +326,18 @@ fun CallLogsSettingsScreen(
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("calls_section_elements", highlightedKey) { highlightedKey = null },
                             onClick = { showCallUIDialog = true }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        RivoListItem(
+                            headline = "Category",
+                            supporting = "Customize pills, reorder, visibility & custom categories",
+                            leadingIcon = Icons.Default.Category,
+                            iconContainerColor = ColorPurple,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { showCategoriesDialog = true }
                         )
                     }
                 }

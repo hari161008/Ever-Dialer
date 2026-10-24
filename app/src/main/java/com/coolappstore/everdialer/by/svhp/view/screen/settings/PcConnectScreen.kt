@@ -80,6 +80,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                 endActions = {
                     IconButton(
                         onClick = {
+                            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordNormalized(0.92f, 0.05f)
                             navigator.navigate(
                                 com.ramcosta.composedestinations.generated.destinations.PcSyncSettingsScreenDestination()
                             )

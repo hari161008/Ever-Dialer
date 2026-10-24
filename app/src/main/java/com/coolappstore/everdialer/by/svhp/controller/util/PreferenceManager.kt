@@ -184,6 +184,274 @@ class PreferenceManager(context: Context) {
         setString(KEY_MUTED_SMS_ADDRESSES, current.joinToString(","))
     }
 
+    fun getSmsCategoryOrder(): List<String> {
+        val raw = getString(KEY_SMS_CATEGORY_ORDER, null)
+        if (raw.isNullOrBlank()) return DEFAULT_SMS_CATEGORY_ORDER
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    fun setSmsCategoryOrder(order: List<String>) {
+        setString(KEY_SMS_CATEGORY_ORDER, order.joinToString(","))
+    }
+
+    fun getHiddenSmsCategories(): Set<String> {
+        val raw = getString(KEY_SMS_CATEGORY_HIDDEN, null) ?: return emptySet()
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    }
+
+    fun setSmsCategoryHidden(categoryId: String, hidden: Boolean) {
+        val current = getHiddenSmsCategories().toMutableSet()
+        if (hidden) current.add(categoryId) else current.remove(categoryId)
+        setString(KEY_SMS_CATEGORY_HIDDEN, current.joinToString(","))
+    }
+
+    fun getCustomSmsCategories(): List<SmsCustomCategory> {
+        val raw = getString(KEY_SMS_CUSTOM_CATEGORIES, null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(raw)
+            val list = mutableListOf<SmsCustomCategory>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val id = obj.optString("id")
+                val name = obj.optString("name")
+                val phonesArray = obj.optJSONArray("contactPhones")
+                val phones = mutableListOf<String>()
+                if (phonesArray != null) {
+                    for (j in 0 until phonesArray.length()) {
+                        phones.add(phonesArray.getString(j))
+                    }
+                }
+                if (id.isNotBlank() && name.isNotBlank()) {
+                    list.add(SmsCustomCategory(id, name, phones))
+                }
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCustomSmsCategory(category: SmsCustomCategory) {
+        val current = getCustomSmsCategories().toMutableList()
+        val idx = current.indexOfFirst { it.id == category.id }
+        if (idx >= 0) {
+            current[idx] = category
+        } else {
+            current.add(category)
+            val order = getSmsCategoryOrder().toMutableList()
+            if (!order.contains(category.id)) {
+                order.add(category.id)
+                setSmsCategoryOrder(order)
+            }
+        }
+        val array = org.json.JSONArray()
+        for (cat in current) {
+            val obj = org.json.JSONObject()
+            obj.put("id", cat.id)
+            obj.put("name", cat.name)
+            val phonesArray = org.json.JSONArray()
+            for (phone in cat.contactPhones) {
+                phonesArray.put(phone)
+            }
+            obj.put("contactPhones", phonesArray)
+            array.put(obj)
+        }
+        setString(KEY_SMS_CUSTOM_CATEGORIES, array.toString())
+    }
+
+    fun deleteCustomSmsCategory(categoryId: String) {
+        val current = getCustomSmsCategories().filterNot { it.id == categoryId }
+        val array = org.json.JSONArray()
+        for (cat in current) {
+            val obj = org.json.JSONObject()
+            obj.put("id", cat.id)
+            obj.put("name", cat.name)
+            val phonesArray = org.json.JSONArray()
+            for (phone in cat.contactPhones) {
+                phonesArray.put(phone)
+            }
+            obj.put("contactPhones", phonesArray)
+            array.put(obj)
+        }
+        setString(KEY_SMS_CUSTOM_CATEGORIES, array.toString())
+        val order = getSmsCategoryOrder().filterNot { it == categoryId }
+        setSmsCategoryOrder(order)
+        setSmsCategoryHidden(categoryId, false)
+    }
+
+    fun getAllSmsCategories(): List<SmsCategoryItem> {
+        val custom = getCustomSmsCategories().associateBy { it.id }
+        val builtin = mapOf(
+            "all" to "All",
+            "favourites" to "Favourites",
+            "starred" to "Starred",
+            "contacts" to "Contacts",
+            "unknown" to "Unknown",
+            "otp" to "OTP"
+        )
+        val order = getSmsCategoryOrder()
+        val result = mutableListOf<SmsCategoryItem>()
+        for (id in order) {
+            if (custom.containsKey(id)) {
+                val c = custom[id]!!
+                result.add(SmsCategoryItem(c.id, c.name, isCustom = true, contactPhones = c.contactPhones))
+            } else if (builtin.containsKey(id)) {
+                result.add(SmsCategoryItem(id, builtin[id]!!, isCustom = false))
+            }
+        }
+        for ((id, name) in builtin) {
+            if (result.none { it.id == id }) {
+                result.add(SmsCategoryItem(id, name, isCustom = false))
+            }
+        }
+        for ((id, c) in custom) {
+            if (result.none { it.id == id }) {
+                result.add(SmsCategoryItem(c.id, c.name, isCustom = true, contactPhones = c.contactPhones))
+            }
+        }
+        return result
+    }
+
+    fun resetSmsCategoriesToDefault() {
+        setSmsCategoryOrder(DEFAULT_SMS_CATEGORY_ORDER)
+        setString(KEY_SMS_CATEGORY_HIDDEN, "")
+    }
+
+    fun getCallCategoryOrder(): List<String> {
+        val raw = getString(KEY_CALL_CATEGORY_ORDER, null)
+        if (raw.isNullOrBlank()) return DEFAULT_CALL_CATEGORY_ORDER
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    fun setCallCategoryOrder(order: List<String>) {
+        setString(KEY_CALL_CATEGORY_ORDER, order.joinToString(","))
+    }
+
+    fun getHiddenCallCategories(): Set<String> {
+        val raw = getString(KEY_CALL_CATEGORY_HIDDEN, null) ?: return emptySet()
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    }
+
+    fun setCallCategoryHidden(categoryId: String, hidden: Boolean) {
+        val current = getHiddenCallCategories().toMutableSet()
+        if (hidden) current.add(categoryId) else current.remove(categoryId)
+        setString(KEY_CALL_CATEGORY_HIDDEN, current.joinToString(","))
+    }
+
+    fun getCustomCallCategories(): List<CallCustomCategory> {
+        val raw = getString(KEY_CALL_CUSTOM_CATEGORIES, null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(raw)
+            val list = mutableListOf<CallCustomCategory>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val id = obj.optString("id")
+                val name = obj.optString("name")
+                val phonesArray = obj.optJSONArray("contactPhones")
+                val phones = mutableListOf<String>()
+                if (phonesArray != null) {
+                    for (j in 0 until phonesArray.length()) {
+                        phones.add(phonesArray.getString(j))
+                    }
+                }
+                if (id.isNotBlank() && name.isNotBlank()) {
+                    list.add(CallCustomCategory(id, name, phones))
+                }
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCustomCallCategory(category: CallCustomCategory) {
+        val current = getCustomCallCategories().toMutableList()
+        val idx = current.indexOfFirst { it.id == category.id }
+        if (idx >= 0) {
+            current[idx] = category
+        } else {
+            current.add(category)
+            val order = getCallCategoryOrder().toMutableList()
+            if (!order.contains(category.id)) {
+                order.add(category.id)
+                setCallCategoryOrder(order)
+            }
+        }
+        val array = org.json.JSONArray()
+        for (cat in current) {
+            val obj = org.json.JSONObject()
+            obj.put("id", cat.id)
+            obj.put("name", cat.name)
+            val phonesArray = org.json.JSONArray()
+            for (phone in cat.contactPhones) {
+                phonesArray.put(phone)
+            }
+            obj.put("contactPhones", phonesArray)
+            array.put(obj)
+        }
+        setString(KEY_CALL_CUSTOM_CATEGORIES, array.toString())
+    }
+
+    fun deleteCustomCallCategory(categoryId: String) {
+        val current = getCustomCallCategories().filterNot { it.id == categoryId }
+        val array = org.json.JSONArray()
+        for (cat in current) {
+            val obj = org.json.JSONObject()
+            obj.put("id", cat.id)
+            obj.put("name", cat.name)
+            val phonesArray = org.json.JSONArray()
+            for (phone in cat.contactPhones) {
+                phonesArray.put(phone)
+            }
+            obj.put("contactPhones", phonesArray)
+            array.put(obj)
+        }
+        setString(KEY_CALL_CUSTOM_CATEGORIES, array.toString())
+        val order = getCallCategoryOrder().filterNot { it == categoryId }
+        setCallCategoryOrder(order)
+        setCallCategoryHidden(categoryId, false)
+    }
+
+    fun getAllCallCategories(): List<CallCategoryItem> {
+        val custom = getCustomCallCategories().associateBy { it.id }
+        val builtin = mapOf(
+            "all" to "All",
+            "favourites" to "Favourites",
+            "contacts" to "Contacts",
+            "unknown" to "Unknown",
+            "missed" to "Missed",
+            "incoming" to "Incoming",
+            "outgoing" to "Outgoing"
+        )
+        val order = getCallCategoryOrder()
+        val result = mutableListOf<CallCategoryItem>()
+        for (id in order) {
+            if (custom.containsKey(id)) {
+                val c = custom[id]!!
+                result.add(CallCategoryItem(c.id, c.name, isCustom = true, contactPhones = c.contactPhones))
+            } else if (builtin.containsKey(id)) {
+                result.add(CallCategoryItem(id, builtin[id]!!, isCustom = false))
+            }
+        }
+        for ((id, name) in builtin) {
+            if (result.none { it.id == id }) {
+                result.add(CallCategoryItem(id, name, isCustom = false))
+            }
+        }
+        for ((id, c) in custom) {
+            if (result.none { it.id == id }) {
+                result.add(CallCategoryItem(c.id, c.name, isCustom = true, contactPhones = c.contactPhones))
+            }
+        }
+        return result
+    }
+
+    fun resetCallCategoriesToDefault() {
+        setCallCategoryOrder(DEFAULT_CALL_CATEGORY_ORDER)
+        setString(KEY_CALL_CATEGORY_HIDDEN, "")
+    }
+
+
 
     /** Returns the user-configured tab order (Settings > Appearance > Tab Sections) as an
      *  ordered list of tab keys (e.g. "favorites", "calls", "contacts", "recordings", "notes").
@@ -880,8 +1148,46 @@ class PreferenceManager(context: Context) {
         const val KEY_PC_SYNC_NOTES                = "pc_sync_notes"
         const val KEY_PC_SYNC_CONTACT_PFP          = "pc_sync_contact_pfp"
         const val KEY_PC_SYNC_BLUETOOTH_ENABLED    = "pc_sync_bluetooth_enabled"
+
+        // SMS Categories
+        const val KEY_SMS_CATEGORY_ORDER           = "sms_category_order"
+        const val KEY_SMS_CATEGORY_HIDDEN          = "sms_category_hidden"
+        const val KEY_SMS_CUSTOM_CATEGORIES        = "sms_custom_categories"
+        val DEFAULT_SMS_CATEGORY_ORDER             = listOf("all", "favourites", "starred", "contacts", "unknown", "otp")
+
+        // Call Categories
+        const val KEY_CALL_CATEGORY_ORDER          = "call_category_order"
+        const val KEY_CALL_CATEGORY_HIDDEN         = "call_category_hidden"
+        const val KEY_CALL_CUSTOM_CATEGORIES       = "call_custom_categories"
+        val DEFAULT_CALL_CATEGORY_ORDER            = listOf("all", "favourites", "contacts", "unknown", "missed", "incoming", "outgoing")
     }
 }
+
+data class SmsCustomCategory(
+    val id: String,
+    val name: String,
+    val contactPhones: List<String> = emptyList()
+)
+
+data class SmsCategoryItem(
+    val id: String,
+    val name: String,
+    val isCustom: Boolean,
+    val contactPhones: List<String> = emptyList()
+)
+
+data class CallCustomCategory(
+    val id: String,
+    val name: String,
+    val contactPhones: List<String> = emptyList()
+)
+
+data class CallCategoryItem(
+    val id: String,
+    val name: String,
+    val isCustom: Boolean,
+    val contactPhones: List<String> = emptyList()
+)
 
 
 

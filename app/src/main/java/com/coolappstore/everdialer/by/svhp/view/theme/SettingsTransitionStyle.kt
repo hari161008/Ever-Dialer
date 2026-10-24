@@ -165,6 +165,21 @@ object SettingsClickTracker {
         }
     }
 
+    private val routeOrigins = mutableMapOf<String, TransformOrigin>()
+
+    fun setOriginForRoute(route: String?, origin: TransformOrigin) {
+        if (route == null) return
+        val base = route.substringBefore("?").substringBefore("/")
+        routeOrigins[base] = origin
+        routeOrigins[route] = origin
+    }
+
+    fun getOriginForRoute(route: String?): TransformOrigin {
+        if (route == null) return lastOrigin
+        val base = route.substringBefore("?").substringBefore("/")
+        return routeOrigins[base] ?: routeOrigins[route] ?: lastOrigin
+    }
+
     fun recordTap(x: Float, y: Float, screenWidth: Float, screenHeight: Float) {
         if (screenWidth > 0f && screenHeight > 0f) {
             val px = (x / screenWidth).coerceIn(0f, 1f)
@@ -222,12 +237,19 @@ val settingsRoutes = setOf(
     "interface_screen",
     "app_settings_screen",
     "sound_vibration_screen",
+    "volume_dnd_screen",
     "biometric_screen",
     "call_settings_screen",
     "caller_ui_screen",
     "caller_u_i_screen",
     "incoming_call_ui_screen",
     "incoming_call_u_i_screen",
+    "call_logs_settings_screen",
+    "call_accounts_screen",
+    "sim_and_call_placement_screen",
+    "answer_style_screen",
+    "raise_to_answer_screen",
+    "swipe_actions_screen",
     "rain_mode_screen",
     "fake_call_screen",
     "contacts_hider_screen",
@@ -236,14 +258,24 @@ val settingsRoutes = setOf(
     "liquid_glass_elements_screen",
     "blur_effects_elements_screen",
     "app_icon_screen",
-    "call_accounts_screen",
+    "sms_app_icon_screen",
+    "custom_font_screen",
+    "dialpad_settings_screen",
     "default_message_app_screen",
-    "raise_to_answer_screen",
+    "navigation_settings_screen",
+    "pc_connect_screen",
+    "pc_sync_settings_screen",
+    "language_settings_screen",
+    "favourites_settings_screen",
+    "contact_info_settings_screen",
+    "debug_settings_screen",
     "updates_screen",
     "about_app_screen",
+    "about_screen",
     "contributors_screen",
     "more_apps_web_view_screen",
     "ratings_web_view_screen",
+    "donate_web_view_screen",
     "sms_settings_screen",
     "sms_chat_screen",
     "new_message_screen",
@@ -276,9 +308,8 @@ fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {
 fun isExpandingRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
-    return base == "settings_screen" ||
-        base == "sms_settings_screen" ||
-        base == "call_recording_settings_screen" ||
+    if (isSmsChatRoute(route) || base == "search_screen") return false
+    return isSettingsRoute(route) ||
         base == "contact_details_screen" ||
         base == "call_log_detail_screen" ||
         base == "new_message_screen"
@@ -336,6 +367,9 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
             isRootSettings -> SettingsClickTracker.settingsIconOrigin
             isExpanding || isContact -> SettingsClickTracker.lastOrigin
             else -> TransformOrigin.Center
+        }
+        if (isExpanding || isContact) {
+            SettingsClickTracker.setOriginForRoute(targetState.destination.route, origin)
         }
         val initialScale = when {
             isContact -> 0.04f
@@ -449,7 +483,7 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
         }
         val origin = when {
             isRootSettings -> SettingsClickTracker.settingsIconOrigin
-            isExpanding || isContact -> SettingsClickTracker.lastOrigin
+            isExpanding || isContact -> SettingsClickTracker.getOriginForRoute(initialState.destination.route)
             else -> TransformOrigin.Center
         }
         val targetScale = when {
