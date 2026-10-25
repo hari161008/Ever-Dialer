@@ -518,3 +518,17 @@ fun ProvideScaledDensity(
         content = content
     )
 }
+
+fun getActiveThemeColor(context: android.content.Context, prefs: PreferenceManager): Int {
+    val dynamicColor = prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true)
+    val customPrimaryInt = prefs.getInt("custom_primary_color", 0)
+    if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        try {
+            return dynamicLightColorScheme(context).primary.toArgb()
+        } catch (_: Throwable) {}
+    }
+    if (customPrimaryInt != 0) {
+        return customPrimaryInt
+    }
+    return 0xFF6750A4.toInt()
+}

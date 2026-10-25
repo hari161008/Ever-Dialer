@@ -36,15 +36,29 @@ import org.koin.compose.viewmodel.koinActivityViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
-fun CreateSmsCategoryScreen(navigator: DestinationsNavigator) {
+fun CreateSmsCategoryScreen(navigator: DestinationsNavigator, categoryId: String? = null) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val allContacts by contactsVM.allContacts.collectAsState()
 
-    var categoryName by remember { mutableStateOf("") }
+    val existingCategory = remember(categoryId) {
+        categoryId?.let { id -> prefs.getCustomSmsCategories().firstOrNull { it.id == id } }
+    }
+
+    var categoryName by remember { mutableStateOf(existingCategory?.name ?: "") }
     var searchQuery by remember { mutableStateOf("") }
     val selectedContactKeys = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(allContacts, existingCategory) {
+        if (existingCategory != null && selectedContactKeys.isEmpty()) {
+            val phones = existingCategory.contactPhones.toSet()
+            val matchedKeys = allContacts.filter { c ->
+                c.phoneNumbers.any { phones.contains(it) }
+            }.map { it.id.ifBlank { it.name } }
+            selectedContactKeys.addAll(matchedKeys)
+        }
+    }
 
     val filteredContacts = remember(allContacts, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -71,14 +85,14 @@ fun CreateSmsCategoryScreen(navigator: DestinationsNavigator) {
             .flatMap { it.phoneNumbers }
             .distinct()
 
-        val id = "custom_" + System.currentTimeMillis()
+        val id = categoryId ?: ("custom_" + System.currentTimeMillis())
         val category = SmsCustomCategory(
             id = id,
             name = trimmedName,
             contactPhones = selectedPhones
         )
         prefs.saveCustomSmsCategory(category)
-        Toast.makeText(context, "Category '$trimmedName' created", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, if (categoryId != null) "Category '$trimmedName' updated" else "Category '$trimmedName' created", Toast.LENGTH_SHORT).show()
         navigator.navigateUp()
     }
 
@@ -87,7 +101,7 @@ fun CreateSmsCategoryScreen(navigator: DestinationsNavigator) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             SettingsPillTopAppBar(
-                title = "New Category",
+                title = if (existingCategory != null) "Edit Category" else "New Category",
                 onBackClick = { navigator.navigateUp() }
             )
         },
@@ -95,7 +109,7 @@ fun CreateSmsCategoryScreen(navigator: DestinationsNavigator) {
             ExtendedFloatingActionButton(
                 onClick = { handleSave() },
                 icon = { Icon(Icons.Default.Check, contentDescription = null) },
-                text = { Text("Save Category") },
+                text = { Text(if (existingCategory != null) "Update Category" else "Save Category") },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )

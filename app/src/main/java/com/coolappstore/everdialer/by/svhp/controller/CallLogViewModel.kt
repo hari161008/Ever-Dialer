@@ -42,7 +42,7 @@ class CallLogViewModel(
     private val _selectedFilter = MutableStateFlow(CallLogFilter.All)
     val selectedFilter = _selectedFilter.asStateFlow()
 
-    private val _selectedCategoryId = MutableStateFlow("all")
+    private val _selectedCategoryId = MutableStateFlow(prefs.getDefaultCallCategory())
     val selectedCategoryId = _selectedCategoryId.asStateFlow()
 
     private val _isFullHistoryLoaded = MutableStateFlow(false)

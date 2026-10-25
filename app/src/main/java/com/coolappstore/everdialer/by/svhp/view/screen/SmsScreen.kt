@@ -188,12 +188,14 @@ fun SmsScreen(
     val customCategories = remember(settingsVer) { prefs.getCustomSmsCategories() }
 
     var selectedFilter by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_SELECTED_FILTER, "all") ?: "all")
+        val def = prefs.getDefaultSmsCategory()
+        mutableStateOf(if (def.isNotBlank()) def else (prefs.getString(PreferenceManager.KEY_SMS_SELECTED_FILTER, "all") ?: "all"))
     }
 
     LaunchedEffect(visibleCategories) {
+        val def = prefs.getDefaultSmsCategory()
         if (visibleCategories.isNotEmpty() && visibleCategories.none { it.id == selectedFilter }) {
-            val fallback = visibleCategories.first().id
+            val fallback = if (visibleCategories.any { it.id == def }) def else visibleCategories.first().id
             selectedFilter = fallback
             prefs.setString(PreferenceManager.KEY_SMS_SELECTED_FILTER, fallback)
         }

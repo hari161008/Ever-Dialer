@@ -277,6 +277,16 @@ class PreferenceManager(context: Context) {
         val order = getSmsCategoryOrder().filterNot { it == categoryId }
         setSmsCategoryOrder(order)
         setSmsCategoryHidden(categoryId, false)
+        if (getDefaultSmsCategory() == categoryId) {
+            setDefaultSmsCategory("all")
+        }
+    }
+
+    fun getDefaultSmsCategory(): String =
+        getString(KEY_DEFAULT_SMS_CATEGORY, "all") ?: "all"
+
+    fun setDefaultSmsCategory(id: String) {
+        setString(KEY_DEFAULT_SMS_CATEGORY, id)
     }
 
     fun getAllSmsCategories(): List<SmsCategoryItem> {
@@ -315,6 +325,7 @@ class PreferenceManager(context: Context) {
     fun resetSmsCategoriesToDefault() {
         setSmsCategoryOrder(DEFAULT_SMS_CATEGORY_ORDER)
         setString(KEY_SMS_CATEGORY_HIDDEN, "")
+        setDefaultSmsCategory("all")
     }
 
     fun getCallCategoryOrder(): List<String> {
@@ -410,6 +421,16 @@ class PreferenceManager(context: Context) {
         val order = getCallCategoryOrder().filterNot { it == categoryId }
         setCallCategoryOrder(order)
         setCallCategoryHidden(categoryId, false)
+        if (getDefaultCallCategory() == categoryId) {
+            setDefaultCallCategory("all")
+        }
+    }
+
+    fun getDefaultCallCategory(): String =
+        getString(KEY_DEFAULT_CALL_CATEGORY, "all") ?: "all"
+
+    fun setDefaultCallCategory(id: String) {
+        setString(KEY_DEFAULT_CALL_CATEGORY, id)
     }
 
     fun getAllCallCategories(): List<CallCategoryItem> {
@@ -449,6 +470,7 @@ class PreferenceManager(context: Context) {
     fun resetCallCategoriesToDefault() {
         setCallCategoryOrder(DEFAULT_CALL_CATEGORY_ORDER)
         setString(KEY_CALL_CATEGORY_HIDDEN, "")
+        setDefaultCallCategory("all")
     }
 
 
@@ -1147,18 +1169,21 @@ class PreferenceManager(context: Context) {
         const val KEY_PC_SYNC_SMS                  = "pc_sync_sms"
         const val KEY_PC_SYNC_NOTES                = "pc_sync_notes"
         const val KEY_PC_SYNC_CONTACT_PFP          = "pc_sync_contact_pfp"
+        const val KEY_PC_SYNC_DYNAMIC_COLORS       = "pc_sync_dynamic_colors"
         const val KEY_PC_SYNC_BLUETOOTH_ENABLED    = "pc_sync_bluetooth_enabled"
 
         // SMS Categories
         const val KEY_SMS_CATEGORY_ORDER           = "sms_category_order"
         const val KEY_SMS_CATEGORY_HIDDEN          = "sms_category_hidden"
         const val KEY_SMS_CUSTOM_CATEGORIES        = "sms_custom_categories"
+        const val KEY_DEFAULT_SMS_CATEGORY         = "default_sms_category"
         val DEFAULT_SMS_CATEGORY_ORDER             = listOf("all", "favourites", "starred", "contacts", "unknown", "otp")
 
         // Call Categories
         const val KEY_CALL_CATEGORY_ORDER          = "call_category_order"
         const val KEY_CALL_CATEGORY_HIDDEN         = "call_category_hidden"
         const val KEY_CALL_CUSTOM_CATEGORIES       = "call_custom_categories"
+        const val KEY_DEFAULT_CALL_CATEGORY        = "default_call_category"
         val DEFAULT_CALL_CATEGORY_ORDER            = listOf("all", "favourites", "contacts", "unknown", "missed", "incoming", "outgoing")
     }
 }

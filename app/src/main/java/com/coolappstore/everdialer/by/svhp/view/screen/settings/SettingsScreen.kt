@@ -124,7 +124,7 @@ private val settingsSectionKeyGroups: List<List<String>> = listOf(
     listOf("tap_haptics", "scroll_haptics"),
     listOf("authentication"),
     listOf("sms_settings_link"),
-    listOf("app_settings", "contacts_hider", "fake_call", "call_recording"),
+    listOf("app_settings", "pc_connect", "sim_and_call_placement", "contacts_hider", "fake_call", "call_recording"),
     listOf("silence_unknown", "blocked_numbers"),
     listOf("create_backup", "restore_backup"),
     listOf("app_language"),

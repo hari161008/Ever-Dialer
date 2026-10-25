@@ -83,8 +83,8 @@ class ConfirmCallActivity : FragmentActivity() {
                     number = number,
                     accountHandle = accountHandle,
                     prefs = prefs,
-                    onConfirm = {
-                        makeCall(this, number, accountHandle, skipConfirm = true)
+                    onConfirm = { chosenHandle ->
+                        makeCall(this, number, chosenHandle, skipConfirm = true)
                         finish()
                     },
                     onDismiss = { finish() }
@@ -149,7 +149,7 @@ private fun ConfirmCallDialogUi(
     number: String,
     accountHandle: PhoneAccountHandle?,
     prefs: PreferenceManager,
-    onConfirm: () -> Unit,
+    onConfirm: (PhoneAccountHandle?) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -182,22 +182,24 @@ private fun ConfirmCallDialogUi(
         }
     }
 
-    val (simLabel, simColor) = remember(accountHandle) {
-        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-        val accounts = try { telecomManager?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-        val slotIndex = if (accountHandle != null) accounts.indexOf(accountHandle) else -1
-        when (slotIndex) {
-            0 -> Pair("SIM 1", Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)))
-            1 -> Pair("SIM 2", Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)))
-            else -> {
-                if (accounts.size == 1) {
-                    Pair("SIM 1", Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)))
-                } else {
-                    Pair<String?, Color?>(null, null)
-                }
-            }
-        }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+    val accounts = remember {
+        try { telecomManager?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
     }
+    val defaultSim = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, 1) }
+    var selectedSimSlot by remember(accountHandle, accounts) {
+        val initialSlot = if (accountHandle != null) {
+            val idx = accounts.indexOf(accountHandle)
+            if (idx in 0..1) idx + 1 else defaultSim
+        } else {
+            defaultSim
+        }
+        mutableIntStateOf(initialSlot)
+    }
+
+    val sim1Color = remember { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+    val sim2Color = remember { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+    val hasTwoSims = accounts.size >= 2
 
     BackHandler { onDismiss() }
 
@@ -320,31 +322,99 @@ private fun ConfirmCallDialogUi(
                     )
                 }
 
-                if (simLabel != null) {
-                    Spacer(Modifier.height(14.dp))
-                    val badgeColor = simColor ?: MaterialTheme.colorScheme.tertiary
+                Spacer(Modifier.height(16.dp))
+
+                if (hasTwoSims) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // SIM 1 Selector
+                        Surface(
+                            onClick = { selectedSimSlot = 1 },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (selectedSimSlot == 1) sim1Color else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (selectedSimSlot == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                            border = if (selectedSimSlot == 1) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            tonalElevation = if (selectedSimSlot == 1) 4.dp else 0.dp,
+                            modifier = Modifier.height(38.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SimCardIconWithNumber(
+                                    simSlotNumber = "1",
+                                    tint = if (selectedSimSlot == 1) Color.White else sim1Color,
+                                    isLarge = false
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "SIM 1",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // SIM 2 Selector
+                        Surface(
+                            onClick = { selectedSimSlot = 2 },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (selectedSimSlot == 2) sim2Color else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (selectedSimSlot == 2) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                            border = if (selectedSimSlot == 2) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            tonalElevation = if (selectedSimSlot == 2) 4.dp else 0.dp,
+                            modifier = Modifier.height(38.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SimCardIconWithNumber(
+                                    simSlotNumber = "2",
+                                    tint = if (selectedSimSlot == 2) Color.White else sim2Color,
+                                    isLarge = false
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "SIM 2",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    val activeColor = if (selectedSimSlot == 2) sim2Color else sim1Color
+                    val slotNumber = if (selectedSimSlot == 2) "2" else "1"
                     Surface(
-                        shape = RoundedCornerShape(100),
-                        color = badgeColor.copy(alpha = 0.14f),
-                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
+                        shape = RoundedCornerShape(14.dp),
+                        color = activeColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.5.dp, activeColor.copy(alpha = 0.45f)),
+                        modifier = Modifier.height(38.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SimCard, null, modifier = Modifier.size(14.dp), tint = badgeColor)
-                            Spacer(Modifier.width(6.dp))
+                            SimCardIconWithNumber(
+                                simSlotNumber = slotNumber,
+                                tint = activeColor,
+                                isLarge = false
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = simLabel,
+                                text = "SIM $slotNumber",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = badgeColor,
+                                color = activeColor,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(26.dp))
 
                 // Action Buttons using Material You dynamic colors & pill shapes
                 Row(
@@ -370,7 +440,14 @@ private fun ConfirmCallDialogUi(
                     }
 
                     Button(
-                        onClick = onConfirm,
+                        onClick = {
+                            val targetHandle = if (accounts.isNotEmpty()) {
+                                com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot(
+                                    context, accounts, if (selectedSimSlot == 2) 1 else 0
+                                )
+                            } else accountHandle
+                            onConfirm(targetHandle)
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(52.dp),

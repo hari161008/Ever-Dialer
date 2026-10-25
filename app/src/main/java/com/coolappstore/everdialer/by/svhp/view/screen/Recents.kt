@@ -671,8 +671,10 @@ fun CallLogFullContent(
         val customCategories = remember(settingsVersion) { prefs.getCustomCallCategories() }
 
         LaunchedEffect(visibleCategories) {
+            val def = prefs.getDefaultCallCategory()
             if (visibleCategories.isNotEmpty() && visibleCategories.none { it.id == selectedCategoryId }) {
-                viewModel.setCategoryId(visibleCategories.first().id)
+                val fallback = if (visibleCategories.any { it.id == def }) def else visibleCategories.first().id
+                viewModel.setCategoryId(fallback)
             }
         }
 

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,7 +30,8 @@ import org.koin.compose.koinInject
 @Composable
 fun SmsCategoriesDialog(
     onDismissRequest: () -> Unit,
-    onAddClick: () -> Unit
+    onAddClick: () -> Unit,
+    onEditClick: ((String) -> Unit)? = null
 ) {
     val prefs = koinInject<PreferenceManager>()
     val density = LocalDensity.current
@@ -136,6 +138,19 @@ fun SmsCategoriesDialog(
                                     )
 
                                     if (item.isCustom) {
+                                        if (onEditClick != null) {
+                                            IconButton(
+                                                onClick = { onEditClick(item.id) },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Edit,
+                                                    contentDescription = "Edit ${item.name}",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
                                         IconButton(
                                             onClick = {
                                                 prefs.deleteCustomSmsCategory(item.id)

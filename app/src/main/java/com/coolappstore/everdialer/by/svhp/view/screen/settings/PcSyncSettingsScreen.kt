@@ -34,6 +34,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -45,10 +46,11 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
-fun PcSyncSettingsScreen(navigator: DestinationsNavigator) {
+fun PcSyncSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
     val syncManager = koinInject<PcBluetoothSyncManager>()
     val scrollState = rememberScrollState()
+    var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     var bluetoothSyncEnabled by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_BLUETOOTH_ENABLED, false))
@@ -163,6 +165,7 @@ fun PcSyncSettingsScreen(navigator: DestinationsNavigator) {
                             leadingIcon = Icons.Outlined.BluetoothSearching,
                             iconContainerColor = Color(0xFF1E88E5),
                             checked = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_bluetooth_sync", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 bluetoothSyncEnabled = isChecked
                                 if (isChecked && !hasPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

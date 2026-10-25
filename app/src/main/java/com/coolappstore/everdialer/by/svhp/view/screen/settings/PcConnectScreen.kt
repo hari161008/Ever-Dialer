@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -33,6 +34,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -41,10 +43,11 @@ import org.koin.compose.koinInject
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
-fun PcConnectScreen(navigator: DestinationsNavigator) {
+fun PcConnectScreen(navigator: DestinationsNavigator, highlightKey: String? = null) {
     val prefs = koinInject<PreferenceManager>()
     val syncManager = koinInject<com.coolappstore.everdialer.by.svhp.controller.util.PcBluetoothSyncManager>()
     val scrollState = rememberScrollState()
+    var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     val settingsVer by prefs.settingsChanged.collectAsState()
     val bluetoothSyncEnabled = remember(settingsVer) {
@@ -68,6 +71,9 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
     }
     var syncContactPfp by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, true))
+    }
+    var syncDynamicColors by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_DYNAMIC_COLORS, true))
     }
 
     Scaffold(
@@ -115,7 +121,9 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                         },
                         shape = RoundedCornerShape(LocalCardCornerRadius.current),
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .settingsSearchHighlight("pc_bluetooth_sync", highlightedKey) { highlightedKey = null }
                     ) {
                         Row(
                             modifier = Modifier
@@ -125,9 +133,9 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.18f)),
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.18f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -178,6 +186,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                             iconContainerColor = Color(0xFFE91E63),
                             checked = syncFavorites,
                             enabled = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_sync_favourites", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 syncFavorites = isChecked
                                 prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_FAVOURITES, isChecked)
@@ -194,6 +203,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                             iconContainerColor = Color(0xFF4CAF50),
                             checked = syncCallLogs,
                             enabled = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_sync_call_logs", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 syncCallLogs = isChecked
                                 prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_CALL_LOGS, isChecked)
@@ -210,6 +220,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                             iconContainerColor = Color(0xFF2196F3),
                             checked = syncContacts,
                             enabled = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_sync_contacts", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 syncContacts = isChecked
                                 prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_CONTACTS, isChecked)
@@ -226,6 +237,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                             iconContainerColor = Color(0xFF9C27B0),
                             checked = syncSms,
                             enabled = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_sync_sms", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 syncSms = isChecked
                                 prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_SMS, isChecked)
@@ -242,6 +254,7 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                             iconContainerColor = Color(0xFFFF9800),
                             checked = syncNotes,
                             enabled = bluetoothSyncEnabled,
+                            modifier = Modifier.settingsSearchHighlight("pc_sync_notes", highlightedKey) { highlightedKey = null },
                             onCheckedChange = { isChecked ->
                                 syncNotes = isChecked
                                 prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_NOTES, isChecked)
@@ -261,9 +274,25 @@ fun PcConnectScreen(navigator: DestinationsNavigator) {
                         iconContainerColor = Color(0xFF009688),
                         checked = syncContactPfp,
                         enabled = bluetoothSyncEnabled,
+                        modifier = Modifier.settingsSearchHighlight("pc_sync_contact_pfp", highlightedKey) { highlightedKey = null },
                         onCheckedChange = { isChecked ->
                             syncContactPfp = isChecked
                             prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, isChecked)
+                            syncManager.triggerSyncNow()
+                        }
+                    )
+                    CardDivider()
+                    RivoSwitchListItem(
+                        headline = "Dynamic colors",
+                        supporting = "Sync phone's theme color to desktop version",
+                        leadingIcon = Icons.Default.Palette,
+                        iconContainerColor = Color(0xFF6750A4),
+                        checked = syncDynamicColors,
+                        enabled = bluetoothSyncEnabled,
+                        modifier = Modifier.settingsSearchHighlight("pc_sync_dynamic_colors", highlightedKey) { highlightedKey = null },
+                        onCheckedChange = { isChecked ->
+                            syncDynamicColors = isChecked
+                            prefs.setBoolean(PreferenceManager.KEY_PC_SYNC_DYNAMIC_COLORS, isChecked)
                             syncManager.triggerSyncNow()
                         }
                     )

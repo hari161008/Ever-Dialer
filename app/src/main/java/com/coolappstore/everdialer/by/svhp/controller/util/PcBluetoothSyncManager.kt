@@ -577,14 +577,16 @@ class PcBluetoothSyncManager(
                         }
                         "make_call" -> {
                             val number = cmdObj.optString("number")
-                            Log.i(TAG, "Executing make_call for $number via Ever Dialer")
+                            val requestedSimSlot = if (cmdObj.has("simSlot")) cmdObj.optInt("simSlot", 0) else 0
+                            Log.i(TAG, "Executing make_call for $number (simSlot=$requestedSimSlot) via Ever Dialer")
                             if (number.isNotBlank()) {
                                 withContext(Dispatchers.Main) {
                                     val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
                                     val accounts = try { telecomManager?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
                                     val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, 1)
+                                    val effectiveSim = if (requestedSimSlot in 1..2) requestedSimSlot else defaultSim
                                     val handle = if (accounts.isNotEmpty()) {
-                                        getPhoneAccountForSimSlot(context, accounts, if (defaultSim == 2) 1 else 0)
+                                        getPhoneAccountForSimSlot(context, accounts, if (effectiveSim == 2) 1 else 0)
                                     } else null
                                     makeCall(context, number, accountHandle = handle, skipConfirm = true)
                                 }
@@ -1029,6 +1031,17 @@ class PcBluetoothSyncManager(
             }
 
             val confirmPlacingCall = prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false)
+            val syncDynamicColors = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_DYNAMIC_COLORS, true)
+            val activeThemeColor = com.coolappstore.everdialer.by.svhp.view.theme.getActiveThemeColor(context, prefs)
+            val themeColorHex = if (syncDynamicColors) String.format("#%06X", 0xFFFFFF and activeThemeColor) else null
+
+            val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, 1)
+            val sim1ColorInt = prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)
+            val sim2ColorInt = prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)
+            val telecomMgr = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            val phoneAccounts = try { telecomMgr?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
+            val simCount = phoneAccounts.size.coerceAtLeast(1)
+
             val enabledFeatures = JSONObject().apply {
                 put("favourites", syncFavorites)
                 put("callLogs", syncCallLogs)
@@ -1036,6 +1049,7 @@ class PcBluetoothSyncManager(
                 put("sms", syncSms)
                 put("notes", syncNotes)
                 put("contactPfp", syncContactPfp)
+                put("dynamicColors", syncDynamicColors)
                 put("confirmPlacingCall", confirmPlacingCall)
             }
 
@@ -1090,6 +1104,12 @@ class PcBluetoothSyncManager(
                 put("pinnedSmsThreadIds", pinnedThreadIds)
                 put("enabledFeatures", enabledFeatures)
                 put("confirmPlacingCall", confirmPlacingCall)
+                put("themeColor", themeColorHex)
+                put("syncDynamicColors", syncDynamicColors)
+                put("defaultSim", defaultSim)
+                put("simCount", simCount)
+                put("sim1Color", String.format("#%06X", 0xFFFFFF and sim1ColorInt))
+                put("sim2Color", String.format("#%06X", 0xFFFFFF and sim2ColorInt))
                 put("deviceName", Build.MODEL)
                 put("telemetry", getDeviceTelemetry())
                 put("timestamp", System.currentTimeMillis())
