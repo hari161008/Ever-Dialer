@@ -398,8 +398,47 @@ class CallService : InCallService() {
 
         @Volatile private var isMerging = false
 
-        fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
-        fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
+        fun setMuted(muted: Boolean) {
+            instance?.let { service ->
+                try { service.setMuted(muted) } catch (_: Throwable) {}
+                try {
+                    val am = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    am?.isMicrophoneMute = muted
+                } catch (_: Throwable) {}
+                val curr = _audioState.value
+                if (curr != null) {
+                    _audioState.value = CallAudioState(muted, curr.route, curr.supportedRouteMask)
+                }
+            }
+        }
+
+        fun setAudioRoute(route: Int) {
+            instance?.let { service ->
+                try { service.setAudioRoute(route) } catch (_: Throwable) {}
+                try {
+                    val am = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    if (am != null) {
+                        if (route == CallAudioState.ROUTE_SPEAKER) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val speakerDev = am.availableCommunicationDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                                if (speakerDev != null) am.setCommunicationDevice(speakerDev)
+                            }
+                            am.isSpeakerphoneOn = true
+                        } else if (route == CallAudioState.ROUTE_EARPIECE) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val earDev = am.availableCommunicationDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                                if (earDev != null) am.setCommunicationDevice(earDev) else am.clearCommunicationDevice()
+                            }
+                            am.isSpeakerphoneOn = false
+                        }
+                    }
+                } catch (_: Throwable) {}
+                val curr = _audioState.value
+                if (curr != null) {
+                    _audioState.value = CallAudioState(curr.isMuted, route, curr.supportedRouteMask)
+                }
+            }
+        }
         fun requestBluetoothAudio(device: BluetoothDevice) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 try {

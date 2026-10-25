@@ -15,9 +15,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -99,7 +101,6 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         allContacts.count { c -> c.phoneNumbers.any { n -> selectedNumbers.any { s -> n.filter(Char::isDigit).takeLast(10) == s.filter(Char::isDigit).takeLast(10) } } }
     }
 
-    var showTypeSheet by remember { mutableStateOf(false) }
     var showPinSetup by remember { mutableStateOf(false) }
     var showPasswordSetup by remember { mutableStateOf(false) }
 
@@ -107,13 +108,6 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         val bm = BiometricManager.from(context)
         bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
                 BiometricManager.BIOMETRIC_SUCCESS
-    }
-
-    val typeLabel = when (biometricsType) {
-        "system" -> "System Biometrics"
-        "pin"    -> "Custom PIN"
-        "password" -> "Custom Password"
-        else     -> "Not Set"
     }
 
     Scaffold(
@@ -132,23 +126,87 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
             modifier = Modifier
                 .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
             com.coolappstore.everdialer.by.svhp.view.components.SettingsSearchEntryPoint(navigator = navigator)
 
-            // ── Authentication Method card ─────────────────────────────────
+            // ── Authentication Methods ─────────────────────────────────────
             SectionLabel("Authentication Method")
             RivoExpressiveCard {
+                // None
                 RivoListItem(
-                    headline = "Authentication Method",
-                    supporting = typeLabel,
+                    headline = "None",
+                    supporting = "No authentication lock",
+                    leadingIcon = Icons.Default.LockOpen,
+                    iconContainerColor = if (biometricsType.isEmpty()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    trailingIcon = if (biometricsType.isEmpty()) Icons.Default.Check else null,
+                    trailingIconTint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_none", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        if (biometricsType.isNotEmpty()) {
+                            biometricsType = ""
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "")
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, "")
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "")
+                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
+                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
+                            appLockEnabled = false
+                            callLockEnabled = false
+                        }
+                    }
+                )
+                CardDivider()
+                // System Biometrics
+                RivoListItem(
+                    headline = "System Biometrics",
+                    supporting = if (systemBiometricsAvailable) "Fingerprint, face unlock, or device credentials"
+                                 else "Not available on this device",
                     leadingIcon = Icons.Default.Fingerprint,
                     iconContainerColor = Color(0xFF6750A4),
-                    trailingIcon = Icons.Default.ChevronRight,
-                    modifier = Modifier.settingsSearchHighlight("auth_method", highlightedKey) { highlightedKey = null },
-                    onClick = { showTypeSheet = true }
+                    trailingIcon = if (biometricsType == "system") Icons.Default.Check else null,
+                    trailingIconTint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_system", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        if (systemBiometricsAvailable) {
+                            biometricsType = "system"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "system")
+                            if (!appLockEnabled) {
+                                appLockEnabled = true
+                                prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                            }
+                        }
+                    }
+                )
+                CardDivider()
+                // Custom PIN
+                RivoListItem(
+                    headline = "Custom PIN",
+                    supporting = if (biometricsType == "pin") "Active · Tap to change PIN" else "Set a numeric PIN of any length",
+                    leadingIcon = Icons.Default.Pin,
+                    iconContainerColor = Color(0xFF2196F3),
+                    trailingIcon = if (biometricsType == "pin") Icons.Default.Check else null,
+                    trailingIconTint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_pin", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        showPinSetup = true
+                    }
+                )
+                CardDivider()
+                // Custom Password
+                RivoListItem(
+                    headline = "Custom Password",
+                    supporting = if (biometricsType == "password") "Active · Tap to change password" else "Set a custom alphanumeric password",
+                    leadingIcon = Icons.Default.Key,
+                    iconContainerColor = Color(0xFF4CAF50),
+                    trailingIcon = if (biometricsType == "password") Icons.Default.Check else null,
+                    trailingIconTint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_password", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        showPasswordSetup = true
+                    }
                 )
             }
 
@@ -302,35 +360,6 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         }
     }
 
-    // ── Type Chooser Bottom Sheet ──────────────────────────────────────────
-    if (showTypeSheet) {
-        BiometricTypeSheet(
-            systemAvailable = systemBiometricsAvailable,
-            currentType = biometricsType,
-            onSelect = { type ->
-                showTypeSheet = false
-                when (type) {
-                    "system" -> {
-                        biometricsType = "system"
-                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "system")
-                        if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
-                    }
-                    "pin"      -> showPinSetup = true
-                    "password" -> showPasswordSetup = true
-                    ""         -> {
-                        biometricsType = ""
-                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "")
-                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, "")
-                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "")
-                        prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
-                        prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
-                        appLockEnabled = false; callLockEnabled = false
-                    }
-                }
-            },
-            onDismiss = { showTypeSheet = false }
-        )
-    }
 
     if (showPinSetup) {
         PinSetupDialog(
@@ -576,166 +605,6 @@ private fun ContactPickerDialog(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-// ─── Biometric Type Selector Sheet ──────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BiometricTypeSheet(
-    systemAvailable: Boolean,
-    currentType: String,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = {
-            Box(
-                Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(3.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.size(width = 36.dp, height = 4.dp)
-                ) {}
-            }
-        }
-    ) {
-        Column(
-            Modifier.fillMaxWidth().navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Choose Method", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
-            }
-
-            // System Biometrics option
-            BiometricOptionRow(
-                icon = Icons.Default.Fingerprint,
-                iconTint = Color(0xFF6750A4),
-                title = "System Biometrics",
-                subtitle = if (systemAvailable) "Fingerprint, face unlock, or device credentials"
-                           else "Not available on this device",
-                isSelected = currentType == "system",
-                enabled = systemAvailable,
-                onClick = { if (systemAvailable) onSelect("system") }
-            )
-
-            HorizontalDivider(
-                Modifier.padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-            )
-            Text(
-                "Custom Biometrics",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
-            )
-
-            BiometricOptionRow(
-                icon = Icons.Default.Pin,
-                iconTint = Color(0xFF2196F3),
-                title = "PIN",
-                subtitle = "Set a numeric PIN of any length",
-                isSelected = currentType == "pin",
-                onClick = { onSelect("pin") }
-            )
-
-            BiometricOptionRow(
-                icon = Icons.Default.Key,
-                iconTint = Color(0xFF4CAF50),
-                title = "Password",
-                subtitle = "Set a custom alphanumeric password",
-                isSelected = currentType == "password",
-                onClick = { onSelect("password") }
-            )
-
-            if (currentType.isNotEmpty()) {
-                HorizontalDivider(
-                    Modifier.padding(vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
-                Surface(
-                    onClick = { onSelect("") },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                        Text("Remove Biometric Lock", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-@Composable
-private fun BiometricOptionRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    val bg by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-        else Color.Transparent,
-        spring(stiffness = Spring.StiffnessMediumLow), label = "optBg"
-    )
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(14.dp),
-        color = bg,
-        modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.4f)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = iconTint.copy(alpha = 0.15f),
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = iconTint, modifier = Modifier.size(22.dp))
-                }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            AnimatedVisibility(
-                visible = isSelected,
-                enter = scaleIn(spring(stiffness = Spring.StiffnessMedium)) + fadeIn(),
-                exit  = scaleOut() + fadeOut()
-            ) {
-                Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             }
         }
     }
