@@ -96,6 +96,13 @@ class PcBluetoothSyncManager(
         NoteManager.onNotesChanged = {
             triggerImmediateSync()
         }
+        scope.launch {
+            prefs.settingsChanged.collect {
+                if (_status.value == PcSyncStatus.CONNECTED) {
+                    triggerImmediateSync()
+                }
+            }
+        }
         val isEnabled = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_BLUETOOTH_ENABLED, false)
         if (isEnabled) {
             start()
@@ -1203,6 +1210,7 @@ class PcBluetoothSyncManager(
                 put("confirmPlacingCall", confirmPlacingCall)
                 put("themeColor", themeColorHex)
                 put("syncDynamicColors", syncDynamicColors)
+                put("favoritesInList", prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false))
                 put("defaultSim", defaultSim)
                 put("simCount", simCount)
                 put("sim1Color", String.format("#%06X", 0xFFFFFF and sim1ColorInt))
