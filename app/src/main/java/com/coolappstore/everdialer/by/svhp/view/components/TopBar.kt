@@ -416,7 +416,9 @@ fun SettingsBackIconButton(
         modifier = modifier,
         colors = IconButtonDefaults.filledIconButtonColors(
             containerColor = containerBg,
-            contentColor = contentFg
+            contentColor = contentFg,
+            disabledContainerColor = containerBg,
+            disabledContentColor = contentFg
         )
     ) {
         Icon(
@@ -505,11 +507,13 @@ fun SettingsPillTopAppBar(
                             }
                             onBackClick()
                         },
-                        enabled = isInteractive,
+                        enabled = true,
                         modifier = Modifier.size(44.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = backBtnBg,
-                            contentColor = backBtnFg
+                            contentColor = backBtnFg,
+                            disabledContainerColor = backBtnBg,
+                            disabledContentColor = backBtnFg
                         )
                     ) {
                         Icon(

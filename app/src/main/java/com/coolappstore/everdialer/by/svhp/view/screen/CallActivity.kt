@@ -103,11 +103,16 @@ import android.content.res.Configuration
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.PowerManager
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.zIndex
 
 class CallActivity : FragmentActivity() {
 
@@ -134,25 +139,108 @@ class CallActivity : FragmentActivity() {
     // Pocket mode prevention
     private var sensorManager: SensorManager? = null
     private var proximitySensor: Sensor? = null
+    private var accelerometerSensor: Sensor? = null
+    private var activityProxWakeLock: PowerManager.WakeLock? = null
     private var isPocketBlocked = false
     // Auto-speaker proximity tracking
     private var autoSpeakerActive = false
 
-    // Note: the real near-ear screen-off (both the plain "Proximity Sensor" mode and the
-    // "Device Orientation with Proximity Sensor" mode) is now owned entirely by CallService,
-    // which runs continuously as a foreground service for the whole call regardless of which
-    // Activity is on top — see CallService.updateProximityScreenOffGate(). It used to live here,
-    // but the PROXIMITY_SCREEN_OFF_WAKE_LOCK it drives only reliably takes effect while the
-    // acquiring app has a foregrounded window, so it would silently stop working the moment the
-    // user switched to the main app during a call, and only "fix itself" once this call screen
-    // was brought back on top. CallActivity no longer needs to track any of that state.
+    private var mLastProximityNear: Boolean? = null
+    private var mInclinationValue: Int? = null
+    private var mIsSlanted: Boolean = false
+    val isNearScreenOff = mutableStateOf(false)
+
+    private fun acquireActivityProxWakeLock() {
+        if (activityProxWakeLock?.isHeld == false) {
+            try { activityProxWakeLock?.acquire() } catch (_: Throwable) {}
+        }
+    }
+
+    private fun releaseActivityProxWakeLock() {
+        if (activityProxWakeLock?.isHeld == true) {
+            try { activityProxWakeLock?.release() } catch (_: Throwable) {}
+        }
+    }
+
+    fun updateActivityProximityScreenOffGate() {
+        val session = CallService.currentCallSession.value
+        val callState = session?.state
+        val audioState = CallService.audioState.value
+        val currentRoute = audioState?.route
+        val isEarActive = when (currentRoute) {
+            CallAudioState.ROUTE_EARPIECE -> true
+            CallAudioState.ROUTE_SPEAKER,
+            CallAudioState.ROUTE_BLUETOOTH,
+            CallAudioState.ROUTE_WIRED_HEADSET -> false
+            else -> {
+                val lastUsedSpeaker = prefs.getString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, "")
+                lastUsedSpeaker != PreferenceManager.SPEAKER_ROUTE_SPEAKER
+            }
+        }
+        val inCallForScreenOff = (callState == Call.STATE_ACTIVE || callState == Call.STATE_DIALING) && isEarActive
+
+        if (!inCallForScreenOff) {
+            releaseActivityProxWakeLock()
+            if (isNearScreenOff.value) {
+                isNearScreenOff.value = false
+                window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            }
+            return
+        }
+
+        val orientationGateEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_ORIENTATION_BG, false)
+        val isNear = mLastProximityNear == true
+
+        val shouldTurnOff = if (orientationGateEnabled) {
+            val inclination = mInclinationValue
+            val orientedToEar = inclination != null && inclination in -90..90 && mIsSlanted
+            isNear && orientedToEar
+        } else {
+            isNear
+        }
+
+        if (shouldTurnOff) {
+            acquireActivityProxWakeLock()
+            if (!isNearScreenOff.value) {
+                isNearScreenOff.value = true
+                window.attributes = window.attributes.apply { screenBrightness = 0.0f }
+            }
+        } else {
+            releaseActivityProxWakeLock()
+            if (isNearScreenOff.value) {
+                isNearScreenOff.value = false
+                window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            }
+        }
+    }
 
     private val proxSensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
             when (event.sensor.type) {
+                Sensor.TYPE_ACCELEROMETER -> {
+                    val ax = event.values[0]
+                    val ay = event.values[1]
+                    val az = event.values[2]
+                    val normOfG = kotlin.math.sqrt(ax * ax + ay * ay + az * az)
+                    if (normOfG > 0f) {
+                        val nx = ax / normOfG
+                        val ny = ay / normOfG
+                        val nz = az / normOfG
+                        mInclinationValue = Math.toDegrees(kotlin.math.atan2(nx, ny).toDouble()).roundToInt()
+                        val angleFromFlatDeg = Math.toDegrees(kotlin.math.acos(nz.coerceIn(-1f, 1f).toDouble()))
+                        val angleFromFlatOrBelow = kotlin.math.min(angleFromFlatDeg, 180.0 - angleFromFlatDeg)
+                        val slantThreshold = prefs.getFloat(
+                            PreferenceManager.KEY_PROXIMITY_ORIENTATION_SLANT_THRESHOLD,
+                            PreferenceManager.DEFAULT_PROXIMITY_ORIENTATION_SLANT_THRESHOLD
+                        )
+                        mIsSlanted = angleFromFlatOrBelow > slantThreshold.toDouble()
+                    }
+                    updateActivityProximityScreenOffGate()
+                }
                 Sensor.TYPE_PROXIMITY -> {
                     val maxRange = event.sensor.maximumRange
-                    val isNear = event.values[0] < maxRange * 0.5f
+                    val isNear = event.values[0] < maxRange * 0.5f || event.values[0] == 0f || (maxRange > 0f && event.values[0] < maxRange)
+                    mLastProximityNear = isNear
 
                     // Pocket mode prevention
                     if (prefs.getBoolean(PreferenceManager.KEY_POCKET_MODE_PREVENTION, false)) {
@@ -174,6 +262,8 @@ class CallActivity : FragmentActivity() {
                             }
                         }
                     }
+
+                    updateActivityProximityScreenOffGate()
                 }
             }
         }
@@ -186,13 +276,26 @@ class CallActivity : FragmentActivity() {
         // Prevent notification shade from being pulled down during a call
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         enableEdgeToEdge()
-        // Register pocket mode / auto-speaker proximity listener. The real near-ear
-        // screen-off is handled entirely by CallService now (see comment above).
+
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        activityProxWakeLock = try {
+            powerManager?.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "EverDialer:ActivityProx")
+        } catch (_: Throwable) { null }
+
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         proximitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        accelerometerSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         proximitySensor?.let {
             sensorManager?.registerListener(proxSensorListener, it, SensorManager.SENSOR_DELAY_UI)
         }
+        accelerometerSensor?.let {
+            sensorManager?.registerListener(proxSensorListener, it, SensorManager.SENSOR_DELAY_UI)
+        }
+
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            am?.mode = AudioManager.MODE_IN_COMMUNICATION
+        } catch (_: Throwable) {}
 
         val answeredFromNotif = intent?.getBooleanExtra("ANSWERED_FROM_NOTIFICATION", false) ?: false
         val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
@@ -411,6 +514,26 @@ class CallActivity : FragmentActivity() {
                             )
                         }
                     }
+
+                    LaunchedEffect(session, audioState, settingsVersion) {
+                        updateActivityProximityScreenOffGate()
+                    }
+
+                    if (isNearScreenOff.value) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black)
+                                .pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            awaitPointerEvent()
+                                        }
+                                    }
+                                }
+                                .zIndex(999999f)
+                        )
+                    }
                 }
             }
         }
@@ -419,6 +542,7 @@ class CallActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         isInForeground.value = true
+        updateActivityProximityScreenOffGate()
     }
 
     private fun showWhenLockedAndTurnScreenOn() {
@@ -454,14 +578,31 @@ class CallActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        releaseActivityProxWakeLock()
         sensorManager?.unregisterListener(proxSensorListener)
         keepAliveForRedial.value = false
         keepAliveForCallingCard.value = false
+        if (isNearScreenOff.value) {
+            isNearScreenOff.value = false
+            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+        }
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            am?.mode = AudioManager.MODE_NORMAL
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                am?.clearCommunicationDevice()
+            }
+        } catch (_: Throwable) {}
     }
 
     override fun onPause() {
         super.onPause()
         isInForeground.value = false
+        releaseActivityProxWakeLock()
+        if (isNearScreenOff.value) {
+            isNearScreenOff.value = false
+            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+        }
     }
 
     private var touchDownX = 0f
@@ -855,6 +996,16 @@ private fun CallBackgroundLayer(
     }
 }
 
+data class ConnectedAudioDevice(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val isBluetooth: Boolean,
+    val isWired: Boolean,
+    val bluetoothDevice: BluetoothDevice? = null,
+    val audioDeviceInfo: AudioDeviceInfo? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressiveCallScreen(
@@ -911,9 +1062,32 @@ fun ExpressiveCallScreen(
     var isBluetoothConnected by remember { mutableStateOf(false) }
     var isWiredHeadsetConnected by remember { mutableStateOf(false) }
     var showAudioSwitcherPopup by remember { mutableStateOf(false) }
-    var showMicSwitcherPopup by remember { mutableStateOf(false) }
-    var selectedMicRoute by remember {
-        mutableStateOf(prefs?.getString(PreferenceManager.KEY_LAST_USED_MIC_ROUTE, PreferenceManager.MIC_ROUTE_EXTERNAL) ?: PreferenceManager.MIC_ROUTE_EXTERNAL)
+    var selectedSpeakerRoute by remember {
+        mutableStateOf(prefs?.getString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL) ?: PreferenceManager.SPEAKER_ROUTE_EXTERNAL)
+    }
+
+    LaunchedEffect(audioState?.route) {
+        val route = audioState?.route ?: return@LaunchedEffect
+        when (route) {
+            CallAudioState.ROUTE_SPEAKER -> {
+                selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_SPEAKER
+            }
+            CallAudioState.ROUTE_BLUETOOTH -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && audioState?.activeBluetoothDevice != null) {
+                    selectedSpeakerRoute = audioState.activeBluetoothDevice.address ?: PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                } else {
+                    selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                }
+            }
+            CallAudioState.ROUTE_EARPIECE -> {
+                selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_EAR
+            }
+            CallAudioState.ROUTE_WIRED_HEADSET -> {
+                if (selectedSpeakerRoute != PreferenceManager.SPEAKER_ROUTE_EAR) {
+                    selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                }
+            }
+        }
     }
 
     DisposableEffect(context) {
@@ -967,7 +1141,182 @@ fun ExpressiveCallScreen(
         }
     }
 
-    val isExternalConnected = isBluetoothConnected || isWiredHeadsetConnected ||
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
+    val externalAudioDevices = remember(audioState, isBluetoothConnected, isWiredHeadsetConnected) {
+        val list = mutableListOf<ConnectedAudioDevice>()
+        val seenIds = mutableSetOf<String>()
+
+        // 1. Telecom Bluetooth devices (API 28+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val btDevices = audioState?.supportedBluetoothDevices ?: emptyList()
+            btDevices.forEach { dev ->
+                val devName = try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        dev.alias ?: dev.name
+                    } else {
+                        dev.name
+                    }
+                } catch (_: SecurityException) {
+                    null
+                } ?: "Bluetooth Device"
+                val devAddress = try { dev.address } catch (_: Throwable) { "bt_${dev.hashCode()}" }
+                if (seenIds.add(devAddress)) {
+                    list.add(
+                        ConnectedAudioDevice(
+                            id = devAddress,
+                            name = devName,
+                            subtitle = "Bluetooth audio",
+                            isBluetooth = true,
+                            isWired = false,
+                            bluetoothDevice = dev
+                        )
+                    )
+                }
+            }
+        }
+
+        // 2. AudioManager Communication Devices (API 31+) or Output Devices
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                audioManager.availableCommunicationDevices.forEach { devInfo ->
+                    val type = devInfo.type
+                    val isBt = type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                            type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+                    val isWired = type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                            type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                            type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                            type == AudioDeviceInfo.TYPE_USB_DEVICE
+
+                    if (isBt) {
+                        val devName = devInfo.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Bluetooth Device"
+                        val devId = "comm_bt_${devInfo.id}"
+                        val existingIndex = list.indexOfFirst {
+                            it.isBluetooth && (it.name.equals(devName, ignoreCase = true) ||
+                                    it.name.contains(devName, ignoreCase = true) ||
+                                    (it.bluetoothDevice != null && devInfo.address == it.bluetoothDevice.address))
+                        }
+                        if (existingIndex >= 0) {
+                            val existing = list[existingIndex]
+                            if (existing.audioDeviceInfo == null) {
+                                list[existingIndex] = existing.copy(audioDeviceInfo = devInfo)
+                            }
+                        } else if (seenIds.add(devId)) {
+                            list.add(
+                                ConnectedAudioDevice(
+                                    id = devId,
+                                    name = devName,
+                                    subtitle = "Bluetooth audio",
+                                    isBluetooth = true,
+                                    isWired = false,
+                                    audioDeviceInfo = devInfo
+                                )
+                            )
+                        }
+                    } else if (isWired) {
+                        val devName = devInfo.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Wired Headset"
+                        val devId = "comm_wired_${devInfo.id}"
+                        val existingIndex = list.indexOfFirst { it.isWired }
+                        if (existingIndex >= 0) {
+                            val existing = list[existingIndex]
+                            if (existing.audioDeviceInfo == null) {
+                                list[existingIndex] = existing.copy(audioDeviceInfo = devInfo)
+                            }
+                        } else if (seenIds.add(devId)) {
+                            list.add(
+                                ConnectedAudioDevice(
+                                    id = devId,
+                                    name = devName,
+                                    subtitle = "Connected Headset",
+                                    isBluetooth = false,
+                                    isWired = true,
+                                    audioDeviceInfo = devInfo
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        } else {
+            try {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                devices.forEach { devInfo ->
+                    val type = devInfo.type
+                    val isWired = type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                            type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                            type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                            type == AudioDeviceInfo.TYPE_USB_DEVICE
+                    val isBt = type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                            type == AudioDeviceInfo.TYPE_BLE_HEADSET
+
+                    if (isWired) {
+                        val devName = devInfo.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Wired Headset"
+                        val devId = "dev_wired_${devInfo.id}"
+                        if (seenIds.add(devId)) {
+                            list.add(
+                                ConnectedAudioDevice(
+                                    id = devId,
+                                    name = devName,
+                                    subtitle = "Connected Headset",
+                                    isBluetooth = false,
+                                    isWired = true,
+                                    audioDeviceInfo = devInfo
+                                )
+                            )
+                        }
+                    } else if (isBt && list.none { it.isBluetooth }) {
+                        val devName = devInfo.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Bluetooth Device"
+                        val devId = "dev_bt_${devInfo.id}"
+                        if (seenIds.add(devId)) {
+                            list.add(
+                                ConnectedAudioDevice(
+                                    id = devId,
+                                    name = devName,
+                                    subtitle = "Bluetooth audio",
+                                    isBluetooth = true,
+                                    isWired = false,
+                                    audioDeviceInfo = devInfo
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 3. Fallbacks if broadcast receivers report connected
+        val hasWired = list.any { it.isWired }
+        if (!hasWired && (isWiredHeadsetConnected || (((audioState?.supportedRouteMask ?: 0) and CallAudioState.ROUTE_WIRED_HEADSET) != 0))) {
+            list.add(
+                ConnectedAudioDevice(
+                    id = "wired_fallback",
+                    name = "Wired Headset",
+                    subtitle = "Connected Headset",
+                    isBluetooth = false,
+                    isWired = true
+                )
+            )
+        }
+
+        val hasBt = list.any { it.isBluetooth }
+        if (!hasBt && (isBluetoothConnected || (((audioState?.supportedRouteMask ?: 0) and CallAudioState.ROUTE_BLUETOOTH) != 0))) {
+            list.add(
+                ConnectedAudioDevice(
+                    id = "bt_fallback",
+                    name = "Bluetooth Device",
+                    subtitle = "Bluetooth audio",
+                    isBluetooth = true,
+                    isWired = false
+                )
+            )
+        }
+
+        list
+    }
+
+    val isExternalConnected = externalAudioDevices.isNotEmpty() || isBluetoothConnected || isWiredHeadsetConnected ||
         ((audioState?.supportedRouteMask ?: 0) and (CallAudioState.ROUTE_BLUETOOTH or CallAudioState.ROUTE_WIRED_HEADSET)) != 0
     // When answered from notification, skip the incoming screen by treating
     // a brief STATE_RINGING flash as already-active for UI purposes
@@ -1480,39 +1829,51 @@ fun ExpressiveCallScreen(
                 label = if (isMuted) "Unmute" else "Mute",
                 isActive = isMuted,
                 btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
-                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg,
-                hasDropdown = isExternalConnected,
-                onDropdownClick = { showMicSwitcherPopup = true }
+                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg
             ) {
-                if (isExternalConnected) {
-                    showMicSwitcherPopup = true
-                } else {
-                    CallService.setMuted(!isMuted)
-                }
+                CallService.setMuted(!isMuted)
             }
-            CallButtonPrefs.ID_SPEAKER -> AnimatedCallButton(
-                icon = when {
-                    isBluetoothActive -> Icons.Default.Bluetooth
-                    audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET -> Icons.Default.Headset
-                    isSpeakerOn -> Icons.AutoMirrored.Filled.VolumeUp
-                    else -> Icons.Default.VolumeDown
-                },
-                label = when {
-                    isBluetoothActive -> "Bluetooth"
-                    audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET -> "Headset"
-                    isSpeakerOn -> "Speaker"
-                    else -> "Ear speaker"
-                },
-                isActive = isSpeakerOn || isBluetoothActive || audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET,
-                btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
-                fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg,
-                hasDropdown = isExternalConnected,
-                onDropdownClick = { showAudioSwitcherPopup = true }
-            ) {
-                if (isExternalConnected) {
-                    showAudioSwitcherPopup = true
+            CallButtonPrefs.ID_SPEAKER -> {
+                val isEarEffective = if (selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER || isSpeakerOn) {
+                    false
+                } else if (selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_EAR) {
+                    true
                 } else {
-                    CallService.setAudioRoute(if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
+                    audioState?.route == CallAudioState.ROUTE_EARPIECE || (audioState?.route != CallAudioState.ROUTE_SPEAKER && audioState?.route != CallAudioState.ROUTE_BLUETOOTH && audioState?.route != CallAudioState.ROUTE_WIRED_HEADSET)
+                }
+                AnimatedCallButton(
+                    icon = when {
+                        !isExternalConnected -> if (isEarEffective) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.PhoneInTalk
+                        isEarEffective -> Icons.Default.PhoneInTalk
+                        isSpeakerOn || selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp
+                        isBluetoothActive -> Icons.Default.Bluetooth
+                        audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET -> Icons.Default.Headset
+                        else -> Icons.Default.PhoneInTalk
+                    },
+                    label = when {
+                        !isExternalConnected -> if (isEarEffective) "Speaker" else "Ear speaker"
+                        isEarEffective -> "Ear speaker"
+                        isSpeakerOn || selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER -> "Speaker"
+                        isBluetoothActive -> "Bluetooth"
+                        audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET -> "Headset"
+                        else -> "Ear speaker"
+                    },
+                    isActive = if (!isExternalConnected) (isSpeakerOn || selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER) else !isEarEffective && (isSpeakerOn || isBluetoothActive || audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET || selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER),
+                    btnColor = controlBtnColor, activeBtnColor = controlBtnActiveColor,
+                    fgColor = controlBtnFg, activeFgColor = controlBtnActiveFg,
+                    hasDropdown = isExternalConnected,
+                    onDropdownClick = { showAudioSwitcherPopup = true }
+                ) {
+                    if (isExternalConnected) {
+                        showAudioSwitcherPopup = true
+                    } else {
+                        val targetRoute = if (isSpeakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER
+                        CallService.setAudioRoute(targetRoute)
+                        val prefVal = if (isSpeakerOn) PreferenceManager.SPEAKER_ROUTE_EAR else PreferenceManager.SPEAKER_ROUTE_SPEAKER
+                        selectedSpeakerRoute = prefVal
+                        prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, prefVal)
+                        (context as? CallActivity)?.updateActivityProximityScreenOffGate()
+                    }
                 }
             }
             CallButtonPrefs.ID_BLUETOOTH -> { /* Standalone Bluetooth button removed */ }
@@ -2636,19 +2997,38 @@ fun ExpressiveCallScreen(
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    val isEarActive = audioState?.route == CallAudioState.ROUTE_EARPIECE
-                    val isSpeakerActive = audioState?.route == CallAudioState.ROUTE_SPEAKER
-                    val isExtActive = audioState?.route == CallAudioState.ROUTE_BLUETOOTH || audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET
+                    val isEarSelected = selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_EAR ||
+                        (audioState?.route == CallAudioState.ROUTE_EARPIECE && selectedSpeakerRoute != PreferenceManager.SPEAKER_ROUTE_SPEAKER)
+                    val isSpeakerSelected = selectedSpeakerRoute == PreferenceManager.SPEAKER_ROUTE_SPEAKER ||
+                        (audioState?.route == CallAudioState.ROUTE_SPEAKER && selectedSpeakerRoute != PreferenceManager.SPEAKER_ROUTE_EAR)
 
                     // Ear speaker
                     PopupSwitcherOptionRow(
                         icon = Icons.Default.PhoneInTalk,
                         title = "Ear speaker",
                         subtitle = "Phone earpiece",
-                        isSelected = isEarActive,
+                        isSelected = isEarSelected,
                         onClick = {
-                            CallService.setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                            selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_EAR
                             prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EAR)
+                            try {
+                                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                                audioManager.isSpeakerphoneOn = false
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    val commDev = audioManager.availableCommunicationDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                                    if (commDev != null) audioManager.setCommunicationDevice(commDev)
+                                }
+                            } catch (_: Throwable) {}
+                            val supportedMask = audioState?.supportedRouteMask ?: 0
+                            val targetRoute = if ((supportedMask and CallAudioState.ROUTE_EARPIECE) != 0) {
+                                CallAudioState.ROUTE_EARPIECE
+                            } else if ((supportedMask and CallAudioState.ROUTE_WIRED_HEADSET) != 0) {
+                                CallAudioState.ROUTE_WIRED_HEADSET
+                            } else {
+                                CallAudioState.ROUTE_SPEAKER
+                            }
+                            CallService.setAudioRoute(targetRoute)
+                            (context as? CallActivity)?.updateActivityProximityScreenOffGate()
                             showAudioSwitcherPopup = false
                         }
                     )
@@ -2658,155 +3038,114 @@ fun ExpressiveCallScreen(
                         icon = Icons.AutoMirrored.Filled.VolumeUp,
                         title = "Speaker",
                         subtitle = "Loudspeaker",
-                        isSelected = isSpeakerActive,
+                        isSelected = isSpeakerSelected,
                         onClick = {
-                            CallService.setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+                            selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_SPEAKER
                             prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_SPEAKER)
-                            showAudioSwitcherPopup = false
-                        }
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    // External speaker
-                    PopupSwitcherOptionRow(
-                        icon = if (isBluetoothConnected) Icons.Default.Bluetooth else Icons.Default.Headset,
-                        title = "External speaker",
-                        subtitle = if (isBluetoothConnected) "Connected Bluetooth" else "Connected Headset",
-                        isSelected = isExtActive,
-                        onClick = {
-                            val route = if (isBluetoothConnected) CallAudioState.ROUTE_BLUETOOTH else CallAudioState.ROUTE_WIRED_HEADSET
-                            CallService.setAudioRoute(route)
-                            prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL)
-                            showAudioSwitcherPopup = false
-                        }
-                    )
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
-        }
-    }
-
-    if (showMicSwitcherPopup) {
-        Dialog(onDismissRequest = { showMicSwitcherPopup = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Mic, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Microphone",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-
-                    // Mute option
-                    Surface(
-                        onClick = { CallService.setMuted(!isMuted) },
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isMuted) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                        null,
-                                        tint = if (isMuted) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                            try {
+                                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                                audioManager.isSpeakerphoneOn = true
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    val commDev = audioManager.availableCommunicationDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                                    if (commDev != null) audioManager.setCommunicationDevice(commDev)
                                 }
+                            } catch (_: Throwable) {}
+                            CallService.setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+                            (context as? CallActivity)?.updateActivityProximityScreenOffGate()
+                            showAudioSwitcherPopup = false
+                        }
+                    )
+
+                    // External devices: list ALL connected external devices individually!
+                    if (externalAudioDevices.isNotEmpty()) {
+                        externalAudioDevices.forEach { extDev ->
+                            Spacer(Modifier.height(6.dp))
+                            val isSelected = if (isEarSelected || isSpeakerSelected) {
+                                false
+                            } else if (selectedSpeakerRoute == extDev.id) {
+                                true
+                            } else if (extDev.isWired) {
+                                audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET
+                            } else if (extDev.isBluetooth) {
+                                if (audioState?.route != CallAudioState.ROUTE_BLUETOOTH) false
+                                else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && extDev.bluetoothDevice != null && audioState?.activeBluetoothDevice != null) {
+                                    audioState?.activeBluetoothDevice == extDev.bluetoothDevice
+                                } else {
+                                    true
+                                }
+                            } else {
+                                false
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Mute Microphone",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    if (isMuted) "Microphone is muted" else "Microphone is active",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = isMuted,
-                                onCheckedChange = { CallService.setMuted(it) }
+
+                            PopupSwitcherOptionRow(
+                                icon = if (extDev.isBluetooth) Icons.Default.Bluetooth else Icons.Default.Headset,
+                                title = extDev.name,
+                                subtitle = extDev.subtitle,
+                                isSelected = isSelected,
+                                onClick = {
+                                    selectedSpeakerRoute = extDev.id
+                                    prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL)
+                                    try {
+                                        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                                        audioManager.isSpeakerphoneOn = false
+                                    } catch (_: Throwable) {}
+                                    if (extDev.isBluetooth) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                            val commDev = extDev.audioDeviceInfo ?: audioManager.availableCommunicationDevices.find {
+                                                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET || (extDev.bluetoothDevice != null && it.address == extDev.bluetoothDevice.address)
+                                            }
+                                            if (commDev != null) {
+                                                try { audioManager.setCommunicationDevice(commDev) } catch (_: Throwable) {}
+                                            }
+                                        }
+                                        extDev.bluetoothDevice?.let { dev ->
+                                            CallService.requestBluetoothAudio(dev)
+                                        }
+                                        CallService.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+                                    } else if (extDev.isWired) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                            val commDev = extDev.audioDeviceInfo ?: audioManager.availableCommunicationDevices.find {
+                                                it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                                            }
+                                            if (commDev != null) {
+                                                try { audioManager.setCommunicationDevice(commDev) } catch (_: Throwable) {}
+                                            }
+                                        }
+                                        CallService.setAudioRoute(CallAudioState.ROUTE_WIRED_HEADSET)
+                                    }
+                                    (context as? CallActivity)?.updateActivityProximityScreenOffGate()
+                                    showAudioSwitcherPopup = false
+                                }
                             )
                         }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    Spacer(Modifier.height(6.dp))
-
-                    Text(
-                        "Input Switcher",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                    )
-
-                    // System
-                    PopupSwitcherOptionRow(
-                        icon = Icons.Default.PhoneAndroid,
-                        title = "System",
-                        subtitle = "Device built-in microphone",
-                        isSelected = selectedMicRoute == PreferenceManager.MIC_ROUTE_SYSTEM,
-                        onClick = {
-                            selectedMicRoute = PreferenceManager.MIC_ROUTE_SYSTEM
-                            prefs?.setString(PreferenceManager.KEY_LAST_USED_MIC_ROUTE, PreferenceManager.MIC_ROUTE_SYSTEM)
-                            showMicSwitcherPopup = false
-                        }
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    // External
-                    PopupSwitcherOptionRow(
-                        icon = Icons.Default.HeadsetMic,
-                        title = "External",
-                        subtitle = "Connected headset / Bluetooth microphone",
-                        isSelected = selectedMicRoute == PreferenceManager.MIC_ROUTE_EXTERNAL,
-                        onClick = {
-                            selectedMicRoute = PreferenceManager.MIC_ROUTE_EXTERNAL
-                            prefs?.setString(PreferenceManager.KEY_LAST_USED_MIC_ROUTE, PreferenceManager.MIC_ROUTE_EXTERNAL)
-                            if (audioState?.route != CallAudioState.ROUTE_BLUETOOTH && audioState?.route != CallAudioState.ROUTE_WIRED_HEADSET) {
+                    } else if (isExternalConnected) {
+                        Spacer(Modifier.height(6.dp))
+                        val isSelected = !isEarSelected && !isSpeakerSelected && (audioState?.route == CallAudioState.ROUTE_BLUETOOTH || audioState?.route == CallAudioState.ROUTE_WIRED_HEADSET)
+                        PopupSwitcherOptionRow(
+                            icon = if (isBluetoothConnected) Icons.Default.Bluetooth else Icons.Default.Headset,
+                            title = "External speaker",
+                            subtitle = if (isBluetoothConnected) "Connected Bluetooth" else "Connected Headset",
+                            isSelected = isSelected,
+                            onClick = {
+                                selectedSpeakerRoute = PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                                prefs?.setString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL)
+                                try {
+                                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                                    audioManager.isSpeakerphoneOn = false
+                                } catch (_: Throwable) {}
                                 val route = if (isBluetoothConnected) CallAudioState.ROUTE_BLUETOOTH else CallAudioState.ROUTE_WIRED_HEADSET
                                 CallService.setAudioRoute(route)
+                                (context as? CallActivity)?.updateActivityProximityScreenOffGate()
+                                showAudioSwitcherPopup = false
                             }
-                            showMicSwitcherPopup = false
-                        }
-                    )
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                 }
             }
         }
     }
+
     }
 
     if (showCallingCardPopup) {

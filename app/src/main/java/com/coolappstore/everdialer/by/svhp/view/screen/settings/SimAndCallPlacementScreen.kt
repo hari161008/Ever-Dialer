@@ -87,9 +87,6 @@ fun SimAndCallPlacementScreen(
     val defaultSpeakerRoute = remember(settingsVersion) {
         prefs.getString(PreferenceManager.KEY_DEFAULT_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL) ?: PreferenceManager.SPEAKER_ROUTE_EXTERNAL
     }
-    val defaultMicRoute = remember(settingsVersion) {
-        prefs.getString(PreferenceManager.KEY_DEFAULT_MIC_ROUTE, PreferenceManager.MIC_ROUTE_EXTERNAL) ?: PreferenceManager.MIC_ROUTE_EXTERNAL
-    }
     val usePreviousAudioConfig = remember(settingsVersion) {
         prefs.getBoolean(PreferenceManager.KEY_USE_PREVIOUS_CALL_AUDIO_CONFIG, false)
     }
@@ -327,22 +324,17 @@ fun SimAndCallPlacementScreen(
                     SimCallSectionLabel("Sound & Vibration")
                     RivoExpressiveCard {
                         RivoListItem(
-                            headline = "Default speaker and mic",
+                            headline = "Default speaker",
                             supporting = if (usePreviousAudioConfig) {
                                 "Use previously used configuration"
                             } else {
-                                val spkLabel = when (defaultSpeakerRoute) {
+                                when (defaultSpeakerRoute) {
                                     PreferenceManager.SPEAKER_ROUTE_EAR -> "Ear speaker"
                                     PreferenceManager.SPEAKER_ROUTE_SPEAKER -> "Speaker"
                                     else -> "External speaker"
                                 }
-                                val micLabel = when (defaultMicRoute) {
-                                    PreferenceManager.MIC_ROUTE_SYSTEM -> "System"
-                                    else -> "External"
-                                }
-                                "Speaker: $spkLabel • Mic: $micLabel"
                             },
-                            leadingIcon = Icons.Outlined.HeadsetMic,
+                            leadingIcon = Icons.Outlined.VolumeUp,
                             iconContainerColor = ColorIndigo,
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("default_speaker_mic", highlightedKey) { highlightedKey = null },

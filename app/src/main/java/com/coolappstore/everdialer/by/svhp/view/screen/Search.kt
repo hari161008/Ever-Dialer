@@ -38,13 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogWindowProvider
-import android.graphics.drawable.ColorDrawable
-import android.view.WindowManager
-import androidx.core.view.WindowCompat
-import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
@@ -101,232 +97,49 @@ private fun matchesNoteQuery(text: String, query: String): Boolean {
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
-@Destination<RootGraph>(style = com.coolappstore.everdialer.by.svhp.view.theme.SearchDestinationStyle::class)
+@Destination<RootGraph>(style = com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle::class)
 @Composable
 fun SearchScreen(
     navController: NavController,
     navigator: DestinationsNavigator,
     initialQuery: String? = null
 ) {
-    val permState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
-    val listState = rememberLazyListState()
-    val prefs = koinInject<PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val coroutineScope = rememberCoroutineScope()
+    com.coolappstore.everdialer.by.svhp.view.theme.ExpandingScreenContainer(onClose = { navigator.navigateUp() }) { closeWithAnimation ->
+        val permState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
+        val listState = rememberLazyListState()
 
-    // Configure the Dialog window to be 100% transparent and edge-to-edge
-    // so the underlying screen (Recents, Contacts, etc.) remains fully visible underneath,
-    // and sync the phone's status bar / navigation bar icon colors according to the theme.
-    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
-    val view = LocalView.current
-    DisposableEffect(view, isDark) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        window?.let { w ->
-            w.setDimAmount(0f)
-            w.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
-            w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-            WindowCompat.setDecorFitsSystemWindows(w, false)
-            w.statusBarColor = android.graphics.Color.TRANSPARENT
-            w.navigationBarColor = android.graphics.Color.TRANSPARENT
-            val controller = WindowCompat.getInsetsController(w, w.decorView)
-            // Light icons on dark theme (!isDark is false), dark icons on light theme (!isDark is true)
-            controller.isAppearanceLightStatusBars = !isDark
-            controller.isAppearanceLightNavigationBars = !isDark
-        }
-        onDispose {}
-    }
-
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = true
-        NavBarVisibilityState.hideForSettingsEntry = true
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = true
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = false
-            NavBarVisibilityState.hideForSettingsEntry = false
-        }
-    }
-
-    // Animation progress: 0f = collapsed search bar pill shape, 1f = fully expanded screen
-    val animProgress = remember { Animatable(0f) }
-    var isClosing by remember { mutableStateOf(false) }
-
-    // Luxurious, smooth expressive zoom curves
-    val zoomEnterEasing = remember { CubicBezierEasing(0.16f, 1f, 0.3f, 1f) }
-    val zoomExitEasing = remember { CubicBezierEasing(0.2f, 0f, 0f, 1f) }
-
-    LaunchedEffect(Unit) {
-        animProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = 580,
-                easing = zoomEnterEasing
-            )
-        )
-    }
-
-    var hasNavigatedUp by remember { mutableStateOf(false) }
-    val safeNavigateUp: () -> Unit = {
-        if (!hasNavigatedUp) {
-            hasNavigatedUp = true
-            try {
-                navigator.navigateUp()
-            } catch (_: Exception) {}
-        }
-    }
-
-    val closeSearch: () -> Unit = {
-        if (!isClosing && !hasNavigatedUp) {
-            isClosing = true
-            keyboardController?.hide()
-            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.notifyClosing()
-            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.triggerSearchBounce()
-            coroutineScope.launch {
-                animProgress.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = 480,
-                        easing = zoomExitEasing
-                    )
-                )
-                safeNavigateUp()
-            }
-        }
-    }
-
-    val predictiveBackEnabled = remember(settingsVer) {
-        prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
-    }
-    var isPredictiveBackTriggering by remember { mutableStateOf(false) }
-    var backSwipeProgress by remember { mutableFloatStateOf(0f) }
-    var backSwipeEdge by remember { mutableIntStateOf(0) }
-
-    if (predictiveBackEnabled) {
-        PredictiveBackHandler(enabled = !isClosing && !hasNavigatedUp) { progressFlow ->
-            isPredictiveBackTriggering = true
-            keyboardController?.hide()
-            try {
-                progressFlow.collect { backEvent ->
-                    backSwipeEdge = backEvent.swipeEdge
-                    // Increased sensitivity (2.6x) and movement for immediate, fluid gesture response
-                    val sensitivity = 2.6f
-                    val effective = (backEvent.progress * sensitivity).coerceIn(0f, 1f)
-                    backSwipeProgress = effective
-                    val scrub = (1f - (effective * 0.52f)).coerceIn(0f, 1f)
-                    animProgress.snapTo(scrub)
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = true
+            NavBarVisibilityState.hideForSettingsEntry = true
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = true
                 }
-                // Gesture committed! Play the exact same smooth exit animation as the top back button
-                isClosing = true
-                isPredictiveBackTriggering = false
-                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.notifyClosing()
-                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.triggerSearchBounce()
-                animProgress.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = 480,
-                        easing = zoomExitEasing
-                    )
-                )
-                safeNavigateUp()
-            } catch (e: CancellationException) {
-                // Gesture cancelled!
-                isPredictiveBackTriggering = false
-                backSwipeProgress = 0f
-                animProgress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        stiffness = Spring.StiffnessMediumLow,
-                        dampingRatio = Spring.DampingRatioLowBouncy
-                    )
-                )
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.isSearchOpening = false
+                NavBarVisibilityState.hideForSettingsEntry = false
             }
         }
-    } else {
-        BackHandler(enabled = !isClosing && !hasNavigatedUp) {
-            closeSearch()
-        }
-    }
 
-    val density = LocalDensity.current
-    val progress = animProgress.value
-
-    // Background scrim: semi-transparent black overlay that smoothly fades in/out with gesture progress.
-    // Behind this scrim, the previous opened page (Recents, Contacts, etc.) is fully visible!
-    val scrimAlpha = (0.38f * progress).coerceIn(0f, 0.38f)
-
-    // Unified smooth scale: exactly the same math for both back button and predictive system back!
-    // Zooms out to 1.0f on open, and smoothly zooms inward all the way down to 0.06f on close
-    val currentScale = lerp(0.06f, 1f, progress)
-
-    // Unified corner radius: rounds smoothly up to 28dp pill radius as it collapses into the pill
-    val currentCornerRadius = (28 * (1f - progress)).dp
-
-    val swipeOffsetPx = if (isPredictiveBackTriggering && backSwipeProgress > 0f) {
-        val dir = if (backSwipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
-        with(density) { dir * backSwipeProgress * progress * 150.dp.toPx() }
-    } else 0f
-
-    val swipeOffsetYPx = if (isPredictiveBackTriggering && backSwipeProgress > 0f) {
-        with(density) { backSwipeProgress * progress * 48.dp.toPx() }
-    } else 0f
-
-    // As the screen closes, the surface sheet below the search bar dissolves smoothly,
-    // leaving only the search bar pill itself to align and morph with the outside bar.
-    val surfaceAlpha = (progress * 1.5f).coerceIn(0f, 1f)
-    val surfaceBgColor = MaterialTheme.colorScheme.surface.copy(alpha = surfaceAlpha)
-
-    // Results content fades out before the pill finishes closing
-    val contentFadeAlpha = ((progress - 0.20f) / 0.80f).coerceIn(0f, 1f)
-
-    val searchOrigin = com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.lastOrigin
-    val surfaceAnimAlpha = (progress * 2.5f).coerceIn(0f, 1f)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = scrimAlpha))
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = currentScale
-                    scaleY = currentScale
-                    translationX = swipeOffsetPx
-                    translationY = swipeOffsetYPx
-                    transformOrigin = searchOrigin
-                    alpha = surfaceAnimAlpha
-                    clip = (currentCornerRadius > 0.5.dp)
-                    shape = RoundedCornerShape(currentCornerRadius)
-                },
-            color = surfaceBgColor,
-            shape = RoundedCornerShape(currentCornerRadius)
-        ) {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                containerColor = Color.Transparent,
-                contentWindowInsets = WindowInsets(0, 0, 0, 0)
-            ) { innerPadding ->
-                Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                    ContactSearchContent(
-                        navigator = navigator,
-                        navController = navController,
-                        isGranted = permState.status == PermissionStatus.Granted,
-                        onRequestPermission = { permState.launchPermissionRequest() },
-                        listState = listState,
-                        initialQuery = initialQuery,
-                        onBack = closeSearch,
-                        searchBarProgress = progress,
-                        contentAlpha = contentFadeAlpha
-                    )
-                }
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        ) { innerPadding ->
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                ContactSearchContent(
+                    navigator = navigator,
+                    navController = navController,
+                    isGranted = permState.status == PermissionStatus.Granted,
+                    onRequestPermission = { permState.launchPermissionRequest() },
+                    listState = listState,
+                    initialQuery = initialQuery,
+                    onBack = closeWithAnimation
+                )
             }
         }
     }
@@ -654,6 +467,7 @@ fun ContactSearchContent(
                     )
                     TextButton(onClick = {
                         saveSearchQuery()
+                        keyboardController?.hide()
                         navigator.navigate(DialPadScreenDestination(initialNumber = query))
                     }) {
                         Text("Open Dialpad", color = MaterialTheme.colorScheme.primary)
@@ -849,16 +663,19 @@ fun ContactSearchContent(
                                                     icon = Icons.Default.Person,
                                                     phoneNumber = entry.number,
                                                     onAvatarClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(ContactDetailsScreenDestination(phoneNumber = entry.number))
                                                     },
                                                     trailingContent = {
                                                         IconButton(onClick = {
+                                                            keyboardController?.hide()
                                                             navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
                                                         }) {
                                                             Icon(Icons.Default.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.primary)
                                                         }
                                                     },
                                                     onClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(DialPadScreenDestination(initialNumber = entry.number))
                                                     }
                                                 )
@@ -902,10 +719,12 @@ fun ContactSearchContent(
                                                     photoUri = conv.photoUri,
                                                     phoneNumber = conv.address,
                                                     onAvatarClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(ContactDetailsScreenDestination(phoneNumber = conv.address))
                                                     },
                                                     onClick = {
                                                         saveSearchQuery()
+                                                        keyboardController?.hide()
                                                         navigator.navigate(
                                                             SmsChatScreenDestination(
                                                                 threadId = conv.threadId,
@@ -955,9 +774,11 @@ fun ContactSearchContent(
                                                     icon = Icons.Default.Mic,
                                                     phoneNumber = rec.phoneNumber,
                                                     onAvatarClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
                                                     },
                                                     onClick = {
+                                                        keyboardController?.hide()
                                                         NavBarVisibilityState.hideForSettingsEntry = true
                                                         navigator.navigate(
                                                             RecordingsScreenDestination(
@@ -1055,6 +876,7 @@ fun ContactSearchContent(
                                                     icon = Icons.Default.StickyNote2,
                                                     phoneNumber = note.phoneNumber,
                                                     onAvatarClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(ContactDetailsScreenDestination(phoneNumber = note.phoneNumber))
                                                     },
                                                     supportingContent = {
@@ -1067,6 +889,7 @@ fun ContactSearchContent(
                                                         )
                                                     },
                                                     onClick = {
+                                                        keyboardController?.hide()
                                                         NavBarVisibilityState.hideForSearchResult = true
                                                         navigator.navigate(NotesScreenDestination(highlightQuery = query))
                                                     }
@@ -1111,6 +934,7 @@ fun ContactSearchContent(
                                                     icon = Icons.Default.Mic,
                                                     phoneNumber = rec.phoneNumber,
                                                     onAvatarClick = {
+                                                        keyboardController?.hide()
                                                         navigator.navigate(ContactDetailsScreenDestination(phoneNumber = rec.phoneNumber))
                                                     },
                                                     supportingContent = {
@@ -1123,6 +947,7 @@ fun ContactSearchContent(
                                                         )
                                                     },
                                                     onClick = {
+                                                        keyboardController?.hide()
                                                         NavBarVisibilityState.hideForSettingsEntry = true
                                                         navigator.navigate(
                                                             RecordingsScreenDestination(

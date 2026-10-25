@@ -308,11 +308,12 @@ fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {
 fun isExpandingRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
-    if (isSmsChatRoute(route) || base == "search_screen") return false
+    if (isSmsChatRoute(route)) return false
     return isSettingsRoute(route) ||
         base == "contact_details_screen" ||
         base == "call_log_detail_screen" ||
-        base == "new_message_screen"
+        base == "new_message_screen" ||
+        base == "search_screen"
 }
 
 fun isExpandingRoute(entry: NavBackStackEntry?): Boolean {
@@ -321,19 +322,6 @@ fun isExpandingRoute(entry: NavBackStackEntry?): Boolean {
     return isExpandingRoute(entry.destination.route)
 }
 
-/**
- * Destination style for SearchScreen — renders as a Dialog destination so the underlying
- * page (Recents, Contacts, etc.) remains fully active and visible in the composition.
- * This guarantees zero blank backgrounds during navigation and smooth predictive back interaction.
- */
-object SearchDestinationStyle : com.ramcosta.composedestinations.spec.DestinationStyle.Dialog() {
-    override val properties: androidx.compose.ui.window.DialogProperties = androidx.compose.ui.window.DialogProperties(
-        dismissOnBackPress = false,
-        dismissOnClickOutside = false,
-        usePlatformDefaultWidth = false,
-        decorFitsSystemWindows = false
-    )
-}
 
 /**
  * Destination style providing dynamic transition styles:

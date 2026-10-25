@@ -95,9 +95,6 @@ fun DefaultSpeakerMicDialog(
     var selectedSpeaker by remember {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_SPEAKER_ROUTE, PreferenceManager.SPEAKER_ROUTE_EXTERNAL) ?: PreferenceManager.SPEAKER_ROUTE_EXTERNAL)
     }
-    var selectedMic by remember {
-        mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_MIC_ROUTE, PreferenceManager.MIC_ROUTE_EXTERNAL) ?: PreferenceManager.MIC_ROUTE_EXTERNAL)
-    }
     var usePreviousConfig by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_USE_PREVIOUS_CALL_AUDIO_CONFIG, false))
     }
@@ -127,7 +124,7 @@ fun DefaultSpeakerMicDialog(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    Icons.Default.HeadsetMic,
+                                    Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(26.dp)
@@ -136,7 +133,7 @@ fun DefaultSpeakerMicDialog(
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "Default speaker and mic",
+                            "Default speaker",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -198,40 +195,7 @@ fun DefaultSpeakerMicDialog(
                             }
                         )
 
-                        Spacer(Modifier.height(8.dp))
-
-                        // Section: Mic
-                        Text(
-                            text = "Default Microphone",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
-                        )
-
-                        AudioChoiceRow(
-                            icon = Icons.Default.HeadsetMic,
-                            label = "External",
-                            subLabel = "Uses connected headset or Bluetooth mic; falls back to system mic",
-                            selected = selectedMic == PreferenceManager.MIC_ROUTE_EXTERNAL,
-                            onClick = {
-                                selectedMic = PreferenceManager.MIC_ROUTE_EXTERNAL
-                                prefs.setString(PreferenceManager.KEY_DEFAULT_MIC_ROUTE, PreferenceManager.MIC_ROUTE_EXTERNAL)
-                            }
-                        )
-
-                        AudioChoiceRow(
-                            icon = Icons.Default.Mic,
-                            label = "System",
-                            subLabel = "Uses phone built-in microphone",
-                            selected = selectedMic == PreferenceManager.MIC_ROUTE_SYSTEM,
-                            onClick = {
-                                selectedMic = PreferenceManager.MIC_ROUTE_SYSTEM
-                                prefs.setString(PreferenceManager.KEY_DEFAULT_MIC_ROUTE, PreferenceManager.MIC_ROUTE_SYSTEM)
-                            }
-                        )
-
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(6.dp))
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         Spacer(Modifier.height(6.dp))
 
@@ -272,7 +236,7 @@ fun DefaultSpeakerMicDialog(
                                         fontWeight = if (usePreviousConfig) FontWeight.Bold else FontWeight.Medium
                                     )
                                     Text(
-                                        "Automatically restore the speaker and mic routes used in your previous call",
+                                        "Automatically restore the speaker route used in your previous call",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

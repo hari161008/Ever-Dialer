@@ -20,7 +20,10 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothProfile
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -95,6 +98,11 @@ class CallService : InCallService() {
         val hasWired = (supportedMask and CallAudioState.ROUTE_WIRED_HEADSET) != 0
         val isExternalConnected = hasBluetooth || hasWired
 
+        val audioManager = try { getSystemService(Context.AUDIO_SERVICE) as? AudioManager } catch (_: Throwable) { null }
+        try {
+            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+        } catch (_: Throwable) {}
+
         when (desiredSpeaker) {
             PreferenceManager.SPEAKER_ROUTE_EXTERNAL -> {
                 if (isExternalConnected) {
@@ -105,10 +113,25 @@ class CallService : InCallService() {
                 }
             }
             PreferenceManager.SPEAKER_ROUTE_SPEAKER -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val speakerDev = audioManager?.availableCommunicationDevices?.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    if (speakerDev != null) audioManager.setCommunicationDevice(speakerDev)
+                }
                 setAudioRoute(CallAudioState.ROUTE_SPEAKER)
             }
             PreferenceManager.SPEAKER_ROUTE_EAR -> {
-                setAudioRoute(CallAudioState.ROUTE_EARPIECE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val earpieceDev = audioManager?.availableCommunicationDevices?.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                    if (earpieceDev != null) audioManager.setCommunicationDevice(earpieceDev)
+                }
+                val targetRoute = if ((supportedMask and CallAudioState.ROUTE_EARPIECE) != 0) {
+                    CallAudioState.ROUTE_EARPIECE
+                } else if (hasWired) {
+                    CallAudioState.ROUTE_WIRED_HEADSET
+                } else {
+                    CallAudioState.ROUTE_EARPIECE
+                }
+                setAudioRoute(targetRoute)
             }
             else -> {
                 if (isExternalConnected) {
@@ -198,8 +221,18 @@ class CallService : InCallService() {
     private fun updateProximityScreenOffGate() {
         val session = _currentCallSession.value
         val callState = session?.state
-        val isSpeakerOn = _audioState.value?.route == CallAudioState.ROUTE_SPEAKER
-        val inCallForScreenOff = (callState == Call.STATE_ACTIVE || callState == Call.STATE_DIALING) && !isSpeakerOn
+        val currentRoute = _audioState.value?.route
+        val isEarActive = when (currentRoute) {
+            CallAudioState.ROUTE_EARPIECE -> true
+            CallAudioState.ROUTE_SPEAKER,
+            CallAudioState.ROUTE_BLUETOOTH,
+            CallAudioState.ROUTE_WIRED_HEADSET -> false
+            else -> {
+                val lastUsedSpeaker = prefs.getString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, "")
+                lastUsedSpeaker != PreferenceManager.SPEAKER_ROUTE_SPEAKER
+            }
+        }
+        val inCallForScreenOff = (callState == Call.STATE_ACTIVE || callState == Call.STATE_DIALING) && isEarActive
 
         if (!inCallForScreenOff) {
             releaseProxWakeLock()
@@ -207,8 +240,9 @@ class CallService : InCallService() {
         }
 
         val orientationGateEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_ORIENTATION_BG, false)
+        val isNear = mLastProximityNear == true
+
         if (orientationGateEnabled) {
-            val isNear = mLastProximityNear == true
             val inclination = mInclinationValue
             val orientedToEar = inclination != null && inclination in -90..90 && mIsSlanted
             if (isNear && orientedToEar) acquireProxWakeLock() else releaseProxWakeLock()
@@ -216,12 +250,9 @@ class CallService : InCallService() {
         }
 
         // Plain mode: proximity sensor alone, no orientation/tilt gating.
-        val proximityBgEnabled = prefs.getBoolean(PreferenceManager.KEY_PROXIMITY_BG, true)
-        if (proximityBgEnabled && mLastProximityNear == true) {
-            acquireProxWakeLock()
-        } else {
-            releaseProxWakeLock()
-        }
+        // Holding the proximity wake lock during earpiece calls allows Android's PowerManager
+        // to turn off the display natively when proximity is detected near.
+        acquireProxWakeLock()
     }
 
     private val proxSensorListener = object : SensorEventListener {
@@ -249,7 +280,7 @@ class CallService : InCallService() {
                 }
                 Sensor.TYPE_PROXIMITY -> {
                     val maxRange = event.sensor.maximumRange
-                    mLastProximityNear = event.values[0] < maxRange * 0.5f
+                    mLastProximityNear = event.values[0] < maxRange * 0.5f || event.values[0] == 0f || (maxRange > 0f && event.values[0] < maxRange)
                     updateProximityScreenOffGate()
                 }
             }
@@ -369,6 +400,13 @@ class CallService : InCallService() {
 
         fun setMuted(muted: Boolean) { instance?.setMuted(muted) }
         fun setAudioRoute(route: Int) { instance?.setAudioRoute(route) }
+        fun requestBluetoothAudio(device: BluetoothDevice) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    instance?.requestBluetoothAudio(device)
+                } catch (_: Throwable) {}
+            }
+        }
 
         private fun shouldLaunchOngoingCallUi(context: Context): Boolean {
             val pm = PreferenceManager(context)
@@ -741,6 +779,13 @@ class CallService : InCallService() {
             instance = null
             removeForeground()
             cancelNotification()
+            try {
+                val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                am?.mode = AudioManager.MODE_NORMAL
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    am?.clearCommunicationDevice()
+                }
+            } catch (_: Throwable) {}
         }
 
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -990,8 +1035,16 @@ class CallService : InCallService() {
         _currentCallSession.value?.call?.let { updateNotification(it) }
 
         audioState?.let { state ->
+            val currentPref = prefs.getString(PreferenceManager.KEY_LAST_USED_SPEAKER_ROUTE, "")
             val speakerVal = when (state.route) {
-                CallAudioState.ROUTE_BLUETOOTH, CallAudioState.ROUTE_WIRED_HEADSET -> PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                CallAudioState.ROUTE_BLUETOOTH -> PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                CallAudioState.ROUTE_WIRED_HEADSET -> {
+                    if (currentPref == PreferenceManager.SPEAKER_ROUTE_EAR) {
+                        PreferenceManager.SPEAKER_ROUTE_EAR
+                    } else {
+                        PreferenceManager.SPEAKER_ROUTE_EXTERNAL
+                    }
+                }
                 CallAudioState.ROUTE_SPEAKER -> PreferenceManager.SPEAKER_ROUTE_SPEAKER
                 CallAudioState.ROUTE_EARPIECE -> PreferenceManager.SPEAKER_ROUTE_EAR
                 else -> null
