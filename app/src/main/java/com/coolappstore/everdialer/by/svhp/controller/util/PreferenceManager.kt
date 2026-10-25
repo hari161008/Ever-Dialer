@@ -1171,6 +1171,7 @@ class PreferenceManager(context: Context) {
         const val KEY_PC_SYNC_CONTACT_PFP          = "pc_sync_contact_pfp"
         const val KEY_PC_SYNC_DYNAMIC_COLORS       = "pc_sync_dynamic_colors"
         const val KEY_PC_SYNC_BLUETOOTH_ENABLED    = "pc_sync_bluetooth_enabled"
+        const val KEY_PC_SYNC_SHOW_NOTIFICATION   = "pc_sync_show_notification"
 
         // SMS Categories
         const val KEY_SMS_CATEGORY_ORDER           = "sms_category_order"

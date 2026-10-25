@@ -35,6 +35,9 @@ class PcSyncService : Service() {
         const val CHANNEL_ID = "everdialer_pc_connect_channel"
         const val NOTIFICATION_ID = 9102
 
+        const val ACTION_UPDATE_NOTIFICATION = "com.coolappstore.everdialer.action.UPDATE_PC_SYNC_NOTIFICATION"
+        const val EXTRA_SHOW_NOTIFICATION = "extra_show_notification"
+
         fun start(context: Context) {
             val intent = Intent(context, PcSyncService::class.java)
             try {
@@ -54,11 +57,25 @@ class PcSyncService : Service() {
                 context.stopService(intent)
             } catch (_: Exception) {}
         }
+
+        fun updateNotificationVisibility(context: Context, show: Boolean) {
+            val intent = Intent(context, PcSyncService::class.java).apply {
+                action = ACTION_UPDATE_NOTIFICATION
+                putExtra(EXTRA_SHOW_NOTIFICATION, show)
+            }
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send notification visibility update: ${e.message}")
+            }
+        }
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var syncManager: PcBluetoothSyncManager? = null
     private var prefs: PreferenceManager? = null
+    private var lastNotificationTitle: String? = null
+    private var lastNotificationText: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -67,6 +84,14 @@ class PcSyncService : Service() {
         Log.i(TAG, "PcSyncService created")
         createNotificationChannel()
 
+        try {
+            syncManager = GlobalContext.get().getOrNull()
+            prefs = GlobalContext.get().getOrNull()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error resolving Koin dependencies: ${e.message}")
+        }
+
+        val showNotification = prefs?.getBoolean(PreferenceManager.KEY_PC_SYNC_SHOW_NOTIFICATION, true) ?: true
         val notification = buildNotification(
             title = "Ever Dialer PC Connect",
             content = "Waiting for Ever Dialer PC..."
@@ -78,11 +103,12 @@ class PcSyncService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        try {
-            syncManager = GlobalContext.get().getOrNull()
-            prefs = GlobalContext.get().getOrNull()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error resolving Koin dependencies: ${e.message}")
+        if (!showNotification) {
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping foreground notification: ${e.message}")
+            }
         }
 
         observeSyncStatus()
@@ -137,6 +163,31 @@ class PcSyncService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_UPDATE_NOTIFICATION) {
+            val show = intent.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, true)
+            if (!show) {
+                try {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error stopping foreground notification: ${e.message}")
+                }
+            } else {
+                val title = lastNotificationTitle ?: "Ever Dialer PC Connect"
+                val text = lastNotificationText ?: "Waiting for Ever Dialer PC..."
+                val notif = buildNotification(title, text)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        startForeground(NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notif)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error restoring foreground notification: ${e.message}")
+                }
+            }
+            return START_STICKY
+        }
+
         ensureSyncStarted()
         return START_STICKY
     }
@@ -176,6 +227,15 @@ class PcSyncService : Service() {
     }
 
     private fun updateNotification(title: String, content: String) {
+        lastNotificationTitle = title
+        lastNotificationText = content
+        val showNotification = prefs?.getBoolean(PreferenceManager.KEY_PC_SYNC_SHOW_NOTIFICATION, true) ?: true
+        if (!showNotification) {
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } catch (_: Exception) {}
+            return
+        }
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         try {
             nm.notify(NOTIFICATION_ID, buildNotification(title, content))

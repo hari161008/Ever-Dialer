@@ -18,6 +18,7 @@ import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -457,6 +458,12 @@ class PcBluetoothSyncManager(
         sb.append(";star_msg:").append(prefs.getString(PreferenceManager.KEY_STARRED_SMS_MESSAGES, ""))
         sb.append(";pin_thr:").append(prefs.getString(PreferenceManager.KEY_PINNED_SMS_THREADS, ""))
 
+        try {
+            val cg = prefs.getContactGroups()
+            val hiddenCg = prefs.getHiddenContactGroupIds()
+            sb.append(";cgroups:").append(cg.size).append("-").append(hiddenCg.size)
+        } catch (_: Exception) {}
+
         return sb.toString()
     }
 
@@ -519,6 +526,14 @@ class PcBluetoothSyncManager(
                 triggerImmediateSync()
             }
         }
+        val statusReceiver = object : BroadcastReceiver() {
+            override fun onReceive(pContext: Context?, intent: Intent?) {
+                scope.launch(Dispatchers.IO) {
+                    val w = activeWriter ?: return@launch
+                    sendTelemetry(w)
+                }
+            }
+        }
         try {
             val filter = IntentFilter().apply {
                 addAction(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
@@ -527,6 +542,15 @@ class PcBluetoothSyncManager(
             ContextCompat.registerReceiver(context, smsReceiver, filter, ContextCompat.RECEIVER_EXPORTED)
         } catch (e: Exception) {
             Log.w(TAG, "Could not register dynamic SMS receiver: ${e.message}")
+        }
+        try {
+            val statusFilter = IntentFilter().apply {
+                addAction("android.media.VOLUME_CHANGED_ACTION")
+                addAction("android.net.wifi.WIFI_AP_STATE_CHANGED")
+            }
+            ContextCompat.registerReceiver(context, statusReceiver, statusFilter, ContextCompat.RECEIVER_EXPORTED)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register volume/hotspot receiver: ${e.message}")
         }
 
         // 3. Periodic change-detector coroutine (runs every 800ms for notes or missed provider events + telemetry)
@@ -574,6 +598,28 @@ class PcBluetoothSyncManager(
                         }
                         "request_telemetry" -> {
                             sendTelemetry(writer)
+                        }
+                        "set_volume" -> {
+                            val stream = cmdObj.optString("stream")
+                            val level = cmdObj.optInt("level", -1)
+                            val streamType = when (stream) {
+                                "ring" -> AudioManager.STREAM_RING
+                                "notification" -> AudioManager.STREAM_NOTIFICATION
+                                "call" -> AudioManager.STREAM_VOICE_CALL
+                                "alarm" -> AudioManager.STREAM_ALARM
+                                "media" -> AudioManager.STREAM_MUSIC
+                                else -> -1
+                            }
+                            Log.i(TAG, "Executing set_volume stream=$stream ($streamType) level=$level")
+                            if (streamType != -1 && level >= 0) {
+                                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                                try {
+                                    audioManager?.setStreamVolume(streamType, level, 0)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to set stream volume for $stream: ${e.message}")
+                                }
+                                sendTelemetry(writer)
+                            }
                         }
                         "make_call" -> {
                             val number = cmdObj.optString("number")
@@ -804,6 +850,9 @@ class PcBluetoothSyncManager(
             try {
                 context.unregisterReceiver(smsReceiver)
             } catch (_: Exception) {}
+            try {
+                context.unregisterReceiver(statusReceiver)
+            } catch (_: Exception) {}
             periodicSyncJob.cancel()
             try {
                 context.contentResolver.unregisterContentObserver(contentObserver)
@@ -936,11 +985,58 @@ class PcBluetoothSyncManager(
                 }
             }
 
-            // 2. Real Call Logs
+            // 1b. Contact Groups
+            val contactGroupsArray = JSONArray()
+            if (syncContacts) {
+                try {
+                    val rawLocalGroups = prefs.getContactGroups()
+                    val sysGroups = runCatching { contactsRepository.getSystemContactGroups() }.getOrDefault(emptyList())
+                    val localGroupMap = rawLocalGroups.associateBy { it.id }.toMutableMap()
+                    for (sg in sysGroups) {
+                        val name = sg.name.trim()
+                        if (name.isBlank() || name.startsWith("System Group:", ignoreCase = true) ||
+                            name.equals("Starred in Android", ignoreCase = true) || name.equals("My Contacts", ignoreCase = true)) {
+                            continue
+                        }
+                        val existing = localGroupMap[sg.id]
+                        if (existing == null) {
+                            localGroupMap[sg.id] = sg
+                        } else {
+                            localGroupMap[sg.id] = existing.copy(
+                                accountType = sg.accountType ?: existing.accountType,
+                                accountName = sg.accountName ?: existing.accountName,
+                                targetLabel = sg.targetLabel ?: existing.targetLabel,
+                                contactIds = if (existing.contactIds.isEmpty() && sg.contactIds.isNotEmpty()) sg.contactIds else existing.contactIds
+                            )
+                        }
+                    }
+                    val allGroups = localGroupMap.values.filter { it.name.isNotBlank() }
+                    val hiddenGroupIds = prefs.getHiddenContactGroupIds()
+                    for (g in allGroups) {
+                        if (g.id in hiddenGroupIds) continue
+                        val gObj = JSONObject().apply {
+                            put("id", g.id)
+                            put("name", g.name)
+                            val ids = JSONArray()
+                            for (id in g.contactIds) {
+                                ids.put(id)
+                            }
+                            put("contactIds", ids)
+                            if (g.accountType != null) put("accountType", g.accountType)
+                            if (g.accountName != null) put("accountName", g.accountName)
+                        }
+                        contactGroupsArray.put(gObj)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error serializing contact groups: ${e.message}")
+                }
+            }
+
+            // 2. Real Call Logs (only latest 50)
             val callLogsArray = JSONArray()
             if (syncCallLogs) {
                 val realLogs = try {
-                    callLogRepository.getCallLogs(limit = 100)
+                    callLogRepository.getCallLogs(limit = 50).take(50)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching call logs: ${e.message}")
                     emptyList()
@@ -1094,6 +1190,7 @@ class PcBluetoothSyncManager(
             // Build wrapper payload
             val payload = JSONObject().apply {
                 put("contacts", contactsArray)
+                put("contactGroups", contactGroupsArray)
                 put("callLogs", callLogsArray)
                 put("callCategories", callCategoriesArray)
                 put("smsThreads", smsArray)
@@ -1130,6 +1227,72 @@ class PcBluetoothSyncManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error sending sync data: ${e.message}", e)
             _status.value = PcSyncStatus.ERROR
+        }
+    }
+
+    private fun isHotspotEnabled(): Boolean {
+        return try {
+            val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return false
+            val method = wm.javaClass.getDeclaredMethod("isWifiApEnabled")
+            method.isAccessible = true
+            method.invoke(wm) as? Boolean ?: false
+        } catch (_: Throwable) {
+            try {
+                val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return false
+                val method = wm.javaClass.getDeclaredMethod("getWifiApState")
+                method.isAccessible = true
+                val state = method.invoke(wm) as? Int ?: -1
+                state == 13 // WIFI_AP_STATE_ENABLED
+            } catch (_: Throwable) {
+                false
+            }
+        }
+    }
+
+    private fun getDataNetworkTypeName(): String {
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager ?: return ""
+        try {
+            val networkType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                tm.dataNetworkType
+            } else {
+                @Suppress("DEPRECATION")
+                tm.networkType
+            }
+            val typeStr = when (networkType) {
+                TelephonyManager.NETWORK_TYPE_NR -> "5G"
+                TelephonyManager.NETWORK_TYPE_LTE -> "4G"
+                TelephonyManager.NETWORK_TYPE_HSPAP -> "H+"
+                TelephonyManager.NETWORK_TYPE_HSPA,
+                TelephonyManager.NETWORK_TYPE_HSDPA,
+                TelephonyManager.NETWORK_TYPE_HSUPA,
+                TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
+                TelephonyManager.NETWORK_TYPE_EDGE -> "E"
+                TelephonyManager.NETWORK_TYPE_GPRS,
+                TelephonyManager.NETWORK_TYPE_CDMA,
+                TelephonyManager.NETWORK_TYPE_1xRTT -> "2G"
+                else -> {
+                    val voiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        try { tm.voiceNetworkType } catch (_: Throwable) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
+                    } else {
+                        TelephonyManager.NETWORK_TYPE_UNKNOWN
+                    }
+                    when (voiceType) {
+                        TelephonyManager.NETWORK_TYPE_NR -> "5G"
+                        TelephonyManager.NETWORK_TYPE_LTE -> "4G"
+                        TelephonyManager.NETWORK_TYPE_HSPAP -> "H+"
+                        TelephonyManager.NETWORK_TYPE_HSPA,
+                        TelephonyManager.NETWORK_TYPE_HSDPA,
+                        TelephonyManager.NETWORK_TYPE_HSUPA,
+                        TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
+                        TelephonyManager.NETWORK_TYPE_EDGE -> "E"
+                        TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
+                        else -> ""
+                    }
+                }
+            }
+            return typeStr
+        } catch (_: Throwable) {
+            return ""
         }
     }
 
@@ -1179,6 +1342,38 @@ class PcBluetoothSyncManager(
                 -1
             }
             obj.put("cellularLevel", cellLevel.coerceIn(-1, 4))
+
+            // 4. Hotspot & Network Data Type
+            obj.put("isHotspotOn", isHotspotEnabled())
+            obj.put("dataNetworkType", getDataNetworkTypeName())
+
+            // 5. Volume Streams
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audioManager != null) {
+                val volObj = JSONObject().apply {
+                    put("ring", JSONObject().apply {
+                        put("current", audioManager.getStreamVolume(AudioManager.STREAM_RING))
+                        put("max", audioManager.getStreamMaxVolume(AudioManager.STREAM_RING))
+                    })
+                    put("notification", JSONObject().apply {
+                        put("current", audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION))
+                        put("max", audioManager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION))
+                    })
+                    put("call", JSONObject().apply {
+                        put("current", audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL))
+                        put("max", audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL))
+                    })
+                    put("alarm", JSONObject().apply {
+                        put("current", audioManager.getStreamVolume(AudioManager.STREAM_ALARM))
+                        put("max", audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM))
+                    })
+                    put("media", JSONObject().apply {
+                        put("current", audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
+                        put("max", audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+                    })
+                }
+                obj.put("volume", volObj)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error gathering telemetry: ${e.message}")
         }
