@@ -54,6 +54,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDown
@@ -432,15 +435,87 @@ fun DialPadScreen(
                 } else {
                     BackHandler(enabled = !dialpadClosing && !didNavigateAway) { closeWithSlowAnimation() }
                 }
+                val density = LocalDensity.current
+                val slideDistancePx = with(density) { slideDistance.toPx() }
+                val keyboardController = LocalSoftwareKeyboardController.current
+                val focusManager = LocalFocusManager.current
+                val haptic = LocalHapticFeedback.current
+
+                var isDraggingHandle by remember { mutableStateOf(false) }
+                val handleWidth by animateDpAsState(
+                    targetValue = if (isDraggingHandle) 52.dp else 36.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "handleWidth"
+                )
+                val handleHeight by animateDpAsState(
+                    targetValue = if (isDraggingHandle) 5.dp else 4.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "handleHeight"
+                )
+                val handleColor by animateColorAsState(
+                    targetValue = if (isDraggingHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "handleColor"
+                )
+
+                val handleDraggableState = rememberDraggableState { delta ->
+                    val currentOffset = closeProgress.value * slideDistancePx
+                    val newOffset = (currentOffset + delta).coerceAtLeast(0f)
+                    val newProgress = (newOffset / slideDistancePx).coerceIn(0f, 1f)
+                    sheetScope.launch {
+                        closeProgress.snapTo(newProgress)
+                    }
+                }
+
                 Column(modifier = Modifier.statusBarsPadding().navigationBarsPadding()) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .draggable(
+                                state = handleDraggableState,
+                                orientation = Orientation.Vertical,
+                                onDragStarted = {
+                                    isDraggingHandle = true
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                                onDragStopped = { velocity ->
+                                    isDraggingHandle = false
+                                    val progress = closeProgress.value
+                                    val offsetPx = progress * slideDistancePx
+                                    val dismissThresholdPx = with(density) { 90.dp.toPx() }
+                                    val shouldDismiss = progress > 0.15f || offsetPx > dismissThresholdPx || velocity > 1000f
+
+                                    sheetScope.launch {
+                                        if (shouldDismiss) {
+                                            dialpadClosing = true
+                                            val duration = ((1f - progress) * 360).toInt().coerceIn(160, 380)
+                                            closeProgress.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = tween(durationMillis = duration, easing = FastOutSlowInEasing)
+                                            )
+                                            finishDismiss()
+                                        } else {
+                                            dialpadClosing = false
+                                            closeProgress.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = spring(
+                                                    stiffness = Spring.StiffnessMediumLow,
+                                                    dampingRatio = Spring.DampingRatioLowBouncy
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(3.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                            modifier = Modifier.size(width = 36.dp, height = 4.dp)
+                            shape = RoundedCornerShape(percent = 50),
+                            color = handleColor,
+                            modifier = Modifier.size(width = handleWidth, height = handleHeight)
                         ) {}
                     }
                     DialPadContent(

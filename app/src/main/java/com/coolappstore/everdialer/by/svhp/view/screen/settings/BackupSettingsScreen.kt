@@ -326,61 +326,10 @@ fun BackupSettingsScreen(
 
             // ── Tab 0: Create Backup ──────────────────────────────────────────
             if (selectedTab == 0) {
-                // 1. Save & Share Buttons at the top (above configuration containers)
-                item {
-                    RivoAnimatedSection(delayMs = 30L) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                                    saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
-                                },
-                                enabled = hasAnyBackupSelected,
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(52.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp)
-                            ) {
-                                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Save Backup", fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            }
-
-                            Button(
-                                onClick = { executeShare() },
-                                enabled = hasAnyBackupSelected,
-                                shape = CircleShape,
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(52.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp)
-                            ) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Share Backup", fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            }
-                        }
-                    }
-                }
-
-                // 2. Auto Backup Container
+                // 1. Auto Backup Container
                 item {
                     val isAutoBackupOn = prefs.isAutoBackupEnabled()
-                    RivoAnimatedSection(delayMs = 50L) {
+                    RivoAnimatedSection(delayMs = 30L) {
                         RivoExpressiveCard {
                             RivoListItem(
                                 headline = "Auto backup",
@@ -396,9 +345,9 @@ fun BackupSettingsScreen(
                     }
                 }
 
-                // 3. Data to include
+                // 2. Data to include
                 item {
-                    RivoAnimatedSection(delayMs = 70L) {
+                    RivoAnimatedSection(delayMs = 60L) {
                         Column {
                             Text(
                                 text = "Select data to include in your backup file",
@@ -407,6 +356,50 @@ fun BackupSettingsScreen(
                                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                             )
                             RivoExpressiveCard {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                            saveBackupLauncher.launch("EverDialer_Backup_$timestamp.everdialer")
+                                        },
+                                        enabled = hasAnyBackupSelected,
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(52.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
+                                    ) {
+                                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Save Backup", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    }
+
+                                    Button(
+                                        onClick = { executeShare() },
+                                        enabled = hasAnyBackupSelected,
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(52.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
+                                    ) {
+                                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Share Backup", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    }
+                                }
+                                CardDivider()
                                 RivoSwitchListItem(
                                     headline = "Backup settings",
                                     supporting = "Preferences, widgets, liquid glass, blur effects & app configuration",
