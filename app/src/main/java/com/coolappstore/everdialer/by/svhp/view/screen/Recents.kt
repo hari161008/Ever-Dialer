@@ -90,8 +90,11 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import android.os.Build
 import com.coolappstore.everdialer.by.svhp.liquidglass.drawBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.lens
+import com.coolappstore.everdialer.by.svhp.liquidglass.effects.blur
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.colorControls
 import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.rememberLayerBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.layerBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 import org.koin.compose.viewmodel.koinActivityViewModel
 import java.util.Calendar
@@ -302,6 +305,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     }
 
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val recentsBackdrop = rememberLayerBackdrop()
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
@@ -355,7 +359,6 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             },
         topBar = { TopBar(navController, navigator) },
         floatingActionButton = {
-            val globalBackdrop = LocalLiquidGlassBackdrop.current
             val settingsVer by prefs.settingsChanged.collectAsState()
             val liquidGlass = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LIQUID_GLASS, false) }
             val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false) }
@@ -368,8 +371,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val fabBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
             val fabFg = if (isSaturatedActive && isDark) Color.Black else if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
             val fabShape = RoundedCornerShape(17.dp)
-            val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-            val useBlur = blurEffects && blurRecentsFab && !useLiquidGlass
+            val useLiquidGlass = liquidGlass && lgRecentsFab && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val useBlur = blurEffects && blurRecentsFab && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             val onOpenDialpad: () -> Unit = {
                 performAppHaptic(
                     context,
@@ -386,15 +389,15 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 .scale(fabScale * dialpadExpandScale)
                 .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier.navigationBarsPadding().padding(bottom = 80.dp))
                 .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
-            if (useLiquidGlass && globalBackdrop != null) {
+            if (useLiquidGlass) {
                 Box(
                     modifier = baseModifier.drawBackdrop(
-                        backdrop = globalBackdrop,
+                        backdrop = recentsBackdrop,
                         shape = { fabShape },
                         effects = {
                             val d = density
                             colorControls(brightness = -0.15f)
-                            lens(refractionHeight = 46f * d, refractionAmount = 64f * d)
+                            lens(refractionHeight = 18f * d, refractionAmount = 48f * d)
                         },
                         highlight = { Highlight.Default }
                     )
@@ -412,13 +415,36 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         ),
                     ) { Icon(Icons.Default.Dialpad, "Dialpad") }
                 }
+            } else if (useBlur) {
+                Box(
+                    modifier = baseModifier.drawBackdrop(
+                        backdrop = recentsBackdrop,
+                        shape = { fabShape },
+                        effects = {
+                            val d = density
+                            colorControls(saturation = 1.3f)
+                            blur(25f * d)
+                        },
+                        highlight = { Highlight.Plain }
+                    )
+                ) {
+                    FloatingActionButton(
+                        onClick = onOpenDialpad,
+                        containerColor = fabBg.copy(alpha = 0.35f),
+                        contentColor = fabFg,
+                        shape = fabShape,
+                        elevation = FloatingActionButtonDefaults.elevation(
+                            defaultElevation = dialpadFabElevation,
+                            pressedElevation = dialpadFabElevation,
+                            focusedElevation = dialpadFabElevation,
+                            hoveredElevation = dialpadFabElevation
+                        ),
+                    ) { Icon(Icons.Default.Dialpad, "Dialpad") }
+                }
             } else {
                 FloatingActionButton(
                     onClick = onOpenDialpad,
-                    containerColor = if (useBlur)
-                        fabBg.copy(alpha = 0.75f)
-                    else
-                        fabBg,
+                    containerColor = fabBg,
                     contentColor = fabFg,
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(
@@ -434,7 +460,20 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        val settingsVer by prefs.settingsChanged.collectAsState()
+        val needBackdropContent = remember(settingsVer) {
+            val lg = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LIQUID_GLASS, false) &&
+                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false)
+            val bl = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) &&
+                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false)
+            (lg || bl) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        }
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .then(if (needBackdropContent) Modifier.layerBackdrop(recentsBackdrop) else Modifier)
+        ) {
             CallLogFullContent(
                 navController = navController,
                 navigator = navigator,

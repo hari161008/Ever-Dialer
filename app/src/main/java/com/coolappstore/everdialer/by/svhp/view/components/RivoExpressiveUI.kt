@@ -1454,13 +1454,18 @@ fun RivoDropdownMenu(
                                 }
                             } else if (useBlurDropdown && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 Surface(
-                                    modifier = Modifier.fillMaxWidth().drawPlainBackdrop(
+                                    modifier = Modifier.fillMaxWidth().drawBackdrop(
                                         backdrop = globalBackdrop,
                                         shape    = { dropdownShape },
-                                        effects  = { blur(30f * density) }
+                                        effects  = {
+                                            val d = density
+                                            colorControls(saturation = 1.3f)
+                                            blur(25f * d)
+                                        },
+                                        highlight = { Highlight.Plain }
                                     ),
                                     shape = dropdownShape,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
                                     tonalElevation = 0.dp
                                 ) {
                                     Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }

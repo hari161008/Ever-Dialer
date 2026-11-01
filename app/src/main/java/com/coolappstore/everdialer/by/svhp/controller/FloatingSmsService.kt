@@ -417,23 +417,25 @@ class FloatingSmsService : Service() {
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            var dragged = false
-                            var isLongPress = false
                             val downPos = down.position
+                            var isDrag = false
+                            var isLongPress = false
+                            var currentChange = down
 
                             try {
                                 withTimeout(viewConfiguration.longPressTimeoutMillis) {
-                                    do {
+                                    while (true) {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                        if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
-                                            dragged = true
-                                            break
-                                        }
+                                        currentChange = change
                                         if (!change.pressed) {
                                             break
                                         }
-                                    } while (true)
+                                        if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                            isDrag = true
+                                            break
+                                        }
+                                    }
                                 }
                             } catch (_: PointerEventTimeoutCancellationException) {
                                 isLongPress = true
@@ -441,27 +443,36 @@ class FloatingSmsService : Service() {
                                 showDismissOption = !showDismissOption
                             }
 
-                            var change = down
-                            while (change.pressed) {
-                                val event = awaitPointerEvent()
-                                val nextChange = event.changes.firstOrNull { it.id == down.id } ?: break
-                                change = nextChange
-                                val delta = nextChange.position - nextChange.previousPosition
-                                if (!dragged && (nextChange.position - downPos).getDistance() > viewConfiguration.touchSlop) {
-                                    dragged = true
-                                    showDismissOption = false
-                                }
-                                if (dragged) {
-                                    nextChange.consume()
+                            if (isDrag) {
+                                showDismissOption = false
+                                while (currentChange.pressed) {
+                                    val delta = currentChange.position - currentChange.previousPosition
+                                    currentChange.consume()
                                     params.x = (params.x + delta.x.toInt()).coerceIn(0, maxX)
                                     params.y = (params.y + delta.y.toInt()).coerceIn(0, maxY)
                                     try {
                                         wm.updateViewLayout(view, params)
                                     } catch (_: Exception) {}
-                                }
-                            }
 
-                            if (!isLongPress && !dragged) {
+                                    val event = awaitPointerEvent()
+                                    currentChange = event.changes.firstOrNull { it.id == down.id } ?: break
+                                }
+                            } else if (isLongPress) {
+                                while (currentChange.pressed) {
+                                    val event = awaitPointerEvent()
+                                    val nextChange = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    currentChange = nextChange
+                                    if ((nextChange.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                        val delta = nextChange.position - nextChange.previousPosition
+                                        nextChange.consume()
+                                        params.x = (params.x + delta.x.toInt()).coerceIn(0, maxX)
+                                        params.y = (params.y + delta.y.toInt()).coerceIn(0, maxY)
+                                        try {
+                                            wm.updateViewLayout(view, params)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            } else {
                                 showDismissOption = false
                                 onTap()
                             }
@@ -967,8 +978,8 @@ private fun FloatingChatOverlay(
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .imePadding()
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.75f)
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.82f)
                 .graphicsLayer {
                     scaleX = cardScale
                     scaleY = cardScale
@@ -991,23 +1002,24 @@ private fun FloatingChatOverlay(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RivoAvatar(
                             name = contactName ?: address,
                             photoUri = photoUri,
                             obeySolidIcons = false,
-                            size = 36.dp,
-                            modifier = Modifier.size(36.dp)
+                            size = 42.dp,
+                            modifier = Modifier.size(42.dp)
                         )
 
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(10.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = contactName ?: address,
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1015,7 +1027,7 @@ private fun FloatingChatOverlay(
                             if (!contactName.isNullOrBlank() && address.isNotBlank()) {
                                 Text(
                                     text = address,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1030,39 +1042,39 @@ private fun FloatingChatOverlay(
                                     makeCall(context, address)
                                 }
                             },
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Call,
                                 contentDescription = "Call",
                                 tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(19.dp)
+                                modifier = Modifier.size(21.dp)
                             )
                         }
 
                         // Open in Full App Action
                         IconButton(
                             onClick = onOpenFullApp,
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                                 contentDescription = "Open in app",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(19.dp)
+                                modifier = Modifier.size(21.dp)
                             )
                         }
 
                         // "X" Action: hides chat screen and restores bubble
                         IconButton(
                             onClick = { animateAndClose(onHide) },
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Hide",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(21.dp)
                             )
                         }
                     }
@@ -1104,9 +1116,9 @@ private fun FloatingChatOverlay(
                                     ) {
                                         Text(
                                             text = item.title,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                         )
                                     }
                                 }
@@ -1127,14 +1139,14 @@ private fun FloatingChatOverlay(
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(
-                                            topStart = 16.dp,
-                                            topEnd = 16.dp,
-                                            bottomStart = if (isOut) 16.dp else 4.dp,
-                                            bottomEnd = if (isOut) 4.dp else 16.dp
+                                            topStart = 18.dp,
+                                            topEnd = 18.dp,
+                                            bottomStart = if (isOut) 18.dp else 4.dp,
+                                            bottomEnd = if (isOut) 4.dp else 18.dp
                                         ),
                                         color = bubbleColor,
                                         modifier = Modifier
-                                            .widthIn(max = 280.dp)
+                                            .widthIn(max = 320.dp)
                                             .combinedClickable(
                                                 onClick = {
                                                     if (msg.body.isNotBlank()) {
@@ -1148,7 +1160,7 @@ private fun FloatingChatOverlay(
                                                 }
                                             )
                                     ) {
-                                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                                             if (msg.isMms && msg.parts.isNotEmpty()) {
                                                 msg.parts.filter { it.isImage && !it.uri.isNullOrBlank() }.forEach { part ->
                                                     AsyncImage(
@@ -1170,23 +1182,23 @@ private fun FloatingChatOverlay(
                                                 }
                                                 Text(
                                                     text = annotated,
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.5.sp, lineHeight = 21.sp),
                                                     color = textColor
                                                 )
                                             }
 
-                                            Spacer(Modifier.height(2.dp))
+                                            Spacer(Modifier.height(3.dp))
                                             Row(
                                                 modifier = Modifier.align(Alignment.End),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 if (isPinned) {
                                                     Icon(
                                                         imageVector = Icons.Default.PushPin,
                                                         contentDescription = "Pinned",
                                                         tint = textColor.copy(alpha = 0.7f),
-                                                        modifier = Modifier.size(10.dp)
+                                                        modifier = Modifier.size(12.dp)
                                                     )
                                                 }
                                                 if (isStarred) {
@@ -1194,12 +1206,12 @@ private fun FloatingChatOverlay(
                                                         imageVector = Icons.Default.Star,
                                                         contentDescription = "Starred",
                                                         tint = Color(0xFFFFB300),
-                                                        modifier = Modifier.size(10.dp)
+                                                        modifier = Modifier.size(12.dp)
                                                     )
                                                 }
                                                 Text(
                                                     text = timeFormat.format(Date(msg.date)),
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
                                                     color = textColor.copy(alpha = 0.65f)
                                                 )
                                             }
@@ -1298,14 +1310,15 @@ private fun FloatingChatOverlay(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TextField(
                             value = inputText,
                             onValueChange = { inputText = it },
-                            placeholder = { Text("Text message", style = MaterialTheme.typography.bodyMedium) },
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.5.sp, color = MaterialTheme.colorScheme.onSurface),
+                            placeholder = { Text("Text message", style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.5.sp)) },
                             modifier = Modifier.weight(1f),
                             maxLines = 3,
                             colors = TextFieldDefaults.colors(
@@ -1328,7 +1341,7 @@ private fun FloatingChatOverlay(
                                     val slotNumber = (sim.simSlotIndex + 1).toString()
                                     Box(
                                         modifier = Modifier
-                                            .size(34.dp)
+                                            .size(38.dp)
                                             .clip(CircleShape)
                                             .background(
                                                 if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -1347,7 +1360,7 @@ private fun FloatingChatOverlay(
                                             simSlotNumber = slotNumber,
                                             tint = if (isSelected) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                            isLarge = false
+                                            isLarge = true
                                         )
                                     }
                                 }
@@ -1359,7 +1372,7 @@ private fun FloatingChatOverlay(
                             onClick = { sendMessage() },
                             enabled = canSend,
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(44.dp)
                                 .background(
                                     color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                     shape = CircleShape
@@ -1369,7 +1382,7 @@ private fun FloatingChatOverlay(
                                 Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "Send",
                                 tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }

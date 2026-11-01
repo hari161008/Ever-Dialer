@@ -148,6 +148,8 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import kotlinx.coroutines.CancellationException
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.rememberLayerBackdrop
+import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.layerBackdrop
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 
 /**
@@ -2025,26 +2027,45 @@ fun DialPadContent(
 
 
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                val dialpadBackdrop = rememberLayerBackdrop()
+                val lgDialpadEnabled = remember(settingsState) {
+                    prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) &&
+                    prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
+                }
+                val blurDialpadEnabled = remember(settingsState) {
+                    prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) &&
+                    prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, false) &&
+                    !lgDialpadEnabled
+                }
+
+                val needDialpadBackdrop = (lgDialpadEnabled || blurDialpadEnabled) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
                 // Dialpad keys
                 val keys = listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("*","0","#"))
                 val subKeys = mapOf("1" to "   ","2" to "ABC","3" to "DEF","4" to "GHI","5" to "JKL","6" to "MNO","7" to "PQRS","8" to "TUV","9" to "WXYZ","0" to "+")
 
-                keys.forEach { row ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        row.forEach { key ->
-                            DialPadKey(
-                                number = key,
-                                letters = subKeys[key] ?: "",
-                                soundPool = soundPool,
-                                context = context,
-                                onClick = { digit ->
-                                    insertAtCursor(digit)
-                                },
-                                onLongClick = if (key == "0") ({ insertAtCursor("+") }) else null,
-                                overrideWidth = keyWidth,
-                                overrideHeight = keyHeight,
-                                scaleFactor = scaleFactor
-                            )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (needDialpadBackdrop) Modifier.layerBackdrop(dialpadBackdrop) else Modifier)
+                ) {
+                    keys.forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            row.forEach { key ->
+                                DialPadKey(
+                                    number = key,
+                                    letters = subKeys[key] ?: "",
+                                    soundPool = soundPool,
+                                    context = context,
+                                    onClick = { digit ->
+                                        insertAtCursor(digit)
+                                    },
+                                    onLongClick = if (key == "0") ({ insertAtCursor("+") }) else null,
+                                    overrideWidth = keyWidth,
+                                    overrideHeight = keyHeight,
+                                    scaleFactor = scaleFactor
+                                )
+                            }
                         }
                     }
                 }
@@ -2068,16 +2089,6 @@ fun DialPadContent(
                         isLarge = true
                     )
 
-                    val lgBackdrop = LocalLiquidGlassBackdrop.current
-                    val lgDialpadEnabled = remember(settingsState) {
-                        prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) &&
-                        prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
-                    }
-                    val blurDialpadEnabled = remember(settingsState) {
-                        prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) &&
-                        prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, false) &&
-                        !lgDialpadEnabled
-                    }
                     if (showSimButtons) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy((8 * scaleFactor).dp),
@@ -2103,7 +2114,7 @@ fun DialPadContent(
                                 contentColor = Color.White,
                                 modifier = Modifier.width(simBtnW).height(callH),
                                 isLarge = true,
-                                liquidGlassBackdrop = lgBackdrop,
+                                liquidGlassBackdrop = dialpadBackdrop,
                                 liquidGlassEnabled = lgDialpadEnabled,
                                 blurEnabled = blurDialpadEnabled,
                                 isCallButton = true
@@ -2128,7 +2139,7 @@ fun DialPadContent(
                                 contentColor = Color.White,
                                 modifier = Modifier.width(simBtnW).height(callH),
                                 isLarge = true,
-                                liquidGlassBackdrop = lgBackdrop,
+                                liquidGlassBackdrop = dialpadBackdrop,
                                 liquidGlassEnabled = lgDialpadEnabled,
                                 blurEnabled = blurDialpadEnabled,
                                 isCallButton = true
@@ -2153,7 +2164,7 @@ fun DialPadContent(
                             contentColor = Color.White,
                             modifier = Modifier.width(callW).height(callH),
                             isLarge = true,
-                            liquidGlassBackdrop = lgBackdrop,
+                            liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
                             blurEnabled = blurDialpadEnabled,
                             isCallButton = true
@@ -2380,25 +2391,34 @@ fun DialerActionExpressive(
             }
         }
     } else if (useBackdropBlur && liquidGlassBackdrop != null) {
-        Surface(
+        Box(
             modifier = modifier
                 .scale(scale)
-                .drawPlainBackdrop(
+                .drawBackdrop(
                     backdrop = liquidGlassBackdrop,
                     shape    = { buttonShape },
-                    effects  = { blur(30f * density) }
+                    effects  = {
+                        val d = density
+                        colorControls(saturation = 1.3f)
+                        blur(25f * d)
+                    },
+                    highlight = { Highlight.Plain }
                 )
                 .combinedClickable(
                     onClick = wrappedOnClick,
                     onLongClick = wrappedOnLongClick,
                     interactionSource = interactionSource,
                     indication = null
-                ),
-            shape = buttonShape,
-            color = animatedBgColor.copy(alpha = 0.72f),
-            contentColor = animatedContentColor
+                )
         ) {
-            actionContent()
+            Surface(
+                shape = buttonShape,
+                color = animatedBgColor.copy(alpha = 0.5f),
+                contentColor = animatedContentColor,
+                modifier = Modifier.matchParentSize()
+            ) {
+                actionContent()
+            }
         }
     } else {
         Surface(

@@ -284,19 +284,23 @@ private class DrawBackdropNode(
         if (layer != null) {
             val padding = padding
 
-            recordLayer(this@DrawBackdropNode,
-                layer,
-                size = IntSize(
-                    size.width.toInt() + padding.toInt() * 2,
-                    size.height.toInt() + padding.toInt() * 2
-                ),
-                block = recordBackdropBlock
-            )
+            try {
+                recordLayer(this@DrawBackdropNode,
+                    layer,
+                    size = IntSize(
+                        size.width.toInt() + padding.toInt() * 2,
+                        size.height.toInt() + padding.toInt() * 2
+                    ),
+                    block = recordBackdropBlock
+                )
 
-            layer.topLeft =
-                if (padding != 0f) IntOffset(-padding.toInt(), -padding.toInt())
-                else IntOffset.Zero
-            drawLayer(layer)
+                layer.topLeft =
+                    if (padding != 0f) IntOffset(-padding.toInt(), -padding.toInt())
+                    else IntOffset.Zero
+                drawLayer(layer)
+            } catch (t: Throwable) {
+                android.util.Log.e("DrawBackdropNode", "Backdrop draw failed safely", t)
+            }
         }
     }
 

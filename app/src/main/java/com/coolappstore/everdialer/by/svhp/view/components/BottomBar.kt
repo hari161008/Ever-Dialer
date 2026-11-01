@@ -478,17 +478,27 @@ fun BottomBar(navController: NavController) {
                         )
                     ) { pillContent() }
                 } else if (useBlurBottomNav && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    Surface(
-                        shape           = pillShape,
-                        color           = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                        shadowElevation = 0.dp,
-                        tonalElevation  = 0.dp,
-                        modifier        = mainPillModifier.drawPlainBackdrop(
+                    Box(
+                        modifier = mainPillModifier.drawBackdrop(
                             backdrop = globalBackdrop,
-                            shape    = { pillShape },
-                            effects  = { blur(30f * density) }
+                            shape = { pillShape },
+                            effects = {
+                                val d = density
+                                colorControls(saturation = 1.3f)
+                                blur(25f * d)
+                            },
+                            highlight = { Highlight.Plain }
                         )
-                    ) { pillContent() }
+                    ) {
+                        Surface(
+                            shape = pillShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
+                            shadowElevation = 0.dp,
+                            tonalElevation = 0.dp,
+                            modifier = Modifier.matchParentSize()
+                        ) {}
+                        pillContent()
+                    }
                 } else {
                     Surface(
                         shape           = pillShape,

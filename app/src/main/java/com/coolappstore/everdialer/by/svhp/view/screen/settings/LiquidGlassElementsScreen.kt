@@ -73,6 +73,10 @@ private val LG_ELEMENTS = listOf(
 fun LiquidGlassElementsScreen(navigator: DestinationsNavigator) {
     val prefs = koinInject<PreferenceManager>()
 
+    var isMainEnabled by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false))
+    }
+
     val states = remember {
         LG_ELEMENTS.associate { el ->
             el.key to mutableStateOf(prefs.getBoolean(el.key, false))
@@ -99,13 +103,32 @@ fun LiquidGlassElementsScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp + navBarBottom)
         ) {
 
+            // Main master toggle at the top
             item {
                 RivoAnimatedSection(delayMs = 0L) {
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Material Liquid You Glass",
+                            supporting = "Apply a liquid glass refraction effect across selected UI elements",
+                            leadingIcon = Icons.Outlined.Lens,
+                            iconContainerColor = Color(0xFF00BCD4),
+                            checked = isMainEnabled,
+                            onCheckedChange = { newValue ->
+                                isMainEnabled = newValue
+                                prefs.setBoolean(PreferenceManager.KEY_LIQUID_GLASS, newValue)
+                            }
+                        )
+                    }
+                }
+            }
+
+            item {
+                RivoAnimatedSection(delayMs = 20L) {
                     Text(
-                        text = "Select which elements use the liquid glass effect. Requires \"Material Liquid You Glass\" to be enabled.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        text = "Elements",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
                     )
                 }
             }
@@ -121,6 +144,7 @@ fun LiquidGlassElementsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = element.icon,
                                 iconContainerColor = element.iconColor,
                                 checked = checked,
+                                enabled = isMainEnabled,
                                 onCheckedChange = { newValue ->
                                     states[element.key]!!.value = newValue
                                     prefs.setBoolean(element.key, newValue)
@@ -129,7 +153,7 @@ fun LiquidGlassElementsScreen(navigator: DestinationsNavigator) {
                             if (index < LG_ELEMENTS.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isMainEnabled) 0.5f else 0.2f)
                                 )
                             }
                         }

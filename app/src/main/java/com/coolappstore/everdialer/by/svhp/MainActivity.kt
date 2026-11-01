@@ -831,6 +831,7 @@ class MainActivity : FragmentActivity() {
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
+                                    .layerBackdrop(liquidGlassBackdropLandscape)
                             ) {
                                 DestinationsNavHost(navGraph = NavGraphs.root, navController = navController, start = startDestination, defaultTransitions = TabTransitionStyle)
                             }

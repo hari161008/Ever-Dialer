@@ -73,6 +73,10 @@ private val BLUR_ELEMENTS = listOf(
 fun BlurEffectsElementsScreen(navigator: DestinationsNavigator) {
     val prefs: PreferenceManager = koinInject()
 
+    var isMainEnabled by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false))
+    }
+
     val states = remember {
         BLUR_ELEMENTS.associate { it.key to mutableStateOf(prefs.getBoolean(it.key, true)) }
     }
@@ -97,13 +101,32 @@ fun BlurEffectsElementsScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp + navBarBottom)
         ) {
 
+            // Main master toggle at the top
             item {
                 RivoAnimatedSection(delayMs = 0L) {
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Material Blur Effects",
+                            supporting = "Apply frosted glass blur across selected UI elements",
+                            leadingIcon = Icons.Outlined.BlurOn,
+                            iconContainerColor = Color(0xFF5C6BC0),
+                            checked = isMainEnabled,
+                            onCheckedChange = { newValue ->
+                                isMainEnabled = newValue
+                                prefs.setBoolean(PreferenceManager.KEY_BLUR_EFFECTS, newValue)
+                            }
+                        )
+                    }
+                }
+            }
+
+            item {
+                RivoAnimatedSection(delayMs = 20L) {
                     Text(
-                        text = "Select which elements use the blur effect. Requires \"Material Blur Effects\" to be enabled.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        text = "Elements",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
                     )
                 }
             }
@@ -119,6 +142,7 @@ fun BlurEffectsElementsScreen(navigator: DestinationsNavigator) {
                                 leadingIcon = element.icon,
                                 iconContainerColor = element.iconColor,
                                 checked = checked,
+                                enabled = isMainEnabled,
                                 onCheckedChange = { newValue ->
                                     states[element.key]!!.value = newValue
                                     prefs.setBoolean(element.key, newValue)
@@ -127,7 +151,7 @@ fun BlurEffectsElementsScreen(navigator: DestinationsNavigator) {
                             if (index < BLUR_ELEMENTS.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isMainEnabled) 0.5f else 0.2f)
                                 )
                             }
                         }

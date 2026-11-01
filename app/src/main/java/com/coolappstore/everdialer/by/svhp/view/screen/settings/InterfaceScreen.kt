@@ -198,8 +198,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var animationStyle      by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) ?: PreferenceManager.ANIMATION_STYLE_ZOOM) }
     var showAnimationStyleDialog by remember { mutableStateOf(false) }
     var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
-    var liquidGlass         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false)) }
-    var blurEffects         by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false)) }
+    val liquidGlass = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
+    val blurEffects = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
     var hangupAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)) }
 
     // App Name preset picker
@@ -1569,27 +1569,15 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 }
                             } else {
                             RivoExpressiveCard {
-                                RivoSwitchListItem(
+                                RivoListItem(
                                     headline = "Material Liquid You Glass",
-                                    supporting = "Apply a liquid glass refraction effect to navigation and menus",
+                                    supporting = if (liquidGlass) "Enabled • Tap to configure elements" else "Disabled • Tap to configure",
                                     leadingIcon = Icons.Outlined.Lens,
                                     iconContainerColor = Color(0xFF00BCD4),
-                                    checked = liquidGlass,
-                                    modifier = Modifier.settingsSearchHighlight("liquid_glass_toggle", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        liquidGlass = it
-                                        prefs.setBoolean(PreferenceManager.KEY_LIQUID_GLASS, it)
-                                    }
-                                )
-                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoListItem(
-                                    headline = "Elements to have liquid glass effect",
-                                    supporting = "Choose which UI elements use the liquid glass effect",
-                                    leadingIcon = Icons.Outlined.Layers,
-                                    iconContainerColor = Color(0xFF0097A7),
                                     trailingIcon = Icons.Default.ChevronRight,
-                                    modifier = Modifier.settingsSearchHighlight("liquid_glass_elements_link", highlightedKey) { highlightedKey = null },
+                                    modifier = Modifier
+                                        .settingsSearchHighlight("liquid_glass_toggle", highlightedKey) { highlightedKey = null }
+                                        .settingsSearchHighlight("liquid_glass_elements_link", highlightedKey) { highlightedKey = null },
                                     onClick = {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.LiquidGlassElementsScreenDestination)
                                     }
@@ -1597,27 +1585,15 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             }
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
-                                RivoSwitchListItem(
+                                RivoListItem(
                                     headline = "Material Blur Effects",
-                                    supporting = "Apply a background blur effect to navigation and menus",
+                                    supporting = if (blurEffects) "Enabled • Tap to configure elements" else "Disabled • Tap to configure",
                                     leadingIcon = Icons.Outlined.BlurOn,
                                     iconContainerColor = Color(0xFF5C6BC0),
-                                    checked = blurEffects,
-                                    modifier = Modifier.settingsSearchHighlight("blur_effects_toggle", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        blurEffects = it
-                                        prefs.setBoolean(PreferenceManager.KEY_BLUR_EFFECTS, it)
-                                    }
-                                )
-                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoListItem(
-                                    headline = "Elements to have blur effect",
-                                    supporting = "Choose which UI elements use the blur effect",
-                                    leadingIcon = Icons.Outlined.Layers,
-                                    iconContainerColor = Color(0xFF3949AB),
                                     trailingIcon = Icons.Default.ChevronRight,
-                                    modifier = Modifier.settingsSearchHighlight("blur_effects_elements_link", highlightedKey) { highlightedKey = null },
+                                    modifier = Modifier
+                                        .settingsSearchHighlight("blur_effects_toggle", highlightedKey) { highlightedKey = null }
+                                        .settingsSearchHighlight("blur_effects_elements_link", highlightedKey) { highlightedKey = null },
                                     onClick = {
                                         navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
                                     }
