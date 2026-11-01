@@ -184,6 +184,15 @@ class PreferenceManager(context: Context) {
         setString(KEY_MUTED_SMS_ADDRESSES, current.joinToString(","))
     }
 
+    fun getBlockerEngine(): String =
+        getString(KEY_BLOCKER_ENGINE, BLOCKER_ENGINE_EVER_DIALER) ?: BLOCKER_ENGINE_EVER_DIALER
+
+    fun setBlockerEngine(engine: String) =
+        setString(KEY_BLOCKER_ENGINE, engine)
+
+    fun isEverDialerBlocker(): Boolean =
+        getBlockerEngine() == BLOCKER_ENGINE_EVER_DIALER
+
     fun getSmsCategoryOrder(): List<String> {
         val raw = getString(KEY_SMS_CATEGORY_ORDER, null)
         if (raw.isNullOrBlank()) return DEFAULT_SMS_CATEGORY_ORDER
@@ -803,6 +812,9 @@ class PreferenceManager(context: Context) {
         const val KEY_SATURATION_LEVEL_DARK  = "saturation_level_dark"
         const val KEY_BLOCKED_CONTACTS      = "blocked_contacts"
         const val KEY_SHOW_BLOCKED_CALLS_IN_CALL_LOGS = "show_blocked_calls_in_call_logs"
+        const val KEY_BLOCKER_ENGINE        = "blocker_engine"
+        const val BLOCKER_ENGINE_EVER_DIALER = "ever_dialer"
+        const val BLOCKER_ENGINE_SYSTEM     = "system"
         const val KEY_SHOW_INCOMING_CALL_UI = "show_incoming_call_ui"
         const val KEY_SHOW_CALLER_UI        = "show_caller_ui"
         const val KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS = "show_fullscreen_call_ui_on_any_apps"

@@ -62,13 +62,47 @@ object BlockedNumbersManager {
         return result
     }
 
-    /** Current blocked list (merges system-wide and app-level blocked numbers). */
+    fun isEverDialerBlocker(prefs: PreferenceManager): Boolean =
+        prefs.isEverDialerBlocker()
+
+    /**
+     * Reads all blocked numbers from the system blocker and persists any missing numbers
+     * into Ever Dialer's app-level block list so Ever Dialer blocker "takes" them.
+     */
+    fun syncSystemToApp(context: Context, prefs: PreferenceManager) {
+        if (!canUseSystemBlockList(context)) return
+        try {
+            val systemList = getSystemBlockedList(context)
+            if (systemList.isEmpty()) return
+            val current = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
+                ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            val missing = systemList.filter { sysNum ->
+                current.none { normalize(it) == normalize(sysNum) }
+            }
+            if (missing.isNotEmpty()) {
+                val updated = (current + missing).distinctBy { normalize(it) }
+                prefs.setString(PreferenceManager.KEY_BLOCKED_CONTACTS, updated.joinToString(","))
+            }
+        } catch (_: Exception) {}
+    }
+
+    /** Current blocked list (respects selected blocker engine). */
     fun getBlockedList(context: Context?, prefs: PreferenceManager): List<String> {
         val appList = prefs.getString(PreferenceManager.KEY_BLOCKED_CONTACTS, "")
             ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
         val systemList = if (context != null) getSystemBlockedList(context) else emptyList()
-        val merged = (appList + systemList).distinctBy { normalize(it) }
-        return merged
+
+        return if (isEverDialerBlocker(prefs)) {
+            // Ever Dialer Blocker: combines app-level list with any numbers taken from system blocker
+            (appList + systemList).distinctBy { normalize(it) }
+        } else {
+            // System Blocker: uses system list, falls back to app list if system list empty or unavailable
+            if (systemList.isNotEmpty()) {
+                systemList.distinctBy { normalize(it) }
+            } else {
+                appList.distinctBy { normalize(it) }
+            }
+        }
     }
 
     /** Overload without context for backward compatibility. */
@@ -76,14 +110,16 @@ object BlockedNumbersManager {
 
     /**
      * Checks whether a number is blocked, checking both the Android system provider
-     * and the app-level blocked list.
+     * and the app-level blocked list according to selected blocker engine.
      */
     fun isBlocked(context: Context?, prefs: PreferenceManager, number: String?): Boolean {
         if (number.isNullOrBlank()) return false
         val target = normalize(number)
         if (target.isEmpty()) return false
 
-        // 1. Check system-wide BlockedNumberContract first if context is available (for digit-containing numbers)
+        val isEverDialer = isEverDialerBlocker(prefs)
+
+        // 1. Check system-wide BlockedNumberContract if available
         if (context != null && canUseSystemBlockList(context) && number.any { it.isDigit() }) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
@@ -94,8 +130,19 @@ object BlockedNumbersManager {
             } catch (_: Exception) {}
         }
 
-        // 2. Check app-level list / cached list
-        return getBlockedList(context, prefs).any { blocked ->
+        // 2. Check active block list
+        val activeList = if (isEverDialer) {
+            getBlockedList(context, prefs)
+        } else {
+            val sysList = if (context != null) getSystemBlockedList(context) else emptyList()
+            if (sysList.isNotEmpty() || (context != null && canUseSystemBlockList(context))) {
+                sysList
+            } else {
+                getBlockedList(context, prefs)
+            }
+        }
+
+        return activeList.any { blocked ->
             val cb = normalize(blocked)
             if (cb.isEmpty()) false
             else if (target == cb) true

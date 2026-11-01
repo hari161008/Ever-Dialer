@@ -3,10 +3,12 @@ package com.coolappstore.everdialer.by.svhp.view.screen.settings
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -53,6 +55,10 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
     val callLogRepo: ICallLogRepository = koinInject()
     val coroutineScope = rememberCoroutineScope()
 
+    var blockerEngine by remember {
+        mutableStateOf(prefs.getBlockerEngine())
+    }
+
     var blockedList by remember {
         mutableStateOf(BlockedNumbersManager.getBlockedList(context, prefs))
     }
@@ -92,21 +98,24 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
     }
 
     val reloadBlockedList: () -> Unit = {
-        val currentList = BlockedNumbersManager.getBlockedList(context, prefs)
-        blockedList = currentList
         coroutineScope.launch(Dispatchers.IO) {
+            if (prefs.isEverDialerBlocker()) {
+                BlockedNumbersManager.syncSystemToApp(context, prefs)
+            }
+            val currentList = BlockedNumbersManager.getBlockedList(context, prefs)
             val resolved = currentList.map { number ->
                 val contact = try { contactsRepo.getContactByNumber(number) } catch (_: Exception) { null }
                 Triple(number, contact?.name ?: number, contact?.photoUri)
             }
             withContext(Dispatchers.Main) {
+                blockedList = currentList
                 blockedWithInfo = resolved
                 isListLoading = false
             }
         }
     }
 
-    LaunchedEffect(blockedList) {
+    LaunchedEffect(blockerEngine) {
         reloadBlockedList()
     }
 
@@ -147,76 +156,229 @@ fun BlockedNumbersScreen(navigator: DestinationsNavigator) {
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // System Blocking card or Red Alert Container if turned off
-            if (canUseSystem) {
-                item {
-                    RivoAnimatedSection(delayMs = 0L) {
-                        RivoExpressiveCard {
-                            RivoListItem(
-                                headline = "System Blocked Numbers",
-                                supporting = "Manage numbers blocked across all phone and messaging apps",
-                                leadingIcon = Icons.Outlined.Security,
-                                iconContainerColor = MaterialTheme.colorScheme.primary,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = { BlockedNumbersManager.openSystemBlockedNumbers(context) }
+            // Call Blocker Engine selection: Ever Dialer Blocker vs System Blocker
+            item {
+                RivoAnimatedSection(delayMs = 0L) {
+                    RivoExpressiveCard {
+                        val isEverDialer = blockerEngine == PreferenceManager.BLOCKER_ENGINE_EVER_DIALER
+                        val isSystem = blockerEngine == PreferenceManager.BLOCKER_ENGINE_SYSTEM
+
+                        // Option 1: Ever Dialer Blocker (Default / Recommended)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    blockerEngine = PreferenceManager.BLOCKER_ENGINE_EVER_DIALER
+                                    prefs.setBlockerEngine(PreferenceManager.BLOCKER_ENGINE_EVER_DIALER)
+                                    reloadBlockedList()
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isEverDialer) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.Shield,
+                                        contentDescription = null,
+                                        tint = if (isEverDialer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "Ever Dialer Blocker",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            "Default",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Direct blocking in Ever Dialer • Takes and syncs numbers with system blocker",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            RadioButton(
+                                selected = isEverDialer,
+                                onClick = {
+                                    blockerEngine = PreferenceManager.BLOCKER_ENGINE_EVER_DIALER
+                                    prefs.setBlockerEngine(PreferenceManager.BLOCKER_ENGINE_EVER_DIALER)
+                                    reloadBlockedList()
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        // Option 2: System Blocker
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    blockerEngine = PreferenceManager.BLOCKER_ENGINE_SYSTEM
+                                    prefs.setBlockerEngine(PreferenceManager.BLOCKER_ENGINE_SYSTEM)
+                                    reloadBlockedList()
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSystem) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.Security,
+                                        contentDescription = null,
+                                        tint = if (isSystem) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "System Blocker",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Android system blocker • May not work on some phones",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            RadioButton(
+                                selected = isSystem,
+                                onClick = {
+                                    blockerEngine = PreferenceManager.BLOCKER_ENGINE_SYSTEM
+                                    prefs.setBlockerEngine(PreferenceManager.BLOCKER_ENGINE_SYSTEM)
+                                    reloadBlockedList()
+                                }
                             )
                         }
                     }
                 }
-            } else {
-                item {
-                    RivoAnimatedSection(delayMs = 0L) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                            onClick = { navigateToSystemBlocker() }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+            }
+
+            // System blocker status or navigation tile
+            if (blockerEngine == PreferenceManager.BLOCKER_ENGINE_SYSTEM) {
+                if (canUseSystem) {
+                    item {
+                        RivoAnimatedSection(delayMs = 20L) {
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "System Blocked Numbers",
+                                    supporting = "Manage numbers blocked across all phone and messaging apps in system settings",
+                                    leadingIcon = Icons.Outlined.Security,
+                                    iconContainerColor = MaterialTheme.colorScheme.primary,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { BlockedNumbersManager.openSystemBlockedNumbers(context) }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    item {
+                        RivoAnimatedSection(delayMs = 20L) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                ),
+                                onClick = { navigateToSystemBlocker() }
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .size(44.dp)
-                                        .background(
-                                            MaterialTheme.colorScheme.error,
-                                            RoundedCornerShape(12.dp)
-                                        ),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.error,
+                                                RoundedCornerShape(12.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.SecurityUpdateWarning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onError,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "System Blocker Unavailable",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Your device does not support system call blocking or default dialer permission is missing. Switch to Ever Dialer Blocker above for guaranteed blocking.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Icon(
-                                        imageVector = Icons.Outlined.SecurityUpdateWarning,
+                                        imageVector = Icons.Default.ChevronRight,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onError,
-                                        modifier = Modifier.size(24.dp)
+                                        tint = MaterialTheme.colorScheme.onErrorContainer
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Turn on System Blocker",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "System blocker is turned off. Tap here to turn on the system blocker and protect against unwanted calls across your device.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                            }
+                        }
+                    }
+                }
+            } else {
+                if (canUseSystem) {
+                    item {
+                        RivoAnimatedSection(delayMs = 20L) {
+                            RivoExpressiveCard {
+                                RivoListItem(
+                                    headline = "System Blocked Numbers",
+                                    supporting = "Ever Dialer blocker is active and synchronized. Tap to view system settings",
+                                    leadingIcon = Icons.Outlined.Security,
+                                    iconContainerColor = MaterialTheme.colorScheme.primary,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { BlockedNumbersManager.openSystemBlockedNumbers(context) }
                                 )
                             }
                         }
