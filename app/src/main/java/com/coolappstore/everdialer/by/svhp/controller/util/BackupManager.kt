@@ -45,6 +45,8 @@ object BackupManager {
     const val PREFS_NS_AUTO = "network_switch_automation_flags"
     const val PREFS_MISSED_CALL_DURATION = "missed_call_durations"
     const val PREFS_WIDGET = "recent_calls_widget_prefs"
+    const val PREFS_DIRECT_CALL_WIDGET = "direct_call_widget_prefs"
+    const val PREFS_CONTACT_INFO_WIDGET = "contact_info_widget_prefs"
 
     val KNOWN_PREFS = listOf(
         PREFS_RIVO,
@@ -56,7 +58,9 @@ object BackupManager {
         PREFS_NS_MASTER,
         PREFS_NS_AUTO,
         PREFS_MISSED_CALL_DURATION,
-        PREFS_WIDGET
+        PREFS_WIDGET,
+        PREFS_DIRECT_CALL_WIDGET,
+        PREFS_CONTACT_INFO_WIDGET
     )
 
     fun getBackupDir(context: Context): File {
@@ -73,20 +77,20 @@ object BackupManager {
 
     fun isCallingCardKey(key: String): Boolean {
         return key.startsWith("contact_") ||
-                key.startsWith("incoming_bg_") ||
-                key.startsWith("ongoing_bg_") ||
-                key.startsWith("incoming_font_") ||
-                key.startsWith("ongoing_font_") ||
-                key.startsWith("incoming_elements_") ||
-                key.startsWith("ongoing_elements_") ||
-                key.startsWith("incoming_custom_pfp_") ||
-                key.startsWith("ongoing_custom_pfp_") ||
-                key.startsWith("incoming_auto_refresh_wallpaper") ||
-                key.startsWith("ongoing_auto_refresh_wallpaper") ||
-                key == PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP ||
-                key == PreferenceManager.KEY_ONGOING_SHOW_CONTACT_PFP ||
-                key == PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER ||
-                key == PreferenceManager.KEY_ONGOING_SHOW_PHONE_NUMBER
+                key.startsWith("incoming_") ||
+                key.startsWith("ongoing_") ||
+                key.startsWith("call_ui_") ||
+                key.startsWith("caller_ui_") ||
+                key.startsWith("banner_") ||
+                key.startsWith("show_incoming_") ||
+                key.startsWith("show_ongoing_") ||
+                key.startsWith("show_fullscreen_") ||
+                key == PreferenceManager.KEY_SHOW_INCOMING_CALL_UI ||
+                key == PreferenceManager.KEY_SHOW_CALLER_UI ||
+                key == PreferenceManager.KEY_SHOW_FULL_SCREEN_INCOMING_ON_ANY_APPS ||
+                key == PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_WHEN_ANSWERED ||
+                key == PreferenceManager.KEY_SHOW_ONGOING_CALL_UI_ON_LOCKSCREEN_WHEN_ANSWERED ||
+                key == PreferenceManager.KEY_CALL_UI_ORDER
     }
 
     fun isContactGroupKey(key: String): Boolean {
@@ -208,6 +212,19 @@ object BackupManager {
                             }
                         }
                     }
+                }
+
+                // 4.5. Backup hidden contact photos
+                if (backupSettings || backupContacts) {
+                    try {
+                        context.filesDir.listFiles()?.forEach { file ->
+                            if (file.isFile && file.name.startsWith("hidden_contact_") && file.name.endsWith(".jpg")) {
+                                zip.putNextEntry(ZipEntry("hidden_contacts/${file.name}"))
+                                FileInputStream(file).use { it.copyTo(zip) }
+                                zip.closeEntry()
+                            }
+                        }
+                    } catch (_: Exception) {}
                 }
 
                 // 5. Backup notes (contact notes & general notes)
@@ -526,6 +543,10 @@ object BackupManager {
                         name.startsWith("sms/") && !name.endsWith("/") -> {
                             hasSms = true
                         }
+                        name.startsWith("hidden_contacts/") -> {
+                            hasSettings = true
+                            hasContacts = true
+                        }
                     }
                     zip.closeEntry()
                     entry = zip.nextEntry
@@ -625,6 +646,17 @@ object BackupManager {
                                     val bgFile = File(bgDir, fileName)
                                     bgFile.parentFile?.mkdirs()
                                     FileOutputStream(bgFile).use { zip.copyTo(it) }
+                                    restoredAny = true
+                                }
+                            }
+                        }
+                        name.startsWith("hidden_contacts/") -> {
+                            if (restoreSettings || restoreContacts) {
+                                val fileName = name.removePrefix("hidden_contacts/")
+                                if (fileName.isNotEmpty()) {
+                                    val photoFile = File(context.filesDir, fileName)
+                                    photoFile.parentFile?.mkdirs()
+                                    FileOutputStream(photoFile).use { zip.copyTo(it) }
                                     restoredAny = true
                                 }
                             }
@@ -1068,6 +1100,23 @@ object BackupManager {
                 }
             } catch (_: Throwable) {}
 
+            if (restoreSettings) {
+                try {
+                    com.coolappstore.everdialer.by.svhp.widget.RecentCallsWidgetProvider.refresh(context)
+                } catch (_: Throwable) {}
+                try {
+                    val mgr = android.appwidget.AppWidgetManager.getInstance(context)
+                    val directComp = android.content.ComponentName(context, com.coolappstore.everdialer.by.svhp.widget.DirectCallWidgetProvider::class.java)
+                    mgr.getAppWidgetIds(directComp)?.forEach { id ->
+                        com.coolappstore.everdialer.by.svhp.widget.DirectCallWidgetProvider.updateWidget(context, mgr, id)
+                    }
+                    val contactComp = android.content.ComponentName(context, com.coolappstore.everdialer.by.svhp.widget.ContactInfoWidgetProvider::class.java)
+                    mgr.getAppWidgetIds(contactComp)?.forEach { id ->
+                        com.coolappstore.everdialer.by.svhp.widget.ContactInfoWidgetProvider.updateWidget(context, mgr, id)
+                    }
+                } catch (_: Throwable) {}
+            }
+
             restoredAny
         } catch (_: Exception) {
             false
@@ -1306,7 +1355,7 @@ object BackupManager {
                     }
                 }
             }
-            editor.apply()
+            editor.commit()
         } catch (_: Exception) {}
     }
 

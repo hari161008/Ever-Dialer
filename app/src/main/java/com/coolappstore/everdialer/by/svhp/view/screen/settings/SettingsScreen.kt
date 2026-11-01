@@ -128,8 +128,7 @@ private val settingsSectionKeyGroups: List<List<String>> = listOf(
     listOf("silence_unknown", "blocked_numbers"),
     listOf("create_backup", "restore_backup"),
     listOf("app_language"),
-    listOf("about_app"),
-    listOf("debug_settings")
+    listOf("about_app")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1460,25 +1459,6 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                 }
             }
 
-            // ── Debug ────────────────────────────────────────────────────────
-            item {
-                RivoAnimatedSection(delayMs = 320L) {
-                    Column {
-                        SectionLabel("Debug")
-                        RivoExpressiveCard {
-                            RivoListItem(
-                                headline = "Debug",
-                                supporting = "Developer & experimental options",
-                                leadingIcon = Icons.Outlined.BugReport,
-                                iconContainerColor = ColorOrange,
-                                trailingIcon = Icons.Default.ChevronRight,
-                                modifier = Modifier.settingsSearchHighlight("debug_settings", highlightedSettingKey) { highlightedSettingKey = null },
-                                onClick = { navigator.navigate(DebugSettingsScreenDestination()) }
-                            )
-                        }
-                    }
-                }
-            }
 
             }
 
@@ -1604,7 +1584,7 @@ private fun CreateBackupDialog(
                         ) {
                             RivoSwitchListItem(
                                 headline = "Backup settings",
-                                supporting = "App preferences, Call Recorder & Network Switcher settings",
+                                supporting = "All app preferences, widgets, Call Recorder & Network Switcher settings",
                                 leadingIcon = Icons.Outlined.Settings,
                                 iconContainerColor = Color(0xFF4CAF50),
                                 checked = backupSettings,
@@ -1613,7 +1593,7 @@ private fun CreateBackupDialog(
                             CardDivider()
                             RivoSwitchListItem(
                                 headline = "Backup calling cards",
-                                supporting = "Saved calling cards, contact backgrounds and PFP customization",
+                                supporting = "Saved calling cards, contact backgrounds, caller UI & PFP customization",
                                 leadingIcon = Icons.Outlined.ContactPhone,
                                 iconContainerColor = Color(0xFF2196F3),
                                 checked = backupCallingCards,
@@ -1817,7 +1797,7 @@ private fun RestoreBackupDialog(
                         ) {
                             RivoSwitchListItem(
                                 headline = "Restore settings",
-                                supporting = if (contents.hasSettings) "App preferences, Call Recorder & Network Switcher settings" else "Not present in this backup",
+                                supporting = if (contents.hasSettings) "All app preferences, widgets, Call Recorder & Network Switcher settings" else "Not present in this backup",
                                 leadingIcon = Icons.Outlined.Settings,
                                 iconContainerColor = Color(0xFF4CAF50),
                                 checked = restoreSettings,
@@ -1827,7 +1807,7 @@ private fun RestoreBackupDialog(
                             CardDivider()
                             RivoSwitchListItem(
                                 headline = "Restore calling cards",
-                                supporting = if (contents.hasCallingCards) "Saved calling cards, contact backgrounds and PFP customization" else "Not present in this backup",
+                                supporting = if (contents.hasCallingCards) "Saved calling cards, contact backgrounds, caller UI & PFP customization" else "Not present in this backup",
                                 leadingIcon = Icons.Outlined.ContactPhone,
                                 iconContainerColor = Color(0xFF2196F3),
                                 checked = restoreCallingCards,

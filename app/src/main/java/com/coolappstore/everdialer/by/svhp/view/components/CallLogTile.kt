@@ -276,14 +276,33 @@ fun CallLogTileSimple(
     val ringDurationText = if (isBlocked && log.duration > 0) "${log.duration}s rang" else if (isMissed && showMissedCallDuration && log.duration > 0) "${log.duration}s rang" else null
     val durationText = if (isMissed || isBlocked) ringDurationText else if (log.duration > 0) android.text.format.DateUtils.formatElapsedTime(log.duration) else null
 
+    val count = if (log.count > 1) log.count else if (log.callIds.size > 1) log.callIds.size else if (log.types.size > 1) log.types.size else 1
+    val baseHeadline = when (log.type) {
+        CallLog.Calls.INCOMING_TYPE -> "Incoming"
+        CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
+        CallLog.Calls.MISSED_TYPE   -> "Missed"
+        CallLog.Calls.BLOCKED_TYPE  -> "Blocked"
+        else                        -> "Call"
+    }
+
     RivoListItem(
-        headline = when (log.type) {
-            CallLog.Calls.INCOMING_TYPE -> "Incoming"
-            CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-            CallLog.Calls.MISSED_TYPE   -> "Missed"
-            CallLog.Calls.BLOCKED_TYPE  -> "Blocked"
-            else                        -> "Call"
-        },
+        headline = if (count > 1) "$baseHeadline ($count)" else baseHeadline,
+        headlineEndContent = if (count > 1) {
+            {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Text(
+                        text = "$count",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        } else null,
         supporting = "${formatDate(log.date, is24H)}${if (durationText != null) " • $durationText" else ""}",
         trailingStartContent = if (onCallClick != null || (matchingRecording != null && onRecordingClick != null)) {
             {

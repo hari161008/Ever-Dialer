@@ -63,7 +63,10 @@ data class Contact(
     val lastTimeContacted: Long = 0L,
     val dateAdded: Long = 0L,
     val firstName: String? = null,
-    val lastName: String? = null
+    val lastName: String? = null,
+    val prefix: String? = null,
+    val middleName: String? = null,
+    val suffix: String? = null
 )
 
 @Serializable

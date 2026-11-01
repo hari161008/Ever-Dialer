@@ -103,7 +103,6 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Favorite
 import com.ramcosta.composedestinations.generated.destinations.AboutAppScreenDestination
-import com.ramcosta.composedestinations.generated.destinations.DebugSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.LanguageSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AnswerStyleScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AppSettingsScreenDestination
@@ -249,7 +248,6 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, GsColorGreen),
         GlobalSettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, GsColorBrown),
         GlobalSettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, GsColorBluGrey),
-        GlobalSettingsSearchEntry("Debug", "Developer & experimental options", "debug_settings", Icons.Outlined.BugReport, GsColorAmber) { it.navigate(DebugSettingsScreenDestination()) },
 
         // ── App Settings screen ──────────────────────────────────────────────────
         GlobalSettingsSearchEntry("Interesting Settings !", "Call features, Volume DND, network switcher, notes", "app_settings", Icons.Outlined.Tune, GsColorTeal) { it.navigate(AppSettingsScreenDestination()) },

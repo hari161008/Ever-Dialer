@@ -105,7 +105,7 @@ class CallLogRepository(
         ensureContactsObserver()
     }
 
-    fun invalidateContactIndex() {
+    override fun invalidateContactIndex() {
         contactIndexDirty = true
         cachedContactIndex = null
     }
@@ -119,6 +119,9 @@ class CallLogRepository(
             try {
                 contentResolver.registerContentObserver(
                     ContactsContract.Contacts.CONTENT_URI, true, contactsObserver
+                )
+                contentResolver.registerContentObserver(
+                    ContactsContract.Data.CONTENT_URI, true, contactsObserver
                 )
                 contactsObserverRegistered = true
             } catch (_: Exception) {}
@@ -203,9 +206,8 @@ class CallLogRepository(
                 continue
             }
             val resolvedMatchName = match?.name?.takeIf { it.isNotBlank() }
-            val resolvedCachedName = raw.cachedName?.takeIf { it.isNotBlank() }
-            val displayName = resolvedMatchName ?: resolvedCachedName ?: raw.number
-            val isCallerIdName = match == null && resolvedCachedName != null
+            val displayName = resolvedMatchName ?: raw.number
+            val isCallerIdName = false
 
             val lastEntry = callLogs.lastOrNull()
             // Only merge consecutive rows into one grouped entry when they're the same number

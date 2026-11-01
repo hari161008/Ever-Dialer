@@ -78,6 +78,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForAccountHandle
+import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForCall
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ICallLogRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
@@ -352,7 +353,7 @@ class CallActivity : FragmentActivity() {
 
                 if (call != null && effectiveSession != null) {
                     val number = call.details?.handle?.schemeSpecificPart ?: ""
-                    val simSlot = remember(call) { getSimSlotForAccountHandle(this@CallActivity, call.details?.accountHandle) }
+                    val simSlot = remember(call) { getSimSlotForCall(this@CallActivity, call) }
                     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
                     // Stable initial values — number shown immediately, replaced by
                     val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
@@ -399,7 +400,7 @@ class CallActivity : FragmentActivity() {
 
                     val incomingCall = incomingSession?.call
                     val incomingNumber = incomingCall?.details?.handle?.schemeSpecificPart ?: ""
-                    val incomingSimSlot = remember(incomingCall) { getSimSlotForAccountHandle(this@CallActivity, incomingCall?.details?.accountHandle) }
+                    val incomingSimSlot = remember(incomingCall) { getSimSlotForCall(this@CallActivity, incomingCall) }
                     val initialIncomingContact = remember(incomingNumber) {
                         if (incomingNumber.isNotEmpty()) {
                             try { contactsRepo.getContactByNumber(incomingNumber) } catch (_: Exception) { null }

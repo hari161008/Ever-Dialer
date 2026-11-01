@@ -39,6 +39,7 @@ import com.coolappstore.everdialer.by.svhp.MainActivity
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForAccountHandle
+import com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForCall
 import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
 import com.coolappstore.everdialer.by.svhp.view.screen.BiometricCallActivity
@@ -1226,7 +1227,7 @@ class CallService : InCallService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val isDualSim = prefs.getActiveSimCount() >= 2
-        val simSlot = if (isDualSim) getSimSlotForAccountHandle(this, call.details?.accountHandle) else -1
+        val simSlot = if (isDualSim) getSimSlotForCall(this, call) else -1
         val contentText = buildCallNotificationContentText(this, isRinging, isDualSim, simSlot)
 
         val builder = NotificationCompat.Builder(this, channelId)

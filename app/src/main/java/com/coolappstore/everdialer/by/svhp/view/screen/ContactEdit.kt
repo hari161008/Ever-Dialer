@@ -77,10 +77,15 @@ fun ContactEditScreen(
             Pair(parts.getOrElse(0) { "" }, parts.getOrElse(1) { "" })
         }
     }
+    var prefix by remember { mutableStateOf("") }
     var firstName by remember { mutableStateOf(initialNameParts.first) }
+    var middleName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf(initialNameParts.second) }
-    val fullName = remember(firstName, lastName) {
-        listOf(firstName.trim(), lastName.trim()).filter { it.isNotBlank() }.joinToString(" ")
+    var suffix by remember { mutableStateOf("") }
+    val fullName = remember(prefix, firstName, middleName, lastName, suffix) {
+        listOf(prefix.trim(), firstName.trim(), middleName.trim(), lastName.trim(), suffix.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
     }
     var photoUri by remember { mutableStateOf<String?>(null) }
     val phoneFields = remember { 
@@ -116,36 +121,51 @@ fun ContactEditScreen(
 
             if (contact != null) {
                 resolvedContact = contact
+                var loadedPrefix = contact.prefix ?: ""
                 var loadedFirst = contact.firstName ?: ""
+                var loadedMiddle = contact.middleName ?: ""
                 var loadedLast = contact.lastName ?: ""
-                if (loadedFirst.isBlank() && loadedLast.isBlank()) {
+                var loadedSuffix = contact.suffix ?: ""
+                if (loadedFirst.isBlank() && loadedLast.isBlank() && loadedMiddle.isBlank() && loadedPrefix.isBlank() && loadedSuffix.isBlank()) {
                     try {
                         context.contentResolver.query(
                             ContactsContract.Data.CONTENT_URI,
                             arrayOf(
+                                ContactsContract.CommonDataKinds.StructuredName.PREFIX,
                                 ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
-                                ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME
+                                ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
+                                ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
+                                ContactsContract.CommonDataKinds.StructuredName.SUFFIX
                             ),
                             "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
                             arrayOf(contactId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE),
                             null
                         )?.use { cursor ->
                             if (cursor.moveToFirst()) {
+                                val prefixIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.PREFIX)
                                 val givenIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME)
+                                val middleIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME)
                                 val familyIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME)
+                                val suffixIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.SUFFIX)
+                                if (prefixIdx >= 0) loadedPrefix = cursor.getString(prefixIdx) ?: ""
                                 if (givenIdx >= 0) loadedFirst = cursor.getString(givenIdx) ?: ""
+                                if (middleIdx >= 0) loadedMiddle = cursor.getString(middleIdx) ?: ""
                                 if (familyIdx >= 0) loadedLast = cursor.getString(familyIdx) ?: ""
+                                if (suffixIdx >= 0) loadedSuffix = cursor.getString(suffixIdx) ?: ""
                             }
                         }
                     } catch (_: Exception) {}
                 }
-                if (loadedFirst.isBlank() && loadedLast.isBlank()) {
+                if (loadedFirst.isBlank() && loadedLast.isBlank() && loadedMiddle.isBlank() && loadedPrefix.isBlank() && loadedSuffix.isBlank()) {
                     val parts = contact.name.trim().split(Regex("\\s+"), limit = 2)
                     loadedFirst = parts.getOrNull(0) ?: ""
                     loadedLast = parts.getOrNull(1) ?: ""
                 }
+                prefix = loadedPrefix
                 firstName = loadedFirst
+                middleName = loadedMiddle
                 lastName = loadedLast
+                suffix = loadedSuffix
                 photoUri = contact.photoUri
                 
                 phoneFields.clear()
@@ -233,8 +253,11 @@ fun ContactEditScreen(
         val contactToSave = Contact(
             id = finalContactId,
             name = fullName,
+            prefix = prefix.trim().ifBlank { null },
             firstName = firstName.trim().ifBlank { null },
+            middleName = middleName.trim().ifBlank { null },
             lastName = lastName.trim().ifBlank { null },
+            suffix = suffix.trim().ifBlank { null },
             phoneNumbers = validPhones,
             phones = contactPhones,
             emails = emailFields.map { it.value.trim() }.filter { it.isNotBlank() },
@@ -518,6 +541,19 @@ fun ContactEditScreen(
                 RivoExpressiveCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(
+                            value = prefix,
+                            onValueChange = { prefix = it },
+                            label = { Text("Prefix (optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            leadingIcon = { Icon(Icons.Default.Person, null) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                        OutlinedTextField(
                             value = firstName,
                             onValueChange = { firstName = it },
                             label = { Text("First Name") },
@@ -531,9 +567,35 @@ fun ContactEditScreen(
                             )
                         )
                         OutlinedTextField(
+                            value = middleName,
+                            onValueChange = { middleName = it },
+                            label = { Text("Middle Name (optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            leadingIcon = { Icon(Icons.Default.Person, null) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                        OutlinedTextField(
                             value = lastName,
                             onValueChange = { lastName = it },
-                            label = { Text("Last Name") },
+                            label = { Text("Last Name (optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            leadingIcon = { Icon(Icons.Default.Person, null) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                        OutlinedTextField(
+                            value = suffix,
+                            onValueChange = { suffix = it },
+                            label = { Text("Suffix (optional)") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             leadingIcon = { Icon(Icons.Default.Person, null) },

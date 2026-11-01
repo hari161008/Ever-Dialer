@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.telecom.Call
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.text.format.DateUtils
@@ -129,28 +130,125 @@ fun getSimSlotForAccountHandle(context: Context, accountHandle: PhoneAccountHand
         val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
                 as? android.telephony.SubscriptionManager ?: return -1
         val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-        val phoneAccount = tm?.getPhoneAccount(accountHandle)
-        val subId = phoneAccount?.extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1)?.takeIf { it != -1 }
-            ?: accountHandle.id.toIntOrNull()
-        if (subId != null && subId != -1) {
-            val slot = sm.getActiveSubscriptionInfo(subId)?.simSlotIndex
-            if (slot != null && slot in 0..1) return slot
+        val phoneAccount = try { tm?.getPhoneAccount(accountHandle) } catch (_: Throwable) { null }
+
+        // 1. Check PhoneAccount extras for explicit slot or subscription ID
+        phoneAccount?.extras?.let { extras ->
+            val slotExtra = listOf(
+                "android.telephony.extra.SLOT_INDEX",
+                "sim_slot",
+                "slot",
+                "simSlotIndex",
+                "slot_index"
+            ).firstNotNullOfOrNull { key ->
+                if (extras.containsKey(key)) extras.getInt(key, -1).takeIf { it in 0..1 } else null
+            }
+            if (slotExtra != null) return slotExtra
+
+            val subIdExtra = listOf(
+                "android.telecom.extra.SUBSCRIPTION_ID",
+                "subscription_id",
+                "sub_id"
+            ).firstNotNullOfOrNull { key ->
+                if (extras.containsKey(key)) extras.getInt(key, -1).takeIf { it > 0 } else null
+            }
+            if (subIdExtra != null) {
+                val slot = sm.getActiveSubscriptionInfo(subIdExtra)?.simSlotIndex
+                if (slot != null && slot in 0..1) return slot
+            }
         }
+
+        // 2. Check active subscriptions
         val activeList = sm.activeSubscriptionInfoList
         if (!activeList.isNullOrEmpty()) {
-            val match = activeList.firstOrNull { sub ->
-                accountHandle.id.contains(sub.subscriptionId.toString()) ||
-                        (sub.iccId != null && accountHandle.id.contains(sub.iccId))
+            val handleId = accountHandle.id ?: ""
+
+            // 2a. Direct slot match if handle.id is "0" or "1"
+            if (handleId == "0") {
+                val slot0Sub = activeList.firstOrNull { it.simSlotIndex == 0 }
+                if (slot0Sub != null) return 0
+            } else if (handleId == "1") {
+                val slot1Sub = activeList.firstOrNull { it.simSlotIndex == 1 }
+                if (slot1Sub != null) return 1
             }
-            if (match != null && match.simSlotIndex in 0..1) {
-                return match.simSlotIndex
+
+            // 2b. Check by ICCID
+            val iccidMatch = activeList.firstOrNull { sub ->
+                !sub.iccId.isNullOrEmpty() && (handleId.contains(sub.iccId) || sub.iccId.contains(handleId))
             }
+            if (iccidMatch != null && iccidMatch.simSlotIndex in 0..1) {
+                return iccidMatch.simSlotIndex
+            }
+
+            // 2c. Check by Subscription ID (exact integer equality)
+            val subIdMatch = activeList.firstOrNull { sub ->
+                sub.subscriptionId > 0 && handleId == sub.subscriptionId.toString()
+            }
+            if (subIdMatch != null && subIdMatch.simSlotIndex in 0..1) {
+                return subIdMatch.simSlotIndex
+            }
+
+            // 2d. Check PhoneAccount label or description ("SIM 1", "SIM 2", "Slot 1", etc.)
+            val label = phoneAccount?.label?.toString() ?: ""
+            if (label.contains("SIM 1", ignoreCase = true) || label.contains("Slot 1", ignoreCase = true)) return 0
+            if (label.contains("SIM 2", ignoreCase = true) || label.contains("Slot 2", ignoreCase = true)) return 1
+
+            // 2e. Check handleId patterns
+            if (handleId.endsWith("0") || handleId.contains("sim1", ignoreCase = true) || handleId.contains("slot0", ignoreCase = true)) return 0
+            if (handleId.endsWith("1") || handleId.contains("sim2", ignoreCase = true) || handleId.contains("slot1", ignoreCase = true)) return 1
+
+            // 2f. If only 1 SIM active, return its slot
             if (activeList.size == 1) {
                 return activeList[0].simSlotIndex
             }
         }
+
+        // 3. Fallback: index within callCapablePhoneAccounts
+        val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null }
+        if (!accounts.isNullOrEmpty()) {
+            val idx = accounts.indexOf(accountHandle)
+            if (idx in 0..1) return idx
+        }
+
         -1
     } catch (_: Exception) { -1 }
+}
+
+/** Resolves a live Call object to a 0-based SIM slot index (0 = SIM 1, 1 = SIM 2), checking call extras first. */
+fun getSimSlotForCall(context: Context, call: Call?): Int {
+    if (call == null) return -1
+    return try {
+        val details = call.details
+        val extrasList = listOfNotNull(details?.extras, details?.intentExtras)
+        for (extras in extrasList) {
+            val slot = listOf(
+                "android.telephony.extra.SLOT_INDEX",
+                "sim_slot",
+                "slot",
+                "simSlotIndex",
+                "slot_index"
+            ).firstNotNullOfOrNull { key ->
+                if (extras.containsKey(key)) extras.getInt(key, -1).takeIf { it in 0..1 } else null
+            }
+            if (slot != null) return slot
+
+            val subId = listOf(
+                "android.telecom.extra.SUBSCRIPTION_ID",
+                "subscription_id",
+                "sub_id"
+            ).firstNotNullOfOrNull { key ->
+                if (extras.containsKey(key)) extras.getInt(key, -1).takeIf { it > 0 } else null
+            }
+            if (subId != null) {
+                val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+                val slotFromSub = sm?.getActiveSubscriptionInfo(subId)?.simSlotIndex
+                if (slotFromSub != null && slotFromSub in 0..1) return slotFromSub
+            }
+        }
+        getSimSlotForAccountHandle(context, details?.accountHandle)
+    } catch (_: Exception) {
+        getSimSlotForAccountHandle(context, call.details?.accountHandle)
+    }
 }
 
 fun makeCall(context: Context, number: String, accountHandle: PhoneAccountHandle? = null, skipConfirm: Boolean = false) {

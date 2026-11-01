@@ -87,6 +87,7 @@ class CallLogViewModel(
             debounceJob?.cancel()
             debounceJob = viewModelScope.launch(Dispatchers.IO) {
                 delay(300)
+                callLogRepo.invalidateContactIndex()
                 fetchLogsInternal()
             }
         }
@@ -118,6 +119,11 @@ class CallLogViewModel(
             ) {
                 getApplication<Application>().contentResolver.registerContentObserver(
                     ContactsContract.Contacts.CONTENT_URI,
+                    true,
+                    contactsObserver
+                )
+                getApplication<Application>().contentResolver.registerContentObserver(
+                    ContactsContract.Data.CONTENT_URI,
                     true,
                     contactsObserver
                 )

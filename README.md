@@ -7,7 +7,7 @@ Ever Dialer is the best replacement of <a href="https://play.google.com/store/ap
 <b>Note:</b> Since this app requires Shizuku for some features, the Shizuku service stops automatically in the Official Shizuku App. To prevent this happening, Uninstall the Original Shizuku and Install this <b>Shizuku Fork (<a href="https://github.com/thedjchi/Shizuku">Click Here</a>) </b> and after installed, then run shizuku normally and make sure that you go to shizuku app, on the top right, click settings icon and click <b>"Watchdog"</b> which prevents Shizuku service from Stopping !!)
 
 <br>
-<br>e
+<br>
 <center>
   <b>Think Different :)</b>
 </center>

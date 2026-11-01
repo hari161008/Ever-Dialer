@@ -7,4 +7,5 @@ interface ICallLogRepository {
     fun getLatestCallDate(): Long?
     fun deleteCallLog(entry: CallLogEntry): Boolean
     fun deleteCallLogs(entries: Collection<CallLogEntry>): Boolean
+    fun invalidateContactIndex()
 }

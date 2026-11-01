@@ -268,7 +268,6 @@ val settingsRoutes = setOf(
     "language_settings_screen",
     "favourites_settings_screen",
     "contact_info_settings_screen",
-    "debug_settings_screen",
     "updates_screen",
     "about_app_screen",
     "about_screen",
