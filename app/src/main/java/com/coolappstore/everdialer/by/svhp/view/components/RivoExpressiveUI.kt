@@ -1329,9 +1329,9 @@ fun RivoDropdownMenu(
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
     val liquidGlass = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
-    val lgDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, false) }
+    val lgDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, true) }
     val blurEffects = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
-    val blurDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_DROPDOWN_MENU, false) }
+    val blurDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_DROPDOWN_MENU, true) }
     var showContent by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
@@ -1462,10 +1462,10 @@ fun RivoDropdownMenu(
                                             colorControls(saturation = 1.3f)
                                             blur(25f * d)
                                         },
-                                        highlight = { Highlight.Plain }
+                                        highlight = { Highlight.Default }
                                     ),
                                     shape = dropdownShape,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
                                     tonalElevation = 0.dp
                                 ) {
                                     Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }

@@ -361,9 +361,9 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         floatingActionButton = {
             val settingsVer by prefs.settingsChanged.collectAsState()
             val liquidGlass = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LIQUID_GLASS, false) }
-            val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false) }
+            val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, true) }
             val blurEffects = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) }
-            val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false) }
+            val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, true) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
             val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
             val isDynamic = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DYNAMIC_COLORS, true) }
@@ -425,19 +425,24 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                             colorControls(saturation = 1.3f)
                             blur(25f * d)
                         },
-                        highlight = { Highlight.Plain }
+                        highlight = { Highlight.Default }
                     )
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(fabBg.copy(alpha = 0.35f), fabShape)
+                    )
                     FloatingActionButton(
                         onClick = onOpenDialpad,
-                        containerColor = fabBg.copy(alpha = 0.35f),
+                        containerColor = Color.Transparent,
                         contentColor = fabFg,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = dialpadFabElevation,
-                            pressedElevation = dialpadFabElevation,
-                            focusedElevation = dialpadFabElevation,
-                            hoveredElevation = dialpadFabElevation
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
                         ),
                     ) { Icon(Icons.Default.Dialpad, "Dialpad") }
                 }
@@ -463,9 +468,9 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         val settingsVer by prefs.settingsChanged.collectAsState()
         val needBackdropContent = remember(settingsVer) {
             val lg = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LIQUID_GLASS, false) &&
-                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, false)
+                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, true)
             val bl = prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) &&
-                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, false)
+                     prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, true)
             (lg || bl) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         }
         Box(

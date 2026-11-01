@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -196,9 +197,9 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
         floatingActionButton = {
             val settingsVer by prefs_ui.settingsChanged.collectAsState()
             val liquidGlass = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
-            val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false) }
+            val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, true) }
             val blurEffects = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
-            val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, false) }
+            val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, true) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
             val isSaturatedActive = remember(settingsVer, isDark) { prefs_ui.isSaturatedForTheme(isDark) }
             val isDynamic = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
@@ -252,19 +253,24 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                             colorControls(saturation = 1.3f)
                             blur(25f * d)
                         },
-                        highlight = { Highlight.Plain }
+                        highlight = { Highlight.Default }
                     )
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(fabBg.copy(alpha = 0.35f), fabShape)
+                    )
                     FloatingActionButton(
                         onClick = fabOnClick,
-                        containerColor = fabBg.copy(alpha = 0.35f),
+                        containerColor = Color.Transparent,
                         contentColor = fabFg,
                         shape = fabShape,
                         elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 6.dp,
-                            pressedElevation = 6.dp,
-                            focusedElevation = 6.dp,
-                            hoveredElevation = 6.dp
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
                         ),
                     ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                 }
@@ -290,8 +296,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
         val settingsVer by prefs_ui.settingsChanged.collectAsState()
         val needBackdropContent = remember(settingsVer) {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && (
-                (prefs_ui.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) && prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, false)) ||
-                (prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) && prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, false))
+                (prefs_ui.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) && prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, true)) ||
+                (prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) && prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, true))
             )
         }
         Box(

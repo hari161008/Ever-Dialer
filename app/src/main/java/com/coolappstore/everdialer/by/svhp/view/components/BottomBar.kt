@@ -144,9 +144,9 @@ fun BottomBar(navController: NavController) {
     val scrollIndication = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION, true) }
     val iconOnly         = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false) }
     val liquidGlass  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
-    val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, false) }
+    val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, true) }
     val blurEffects  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
-    val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, false) }
+    val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, true) }
     val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
     val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
@@ -487,16 +487,14 @@ fun BottomBar(navController: NavController) {
                                 colorControls(saturation = 1.3f)
                                 blur(25f * d)
                             },
-                            highlight = { Highlight.Plain }
+                            highlight = { Highlight.Default }
                         )
                     ) {
-                        Surface(
-                            shape = pillShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
-                            shadowElevation = 0.dp,
-                            tonalElevation = 0.dp,
-                            modifier = Modifier.matchParentSize()
-                        ) {}
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.25f), pillShape)
+                        )
                         pillContent()
                     }
                 } else {

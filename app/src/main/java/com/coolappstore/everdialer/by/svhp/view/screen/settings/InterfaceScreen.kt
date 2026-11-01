@@ -1569,33 +1569,25 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 }
                             } else {
                             RivoExpressiveCard {
+                                val statusText = when {
+                                    liquidGlass && blurEffects -> "Liquid Glass & Blur active • Tap to configure"
+                                    liquidGlass -> "Liquid Glass active • Tap to configure"
+                                    blurEffects -> "Blur active • Tap to configure"
+                                    else -> "Disabled • Tap to configure"
+                                }
                                 RivoListItem(
-                                    headline = "Material Liquid You Glass",
-                                    supporting = if (liquidGlass) "Enabled • Tap to configure elements" else "Disabled • Tap to configure",
-                                    leadingIcon = Icons.Outlined.Lens,
+                                    headline = "Liquid and Blur effects",
+                                    supporting = statusText,
+                                    leadingIcon = Icons.Outlined.AutoAwesome,
                                     iconContainerColor = Color(0xFF00BCD4),
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier
                                         .settingsSearchHighlight("liquid_glass_toggle", highlightedKey) { highlightedKey = null }
-                                        .settingsSearchHighlight("liquid_glass_elements_link", highlightedKey) { highlightedKey = null },
-                                    onClick = {
-                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.LiquidGlassElementsScreenDestination)
-                                    }
-                                )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            RivoExpressiveCard {
-                                RivoListItem(
-                                    headline = "Material Blur Effects",
-                                    supporting = if (blurEffects) "Enabled • Tap to configure elements" else "Disabled • Tap to configure",
-                                    leadingIcon = Icons.Outlined.BlurOn,
-                                    iconContainerColor = Color(0xFF5C6BC0),
-                                    trailingIcon = Icons.Default.ChevronRight,
-                                    modifier = Modifier
+                                        .settingsSearchHighlight("liquid_glass_elements_link", highlightedKey) { highlightedKey = null }
                                         .settingsSearchHighlight("blur_effects_toggle", highlightedKey) { highlightedKey = null }
                                         .settingsSearchHighlight("blur_effects_elements_link", highlightedKey) { highlightedKey = null },
                                     onClick = {
-                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.BlurEffectsElementsScreenDestination)
+                                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.LiquidGlassElementsScreenDestination())
                                     }
                                 )
                             }

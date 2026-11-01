@@ -2030,11 +2030,11 @@ fun DialPadContent(
                 val dialpadBackdrop = rememberLayerBackdrop()
                 val lgDialpadEnabled = remember(settingsState) {
                     prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) &&
-                    prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, false)
+                    prefs.getBoolean(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON, true)
                 }
                 val blurDialpadEnabled = remember(settingsState) {
                     prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) &&
-                    prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, false) &&
+                    prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, true) &&
                     !lgDialpadEnabled
                 }
 
@@ -2402,23 +2402,22 @@ fun DialerActionExpressive(
                         colorControls(saturation = 1.3f)
                         blur(25f * d)
                     },
-                    highlight = { Highlight.Plain }
+                    highlight = { Highlight.Default }
                 )
                 .combinedClickable(
                     onClick = wrappedOnClick,
                     onLongClick = wrappedOnLongClick,
                     interactionSource = interactionSource,
                     indication = null
-                )
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Surface(
-                shape = buttonShape,
-                color = animatedBgColor.copy(alpha = 0.5f),
-                contentColor = animatedContentColor,
-                modifier = Modifier.matchParentSize()
-            ) {
-                actionContent()
-            }
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(animatedBgColor.copy(alpha = 0.45f), buttonShape)
+            )
+            actionContent()
         }
     } else {
         Surface(
