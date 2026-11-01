@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -522,3 +523,30 @@ private fun AppModeRow(
         }
     }
 }
+
+/**
+ * "Automation Service Notification" toggle card — placed below Network Mode Configuration.
+ */
+@Composable
+fun AutomationNotificationsCard(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = NetworkSwitchCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            AutomationCardHeader(
+                icon = Icons.Outlined.Notifications,
+                title = "Automation Service Notification",
+                subtitle = "Show notification in status bar while automation service is running",
+                enabled = enabled,
+                onEnabledChange = onEnabledChange
+            )
+        }
+    }
+}
+

@@ -128,6 +128,7 @@ import com.ramcosta.composedestinations.generated.destinations.UpdatesScreenDest
 import com.ramcosta.composedestinations.generated.destinations.VolumeDndScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.PcConnectScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.PcSyncSettingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotificationsSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CreateCallCategoryScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CreateSmsCategoryScreenDestination
@@ -243,6 +244,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Call Recording", "Open Ever Call Recorder", "call_recording", Icons.Default.FiberManualRecord, Color(0xFFE53935)),
         GlobalSettingsSearchEntry("Silence Unknown Callers", "Automatically decline calls from unknown numbers", "silence_unknown", Icons.Outlined.PhoneDisabled, GsColorRed),
         GlobalSettingsSearchEntry("Blocked Numbers", "Numbers you've blocked from calling you", "blocked_numbers", Icons.Outlined.PersonOff, GsColorBluGrey),
+        GlobalSettingsSearchEntry("Notifications", "PC Connect, Call Recording, and 4G/5G Switcher notifications", "notifications", Icons.Outlined.Notifications, GsColorOrange) { it.navigate(NotificationsSettingsScreenDestination()) },
         GlobalSettingsSearchEntry("Show blocked numbers in call logs", "Display calls from blocked numbers in your call history", "show_blocked_calls_in_call_logs", Icons.Outlined.PersonOff, GsColorBluGrey),
         GlobalSettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, GsColorAmber) { it.navigate(UpdatesScreenDestination) },
         GlobalSettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, GsColorGreen),

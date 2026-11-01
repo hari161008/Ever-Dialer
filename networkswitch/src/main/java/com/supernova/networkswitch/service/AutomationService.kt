@@ -100,23 +100,40 @@ class AutomationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_UPDATE_NOTIFICATION) {
+            val showNotification = com.supernova.networkswitch.util.AutomationSwitchStore.areNotificationsEnabled(this)
+            if (showNotification) {
+                showForegroundNotification()
+            } else {
+                removeForegroundNotification()
+            }
+        }
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startForegroundWithNotification() {
-        val channelId = "network_switch_automation"
+        val showNotification = com.supernova.networkswitch.util.AutomationSwitchStore.areNotificationsEnabled(this)
+        if (showNotification) {
+            showForegroundNotification()
+        } else {
+            // Android requires startForeground() to be called after startForegroundService() within timeout.
+            // Calling startForeground and then immediately stopForeground(STOP_FOREGROUND_REMOVE) satisfies
+            // the system contract while cleanly removing the notification from the panel.
+            showForegroundNotification()
+            removeForegroundNotification()
+        }
+    }
+
+    private fun showForegroundNotification() {
+        val channelId = "network_switch_automation_visible"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // IMPORTANCE_NONE blocks the channel from ever displaying anything in the shade,
-            // status bar, or lock screen — this satisfies the platform's requirement that a
-            // foreground service post a notification, while ensuring the user never sees it
-            // (not even briefly, and not just "silently" present in the shade).
             val channel = NotificationChannel(
                 channelId,
                 "Network Mode Automation",
-                NotificationManager.IMPORTANCE_NONE
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps automatic network mode switching rules running in the background"
                 setShowBadge(false)
@@ -139,7 +156,7 @@ class AutomationService : Service() {
             .setContentText("Watching for screen, battery saver, or app changes")
             .setSmallIcon(R.drawable.ic_5g_big)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppIntent)
             .build()
 
@@ -153,29 +170,25 @@ class AutomationService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-            // Android requires a notification to start a foreground service, but the automation
-            // rules running in the background aren't something the user needs to be reminded
-            // about on every screen/app change, so hide it from the notification shade right
-            // after satisfying that requirement. The service keeps running in the foreground.
-            // startForeground() posts the notification asynchronously through the system server,
-            // so cancelling in the very same call can race ahead of it and get overwritten a
-            // moment later — cancel a few times over the next couple of seconds to be safe.
-            hideForegroundNotification()
         } catch (e: Exception) {
             // If the platform refuses the foreground start (e.g. background start restrictions),
             // fall back to running as a plain background service rather than crashing.
         }
     }
 
-    private fun hideForegroundNotification() {
-        val notificationManager = androidx.core.app.NotificationManagerCompat.from(this)
-        try { notificationManager.cancel(NOTIFICATION_ID) } catch (_: Exception) {}
-        serviceScope.launch {
-            repeat(5) {
-                delay(400)
-                try { notificationManager.cancel(NOTIFICATION_ID) } catch (_: Exception) {}
+    private fun removeForegroundNotification() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
             }
-        }
+        } catch (_: Exception) {}
+        try {
+            val notificationManager = androidx.core.app.NotificationManagerCompat.from(this)
+            notificationManager.cancel(NOTIFICATION_ID)
+        } catch (_: Exception) {}
     }
 
     private fun registerReceivers() {
@@ -338,7 +351,9 @@ class AutomationService : Service() {
         if (mode != lastAppliedMode) {
             lastAppliedMode = mode
             applyMode(mode)
-            hideForegroundNotification()
+            if (!com.supernova.networkswitch.util.AutomationSwitchStore.areNotificationsEnabled(this)) {
+                removeForegroundNotification()
+            }
         }
     }
 
@@ -355,6 +370,7 @@ class AutomationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        removeForegroundNotification()
         if (receiverRegistered) {
             try {
                 unregisterReceiver(stateReceiver)
@@ -367,8 +383,24 @@ class AutomationService : Service() {
     }
 
     companion object {
+        const val ACTION_UPDATE_NOTIFICATION = "com.supernova.networkswitch.UPDATE_NOTIFICATION"
         private const val NOTIFICATION_ID = 8421
         private const val POLL_INTERVAL_MS = 2000L
         private const val USAGE_EVENTS_WINDOW_MS = 10_000L
+
+        fun updateNotification(context: Context) {
+            val enabled = com.supernova.networkswitch.util.AutomationSwitchStore.areNotificationsEnabled(context)
+            if (!enabled) {
+                try {
+                    androidx.core.app.NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+                } catch (_: Exception) {}
+            }
+            try {
+                val intent = Intent(context, AutomationService::class.java).apply {
+                    action = ACTION_UPDATE_NOTIFICATION
+                }
+                context.startService(intent)
+            } catch (_: Exception) {}
+        }
     }
 }

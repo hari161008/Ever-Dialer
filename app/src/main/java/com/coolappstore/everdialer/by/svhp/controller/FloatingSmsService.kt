@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
@@ -26,9 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,65 +37,82 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.net.Uri
+import android.telephony.SubscriptionInfo
+import android.telephony.SubscriptionManager
+import android.widget.Toast
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.coolappstore.everdialer.by.svhp.MainActivity
+import com.coolappstore.everdialer.by.svhp.controller.sms.SmsEventBus
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ISmsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import kotlinx.coroutines.*
 import org.koin.core.context.GlobalContext
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+
+data class FloatingBubbleData(
+    val threadId: Long,
+    val address: String,
+    val contactName: String?,
+    val photoUri: String?
+)
 
 class FloatingSmsService : Service() {
 
     private lateinit var wm: WindowManager
-    private var bubbleView: ComposeView? = null
+    private val activeBubbles = mutableListOf<BubbleHolder>()
     private var chatView: ComposeView? = null
+    private var currentOpenData: FloatingBubbleData? = null
     private val lifecycleOwner = ServiceLifecycleOwner()
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private val threadIdState = mutableLongStateOf(-1L)
-    private val addressState = mutableStateOf("")
-    private val contactNameState = mutableStateOf<String?>(null)
-    private val photoUriState = mutableStateOf<String?>(null)
-
-    private val bubbleParams = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
-        PixelFormat.TRANSLUCENT
-    ).apply {
-        gravity = Gravity.TOP or Gravity.START
-        x = 24
-        y = 320
-    }
+    private class BubbleHolder(
+        val data: FloatingBubbleData,
+        val view: ComposeView,
+        val params: WindowManager.LayoutParams
+    )
 
     private val chatParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
         PixelFormat.TRANSLUCENT
     ).apply {
         gravity = Gravity.TOP or Gravity.START
         softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
     }
 
     companion object {
@@ -103,13 +121,28 @@ class FloatingSmsService : Service() {
         const val EXTRA_CONTACT_NAME = "contact_name"
         const val EXTRA_PHOTO_URI = "photo_uri"
 
+        const val EXTRA_THREAD_IDS = "thread_ids"
+        const val EXTRA_ADDRESSES = "addresses"
+        const val EXTRA_CONTACT_NAMES = "contact_names"
+        const val EXTRA_PHOTO_URIS = "photo_uris"
+
+        fun start(context: Context, items: List<FloatingBubbleData>) {
+            if (items.isEmpty()) return
+            val intent = Intent(context, FloatingSmsService::class.java).apply {
+                val tids = items.map { it.threadId }.toLongArray()
+                val addrs = ArrayList(items.map { it.address })
+                val names = ArrayList(items.map { it.contactName ?: "" })
+                val photos = ArrayList(items.map { it.photoUri ?: "" })
+                putExtra(EXTRA_THREAD_IDS, tids)
+                putStringArrayListExtra(EXTRA_ADDRESSES, addrs)
+                putStringArrayListExtra(EXTRA_CONTACT_NAMES, names)
+                putStringArrayListExtra(EXTRA_PHOTO_URIS, photos)
+            }
+            context.startService(intent)
+        }
+
         fun start(context: Context, threadId: Long, address: String, contactName: String? = null, photoUri: String? = null) {
-            context.startService(Intent(context, FloatingSmsService::class.java).apply {
-                putExtra(EXTRA_THREAD_ID, threadId)
-                putExtra(EXTRA_ADDRESS, address)
-                putExtra(EXTRA_CONTACT_NAME, contactName)
-                putExtra(EXTRA_PHOTO_URI, photoUri)
-            })
+            start(context, listOf(FloatingBubbleData(threadId, address, contactName, photoUri)))
         }
 
         fun stop(context: Context) {
@@ -131,44 +164,100 @@ class FloatingSmsService : Service() {
             return START_NOT_STICKY
         }
 
-        threadIdState.longValue = intent?.getLongExtra(EXTRA_THREAD_ID, -1L) ?: -1L
-        addressState.value = intent?.getStringExtra(EXTRA_ADDRESS) ?: ""
-        contactNameState.value = intent?.getStringExtra(EXTRA_CONTACT_NAME)
-        photoUriState.value = intent?.getStringExtra(EXTRA_PHOTO_URI)
+        val items = mutableListOf<FloatingBubbleData>()
+        val multiThreadIds = intent?.getLongArrayExtra(EXTRA_THREAD_IDS)
+        val multiAddresses = intent?.getStringArrayListExtra(EXTRA_ADDRESSES)
+        val multiNames = intent?.getStringArrayListExtra(EXTRA_CONTACT_NAMES)
+        val multiPhotos = intent?.getStringArrayListExtra(EXTRA_PHOTO_URIS)
 
-        if (bubbleView == null && chatView == null) {
-            createBubble()
+        if (multiThreadIds != null && multiThreadIds.isNotEmpty()) {
+            for (i in multiThreadIds.indices) {
+                val tid = multiThreadIds[i]
+                val addr = multiAddresses?.getOrNull(i).orEmpty()
+                val name = multiNames?.getOrNull(i)?.takeIf { it.isNotBlank() }
+                val photo = multiPhotos?.getOrNull(i)?.takeIf { it.isNotBlank() }
+                items.add(FloatingBubbleData(tid, addr, name, photo))
+            }
+        } else {
+            val tid = intent?.getLongExtra(EXTRA_THREAD_ID, -1L) ?: -1L
+            val addr = intent?.getStringExtra(EXTRA_ADDRESS).orEmpty()
+            val name = intent?.getStringExtra(EXTRA_CONTACT_NAME)
+            val photo = intent?.getStringExtra(EXTRA_PHOTO_URI)
+            if (tid > 0 || addr.isNotBlank()) {
+                items.add(FloatingBubbleData(tid, addr, name, photo))
+            }
         }
+
+        for (item in items) {
+            addBubble(item)
+        }
+
         return START_NOT_STICKY
     }
 
-    private fun createBubble() {
+    private fun addBubble(item: FloatingBubbleData) {
+        val existing = activeBubbles.find { it.data.threadId == item.threadId || (item.address.isNotBlank() && it.data.address == item.address) }
+        if (existing != null) {
+            existing.view.visibility = View.VISIBLE
+            return
+        }
+
+        val idx = activeBubbles.size
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 24
+            y = 200 + (idx * 200) % 1100
+        }
+
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
                 Rivo4Theme {
+                    val density = LocalDensity.current
+                    val bubbleRadiusPx = with(density) { 36.dp.roundToPx() }
                     FloatingSmsBubbleUI(
-                        name = contactNameState.value ?: addressState.value,
-                        photoUri = photoUriState.value,
+                        name = item.contactName ?: item.address,
+                        photoUri = item.photoUri,
+                        params = params,
+                        view = this,
                         onTap = {
-                            showChatWindow()
+                            val centerX = params.x + bubbleRadiusPx
+                            val centerY = params.y + bubbleRadiusPx
+                            showChatWindow(item, centerX, centerY)
                         }
                     )
                 }
             }
         }
-        bubbleView = cv
+        val holder = BubbleHolder(item, cv, params)
+        activeBubbles.add(holder)
         try {
-            wm.addView(cv, bubbleParams)
+            wm.addView(cv, params)
         } catch (_: Exception) {
-            stopSelf()
+            activeBubbles.remove(holder)
+            if (activeBubbles.isEmpty()) stopSelf()
         }
     }
 
     @Composable
-    private fun FloatingSmsBubbleUI(name: String, photoUri: String?, onTap: () -> Unit) {
+    private fun FloatingSmsBubbleUI(
+        name: String,
+        photoUri: String?,
+        params: WindowManager.LayoutParams,
+        view: View,
+        onTap: () -> Unit
+    ) {
         val pressSource = remember { MutableInteractionSource() }
         val isPressed by pressSource.collectIsPressedAsState()
         val pressScale by animateFloatAsState(
@@ -194,10 +283,10 @@ class FloatingSmsService : Service() {
                             }
                             if (dragged) {
                                 change.consume()
-                                bubbleParams.x = (bubbleParams.x + delta.x.toInt()).coerceAtLeast(0)
-                                bubbleParams.y = (bubbleParams.y + delta.y.toInt()).coerceAtLeast(0)
+                                params.x = (params.x + delta.x.toInt()).coerceAtLeast(0)
+                                params.y = (params.y + delta.y.toInt()).coerceAtLeast(0)
                                 try {
-                                    wm.updateViewLayout(bubbleView, bubbleParams)
+                                    wm.updateViewLayout(view, params)
                                 } catch (_: Exception) {}
                             }
                             if (!change.pressed) {
@@ -238,9 +327,10 @@ class FloatingSmsService : Service() {
         }
     }
 
-    private fun showChatWindow() {
+    private fun showChatWindow(item: FloatingBubbleData, bubbleCenterX: Int, bubbleCenterY: Int) {
         if (chatView != null) return
-        bubbleView?.visibility = View.GONE
+        currentOpenData = item
+        activeBubbles.forEach { it.view.visibility = View.GONE }
 
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -249,26 +339,26 @@ class FloatingSmsService : Service() {
             setContent {
                 Rivo4Theme {
                     FloatingChatOverlay(
-                        threadId = threadIdState.longValue,
-                        address = addressState.value,
-                        contactName = contactNameState.value,
-                        photoUri = photoUriState.value,
-                        onMinimize = {
+                        threadId = item.threadId,
+                        address = item.address,
+                        contactName = item.contactName,
+                        photoUri = item.photoUri,
+                        bubbleCenterX = bubbleCenterX,
+                        bubbleCenterY = bubbleCenterY,
+                        onHide = {
                             dismissChatWindow(minimize = true)
                         },
-                        onClose = {
+                        onDismiss = {
                             dismissChatWindow(minimize = false)
-                            stopSelf()
                         },
                         onOpenFullApp = {
                             val intent = Intent(this@FloatingSmsService, MainActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                putExtra("navigate_to_sms_thread_id", threadIdState.longValue)
-                                putExtra("navigate_to_sms_address", addressState.value)
+                                putExtra("navigate_to_sms_thread_id", item.threadId)
+                                putExtra("navigate_to_sms_address", item.address)
                             }
                             startActivity(intent)
                             dismissChatWindow(minimize = false)
-                            stopSelf()
                         }
                     )
                 }
@@ -278,7 +368,7 @@ class FloatingSmsService : Service() {
         try {
             wm.addView(cv, chatParams)
         } catch (_: Exception) {
-            bubbleView?.visibility = View.VISIBLE
+            activeBubbles.forEach { it.view.visibility = View.VISIBLE }
         }
     }
 
@@ -288,25 +378,112 @@ class FloatingSmsService : Service() {
         } catch (_: Exception) {}
         chatView = null
 
-        if (minimize) {
-            bubbleView?.visibility = View.VISIBLE
-        } else {
-            removeBubble()
-        }
-    }
+        val item = currentOpenData
+        currentOpenData = null
 
-    private fun removeBubble() {
-        try {
-            bubbleView?.let { wm.removeViewImmediate(it) }
-        } catch (_: Exception) {}
-        bubbleView = null
+        if (minimize) {
+            activeBubbles.forEach { it.view.visibility = View.VISIBLE }
+        } else {
+            if (item != null) {
+                val iter = activeBubbles.iterator()
+                while (iter.hasNext()) {
+                    val b = iter.next()
+                    if (b.data.threadId == item.threadId || (item.address.isNotBlank() && b.data.address == item.address)) {
+                        try { wm.removeViewImmediate(b.view) } catch (_: Exception) {}
+                        iter.remove()
+                    }
+                }
+            }
+            if (activeBubbles.isEmpty()) {
+                stopSelf()
+            } else {
+                activeBubbles.forEach { it.view.visibility = View.VISIBLE }
+            }
+        }
     }
 
     override fun onDestroy() {
         scope.cancel()
         lifecycleOwner.onDestroy()
-        dismissChatWindow(minimize = false)
+        try {
+            chatView?.let { wm.removeViewImmediate(it) }
+        } catch (_: Exception) {}
+        chatView = null
+        for (b in activeBubbles) {
+            try { wm.removeViewImmediate(b.view) } catch (_: Exception) {}
+        }
+        activeBubbles.clear()
         super.onDestroy()
+    }
+}
+
+private sealed interface FloatingChatListItem {
+    data class DateHeader(val dayKey: Long, val title: String) : FloatingChatListItem
+    data class Message(val message: SmsMessage) : FloatingChatListItem
+}
+
+private fun getDayKey(timestamp: Long): Long {
+    var time = timestamp
+    if (time in 1..999999999999L) {
+        time *= 1000L
+    }
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = time
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
+}
+
+private fun formatChatDateHeader(timestamp: Long): String {
+    var time = timestamp
+    if (time in 1..999999999999L) {
+        time *= 1000L
+    }
+    val cal = Calendar.getInstance()
+    val todayYear = cal.get(Calendar.YEAR)
+    val todayDay = cal.get(Calendar.DAY_OF_YEAR)
+
+    cal.timeInMillis = time
+    val msgYear = cal.get(Calendar.YEAR)
+    val msgDay = cal.get(Calendar.DAY_OF_YEAR)
+
+    return when {
+        todayYear == msgYear && todayDay == msgDay -> "Today"
+        todayYear == msgYear && todayDay - msgDay == 1 -> "Yesterday"
+        todayYear - msgYear == 1 && todayDay == 1 && msgDay >= 365 -> "Yesterday"
+        else -> SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(time))
+    }
+}
+
+private fun buildClickableMessageText(text: String, linkColor: Color): AnnotatedString {
+    val urlPattern = android.util.Patterns.WEB_URL
+    return buildAnnotatedString {
+        var lastIdx = 0
+        val matcher = urlPattern.matcher(text)
+        while (matcher.find()) {
+            val start = matcher.start()
+            val end = matcher.end()
+            append(text.substring(lastIdx, start))
+            val rawUrl = matcher.group() ?: ""
+            val fullUrl = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) rawUrl else "https://$rawUrl"
+            val link = LinkAnnotation.Url(
+                url = fullUrl,
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = linkColor,
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+            )
+            withLink(link) {
+                append(rawUrl)
+            }
+            lastIdx = end
+        }
+        append(text.substring(lastIdx))
     }
 }
 
@@ -316,8 +493,10 @@ private fun FloatingChatOverlay(
     address: String,
     contactName: String?,
     photoUri: String?,
-    onMinimize: () -> Unit,
-    onClose: () -> Unit,
+    bubbleCenterX: Int,
+    bubbleCenterY: Int,
+    onHide: () -> Unit,
+    onDismiss: () -> Unit,
     onOpenFullApp: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -329,11 +508,117 @@ private fun FloatingChatOverlay(
             null
         }
     }
+    val prefs = remember {
+        try {
+            GlobalContext.get().get<PreferenceManager>()
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    val density = LocalDensity.current
+    val config = LocalConfiguration.current
+    val screenWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
+    val pivotX = (bubbleCenterX / screenWidthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    val pivotY = (bubbleCenterY / screenHeightPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    val transformOrigin = remember(pivotX, pivotY) { TransformOrigin(pivotX, pivotY) }
+
+    var isVisible by remember { mutableStateOf(false) }
+    var isClosing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val animProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 380,
+            easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+        ),
+        label = "floatingChatZoom"
+    )
+
+    val cardScale = androidx.compose.ui.util.lerp(0.04f, 1f, animProgress)
+    val cardAlpha = animProgress.coerceIn(0f, 1f)
+    val backdropAlpha = (0.55f * animProgress).coerceIn(0f, 0.55f)
+
+    fun animateAndClose(action: () -> Unit) {
+        if (isClosing) return
+        isClosing = true
+        isVisible = false
+        coroutineScope.launch {
+            delay(400)
+            action()
+        }
+    }
 
     var effectiveThreadId by remember { mutableLongStateOf(threadId) }
     var messages by remember { mutableStateOf<List<SmsMessage>>(emptyList()) }
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    val signatureEnabled = remember {
+        prefs?.getBoolean(PreferenceManager.KEY_SMS_SIGNATURE_ENABLED, false) ?: false
+    }
+    val signatureText = remember {
+        prefs?.getString(PreferenceManager.KEY_SMS_SIGNATURE, "") ?: ""
+    }
+    val stripUnicode = remember {
+        prefs?.getBoolean(PreferenceManager.KEY_SMS_STRIP_UNICODE, false) ?: false
+    }
+
+    val is24Hour = remember { android.text.format.DateFormat.is24HourFormat(context) }
+    val timeFormat = remember(is24Hour) {
+        SimpleDateFormat(if (is24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+    }
+
+    val subscriptionManager = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+        } else null
+    }
+
+    val activeSims: List<SubscriptionInfo> = remember {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.READ_PHONE_STATE
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                subscriptionManager?.activeSubscriptionInfoList ?: emptyList()
+            } else {
+                emptyList()
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    val sortedSims: List<SubscriptionInfo> = remember(activeSims) {
+        activeSims.sortedBy { it.simSlotIndex }
+    }
+
+    val initialSubId = remember(sortedSims) {
+        if (sortedSims.isEmpty()) null
+        else {
+            val perAddressSubId = if (address.isNotBlank() && prefs != null) prefs.getInt("last_used_sms_sub_id_$address", -1) else -1
+            if (perAddressSubId != -1 && sortedSims.any { it.subscriptionId == perAddressSubId }) {
+                perAddressSubId
+            } else {
+                val globalSubId = prefs?.getInt("last_used_sms_sub_id", -1) ?: -1
+                if (globalSubId != -1 && sortedSims.any { it.subscriptionId == globalSubId }) {
+                    globalSubId
+                } else {
+                    sortedSims.firstOrNull()?.subscriptionId
+                }
+            }
+        }
+    }
+
+    var selectedSubId by remember(sortedSims) { mutableStateOf(initialSubId) }
 
     LaunchedEffect(effectiveThreadId, address) {
         if (effectiveThreadId <= 0 && address.isNotBlank()) {
@@ -351,34 +636,102 @@ private fun FloatingChatOverlay(
                 }
                 messages = msgs
             }
-            delay(1500)
+            delay(2000)
         }
+    }
+
+    LaunchedEffect(effectiveThreadId) {
+        SmsEventBus.newSmsEvent.collect { eventThreadId ->
+            if (effectiveThreadId > 0 && (eventThreadId == null || eventThreadId == effectiveThreadId)) {
+                val msgs = withContext(Dispatchers.IO) {
+                    smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
+                }
+                messages = msgs
+            }
+        }
+    }
+
+    val chatListItems = remember(messages) {
+        val items = mutableListOf<FloatingChatListItem>()
+        var currentDayKey = -1L
+        for (message in messages) {
+            val dayKey = getDayKey(message.date)
+            if (dayKey != currentDayKey) {
+                currentDayKey = dayKey
+                items.add(FloatingChatListItem.DateHeader(dayKey, formatChatDateHeader(message.date)))
+            }
+            items.add(FloatingChatListItem.Message(message))
+        }
+        items
     }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            listState.animateScrollToItem(0)
         }
     }
 
-    val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+    fun sendMessage() {
+        if (inputText.isBlank()) return
+        var finalBody = inputText.trim()
+        if (signatureEnabled && signatureText.isNotBlank()) {
+            finalBody = "$finalBody\n$signatureText"
+        }
+        if (stripUnicode) {
+            finalBody = java.text.Normalizer.normalize(finalBody, java.text.Normalizer.Form.NFD)
+                .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        }
+        selectedSubId?.let { subId ->
+            prefs?.setInt("last_used_sms_sub_id", subId)
+            if (address.isNotBlank()) {
+                prefs?.setInt("last_used_sms_sub_id_$address", subId)
+            }
+        }
+        val textToSend = finalBody
+        inputText = ""
+        coroutineScope.launch {
+            withContext(Dispatchers.IO) {
+                smsRepo?.sendSms(address, textToSend, selectedSubId)
+                if (effectiveThreadId > 0) {
+                    val msgs = smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
+                    withContext(Dispatchers.Main) {
+                        messages = msgs
+                    }
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
-            .imePadding()
-            .clickable(onClick = onMinimize),
+            .background(Color.Black.copy(alpha = backdropAlpha))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { animateAndClose(onHide) }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
+                .imePadding()
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.75f)
+                .graphicsLayer {
+                    scaleX = cardScale
+                    scaleY = cardScale
+                    alpha = cardAlpha
+                    this.transformOrigin = transformOrigin
+                }
                 .shadow(16.dp, RoundedCornerShape(24.dp))
-                .clickable(enabled = false) {}
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                )
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // Header
@@ -392,39 +745,105 @@ private fun FloatingChatOverlay(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Left: Dismiss Button
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { animateAndClose(onDismiss) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    text = "Dismiss",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
                         RivoAvatar(
                             name = contactName ?: address,
                             photoUri = photoUri,
                             obeySolidIcons = false,
-                            size = 38.dp,
-                            modifier = Modifier.size(38.dp)
+                            size = 36.dp,
+                            modifier = Modifier.size(36.dp)
                         )
-                        Spacer(Modifier.width(10.dp))
+
+                        Spacer(Modifier.width(8.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = contactName ?: address,
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (!contactName.isNullOrBlank()) {
+                            if (!contactName.isNullOrBlank() && address.isNotBlank()) {
                                 Text(
                                     text = address,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        IconButton(onClick = onOpenFullApp, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = "Open in app", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+
+                        // Call Action
+                        IconButton(
+                            onClick = {
+                                if (address.isNotBlank()) {
+                                    makeCall(context, address)
+                                }
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Call",
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(19.dp)
+                            )
                         }
-                        IconButton(onClick = onMinimize, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Remove, contentDescription = "Minimize", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+
+                        // Open in Full App Action
+                        IconButton(
+                            onClick = onOpenFullApp,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                                contentDescription = "Open in app",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(19.dp)
+                            )
                         }
-                        IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+
+                        // "X" Action: hides chat screen and restores bubble
+                        IconButton(
+                            onClick = { animateAndClose(onHide) },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Hide",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -434,44 +853,109 @@ private fun FloatingChatOverlay(
                 // Messages list
                 LazyColumn(
                     state = listState,
+                    reverseLayout = true,
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 12.dp),
                     contentPadding = PaddingValues(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom)
                 ) {
-                    items(messages, key = { it.id }) { msg ->
-                        val isOut = msg.isOutgoing
-                        val bubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                        val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    items(
+                        items = chatListItems.asReversed(),
+                        key = { item ->
+                            when (item) {
+                                is FloatingChatListItem.DateHeader -> "date_${item.dayKey}"
+                                is FloatingChatListItem.Message -> if (item.message.isMms) "mms_${item.message.id}" else "sms_${item.message.id}"
+                            }
+                        }
+                    ) { item ->
+                        when (item) {
+                            is FloatingChatListItem.DateHeader -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+                                        tonalElevation = 1.dp
+                                    ) {
+                                        Text(
+                                            text = item.title,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            is FloatingChatListItem.Message -> {
+                                val msg = item.message
+                                val isOut = msg.isOutgoing
+                                val bubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                val linkColor = MaterialTheme.colorScheme.primary
 
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = if (isOut) Alignment.CenterEnd else Alignment.CenterStart
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(
-                                    topStart = 16.dp,
-                                    topEnd = 16.dp,
-                                    bottomStart = if (isOut) 16.dp else 4.dp,
-                                    bottomEnd = if (isOut) 4.dp else 16.dp
-                                ),
-                                color = bubbleColor,
-                                modifier = Modifier.widthIn(max = 260.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                    Text(
-                                        text = msg.body,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = textColor
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = timeFormat.format(java.util.Date(msg.date)),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                        color = textColor.copy(alpha = 0.65f),
-                                        modifier = Modifier.align(Alignment.End)
-                                    )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = if (isOut) Alignment.CenterEnd else Alignment.CenterStart
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(
+                                            topStart = 16.dp,
+                                            topEnd = 16.dp,
+                                            bottomStart = if (isOut) 16.dp else 4.dp,
+                                            bottomEnd = if (isOut) 4.dp else 16.dp
+                                        ),
+                                        color = bubbleColor,
+                                        modifier = Modifier
+                                            .widthIn(max = 280.dp)
+                                            .clickable {
+                                                if (msg.body.isNotBlank()) {
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
+                                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                    ) {
+                                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                            if (msg.isMms && msg.parts.isNotEmpty()) {
+                                                msg.parts.filter { it.isImage && !it.uri.isNullOrBlank() }.forEach { part ->
+                                                    AsyncImage(
+                                                        model = Uri.parse(part.uri),
+                                                        contentDescription = "MMS Image",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .heightIn(max = 200.dp)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .padding(bottom = 6.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            if (msg.body.isNotBlank()) {
+                                                val annotated = remember(msg.body, linkColor) {
+                                                    buildClickableMessageText(msg.body, linkColor)
+                                                }
+                                                Text(
+                                                    text = annotated,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = textColor
+                                                )
+                                            }
+
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = timeFormat.format(Date(msg.date)),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = textColor.copy(alpha = 0.65f),
+                                                modifier = Modifier.align(Alignment.End)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -490,7 +974,7 @@ private fun FloatingChatOverlay(
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         TextField(
                             value = inputText,
@@ -507,22 +991,46 @@ private fun FloatingChatOverlay(
                             )
                         )
 
-                        val canSend = inputText.isNotBlank()
-                        IconButton(
-                            onClick = {
-                                if (canSend) {
-                                    val textToSend = inputText.trim()
-                                    inputText = ""
-                                    coroutineScope.launch {
-                                        withContext(Dispatchers.IO) {
-                                            smsRepo?.sendSms(address, textToSend, null)
-                                            if (effectiveThreadId > 0) {
-                                                messages = smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
-                                            }
-                                        }
+                        // Dual-SIM Picker (shown when device has exactly 2 SIMs)
+                        if (sortedSims.size == 2) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                sortedSims.forEach { sim ->
+                                    val isSelected = selectedSubId == sim.subscriptionId
+                                    val slotNumber = (sim.simSlotIndex + 1).toString()
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                else Color.Transparent
+                                            )
+                                            .clickable {
+                                                selectedSubId = sim.subscriptionId
+                                                prefs?.setInt("last_used_sms_sub_id", sim.subscriptionId)
+                                                if (address.isNotBlank()) {
+                                                    prefs?.setInt("last_used_sms_sub_id_$address", sim.subscriptionId)
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        SimCardIconWithNumber(
+                                            simSlotNumber = slotNumber,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            isLarge = false
+                                        )
                                     }
                                 }
-                            },
+                            }
+                        }
+
+                        val canSend = inputText.isNotBlank()
+                        IconButton(
+                            onClick = { sendMessage() },
                             enabled = canSend,
                             modifier = Modifier
                                 .size(40.dp)

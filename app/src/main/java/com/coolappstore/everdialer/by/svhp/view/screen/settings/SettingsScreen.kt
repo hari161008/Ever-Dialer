@@ -1391,6 +1391,18 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 onClick = { navigator.navigate(BlockedNumbersScreenDestination()) }
                             )
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Notifications",
+                                supporting = "PC Connect, Call Recording, and 4G/5G Switcher notifications",
+                                leadingIcon = Icons.Outlined.Notifications,
+                                iconContainerColor = ColorOrange,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("notifications", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = { navigator.navigate(NotificationsSettingsScreenDestination()) }
+                            )
+                        }
                     }
                 }
             }

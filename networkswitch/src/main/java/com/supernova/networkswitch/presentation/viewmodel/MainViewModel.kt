@@ -100,6 +100,9 @@ class MainViewModel constructor(
     var hasUsageAccess by mutableStateOf(false)
         private set
 
+    var notificationsEnabled by mutableStateOf(true)
+        private set
+
     init {
         observeMasterSwitch()
         observeControlMethodPreference()
@@ -337,6 +340,9 @@ class MainViewModel constructor(
         viewModelScope.launch {
             preferencesRepository.observeAppLaunchConfig().collectLatest { appLaunchConfig = it }
         }
+        viewModelScope.launch {
+            AutomationSwitchStore.notificationsEnabled.collectLatest { notificationsEnabled = it }
+        }
     }
 
     /** Turns "Switch Based On Screen State" on/off. Off by default. */
@@ -423,5 +429,12 @@ class MainViewModel constructor(
     /** Sends the user to the system "Usage Access" settings screen to grant the permission. */
     fun requestUsageAccess(context: android.content.Context) {
         UsageAccessHelper.openUsageAccessSettings(context)
+    }
+
+    /** Toggles the persistent automation service notification on/off. */
+    fun setNotificationsEnabled(context: android.content.Context, enabled: Boolean) {
+        notificationsEnabled = enabled
+        AutomationSwitchStore.setNotificationsEnabled(context, enabled)
+        com.supernova.networkswitch.service.AutomationService.updateNotification(context)
     }
 }

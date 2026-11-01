@@ -668,6 +668,34 @@ class SmsRepository(
         } catch (_: Throwable) {}
     }
 
+    override suspend fun markThreadAsUnread(threadId: Long): Unit = withContext(Dispatchers.IO) {
+        try {
+            val values = ContentValues().apply {
+                put(Telephony.Sms.READ, 0)
+                put(Telephony.Sms.SEEN, 0)
+            }
+            contentResolver.update(
+                Telephony.Sms.Inbox.CONTENT_URI,
+                values,
+                "${Telephony.Sms.THREAD_ID} = ?",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Throwable) {}
+
+        try {
+            val mmsValues = ContentValues().apply {
+                put(Telephony.Mms.READ, 0)
+                put(Telephony.Mms.SEEN, 0)
+            }
+            contentResolver.update(
+                Telephony.Mms.Inbox.CONTENT_URI,
+                mmsValues,
+                "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId.toString())
+            )
+        } catch (_: Throwable) {}
+    }
+
     override fun resolveContactInfo(address: String): Pair<String?, String?> {
         val result = resolveContact(address)
         return Pair(result?.first, result?.second)

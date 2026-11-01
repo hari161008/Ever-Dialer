@@ -283,6 +283,21 @@ class SmsViewModel(
         }
     }
 
+    fun markThreadAsUnread(threadId: Long) {
+        val current = _conversations.value
+        val updated = current.map { conv ->
+            if (conv.threadId == threadId) conv.copy(isRead = false, unreadCount = 1) else conv
+        }
+        if (current != updated) {
+            _conversations.value = updated
+            SmsCache.write(getApplication(), updated)
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            smsRepository.markThreadAsUnread(threadId)
+            fetchConversations()
+        }
+    }
+
     fun refreshStarredMessages(starredIds: Set<Long>) {
         viewModelScope.launch(Dispatchers.IO) {
             if (starredIds.isEmpty()) {

@@ -234,7 +234,7 @@ fun BottomBar(navController: NavController) {
     val pillOffsetY by animateFloatAsState(
         targetValue   = if (pillVisible) 0f else pillExitOffsetY,
         animationSpec = tween(
-            durationMillis = if (pillVisible) 420 else 460,
+            durationMillis = if (pillVisible) 600 else 460,
             easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.08f, 0.85f, 0.18f, 1f)
         ),
         label         = "pillSlideIn"
@@ -242,8 +242,8 @@ fun BottomBar(navController: NavController) {
     val pillAlpha by animateFloatAsState(
         targetValue   = if (pillVisible) 1f else 0f,
         animationSpec = tween(
-            durationMillis = if (pillVisible) 350 else 300,
-            easing         = LinearEasing
+            durationMillis = if (pillVisible) 550 else 300,
+            easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else LinearEasing
         ),
         label         = "pillFadeIn"
     )

@@ -30,6 +30,7 @@ import com.supernova.networkswitch.domain.model.CompatibilityState
 import com.supernova.networkswitch.presentation.theme.NetworkSwitchTheme
 import com.supernova.networkswitch.presentation.viewmodel.MainViewModel
 import com.supernova.networkswitch.presentation.ui.composable.AppLaunchAutomationCard
+import com.supernova.networkswitch.presentation.ui.composable.AutomationNotificationsCard
 import com.supernova.networkswitch.presentation.ui.composable.BatterySaverAutomationCard
 import com.supernova.networkswitch.presentation.ui.composable.CompatibilityCard
 import com.supernova.networkswitch.presentation.ui.composable.MasterSwitchCard
@@ -197,6 +198,12 @@ private fun MainScreen(
                     onModeASelected = { viewModel.updateConfigModeA(it) },
                     onModeBSelected = { viewModel.updateConfigModeB(it) },
                     onSaveClick = { viewModel.saveNetworkModeConfig() }
+                )
+
+                // Option to toggle automation service notification
+                AutomationNotificationsCard(
+                    enabled = viewModel.notificationsEnabled,
+                    onEnabledChange = { viewModel.setNotificationsEnabled(context, it) }
                 )
 
                 // "Switch Based On Screen State" — off by default

@@ -88,6 +88,10 @@ fun isContactDetailsRoute(route: String?): Boolean {
     return base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true)
 }
 
+fun isContactOrChatRoute(route: String?): Boolean {
+    return isContactDetailsRoute(route) || isSmsChatRoute(route)
+}
+
 /**
  * Windows Phone Metro-style turnstile page transition specifications,
  * modeled after the Windows Phone 7/8 animation physics and MangoTile's implementation.
@@ -279,7 +283,8 @@ val settingsRoutes = setOf(
     "sms_chat_screen",
     "new_message_screen",
     "blocked_numbers_screen",
-    "blocked_sms_screen"
+    "blocked_sms_screen",
+    "notifications_settings_screen"
 )
 
 fun isRecordingsFromSettings(entry: NavBackStackEntry?): Boolean {
@@ -307,12 +312,12 @@ fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {
 fun isExpandingRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
-    if (isSmsChatRoute(route)) return false
     return isSettingsRoute(route) ||
         base == "contact_details_screen" ||
         base == "call_log_detail_screen" ||
         base == "new_message_screen" ||
-        base == "search_screen"
+        base == "search_screen" ||
+        base == "sms_chat_screen"
 }
 
 fun isExpandingRoute(entry: NavBackStackEntry?): Boolean {
@@ -331,22 +336,18 @@ fun isExpandingRoute(entry: NavBackStackEntry?): Boolean {
 object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        val isChat = isSmsChatRoute(targetState.destination.route)
-        val isContact = isContactDetailsRoute(targetState.destination.route)
+        val isContact = isContactOrChatRoute(targetState.destination.route)
         val isExpanding = isExpandingRoute(targetState)
         val duration = when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
-            isChat -> CHAT_ANIM_DURATION_ENTER
             else -> 600
         }
         val easing = when {
             isContact -> ContactDetailsSmoothEase
-            isChat -> ChatSmoothEase
             else -> SettingsSmoothEase
         }
         val easingOut = when {
             isContact -> ContactDetailsSmoothEase
-            isChat -> ChatSmoothEaseOut
             else -> SettingsSmoothEaseOut
         }
         val isRootSettings = targetState.destination.route?.substringBefore("?")?.substringBefore("/") == "settings_screen"
@@ -377,21 +378,17 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        val isChat = isSmsChatRoute(initialState.destination.route)
-        val isContact = isContactDetailsRoute(initialState.destination.route)
+        val isContact = isContactOrChatRoute(initialState.destination.route)
         val duration = when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
-            isChat -> CHAT_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
         }
         val easing = when {
             isContact -> ContactDetailsSmoothEaseExit
-            isChat -> ChatSmoothEase
             else -> SettingsSmoothEase
         }
         val easingIn = when {
             isContact -> ContactDetailsSmoothEaseExit
-            isChat -> ChatSmoothEaseIn
             else -> SettingsSmoothEaseIn
         }
 
@@ -407,21 +404,17 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        val isChat = isSmsChatRoute(targetState.destination.route)
-        val isContact = isContactDetailsRoute(targetState.destination.route)
+        val isContact = isContactOrChatRoute(targetState.destination.route)
         val duration = when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
-            isChat -> CHAT_ANIM_DURATION_ENTER
             else -> SETTINGS_ANIM_DURATION_EXIT
         }
         val easing = when {
             isContact -> ContactDetailsSmoothEase
-            isChat -> ChatSmoothEase
             else -> SettingsSmoothEase
         }
         val easingOut = when {
             isContact -> ContactDetailsSmoothEase
-            isChat -> ChatSmoothEaseOut
             else -> SettingsSmoothEaseOut
         }
 
@@ -446,22 +439,18 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        val isChat = isSmsChatRoute(initialState.destination.route)
-        val isContact = isContactDetailsRoute(initialState.destination.route)
+        val isContact = isContactOrChatRoute(initialState.destination.route)
         val isExpanding = isExpandingRoute(initialState)
         val duration = when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
-            isChat -> CHAT_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
         }
         val easing = when {
             isContact -> ContactDetailsSmoothEaseExit
-            isChat -> ChatSmoothEase
             else -> SettingsSmoothEase
         }
         val easingIn = when {
             isContact -> ContactDetailsSmoothEaseExit
-            isChat -> ChatSmoothEaseIn
             else -> SettingsSmoothEaseIn
         }
         val isRootSettings = initialState.destination.route?.substringBefore("?")?.substringBefore("/") == "settings_screen"

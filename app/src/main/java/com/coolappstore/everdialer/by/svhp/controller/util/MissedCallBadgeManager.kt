@@ -85,101 +85,140 @@ object MissedCallBadgeManager {
             }
 
             val prefs = PreferenceManager(context)
-            val showNotif = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_NOTIFICATION, false)
+            val showNotif = prefs.getBoolean(PreferenceManager.KEY_MISSED_CALL_NOTIFICATION, true)
+            val provider = prefs.getString(
+                PreferenceManager.KEY_MISSED_CALL_NOTIFICATION_PROVIDER,
+                PreferenceManager.MISSED_CALL_PROVIDER_SYSTEM
+            ) ?: PreferenceManager.MISSED_CALL_PROVIDER_SYSTEM
 
-            if (showNotif && count > 0) {
-                val openIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra("NAV_TO_RECENTS", true)
-                }
-                val openPendingIntent = PendingIntent.getActivity(
-                    context,
-                    9901,
-                    openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                val dismissIntent = Intent(context, MissedCallDismissReceiver::class.java)
-                val dismissPendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    9902,
-                    dismissIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                val latestInfo = getLatestMissedCallInfo(context)
-                val caller = latestInfo?.first?.ifBlank { "Unknown" } ?: "Unknown"
-                val number = latestInfo?.second ?: ""
-                val title = if (count == 1) "Missed call from $caller" else "$count Missed Calls"
-                val contentText = if (count == 1) {
-                    if (caller != number && number.isNotBlank()) number else "Tap to view call history"
-                } else {
-                    "Latest missed call from $caller"
-                }
-
-                val builder = NotificationCompat.Builder(context, CHANNEL_MISSED_CALLS_ID)
-                    .setSmallIcon(android.R.drawable.stat_notify_missed_call)
-                    .setContentTitle(title)
-                    .setContentText(contentText)
-                    .setNumber(count)
-                    .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
-                    .setAutoCancel(true)
-                    .setContentIntent(openPendingIntent)
-                    .setDeleteIntent(dismissPendingIntent)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-
-                if (number.isNotBlank()) {
-                    val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
-                        setClass(context, MainActivity::class.java)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    val callPendingIntent = PendingIntent.getActivity(
-                        context,
-                        9903,
-                        callIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        android.R.drawable.stat_notify_missed_call,
-                        "Call back",
-                        callPendingIntent
-                    )
-
-                    val msgIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    val msgPendingIntent = PendingIntent.getActivity(
-                        context,
-                        9904,
-                        msgIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        android.R.drawable.sym_action_chat,
-                        "Message",
-                        msgPendingIntent
-                    )
-                }
-
-                val notification = builder.build()
-
-                // Xiaomi MIUI badge reflection
-                try {
-                    val extraNotificationField = notification.javaClass.getDeclaredField("extraNotification")
-                    val extraNotification = extraNotificationField.get(notification)
-                    val setMessageCountMethod = extraNotification.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType)
-                    setMessageCountMethod.invoke(extraNotification, count)
-                } catch (_: Throwable) {}
-
-                nm.notify(MISSED_CALLS_NOTIF_ID, notification)
-            } else {
+            if (!showNotif) {
                 nm.cancel(MISSED_CALLS_NOTIF_ID)
+                cancelSystemMissedCallNotification(context)
+                markCallLogMissedAsReadSilently(context)
+                applyOemBadges(context, 0)
+                return
             }
-            applyOemBadges(context, count)
+
+            if (provider == PreferenceManager.MISSED_CALL_PROVIDER_EVER_DIALER) {
+                // Cancel system missed call notification
+                cancelSystemMissedCallNotification(context)
+
+                val storedCount = prefs.getInt("active_ever_dialer_missed_count", 0)
+                val totalCount = if (count > 0) storedCount + count else storedCount
+                prefs.setInt("active_ever_dialer_missed_count", totalCount)
+
+                val displayCount = if (totalCount > 0) totalCount else count
+
+                if (displayCount > 0) {
+                    val openIntent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("NAV_TO_RECENTS", true)
+                    }
+                    val openPendingIntent = PendingIntent.getActivity(
+                        context,
+                        9901,
+                        openIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    val dismissIntent = Intent(context, MissedCallDismissReceiver::class.java)
+                    val dismissPendingIntent = PendingIntent.getBroadcast(
+                        context,
+                        9902,
+                        dismissIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    val latestInfo = getLatestMissedCallInfo(context)
+                    val caller = latestInfo?.first?.ifBlank { "Unknown" } ?: "Unknown"
+                    val number = latestInfo?.second ?: ""
+                    val title = if (displayCount == 1) "Missed call from $caller" else "$displayCount Missed Calls"
+                    val contentText = if (displayCount == 1) {
+                        if (caller != number && number.isNotBlank()) number else "Tap to view call history"
+                    } else {
+                        "Latest missed call from $caller"
+                    }
+
+                    val builder = NotificationCompat.Builder(context, CHANNEL_MISSED_CALLS_ID)
+                        .setSmallIcon(android.R.drawable.stat_notify_missed_call)
+                        .setContentTitle(title)
+                        .setContentText(contentText)
+                        .setNumber(displayCount)
+                        .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+                        .setAutoCancel(true)
+                        .setContentIntent(openPendingIntent)
+                        .setDeleteIntent(dismissPendingIntent)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+
+                    if (number.isNotBlank()) {
+                        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
+                            setClass(context, MainActivity::class.java)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        val callPendingIntent = PendingIntent.getActivity(
+                            context,
+                            9903,
+                            callIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        builder.addAction(
+                            android.R.drawable.stat_notify_missed_call,
+                            "Call back",
+                            callPendingIntent
+                        )
+
+                        val msgIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        val msgPendingIntent = PendingIntent.getActivity(
+                            context,
+                            9904,
+                            msgIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        builder.addAction(
+                            android.R.drawable.sym_action_chat,
+                            "Message",
+                            msgPendingIntent
+                        )
+                    }
+
+                    val notification = builder.build()
+
+                    // Xiaomi MIUI badge reflection
+                    try {
+                        val extraNotificationField = notification.javaClass.getDeclaredField("extraNotification")
+                        val extraNotification = extraNotificationField.get(notification)
+                        val setMessageCountMethod = extraNotification.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType)
+                        setMessageCountMethod.invoke(extraNotification, displayCount)
+                    } catch (_: Throwable) {}
+
+                    nm.notify(MISSED_CALLS_NOTIF_ID, notification)
+                    markCallLogMissedAsReadSilently(context)
+                } else {
+                    nm.cancel(MISSED_CALLS_NOTIF_ID)
+                }
+                applyOemBadges(context, displayCount)
+            } else {
+                // System provider selected
+                prefs.setInt("active_ever_dialer_missed_count", 0)
+                nm.cancel(MISSED_CALLS_NOTIF_ID)
+                applyOemBadges(context, count)
+            }
         } catch (_: Throwable) {}
     }
 
     fun markMissedCallsAsRead(context: Context) {
+        val prefs = PreferenceManager(context)
+        prefs.setInt("active_ever_dialer_missed_count", 0)
+        markCallLogMissedAsReadSilently(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        nm?.cancel(MISSED_CALLS_NOTIF_ID)
+        cancelSystemMissedCallNotification(context)
+        applyOemBadges(context, 0)
+    }
+
+    fun markCallLogMissedAsReadSilently(context: Context) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return
@@ -193,7 +232,23 @@ object MissedCallBadgeManager {
             val args = arrayOf(CallLog.Calls.MISSED_TYPE.toString())
             context.contentResolver.update(CallLog.Calls.CONTENT_URI, values, where, args)
         } catch (_: Throwable) {}
-        updateBadge(context, 0)
+    }
+
+    fun cancelSystemMissedCallNotification(context: Context) {
+        val cancelAction = {
+            try {
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    tm?.cancelMissedCallsNotification()
+                }
+            } catch (_: Throwable) {}
+        }
+        cancelAction()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        handler.postDelayed({ cancelAction() }, 300)
+        handler.postDelayed({ cancelAction() }, 800)
+        handler.postDelayed({ cancelAction() }, 1500)
+        handler.postDelayed({ cancelAction() }, 2500)
     }
 
     private fun getLauncherActivityName(context: Context): String {

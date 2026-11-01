@@ -22,6 +22,7 @@ object AutomationSwitchStore {
     private const val KEY_SCREEN_STATE_ENABLED = "screen_state_enabled"
     private const val KEY_BATTERY_SAVER_ENABLED = "battery_saver_enabled"
     private const val KEY_APP_LAUNCH_ENABLED = "app_launch_enabled"
+    private const val KEY_NOTIFICATIONS_ENABLED = "automation_notifications_enabled"
 
     @Volatile
     private var initialized = false
@@ -36,6 +37,9 @@ object AutomationSwitchStore {
     private val _appLaunchEnabled = MutableStateFlow(false)
     val appLaunchEnabled: StateFlow<Boolean> get() = _appLaunchEnabled
 
+    private val _notificationsEnabled = MutableStateFlow(true)
+    val notificationsEnabled: StateFlow<Boolean> get() = _notificationsEnabled
+
     @Synchronized
     fun init(context: Context) {
         if (initialized) return
@@ -43,6 +47,7 @@ object AutomationSwitchStore {
         _screenStateEnabled.value = prefs.getBoolean(KEY_SCREEN_STATE_ENABLED, false)
         _batterySaverEnabled.value = prefs.getBoolean(KEY_BATTERY_SAVER_ENABLED, false)
         _appLaunchEnabled.value = prefs.getBoolean(KEY_APP_LAUNCH_ENABLED, false)
+        _notificationsEnabled.value = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
         initialized = true
     }
 
@@ -52,12 +57,18 @@ object AutomationSwitchStore {
         _screenStateEnabled.value = prefs.getBoolean(KEY_SCREEN_STATE_ENABLED, false)
         _batterySaverEnabled.value = prefs.getBoolean(KEY_BATTERY_SAVER_ENABLED, false)
         _appLaunchEnabled.value = prefs.getBoolean(KEY_APP_LAUNCH_ENABLED, false)
+        _notificationsEnabled.value = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
         initialized = true
     }
 
     fun isAnyEnabled(context: Context): Boolean {
         init(context)
         return _screenStateEnabled.value || _batterySaverEnabled.value || _appLaunchEnabled.value
+    }
+
+    fun areNotificationsEnabled(context: Context): Boolean {
+        init(context)
+        return _notificationsEnabled.value
     }
 
     fun setScreenStateEnabled(context: Context, enabled: Boolean) {
@@ -76,5 +87,11 @@ object AutomationSwitchStore {
         init(context)
         prefs.edit().putBoolean(KEY_APP_LAUNCH_ENABLED, enabled).apply()
         _appLaunchEnabled.value = enabled
+    }
+
+    fun setNotificationsEnabled(context: Context, enabled: Boolean) {
+        init(context)
+        prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
+        _notificationsEnabled.value = enabled
     }
 }
