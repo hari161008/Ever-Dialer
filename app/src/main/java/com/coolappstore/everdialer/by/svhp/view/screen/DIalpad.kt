@@ -1888,12 +1888,13 @@ fun DialPadContent(
 
             val scaleFactor = minOf(widthScale, heightScale)
 
-            val keyWidth: Dp  = (98 * scaleFactor).dp
-            val keyHeight: Dp = (62 * scaleFactor).dp
+            val contentWidth = (availableWidth - 16f).coerceAtLeast(200f)
+            val keySpacing: Dp = (8 * scaleFactor).coerceIn(6f, 12f).dp
+            val maxKeyW = ((contentWidth - (keySpacing.value * 2f + 8f)) / 3f).coerceIn(64f, 96f).dp
+            val keyWidth: Dp  = minOf((92 * scaleFactor).dp, maxKeyW)
+            val keyHeight: Dp = (58 * scaleFactor).coerceIn(48f, 66f).dp
             val actionSize: Dp = (58 * scaleFactor).dp
-            val callW: Dp  = (102 * scaleFactor).dp
-            val callH: Dp  = (66 * scaleFactor).dp
-            val keySpacing: Dp = (7 * scaleFactor).dp
+            val callH: Dp  = (62 * scaleFactor).coerceIn(52f, 68f).dp
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -2047,10 +2048,15 @@ fun DialPadContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (needDialpadBackdrop) Modifier.layerBackdrop(dialpadBackdrop) else Modifier)
+                        .then(if (needDialpadBackdrop) Modifier.layerBackdrop(dialpadBackdrop) else Modifier),
+                    verticalArrangement = Arrangement.spacedBy(keySpacing)
                 ) {
                     keys.forEach { row ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             row.forEach { key ->
                                 DialPadKey(
                                     number = key,
@@ -2070,82 +2076,97 @@ fun DialPadContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-                val simBtnW = (70 * scaleFactor).dp
-                val sideBtnW = if (showSimButtons) simBtnW else keyWidth
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    DialerActionExpressive(
-                        onClick = {
-                            showAddContactChoiceDialog = true
-                        },
-                        icon = Icons.Default.PersonAdd,
-                        contentDescription = "Add Contact",
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.width(sideBtnW).height(callH),
-                        isLarge = true
-                    )
+                Spacer(modifier = Modifier.height(keySpacing))
 
-                    if (showSimButtons) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy((8 * scaleFactor).dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DialerActionExpressive(
-                                onClick = {
-                                    if (number.isNotEmpty()) {
-                                        initiateCallWithSim(number, 0)
-                                    } else {
-                                        val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
-                                        if (latestCall != null) {
-                                            replaceNumber(latestCall.number)
-                                        }
+                if (showSimButtons) {
+                    val simBtnW = ((contentWidth - (keySpacing.value * 3f + 8f)) / 4f).coerceIn(52f, 72f).dp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally)
+                    ) {
+                        DialerActionExpressive(
+                            onClick = {
+                                showAddContactChoiceDialog = true
+                            },
+                            icon = Icons.Default.PersonAdd,
+                            contentDescription = "Add Contact",
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.width(simBtnW).height(callH),
+                            isLarge = true
+                        )
+
+                        DialerActionExpressive(
+                            onClick = {
+                                if (number.isNotEmpty()) {
+                                    initiateCallWithSim(number, 0)
+                                } else {
+                                    val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                    if (latestCall != null) {
+                                        replaceNumber(latestCall.number)
                                     }
-                                },
-                                onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
-                                icon = Icons.Default.SimCard,
-                                simSlotNumber = "1",
-                                contentDescription = "Call with SIM 1",
-                                containerColor = sim1Color,
-                                customColor = sim1Color,
-                                contentColor = Color.White,
-                                modifier = Modifier.width(simBtnW).height(callH),
-                                isLarge = true,
-                                liquidGlassBackdrop = dialpadBackdrop,
-                                liquidGlassEnabled = lgDialpadEnabled,
-                                blurEnabled = blurDialpadEnabled,
-                                isCallButton = true
-                            )
-                            DialerActionExpressive(
-                                onClick = {
-                                    if (number.isNotEmpty()) {
-                                        initiateCallWithSim(number, 1)
-                                    } else {
-                                        val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
-                                        if (latestCall != null) {
-                                            replaceNumber(latestCall.number)
-                                        }
+                                }
+                            },
+                            onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                            icon = Icons.Default.SimCard,
+                            simSlotNumber = "1",
+                            contentDescription = "Call with SIM 1",
+                            containerColor = sim1Color,
+                            customColor = sim1Color,
+                            contentColor = Color.White,
+                            modifier = Modifier.width(simBtnW).height(callH),
+                            isLarge = true,
+                            liquidGlassBackdrop = dialpadBackdrop,
+                            liquidGlassEnabled = lgDialpadEnabled,
+                            blurEnabled = blurDialpadEnabled,
+                            isCallButton = true
+                        )
+
+                        DialerActionExpressive(
+                            onClick = {
+                                if (number.isNotEmpty()) {
+                                    initiateCallWithSim(number, 1)
+                                } else {
+                                    val latestCall = callLogsForSearch.firstOrNull { it.number.isNotBlank() }
+                                    if (latestCall != null) {
+                                        replaceNumber(latestCall.number)
                                     }
-                                },
-                                onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
-                                icon = Icons.Default.SimCard,
-                                simSlotNumber = "2",
-                                contentDescription = "Call with SIM 2",
-                                containerColor = sim2Color,
-                                customColor = sim2Color,
-                                contentColor = Color.White,
-                                modifier = Modifier.width(simBtnW).height(callH),
-                                isLarge = true,
-                                liquidGlassBackdrop = dialpadBackdrop,
-                                liquidGlassEnabled = lgDialpadEnabled,
-                                blurEnabled = blurDialpadEnabled,
-                                isCallButton = true
-                            )
-                        }
-                    } else {
+                                }
+                            },
+                            onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
+                            icon = Icons.Default.SimCard,
+                            simSlotNumber = "2",
+                            contentDescription = "Call with SIM 2",
+                            containerColor = sim2Color,
+                            customColor = sim2Color,
+                            contentColor = Color.White,
+                            modifier = Modifier.width(simBtnW).height(callH),
+                            isLarge = true,
+                            liquidGlassBackdrop = dialpadBackdrop,
+                            liquidGlassEnabled = lgDialpadEnabled,
+                            blurEnabled = blurDialpadEnabled,
+                            isCallButton = true
+                        )
+
+                        Spacer(modifier = Modifier.width(simBtnW))
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally)
+                    ) {
+                        DialerActionExpressive(
+                            onClick = {
+                                showAddContactChoiceDialog = true
+                            },
+                            icon = Icons.Default.PersonAdd,
+                            contentDescription = "Add Contact",
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.width(keyWidth).height(callH),
+                            isLarge = true
+                        )
+
                         DialerActionExpressive(
                             onClick = {
                                 if (number.isNotEmpty()) {
@@ -2162,16 +2183,16 @@ fun DialPadContent(
                             contentDescription = "Call",
                             containerColor = Color(0xFF34A853),
                             contentColor = Color.White,
-                            modifier = Modifier.width(callW).height(callH),
+                            modifier = Modifier.width(keyWidth).height(callH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
                             blurEnabled = blurDialpadEnabled,
                             isCallButton = true
                         )
-                    }
 
-                    Spacer(modifier = Modifier.width(sideBtnW))
+                        Spacer(modifier = Modifier.width(keyWidth))
+                    }
                 }
                 }
             }
@@ -2287,6 +2308,8 @@ fun DialerActionExpressive(
     val settingsState by prefs.settingsChanged.collectAsState()
     val isSaturatedActive = remember(settingsState, isDark) { prefs.isSaturatedForTheme(isDark) }
     val isSaturatedContainer = remember(settingsState) { prefs.getSaturatedTarget() == PreferenceManager.SATURATED_TARGET_CONTAINER }
+    val lgCallButtonConfig = remember(settingsState) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON) }
+    val blurCallButtonConfig = remember(settingsState) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON) }
 
     val triggerTapPulse = {
         tapJob?.cancel()
@@ -2368,9 +2391,14 @@ fun DialerActionExpressive(
                     shape = { buttonShape },
                     effects = {
                         val d = density
-                        colorControls(saturation = 1.3f)
-                        blur(2f * d)
-                        lens(refractionHeight = 18f * d, refractionAmount = 52f * d)
+                        colorControls(brightness = lgCallButtonConfig.brightness, saturation = lgCallButtonConfig.saturation)
+                        if (lgCallButtonConfig.blurRadiusDp > 0f) blur(lgCallButtonConfig.blurRadiusDp * d)
+                        lens(
+                            refractionHeight = lgCallButtonConfig.refractionHeightDp * d,
+                            refractionAmount = lgCallButtonConfig.refractionAmountDp * d,
+                            chromaticAberration = lgCallButtonConfig.chromaticAberration,
+                            depthEffect = lgCallButtonConfig.depthEffect
+                        )
                     },
                     highlight = { Highlight.Default }
                 )
@@ -2399,8 +2427,8 @@ fun DialerActionExpressive(
                     shape    = { buttonShape },
                     effects  = {
                         val d = density
-                        colorControls(saturation = 1.3f)
-                        blur(25f * d)
+                        colorControls(saturation = blurCallButtonConfig.saturation)
+                        blur(blurCallButtonConfig.blurRadiusDp * d)
                     },
                     highlight = { Highlight.Default }
                 )

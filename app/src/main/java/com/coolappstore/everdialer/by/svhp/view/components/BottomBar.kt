@@ -147,6 +147,8 @@ fun BottomBar(navController: NavController) {
     val lgBottomNav  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_LG_BOTTOM_NAV, true) }
     val blurEffects  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
     val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, true) }
+    val lgBottomNavConfig = remember(settingsState) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_BOTTOM_NAV) }
+    val blurBottomNavConfig = remember(settingsState) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_BOTTOM_NAV) }
     val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
     val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
@@ -467,11 +469,13 @@ fun BottomBar(navController: NavController) {
                             shape    = { pillShape },
                             effects  = {
                                 val d = density
-                                colorControls(saturation = 1.4f)
-                                blur(2f * d)
+                                colorControls(brightness = lgBottomNavConfig.brightness, saturation = lgBottomNavConfig.saturation)
+                                if (lgBottomNavConfig.blurRadiusDp > 0f) blur(lgBottomNavConfig.blurRadiusDp * d)
                                 lens(
-                                    refractionHeight = 23f * d,
-                                    refractionAmount = 64f * d
+                                    refractionHeight = lgBottomNavConfig.refractionHeightDp * d,
+                                    refractionAmount = lgBottomNavConfig.refractionAmountDp * d,
+                                    chromaticAberration = lgBottomNavConfig.chromaticAberration,
+                                    depthEffect = lgBottomNavConfig.depthEffect
                                 )
                             },
                             highlight = { Highlight.Default }
@@ -484,8 +488,8 @@ fun BottomBar(navController: NavController) {
                             shape = { pillShape },
                             effects = {
                                 val d = density
-                                colorControls(saturation = 1.3f)
-                                blur(25f * d)
+                                colorControls(saturation = blurBottomNavConfig.saturation)
+                                blur(blurBottomNavConfig.blurRadiusDp * d)
                             },
                             highlight = { Highlight.Default }
                         )

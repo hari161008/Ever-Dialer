@@ -1045,7 +1045,8 @@ fun RivoSwitchListItem(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onArrowClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
@@ -1126,28 +1127,62 @@ fun RivoSwitchListItem(
             val solidStyle = remember(settingsVersion, isDark) { prefs.getSolidIconsStyle(isDark) }
             val isSaturatedSolidBrightDark = isDark && isSaturatedActive && solidIcons && (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT)
             val isTrackBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.40
-            Switch(
-                checked = checked && enabled,
-                onCheckedChange = {
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
-                        performAppHaptic(
-                            context,
-                            prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
-                            prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Switch(
+                    checked = checked && enabled,
+                    onCheckedChange = {
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                            performAppHaptic(
+                                context,
+                                prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                            )
+                        }
+                        onCheckedChange(it)
+                    },
+                    enabled = enabled,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        checkedBorderColor = Color.Transparent,
+                        uncheckedThumbColor = if (isDark) Color(0xFFB0B0B5) else Color(0xFF6B7280),
+                        uncheckedTrackColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E7EB),
+                        uncheckedBorderColor = if (isDark) Color(0xFF48484A) else Color(0xFF9CA3AF)
+                    )
+                )
+
+                if (onArrowClick != null) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) {
+                                performAppHaptic(
+                                    context,
+                                    prefs.getString(PreferenceManager.KEY_APP_HAPTICS_STRENGTH, "light") ?: "light",
+                                    prefs.getFloat(PreferenceManager.KEY_HAPTICS_CUSTOM_INTENSITY, 0.5f)
+                                )
+                            }
+                            onArrowClick()
+                        },
+                        enabled = enabled,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Configure",
+                            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    onCheckedChange(it)
-                },
-                enabled = enabled,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = if (isSaturatedSolidBrightDark) Color.Black else if (isTrackBright) Color(0xFF1C1B1F) else Color.White,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    checkedBorderColor = Color.Transparent,
-                    uncheckedThumbColor = if (isDark) Color(0xFFB0B0B5) else Color(0xFF6B7280),
-                    uncheckedTrackColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E7EB),
-                    uncheckedBorderColor = if (isDark) Color(0xFF48484A) else Color(0xFF9CA3AF)
-                )
-            )
+                }
+            }
         }
     }
 }
@@ -1332,6 +1367,8 @@ fun RivoDropdownMenu(
     val lgDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_LG_DROPDOWN_MENU, true) }
     val blurEffects = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
     val blurDropdownMenu = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_BLUR_DROPDOWN_MENU, true) }
+    val lgDropdownConfig = remember(settingsVer) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_DROPDOWN_MENU) }
+    val blurDropdownConfig = remember(settingsVer) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_DROPDOWN_MENU) }
     var showContent by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
@@ -1437,11 +1474,13 @@ fun RivoDropdownMenu(
                                             shape = { menuShape },
                                             effects = {
                                                 val d = density
-                                                colorControls(brightness = -0.13f, saturation = 1.4f)
-                                                blur(6f * d)
+                                                colorControls(brightness = lgDropdownConfig.brightness, saturation = lgDropdownConfig.saturation)
+                                                if (lgDropdownConfig.blurRadiusDp > 0f) blur(lgDropdownConfig.blurRadiusDp * d)
                                                 lens(
-                                                    refractionHeight = 40f * d,
-                                                    refractionAmount = 248f * d
+                                                    refractionHeight = lgDropdownConfig.refractionHeightDp * d,
+                                                    refractionAmount = lgDropdownConfig.refractionAmountDp * d,
+                                                    chromaticAberration = lgDropdownConfig.chromaticAberration,
+                                                    depthEffect = lgDropdownConfig.depthEffect
                                                 )
                                             },
                                             highlight = { Highlight.Plain }
@@ -1459,8 +1498,8 @@ fun RivoDropdownMenu(
                                         shape    = { dropdownShape },
                                         effects  = {
                                             val d = density
-                                            colorControls(saturation = 1.3f)
-                                            blur(25f * d)
+                                            colorControls(saturation = blurDropdownConfig.saturation)
+                                            blur(blurDropdownConfig.blurRadiusDp * d)
                                         },
                                         highlight = { Highlight.Default }
                                     ),

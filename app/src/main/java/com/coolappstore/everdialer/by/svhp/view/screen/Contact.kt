@@ -200,6 +200,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
             val lgContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_LG_CONTACTS_FAB, true) }
             val blurEffects = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurContactsFab = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_BLUR_CONTACTS_FAB, true) }
+            val lgContactsConfig = remember(settingsVer) { prefs_ui.getLiquidGlassConfig(PreferenceManager.KEY_LG_CONTACTS_FAB) }
+            val blurContactsConfig = remember(settingsVer) { prefs_ui.getBlurConfig(PreferenceManager.KEY_BLUR_CONTACTS_FAB) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
             val isSaturatedActive = remember(settingsVer, isDark) { prefs_ui.isSaturatedForTheme(isDark) }
             val isDynamic = remember(settingsVer) { prefs_ui.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
@@ -224,8 +226,14 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         shape = { fabShape },
                         effects = {
                             val d = density
-                            colorControls(brightness = -0.15f)
-                            lens(refractionHeight = 18f * d, refractionAmount = 48f * d)
+                            colorControls(brightness = lgContactsConfig.brightness, saturation = lgContactsConfig.saturation)
+                            if (lgContactsConfig.blurRadiusDp > 0f) blur(lgContactsConfig.blurRadiusDp * d)
+                            lens(
+                                refractionHeight = lgContactsConfig.refractionHeightDp * d,
+                                refractionAmount = lgContactsConfig.refractionAmountDp * d,
+                                chromaticAberration = lgContactsConfig.chromaticAberration,
+                                depthEffect = lgContactsConfig.depthEffect
+                            )
                         },
                         highlight = { Highlight.Default }
                     )
@@ -250,8 +258,8 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         shape = { fabShape },
                         effects = {
                             val d = density
-                            colorControls(saturation = 1.3f)
-                            blur(25f * d)
+                            colorControls(saturation = blurContactsConfig.saturation)
+                            blur(blurContactsConfig.blurRadiusDp * d)
                         },
                         highlight = { Highlight.Default }
                     )

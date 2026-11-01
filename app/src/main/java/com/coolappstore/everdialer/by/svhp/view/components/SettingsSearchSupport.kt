@@ -103,6 +103,7 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Favorite
 import com.ramcosta.composedestinations.generated.destinations.AboutAppScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.BackupSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.LanguageSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AnswerStyleScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.AppSettingsScreenDestination
@@ -247,8 +248,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Notifications", "PC Connect, Call Recording, and 4G/5G Switcher notifications", "notifications", Icons.Outlined.Notifications, GsColorOrange) { it.navigate(NotificationsSettingsScreenDestination()) },
         GlobalSettingsSearchEntry("Show blocked numbers in call logs", "Display calls from blocked numbers in your call history", "show_blocked_calls_in_call_logs", Icons.Outlined.PersonOff, GsColorBluGrey),
         GlobalSettingsSearchEntry("Auto Check For Updates", "Automatically check for updates when the app opens", "auto_check_updates", Icons.Default.Autorenew, GsColorAmber) { it.navigate(UpdatesScreenDestination) },
-        GlobalSettingsSearchEntry("Create Backup", "Save app configuration, settings and calling cards", "create_backup", Icons.Default.Backup, GsColorGreen),
-        GlobalSettingsSearchEntry("Restore Backup", "Restore app configuration, settings and calling cards", "restore_backup", Icons.Default.Restore, GsColorBrown),
+        GlobalSettingsSearchEntry("Backup And Restore", "Save or restore app configuration, settings and calling cards", "backup_and_restore", Icons.Default.Backup, GsColorGreen) { it.navigate(BackupSettingsScreenDestination(initialTab = 0)) },
         GlobalSettingsSearchEntry("About Ever Dialer", "Version $APP_VERSION · Developer info", "about_app", Icons.Outlined.Info, GsColorBluGrey),
 
         // ── App Settings screen ──────────────────────────────────────────────────

@@ -261,6 +261,8 @@ val settingsRoutes = setOf(
     "contact_pfp_customization_screen",
     "liquid_glass_elements_screen",
     "blur_effects_elements_screen",
+    "backup_settings_screen",
+    "auto_backup_settings_screen",
     "app_icon_screen",
     "sms_app_icon_screen",
     "custom_font_screen",

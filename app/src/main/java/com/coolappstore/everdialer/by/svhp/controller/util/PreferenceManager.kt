@@ -652,6 +652,157 @@ class PreferenceManager(context: Context) {
     fun getAppLanguage(): String = getString(KEY_APP_LANGUAGE, LANGUAGE_SYSTEM) ?: LANGUAGE_SYSTEM
     fun setAppLanguage(lang: String) = setString(KEY_APP_LANGUAGE, lang)
 
+    fun getLiquidGlassDefaultConfig(elementKey: String): LiquidGlassElementConfig {
+        val defaultBlur = when (elementKey) {
+            KEY_LG_DROPDOWN_MENU -> 6f
+            KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 0f
+            else -> 2f
+        }
+        val defaultRefractionHeight = when (elementKey) {
+            KEY_LG_BOTTOM_NAV -> 23f
+            KEY_LG_DROPDOWN_MENU -> 40f
+            else -> 18f
+        }
+        val defaultRefractionAmount = when (elementKey) {
+            KEY_LG_BOTTOM_NAV -> 64f
+            KEY_LG_DROPDOWN_MENU -> 248f
+            KEY_LG_DIALPAD_CALL_BUTTON -> 52f
+            else -> 48f
+        }
+        val defaultSaturation = when (elementKey) {
+            KEY_LG_BOTTOM_NAV, KEY_LG_DROPDOWN_MENU -> 1.4f
+            KEY_LG_DIALPAD_CALL_BUTTON -> 1.3f
+            else -> 1.0f
+        }
+        val defaultBrightness = when (elementKey) {
+            KEY_LG_DROPDOWN_MENU -> -0.13f
+            KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> -0.15f
+            else -> 0f
+        }
+        return LiquidGlassElementConfig(
+            blurRadiusDp = defaultBlur,
+            refractionHeightDp = defaultRefractionHeight,
+            refractionAmountDp = defaultRefractionAmount,
+            chromaticAberration = false,
+            depthEffect = false,
+            saturation = defaultSaturation,
+            brightness = defaultBrightness
+        )
+    }
+
+    fun getLiquidGlassConfig(elementKey: String): LiquidGlassElementConfig {
+        val def = getLiquidGlassDefaultConfig(elementKey)
+        return LiquidGlassElementConfig(
+            blurRadiusDp = getFloat("${elementKey}_blur", def.blurRadiusDp),
+            refractionHeightDp = getFloat("${elementKey}_refraction_h", def.refractionHeightDp),
+            refractionAmountDp = getFloat("${elementKey}_refraction_a", def.refractionAmountDp),
+            chromaticAberration = getBoolean("${elementKey}_chromatic", def.chromaticAberration),
+            depthEffect = getBoolean("${elementKey}_depth", def.depthEffect),
+            saturation = getFloat("${elementKey}_saturation", def.saturation),
+            brightness = getFloat("${elementKey}_brightness", def.brightness)
+        )
+    }
+
+    fun setLiquidGlassConfig(elementKey: String, config: LiquidGlassElementConfig) {
+        setFloat("${elementKey}_blur", config.blurRadiusDp)
+        setFloat("${elementKey}_refraction_h", config.refractionHeightDp)
+        setFloat("${elementKey}_refraction_a", config.refractionAmountDp)
+        setBoolean("${elementKey}_chromatic", config.chromaticAberration)
+        setBoolean("${elementKey}_depth", config.depthEffect)
+        setFloat("${elementKey}_saturation", config.saturation)
+        setFloat("${elementKey}_brightness", config.brightness)
+    }
+
+    fun resetLiquidGlassConfig(elementKey: String) {
+        remove("${elementKey}_blur")
+        remove("${elementKey}_refraction_h")
+        remove("${elementKey}_refraction_a")
+        remove("${elementKey}_chromatic")
+        remove("${elementKey}_depth")
+        remove("${elementKey}_saturation")
+        remove("${elementKey}_brightness")
+    }
+
+    fun getBlurDefaultConfig(elementKey: String): BlurElementConfig {
+        return BlurElementConfig(
+            blurRadiusDp = 25f,
+            saturation = 1.3f
+        )
+    }
+
+    fun getBlurConfig(elementKey: String): BlurElementConfig {
+        val def = getBlurDefaultConfig(elementKey)
+        return BlurElementConfig(
+            blurRadiusDp = getFloat("${elementKey}_blur_radius", def.blurRadiusDp),
+            saturation = getFloat("${elementKey}_blur_sat", def.saturation)
+        )
+    }
+
+    fun setBlurConfig(elementKey: String, config: BlurElementConfig) {
+        setFloat("${elementKey}_blur_radius", config.blurRadiusDp)
+        setFloat("${elementKey}_blur_sat", config.saturation)
+    }
+
+    fun resetBlurConfig(elementKey: String) {
+        remove("${elementKey}_blur_radius")
+        remove("${elementKey}_blur_sat")
+    }
+
+    // ── Auto Backup Configuration Helpers ─────────────────────────────────
+    fun isAutoBackupEnabled(): Boolean = getBoolean(KEY_AUTO_BACKUP_ENABLED, false)
+    fun setAutoBackupEnabled(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ENABLED, enabled)
+
+    fun getAutoBackupFolderUri(): String? = getString(KEY_AUTO_BACKUP_FOLDER_URI, null)
+    fun setAutoBackupFolderUri(uri: String?) = setString(KEY_AUTO_BACKUP_FOLDER_URI, uri)
+
+    fun getAutoBackupIntervalValue(): Int = getInt(KEY_AUTO_BACKUP_INTERVAL_VALUE, 2)
+    fun setAutoBackupIntervalValue(value: Int) = setInt(KEY_AUTO_BACKUP_INTERVAL_VALUE, value)
+
+    fun getAutoBackupIntervalUnit(): String = getString(KEY_AUTO_BACKUP_INTERVAL_UNIT, "hours") ?: "hours"
+    fun setAutoBackupIntervalUnit(unit: String) = setString(KEY_AUTO_BACKUP_INTERVAL_UNIT, unit)
+
+    fun isAutoBackupItemSettings(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_SETTINGS, true)
+    fun setAutoBackupItemSettings(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_SETTINGS, enabled)
+
+    fun isAutoBackupItemLiquidGlass(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_LIQUID_GLASS, true)
+    fun setAutoBackupItemLiquidGlass(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_LIQUID_GLASS, enabled)
+
+    fun isAutoBackupItemCallingCards(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_CALLING_CARDS, true)
+    fun setAutoBackupItemCallingCards(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_CALLING_CARDS, enabled)
+
+    fun isAutoBackupItemNotes(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_NOTES, true)
+    fun setAutoBackupItemNotes(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_NOTES, enabled)
+
+    fun isAutoBackupItemGroups(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_GROUPS, false)
+    fun setAutoBackupItemGroups(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_GROUPS, enabled)
+
+    fun isAutoBackupItemRecordings(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_RECORDINGS, true)
+    fun setAutoBackupItemRecordings(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_RECORDINGS, enabled)
+
+    fun isAutoBackupItemContacts(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_CONTACTS, false)
+    fun setAutoBackupItemContacts(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_CONTACTS, enabled)
+
+    fun isAutoBackupItemCallLogs(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_CALL_LOGS, false)
+    fun setAutoBackupItemCallLogs(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_CALL_LOGS, enabled)
+
+    fun isAutoBackupItemSms(): Boolean = getBoolean(KEY_AUTO_BACKUP_ITEMS_SMS, false)
+    fun setAutoBackupItemSms(enabled: Boolean) = setBoolean(KEY_AUTO_BACKUP_ITEMS_SMS, enabled)
+
+    fun isAutoDeleteBackupsTimeEnabled(): Boolean = getBoolean(KEY_AUTO_DELETE_BACKUPS_TIME_ENABLED, false)
+    fun setAutoDeleteBackupsTimeEnabled(enabled: Boolean) = setBoolean(KEY_AUTO_DELETE_BACKUPS_TIME_ENABLED, enabled)
+
+    fun getAutoDeleteBackupsTimeValue(): Int = getInt(KEY_AUTO_DELETE_BACKUPS_TIME_VALUE, 7)
+    fun setAutoDeleteBackupsTimeValue(value: Int) = setInt(KEY_AUTO_DELETE_BACKUPS_TIME_VALUE, value)
+
+    fun getAutoDeleteBackupsTimeUnit(): String = getString(KEY_AUTO_DELETE_BACKUPS_TIME_UNIT, "days") ?: "days"
+    fun setAutoDeleteBackupsTimeUnit(unit: String) = setString(KEY_AUTO_DELETE_BACKUPS_TIME_UNIT, unit)
+
+    fun isAutoDeleteBackupsCountEnabled(): Boolean = getBoolean(KEY_AUTO_DELETE_BACKUPS_COUNT_ENABLED, false)
+    fun setAutoDeleteBackupsCountEnabled(enabled: Boolean) = setBoolean(KEY_AUTO_DELETE_BACKUPS_COUNT_ENABLED, enabled)
+
+    fun getAutoDeleteBackupsCountValue(): Int = getInt(KEY_AUTO_DELETE_BACKUPS_COUNT_VALUE, 5)
+    fun setAutoDeleteBackupsCountValue(value: Int) = setInt(KEY_AUTO_DELETE_BACKUPS_COUNT_VALUE, value)
+
     companion object {
         const val KEY_APP_LANGUAGE = "app_language"
         const val LANGUAGE_SYSTEM = "system"
@@ -935,6 +1086,28 @@ class PreferenceManager(context: Context) {
         const val KEY_BLUR_DIALPAD_CALL_BUTTON = "blur_dialpad_call_button"
         const val KEY_BLUR_CONTACTS_FAB        = "blur_contacts_fab"
         const val KEY_BLUR_RECENTS_FAB         = "blur_recents_fab"
+
+        // ── Auto Backup Configuration ───────────────────────────────────────
+        const val KEY_AUTO_BACKUP_ENABLED              = "auto_backup_enabled"
+        const val KEY_AUTO_BACKUP_FOLDER_URI           = "auto_backup_folder_uri"
+        const val KEY_AUTO_BACKUP_INTERVAL_VALUE       = "auto_backup_interval_value" // default: 2
+        const val KEY_AUTO_BACKUP_INTERVAL_UNIT        = "auto_backup_interval_unit"  // default: "hours"
+        const val KEY_AUTO_BACKUP_ITEMS_SETTINGS       = "auto_backup_items_settings"
+        const val KEY_AUTO_BACKUP_ITEMS_LIQUID_GLASS   = "auto_backup_items_liquid_glass"
+        const val KEY_AUTO_BACKUP_ITEMS_CALLING_CARDS  = "auto_backup_items_calling_cards"
+        const val KEY_AUTO_BACKUP_ITEMS_NOTES          = "auto_backup_items_notes"
+        const val KEY_AUTO_BACKUP_ITEMS_GROUPS         = "auto_backup_items_groups"
+        const val KEY_AUTO_BACKUP_ITEMS_RECORDINGS     = "auto_backup_items_recordings"
+        const val KEY_AUTO_BACKUP_ITEMS_CONTACTS       = "auto_backup_items_contacts"
+        const val KEY_AUTO_BACKUP_ITEMS_CALL_LOGS      = "auto_backup_items_call_logs"
+        const val KEY_AUTO_BACKUP_ITEMS_SMS            = "auto_backup_items_sms"
+
+        // Auto Delete Backups Configuration
+        const val KEY_AUTO_DELETE_BACKUPS_TIME_ENABLED = "auto_delete_backups_time_enabled"
+        const val KEY_AUTO_DELETE_BACKUPS_TIME_VALUE   = "auto_delete_backups_time_value" // default: 7
+        const val KEY_AUTO_DELETE_BACKUPS_TIME_UNIT    = "auto_delete_backups_time_unit"  // default: "days"
+        const val KEY_AUTO_DELETE_BACKUPS_COUNT_ENABLED = "auto_delete_backups_count_enabled"
+        const val KEY_AUTO_DELETE_BACKUPS_COUNT_VALUE   = "auto_delete_backups_count_value" // default: 5
         const val KEY_DEFAULT_TAB              = "default_tab"
         const val KEY_AUTO_SPEAKER             = "auto_speaker"
         const val KEY_FAVORITES_ORDER          = "favorites_order"
@@ -1230,5 +1403,17 @@ data class CallCategoryItem(
     val contactPhones: List<String> = emptyList()
 )
 
+data class LiquidGlassElementConfig(
+    val blurRadiusDp: Float,
+    val refractionHeightDp: Float,
+    val refractionAmountDp: Float,
+    val chromaticAberration: Boolean,
+    val depthEffect: Boolean,
+    val saturation: Float,
+    val brightness: Float
+)
 
-
+data class BlurElementConfig(
+    val blurRadiusDp: Float,
+    val saturation: Float
+)

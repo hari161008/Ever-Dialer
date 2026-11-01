@@ -364,6 +364,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             val lgRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_LG_RECENTS_FAB, true) }
             val blurEffects = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_EFFECTS, false) }
             val blurRecentsFab = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_BLUR_RECENTS_FAB, true) }
+            val lgRecentsConfig = remember(settingsVer) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_RECENTS_FAB) }
+            val blurRecentsConfig = remember(settingsVer) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_RECENTS_FAB) }
             val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
             val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
             val isDynamic = remember(settingsVer) { prefs.getBoolean(com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager.KEY_DYNAMIC_COLORS, true) }
@@ -396,8 +398,14 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         shape = { fabShape },
                         effects = {
                             val d = density
-                            colorControls(brightness = -0.15f)
-                            lens(refractionHeight = 18f * d, refractionAmount = 48f * d)
+                            colorControls(brightness = lgRecentsConfig.brightness, saturation = lgRecentsConfig.saturation)
+                            if (lgRecentsConfig.blurRadiusDp > 0f) blur(lgRecentsConfig.blurRadiusDp * d)
+                            lens(
+                                refractionHeight = lgRecentsConfig.refractionHeightDp * d,
+                                refractionAmount = lgRecentsConfig.refractionAmountDp * d,
+                                chromaticAberration = lgRecentsConfig.chromaticAberration,
+                                depthEffect = lgRecentsConfig.depthEffect
+                            )
                         },
                         highlight = { Highlight.Default }
                     )
@@ -422,8 +430,8 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         shape = { fabShape },
                         effects = {
                             val d = density
-                            colorControls(saturation = 1.3f)
-                            blur(25f * d)
+                            colorControls(saturation = blurRecentsConfig.saturation)
+                            blur(blurRecentsConfig.blurRadiusDp * d)
                         },
                         highlight = { Highlight.Default }
                     )

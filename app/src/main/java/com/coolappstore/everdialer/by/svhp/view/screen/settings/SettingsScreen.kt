@@ -1415,18 +1415,16 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         SectionLabel("Backup & Restore")
                         RivoExpressiveCard {
                             RivoListItem(
-                                headline   = "Create Backup",
-                                supporting = "Save app configuration, settings and calling cards",
+                                headline   = "Backup And Restore",
+                                supporting = "Save or restore app configuration, liquid glass, settings and calling cards",
                                 leadingIcon = Icons.Default.Backup,
                                 iconContainerColor = ColorGreen,
                                 trailingIcon = Icons.Default.ChevronRight,
-                                modifier = Modifier.settingsSearchHighlight("create_backup", highlightedSettingKey) { highlightedSettingKey = null },
+                                modifier = Modifier.settingsSearchHighlight("backup_and_restore", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = {
-                                    showBackupDialog = true
+                                    navigator.navigate(BackupSettingsScreenDestination(initialTab = 0))
                                 }
                             )
-                            CardDivider()
-                            RivoListItem(headline = "Restore Backup", supporting = "Restore app configuration, settings and calling cards", leadingIcon = Icons.Default.Restore, iconContainerColor = ColorBrown, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("restore_backup", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { restoreLauncher.launch("*/*") })
                         }
                     }
                 }
