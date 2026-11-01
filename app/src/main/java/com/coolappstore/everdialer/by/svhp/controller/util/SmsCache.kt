@@ -2,10 +2,12 @@ package com.coolappstore.everdialer.by.svhp.controller.util
 
 import android.content.Context
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsConversation
+import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Disk- and memory-backed cache for resolved SMS conversations, mirroring [CallLogsCache]
@@ -27,11 +29,49 @@ object SmsCache {
     @Volatile
     private var inMemoryCache: List<SmsConversation>? = null
 
+    // In-memory cache for thread messages: threadId -> messages, and normalizedAddress -> threadId
+    private val threadMessagesCache = ConcurrentHashMap<Long, List<SmsMessage>>()
+    private val addressThreadMap = ConcurrentHashMap<String, Long>()
+
     fun getInMemoryCache(): List<SmsConversation>? = inMemoryCache
 
     fun setInMemoryCache(conversations: List<SmsConversation>) {
         inMemoryCache = conversations
     }
+
+    fun getThreadMessages(threadId: Long): List<SmsMessage>? =
+        if (threadId > 0) threadMessagesCache[threadId] else null
+
+    fun getThreadMessagesByAddress(address: String): List<SmsMessage>? {
+        val normalized = normalizeAddress(address)
+        if (normalized.isBlank()) return null
+        val threadId = addressThreadMap[normalized]
+        return if (threadId != null && threadId > 0) threadMessagesCache[threadId] else null
+    }
+
+    fun setThreadMessages(threadId: Long, messages: List<SmsMessage>, address: String? = null) {
+        if (threadId > 0) {
+            threadMessagesCache[threadId] = messages
+            if (!address.isNullOrBlank()) {
+                val normalized = normalizeAddress(address)
+                if (normalized.isNotBlank()) {
+                    addressThreadMap[normalized] = threadId
+                }
+            }
+        }
+    }
+
+    fun removeThreadMessages(threadId: Long) {
+        threadMessagesCache.remove(threadId)
+    }
+
+    fun clearAllThreadMessages() {
+        threadMessagesCache.clear()
+        addressThreadMap.clear()
+    }
+
+    private fun normalizeAddress(address: String): String =
+        address.replace("[^0-9+]".toRegex(), "")
 
     private fun cacheFile(context: Context): File =
         File(context.filesDir, CACHE_FILE_NAME)
@@ -71,6 +111,7 @@ object SmsCache {
 
     fun clear(context: Context) {
         inMemoryCache = null
+        clearAllThreadMessages()
         try {
             cacheFile(context).delete()
         } catch (_: Exception) {}

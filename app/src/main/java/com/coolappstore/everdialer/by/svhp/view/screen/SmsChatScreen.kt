@@ -109,7 +109,10 @@ fun SmsChatScreen(
     val allContacts by contactsVM.allContacts.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    DisposableEffect(Unit) {
+    val isThreadLoading by smsVM.isThreadLoading.collectAsState()
+
+    DisposableEffect(threadId, address) {
+        smsVM.prepareThread(threadId, address)
         onDispose {
             smsVM.clearActiveThread()
         }
@@ -310,7 +313,7 @@ fun SmsChatScreen(
                 }
             }
             if (effectiveThreadId > 0) {
-                smsVM.loadThreadMessages(effectiveThreadId)
+                smsVM.loadThreadMessages(effectiveThreadId, address)
             }
             delay(1500)
         }
@@ -322,11 +325,11 @@ fun SmsChatScreen(
                 val resolved = smsVM.getOrCreateThreadId(address)
                 if (resolved > 0) {
                     effectiveThreadId = resolved
-                    smsVM.loadThreadMessages(resolved)
+                    smsVM.loadThreadMessages(resolved, address)
                 }
             } else if (effectiveThreadId > 0) {
                 if (eventThreadId == null || eventThreadId == effectiveThreadId) {
-                    smsVM.loadThreadMessages(effectiveThreadId)
+                    smsVM.loadThreadMessages(effectiveThreadId, address)
                 }
             }
         }
@@ -955,11 +958,19 @@ fun SmsChatScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No messages in this conversation",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (isThreadLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Text(
+                                text = "No messages in this conversation",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(

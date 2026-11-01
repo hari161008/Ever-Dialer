@@ -74,7 +74,6 @@ import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ISmsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
-import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
@@ -97,7 +96,6 @@ class FloatingSmsService : Service() {
     private lateinit var wm: WindowManager
     private val activeBubbles = mutableListOf<BubbleHolder>()
     private var chatView: View? = null
-    private var currentOpenData: FloatingBubbleData? = null
     private var chatOverlayBackHandler: (() -> Unit)? = null
     private val lifecycleOwner = ServiceLifecycleOwner()
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -162,6 +160,39 @@ class FloatingSmsService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, FloatingSmsService::class.java))
+        }
+
+        @Volatile
+        var currentOpenData: FloatingBubbleData? = null
+            internal set
+
+        fun isChatOpenFor(incomingAddress: String, incomingThreadId: Long): Boolean {
+            val current = currentOpenData ?: return false
+            if (incomingThreadId > 0 && current.threadId > 0 && current.threadId == incomingThreadId) {
+                return true
+            }
+            val curAddr = current.address.trim()
+            val incAddr = incomingAddress.trim()
+            if (curAddr.isNotBlank() && incAddr.isNotBlank()) {
+                if (curAddr.equals(incAddr, ignoreCase = true)) {
+                    return true
+                }
+                try {
+                    if (android.telephony.PhoneNumberUtils.compare(incAddr, curAddr)) {
+                        return true
+                    }
+                } catch (_: Throwable) {}
+                val cleanInc = incAddr.filter { it.isDigit() }
+                val cleanCur = curAddr.filter { it.isDigit() }
+                if (cleanInc.isNotEmpty() && cleanCur.isNotEmpty()) {
+                    if (cleanInc == cleanCur ||
+                        (cleanInc.length >= 7 && cleanCur.length >= 7 && cleanInc.takeLast(7) == cleanCur.takeLast(7))
+                    ) {
+                        return true
+                    }
+                }
+            }
+            return false
         }
     }
 
@@ -634,6 +665,7 @@ class FloatingSmsService : Service() {
             chatView?.let { wm.removeViewImmediate(it) }
         } catch (_: Exception) {}
         chatView = null
+        currentOpenData = null
         for (b in activeBubbles) {
             try { wm.removeViewImmediate(b.view) } catch (_: Exception) {}
         }
@@ -773,10 +805,16 @@ private fun FloatingChatOverlay(
         }
     }
 
-    LaunchedEffect(Unit) {
+    var activeMenuMessage by remember { mutableStateOf<SmsMessage?>(null) }
+
+    LaunchedEffect(activeMenuMessage) {
         isVisible = true
         registerBackHandler?.invoke {
-            animateAndClose(onHide)
+            if (activeMenuMessage != null) {
+                activeMenuMessage = null
+            } else {
+                animateAndClose(onHide)
+            }
         }
     }
 
@@ -866,6 +904,7 @@ private fun FloatingChatOverlay(
             }
             if (resolved > 0) {
                 effectiveThreadId = resolved
+                FloatingSmsService.currentOpenData = FloatingSmsService.currentOpenData?.copy(threadId = resolved)
             }
         }
         while (isActive) {
@@ -1129,7 +1168,6 @@ private fun FloatingChatOverlay(
                                 val bubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                 val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                 val linkColor = MaterialTheme.colorScheme.primary
-                                var showMessageMenu by remember { mutableStateOf(false) }
                                 val isPinned = remember(msg.id) { prefs?.isSmsMessagePinned(msg.id) ?: false }
                                 val isStarred = remember(msg.id) { prefs?.isSmsMessageStarred(msg.id) ?: false }
 
@@ -1156,7 +1194,7 @@ private fun FloatingChatOverlay(
                                                     }
                                                 },
                                                 onLongClick = {
-                                                    showMessageMenu = true
+                                                    activeMenuMessage = msg
                                                 }
                                             )
                                     ) {
@@ -1215,83 +1253,6 @@ private fun FloatingChatOverlay(
                                                     color = textColor.copy(alpha = 0.65f)
                                                 )
                                             }
-                                        }
-
-                                        RivoDropdownMenu(
-                                            expanded = showMessageMenu,
-                                            onDismissRequest = { showMessageMenu = false }
-                                        ) {
-                                            RivoDropdownMenuItem(
-                                                text = if (isPinned) "Unpin message" else "Pin message",
-                                                icon = Icons.Default.PushPin,
-                                                iconTint = Color(0xFFFF9800),
-                                                onClick = {
-                                                    showMessageMenu = false
-                                                    prefs?.setSmsMessagePinned(msg.id, !isPinned)
-                                                }
-                                            )
-                                            RivoDropdownMenuItem(
-                                                text = if (isStarred) "Unstar message" else "Star message",
-                                                icon = if (isStarred) Icons.Default.StarOutline else Icons.Default.Star,
-                                                iconTint = Color(0xFFFFB300),
-                                                onClick = {
-                                                    showMessageMenu = false
-                                                    prefs?.setSmsMessageStarred(msg.id, !isStarred)
-                                                }
-                                            )
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                            )
-                                            RivoDropdownMenuItem(
-                                                text = "Copy text",
-                                                icon = Icons.Default.ContentCopy,
-                                                iconTint = Color(0xFF009688),
-                                                onClick = {
-                                                    showMessageMenu = false
-                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                    clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
-                                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                                                }
-                                            )
-                                            RivoDropdownMenuItem(
-                                                text = "Share",
-                                                icon = Icons.Default.Share,
-                                                iconTint = Color(0xFF2196F3),
-                                                onClick = {
-                                                    showMessageMenu = false
-                                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                                        putExtra(Intent.EXTRA_TEXT, msg.body)
-                                                        type = "text/plain"
-                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    }
-                                                    context.startActivity(Intent.createChooser(sendIntent, "Share Message").apply {
-                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    })
-                                                }
-                                            )
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                            )
-                                            RivoDropdownMenuItem(
-                                                text = "Delete",
-                                                icon = Icons.Outlined.Delete,
-                                                iconTint = MaterialTheme.colorScheme.error,
-                                                isDestructive = true,
-                                                onClick = {
-                                                    showMessageMenu = false
-                                                    coroutineScope.launch(Dispatchers.IO) {
-                                                        smsRepo?.deleteMessage(msg.id, msg.isMms)
-                                                        if (effectiveThreadId > 0) {
-                                                            val updated = smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
-                                                            withContext(Dispatchers.Main) {
-                                                                messages = updated
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            )
                                         }
                                     }
                                 }
@@ -1384,6 +1345,120 @@ private fun FloatingChatOverlay(
                                 tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.size(20.dp)
                             )
+                        }
+                    }
+                }
+            }
+
+            // Message Actions In-Layout Modal Overlay (Replaces Dialog/Popup to avoid BadTokenException in Service overlay)
+            AnimatedVisibility(
+                visible = activeMenuMessage != null,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(140))
+            ) {
+                val menuMsg = activeMenuMessage
+                if (menuMsg != null) {
+                    val isPinned = remember(menuMsg.id) { prefs?.isSmsMessagePinned(menuMsg.id) ?: false }
+                    val isStarred = remember(menuMsg.id) { prefs?.isSmsMessageStarred(menuMsg.id) ?: false }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { activeMenuMessage = null }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shadowElevation = 12.dp,
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {} // block clicks from dismissing
+                                )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp)
+                            ) {
+                                RivoDropdownMenuItem(
+                                    text = if (isPinned) "Unpin message" else "Pin message",
+                                    icon = Icons.Default.PushPin,
+                                    iconTint = Color(0xFFFF9800),
+                                    onClick = {
+                                        activeMenuMessage = null
+                                        prefs?.setSmsMessagePinned(menuMsg.id, !isPinned)
+                                    }
+                                )
+                                RivoDropdownMenuItem(
+                                    text = if (isStarred) "Unstar message" else "Star message",
+                                    icon = if (isStarred) Icons.Default.StarOutline else Icons.Default.Star,
+                                    iconTint = Color(0xFFFFB300),
+                                    onClick = {
+                                        activeMenuMessage = null
+                                        prefs?.setSmsMessageStarred(menuMsg.id, !isStarred)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoDropdownMenuItem(
+                                    text = "Copy text",
+                                    icon = Icons.Default.ContentCopy,
+                                    iconTint = Color(0xFF009688),
+                                    onClick = {
+                                        activeMenuMessage = null
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", menuMsg.body))
+                                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                                RivoDropdownMenuItem(
+                                    text = "Share",
+                                    icon = Icons.Default.Share,
+                                    iconTint = Color(0xFF2196F3),
+                                    onClick = {
+                                        activeMenuMessage = null
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            putExtra(Intent.EXTRA_TEXT, menuMsg.body)
+                                            type = "text/plain"
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Share Message").apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        })
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoDropdownMenuItem(
+                                    text = "Delete",
+                                    icon = Icons.Outlined.Delete,
+                                    iconTint = MaterialTheme.colorScheme.error,
+                                    isDestructive = true,
+                                    onClick = {
+                                        activeMenuMessage = null
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            smsRepo?.deleteMessage(menuMsg.id, menuMsg.isMms)
+                                            if (effectiveThreadId > 0) {
+                                                val updated = smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
+                                                withContext(Dispatchers.Main) {
+                                                    messages = updated
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
