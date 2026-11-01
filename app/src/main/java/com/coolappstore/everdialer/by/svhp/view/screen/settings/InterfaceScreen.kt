@@ -5,6 +5,7 @@ import com.ramcosta.composedestinations.generated.destinations.CallLogsSettingsS
 import com.ramcosta.composedestinations.generated.destinations.DialpadSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactInfoSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavouritesSettingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NavigationSettingsScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.theme.AppFontHelper
 import android.app.Activity
@@ -1767,6 +1768,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier.settingsSearchHighlight("favourites_settings_link", highlightedKey) { highlightedKey = null },
                                     onClick = { navigator.navigate(FavouritesSettingsScreenDestination()) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Notes",
+                                    supporting = "Customize swipe actions and settings for notes",
+                                    leadingIcon = Icons.Outlined.Description,
+                                    iconContainerColor = ColorOrange,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("notes_settings_link", highlightedKey) { highlightedKey = null },
+                                    onClick = { navigator.navigate(NotesSettingsScreenDestination()) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

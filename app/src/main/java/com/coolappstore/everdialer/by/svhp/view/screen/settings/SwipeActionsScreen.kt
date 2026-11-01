@@ -119,9 +119,138 @@ private val SWIPE_SECTIONS = listOf(
     SwipeSectionInfo("sms", "SMS / Messages", Icons.AutoMirrored.Filled.Message, Color(0xFF673AB7), SMS_SWIPE_OPTIONS)
 )
 
-private fun getActionLabel(section: SwipeSectionInfo, key: String): String {
+fun getActionLabel(section: SwipeSectionInfo, key: String): String {
     if (key == "none") return "None"
     return section.options.firstOrNull { it.key == key }?.label ?: "None"
+}
+
+@Composable
+fun SwipeActionConfigSection(
+    sectionKey: String,
+    title: String? = null,
+    modifier: Modifier = Modifier,
+    onShowFavoritesInListClick: (() -> Unit)? = null
+) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val colorScheme = MaterialTheme.colorScheme
+
+    val section = remember(sectionKey, colorScheme) {
+        when (sectionKey) {
+            "favourites" -> SwipeSectionInfo("favourites", "Favourites", Icons.Default.Favorite, Color(0xFFE91E63), FAVOURITES_SWIPE_OPTIONS)
+            "call_logs" -> SwipeSectionInfo("call_logs", "Call Logs", Icons.Outlined.History, colorScheme.primary, CALL_LOGS_SWIPE_OPTIONS)
+            "contacts" -> SwipeSectionInfo("contacts", "Contacts", Icons.Outlined.Person, colorScheme.secondary, CONTACTS_SWIPE_OPTIONS)
+            "recordings" -> SwipeSectionInfo("recordings", "Call Recordings", Icons.Outlined.Mic, colorScheme.tertiary, RECORDINGS_SWIPE_OPTIONS)
+            "notes" -> SwipeSectionInfo("notes", "Notes", Icons.Outlined.Description, colorScheme.primary, NOTES_SWIPE_OPTIONS)
+            "sms" -> SwipeSectionInfo("sms", "SMS / Messages", Icons.AutoMirrored.Filled.Message, colorScheme.secondary, SMS_SWIPE_OPTIONS)
+            else -> null
+        }
+    } ?: return
+
+    val leftKey = remember(settingsVer, section.key) { prefs.getSwipeAction(section.key, "left") }
+    val rightKey = remember(settingsVer, section.key) { prefs.getSwipeAction(section.key, "right") }
+    val leftLabel = getActionLabel(section, leftKey)
+    val rightLabel = getActionLabel(section, rightKey)
+
+    val isFavoritesSection = section.key == "favourites"
+    val favoritesInList = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)
+    }
+
+    var activeDialogDirection by remember { mutableStateOf<String?>(null) }
+
+    Column(modifier = modifier) {
+        Text(
+            text = title ?: "Swipe Actions",
+            style = MaterialTheme.typography.labelLarge,
+            color = rivoHeadingColor(),
+            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+        )
+        RivoExpressiveCard {
+            if (isFavoritesSection && !favoritesInList) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "This feature can only be used when the favourites section is in list style.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        if (onShowFavoritesInListClick != null) {
+                            FilledTonalButton(
+                                onClick = onShowFavoritesInListClick,
+                                modifier = Modifier.align(Alignment.End),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("Show Favourites in list", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+                CardDivider()
+            }
+
+            // Left Action Row
+            RivoListItem(
+                headline = "Left action",
+                supporting = leftLabel,
+                leadingIcon = Icons.AutoMirrored.Outlined.ArrowBack,
+                iconContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                trailingIcon = Icons.Default.ChevronRight,
+                onClick = {
+                    activeDialogDirection = "left"
+                }
+            )
+
+            CardDivider()
+
+            // Right Action Row
+            RivoListItem(
+                headline = "Right action",
+                supporting = rightLabel,
+                leadingIcon = Icons.AutoMirrored.Outlined.ArrowForward,
+                iconContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                trailingIcon = Icons.Default.ChevronRight,
+                onClick = {
+                    activeDialogDirection = "right"
+                }
+            )
+        }
+    }
+
+    if (activeDialogDirection != null) {
+        SwipeActionFloatingDialog(
+            section = section,
+            initialDirection = activeDialogDirection,
+            onDismiss = {
+                activeDialogDirection = null
+            },
+            onSaveAction = { direction, actionKey ->
+                prefs.setSwipeAction(section.key, direction, actionKey)
+            },
+            currentLeftKey = prefs.getSwipeAction(section.key, "left"),
+            currentRightKey = prefs.getSwipeAction(section.key, "right")
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,8 +259,6 @@ private fun getActionLabel(section: SwipeSectionInfo, key: String): String {
 fun SwipeActionsScreen(
     navigator: DestinationsNavigator
 ) {
-    val prefs = koinInject<PreferenceManager>()
-    val settingsVer by prefs.settingsChanged.collectAsState()
     val scrollState = rememberScrollState()
 
     val colorScheme = MaterialTheme.colorScheme
@@ -145,9 +272,6 @@ fun SwipeActionsScreen(
             SwipeSectionInfo("sms", "SMS / Messages", Icons.AutoMirrored.Filled.Message, colorScheme.secondary, SMS_SWIPE_OPTIONS)
         )
     }
-
-    var activeDialogSection by remember { mutableStateOf<SwipeSectionInfo?>(null) }
-    var activeDialogDirection by remember { mutableStateOf<String?>(null) } // "left" or "right" or null
 
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
@@ -169,166 +293,18 @@ fun SwipeActionsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             swipeSections.forEachIndexed { index, section ->
-                val leftKey = remember(settingsVer, section.key) { prefs.getSwipeAction(section.key, "left") }
-                val rightKey = remember(settingsVer, section.key) { prefs.getSwipeAction(section.key, "right") }
-                val leftLabel = getActionLabel(section, leftKey)
-                val rightLabel = getActionLabel(section, rightKey)
-
-                val isFavoritesSection = section.key == "favourites"
-                val favoritesInList = remember(settingsVer) {
-                    prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)
-                }
-
                 RivoAnimatedSection(delayMs = (index * 25).toLong()) {
-                    Column {
-                        Text(
-                            text = section.title,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-                        )
-                        RivoExpressiveCard {
-                            if (isFavoritesSection && !favoritesInList) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Info,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text(
-                                                text = "This feature can only be used when the favourites section is in list style.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        }
-                                        FilledTonalButton(
-                                            onClick = {
-                                                com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordNormalized(0.7f, 0.4f)
-                                                navigator.navigate(FavouritesSettingsScreenDestination())
-                                            },
-                                            modifier = Modifier.align(Alignment.End),
-                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                        ) {
-                                            Text("Show Favourites in list", style = MaterialTheme.typography.labelMedium)
-                                        }
-                                    }
-                                }
-                                CardDivider()
-                            }
-
-                            // Section header row - tapping it opens floating popup
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        activeDialogSection = section
-                                        activeDialogDirection = null
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = section.iconColor.copy(alpha = 0.15f),
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            section.icon,
-                                            contentDescription = null,
-                                            tint = section.iconColor,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = section.title,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = "Left: $leftLabel • Right: $rightLabel",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Icon(
-                                    Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                            }
-
-                            CardDivider()
-
-                            // Left Action Row
-                            RivoListItem(
-                                headline = "Left action",
-                                supporting = leftLabel,
-                                leadingIcon = Icons.AutoMirrored.Outlined.ArrowBack,
-                                iconContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    activeDialogSection = section
-                                    activeDialogDirection = "left"
-                                }
-                            )
-
-                            CardDivider()
-
-                            // Right Action Row
-                            RivoListItem(
-                                headline = "Right action",
-                                supporting = rightLabel,
-                                leadingIcon = Icons.AutoMirrored.Outlined.ArrowForward,
-                                iconContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    activeDialogSection = section
-                                    activeDialogDirection = "right"
-                                }
-                            )
+                    SwipeActionConfigSection(
+                        sectionKey = section.key,
+                        title = section.title,
+                        onShowFavoritesInListClick = {
+                            com.coolappstore.everdialer.by.svhp.view.theme.SettingsClickTracker.recordNormalized(0.7f, 0.4f)
+                            navigator.navigate(FavouritesSettingsScreenDestination())
                         }
-                    }
+                    )
                 }
             }
         }
-    }
-
-    // Floating Popup
-    if (activeDialogSection != null) {
-        val currentSection = activeDialogSection!!
-        SwipeActionFloatingDialog(
-            section = currentSection,
-            initialDirection = activeDialogDirection,
-            onDismiss = {
-                activeDialogSection = null
-                activeDialogDirection = null
-            },
-            onSaveAction = { direction, actionKey ->
-                prefs.setSwipeAction(currentSection.key, direction, actionKey)
-            },
-            currentLeftKey = prefs.getSwipeAction(currentSection.key, "left"),
-            currentRightKey = prefs.getSwipeAction(currentSection.key, "right")
-        )
     }
 }
 

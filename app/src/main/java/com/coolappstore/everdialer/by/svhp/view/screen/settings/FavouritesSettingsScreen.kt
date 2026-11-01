@@ -81,6 +81,10 @@ fun FavouritesSettingsScreen(
                     }
                 }
             }
+
+            RivoAnimatedSection(delayMs = 20L) {
+                SwipeActionConfigSection(sectionKey = "favourites")
+            }
         }
     }
 }

@@ -113,6 +113,9 @@ fun PlaybackScreen(
             ) {
                 Row(modifier = Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(accentColor.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                        val isContact = !recording.contactName.isNullOrBlank() &&
+                            recording.contactName != recording.phoneNumber &&
+                            !recording.contactName.equals("Unknown", ignoreCase = true)
                         if (photoBitmap != null) {
                             Image(
                                 bitmap = photoBitmap!!,
@@ -120,12 +123,19 @@ fun PlaybackScreen(
                                 modifier = Modifier.fillMaxSize().clip(CircleShape),
                                 contentScale = ContentScale.Crop
                             )
-                        } else {
+                        } else if (isContact) {
                             Text(
                                 text = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = accentColor
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     }

@@ -325,6 +325,10 @@ fun ContactInfoSettingsScreen(
                     }
                 }
             }
+
+            RivoAnimatedSection(delayMs = 40L) {
+                SwipeActionConfigSection(sectionKey = "contacts")
+            }
         }
     }
 }

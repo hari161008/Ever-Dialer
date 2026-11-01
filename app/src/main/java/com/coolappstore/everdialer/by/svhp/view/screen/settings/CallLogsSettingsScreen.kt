@@ -443,6 +443,10 @@ fun CallLogsSettingsScreen(
                 }
             }
 
+            RivoAnimatedSection(delayMs = 35L) {
+                SwipeActionConfigSection(sectionKey = "call_logs")
+            }
+
             RivoAnimatedSection(delayMs = 40L) {
                 Column {
                     Text(

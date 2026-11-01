@@ -768,12 +768,21 @@ private fun RecordingRow(
                             .background(accentColor.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
+                        val isContact = !item.contactName.isNullOrBlank() &&
+                            item.contactName != item.phoneNumber &&
+                            !item.contactName.equals("Unknown", ignoreCase = true)
                         if (photoBitmap != null) {
                             Image(bitmap = photoBitmap!!, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        } else {
-                            val initial = item.contactName?.firstOrNull()?.uppercaseChar()?.toString()
-                                ?: item.phoneNumber.firstOrNull { it.isDigit() }?.toString() ?: "?"
+                        } else if (isContact) {
+                            val initial = item.contactName?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
                             Text(initial, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accentColor)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
 

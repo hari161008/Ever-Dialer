@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -273,8 +274,47 @@ private fun AppearanceSection(preferences: AppPreferences, updateTrigger: Int, a
 
 // ── Appearance (Call Recording menu placement in Ever Dialer's Settings) ──────────
 
+private data class RecordingSwipeOption(
+    val key: String,
+    val label: String,
+    val icon: ImageVector
+)
+
+private val RECORDING_SWIPE_OPTIONS = listOf(
+    RecordingSwipeOption("none", "None", Icons.Outlined.Block),
+    RecordingSwipeOption("select", "Select", Icons.Default.CheckBox),
+    RecordingSwipeOption("share", "Share", Icons.Default.Share),
+    RecordingSwipeOption("view_info", "View Info", Icons.Default.Info),
+    RecordingSwipeOption("toggle_favourite", "Add/Remove Favourite", Icons.Default.Favorite),
+    RecordingSwipeOption("delete", "Delete", Icons.Default.Delete)
+)
+
 @Composable
 private fun RecordingMenuAppearanceSection(preferences: AppPreferences, updateTrigger: Int, actions: SettingsActions) {
+    val context = LocalContext.current
+    val sharedPrefs = remember(context) { context.getSharedPreferences("rivo_prefs", android.content.Context.MODE_PRIVATE) }
+    var leftActionKey by remember {
+        mutableStateOf(sharedPrefs.getString("swipe_action_recordings_left", "none") ?: "none")
+    }
+    var rightActionKey by remember {
+        mutableStateOf(sharedPrefs.getString("swipe_action_recordings_right", "none") ?: "none")
+    }
+    var pickerDirection by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(sharedPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "swipe_action_recordings_left") {
+                leftActionKey = sp.getString("swipe_action_recordings_left", "none") ?: "none"
+            } else if (key == "swipe_action_recordings_right") {
+                rightActionKey = sp.getString("swipe_action_recordings_right", "none") ?: "none"
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     val showBelowUpdates = remember(updateTrigger) { preferences.isShowRecordingMenuBelowUpdatesEnabled() }
     SettingsSection(title = "Appearance", icon = Icons.Outlined.Palette) {
         ToggleListItem(
@@ -284,6 +324,100 @@ private fun RecordingMenuAppearanceSection(preferences: AppPreferences, updateTr
                 "Updates, under its own \"Call Recording\" heading.",
             checked = showBelowUpdates,
             onCheckedChange = { actions.setShowRecordingMenuBelowUpdatesEnabled(it) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        SectionListItem(
+            icon = Icons.Outlined.SwipeLeft,
+            headline = "Left Swipe Action",
+            supporting = RECORDING_SWIPE_OPTIONS.firstOrNull { it.key == leftActionKey }?.label ?: "None",
+            supportingColor = MaterialTheme.colorScheme.primary,
+            onClick = { pickerDirection = "left" }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        SectionListItem(
+            icon = Icons.Outlined.SwipeRight,
+            headline = "Right Swipe Action",
+            supporting = RECORDING_SWIPE_OPTIONS.firstOrNull { it.key == rightActionKey }?.label ?: "None",
+            supportingColor = MaterialTheme.colorScheme.primary,
+            onClick = { pickerDirection = "right" }
+        )
+    }
+
+    if (pickerDirection != null) {
+        val direction = pickerDirection!!
+        val isLeft = direction == "left"
+        val currentKey = if (isLeft) leftActionKey else rightActionKey
+        AlertDialog(
+            onDismissRequest = { pickerDirection = null },
+            title = {
+                Text(
+                    text = if (isLeft) "Left Swipe Action" else "Right Swipe Action",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    RECORDING_SWIPE_OPTIONS.forEach { opt ->
+                        val isSelected = opt.key == currentKey
+                        Surface(
+                            onClick = {
+                                if (isLeft) {
+                                    leftActionKey = opt.key
+                                    sharedPrefs.edit().putString("swipe_action_recordings_left", opt.key).apply()
+                                } else {
+                                    rightActionKey = opt.key
+                                    sharedPrefs.edit().putString("swipe_action_recordings_right", opt.key).apply()
+                                }
+                                pickerDirection = null
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = opt.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = opt.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pickerDirection = null }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

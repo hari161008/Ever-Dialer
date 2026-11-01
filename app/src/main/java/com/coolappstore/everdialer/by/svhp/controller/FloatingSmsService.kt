@@ -10,10 +10,13 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.KeyEvent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,8 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,10 +43,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -67,6 +74,8 @@ import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
 import com.coolappstore.everdialer.by.svhp.modal.data.SmsMessage
 import com.coolappstore.everdialer.by.svhp.modal.`interface`.ISmsRepository
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
+import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
 import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
 import kotlinx.coroutines.*
@@ -87,15 +96,17 @@ class FloatingSmsService : Service() {
 
     private lateinit var wm: WindowManager
     private val activeBubbles = mutableListOf<BubbleHolder>()
-    private var chatView: ComposeView? = null
+    private var chatView: View? = null
     private var currentOpenData: FloatingBubbleData? = null
+    private var chatOverlayBackHandler: (() -> Unit)? = null
     private val lifecycleOwner = ServiceLifecycleOwner()
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private class BubbleHolder(
         val data: FloatingBubbleData,
         val view: ComposeView,
-        val params: WindowManager.LayoutParams
+        val params: WindowManager.LayoutParams,
+        val setBubbleVisible: (Boolean) -> Unit
     )
 
     private val chatParams = WindowManager.LayoutParams(
@@ -112,6 +123,10 @@ class FloatingSmsService : Service() {
         softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            fitInsetsTypes = 0
+            fitInsetsSides = 0
         }
     }
 
@@ -195,10 +210,19 @@ class FloatingSmsService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun removeBubble(holder: BubbleHolder) {
+        try { wm.removeViewImmediate(holder.view) } catch (_: Exception) {}
+        activeBubbles.remove(holder)
+        if (activeBubbles.isEmpty()) {
+            stopSelf()
+        }
+    }
+
     private fun addBubble(item: FloatingBubbleData) {
         val existing = activeBubbles.find { it.data.threadId == item.threadId || (item.address.isNotBlank() && it.data.address == item.address) }
         if (existing != null) {
             existing.view.visibility = View.VISIBLE
+            existing.setBubbleVisible(true)
             return
         }
 
@@ -218,6 +242,9 @@ class FloatingSmsService : Service() {
             y = 200 + (idx * 200) % 1100
         }
 
+        val holderRef = arrayOfNulls<BubbleHolder>(1)
+        val isBubbleVisibleState = mutableStateOf(true)
+
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lifecycleOwner)
@@ -231,16 +258,27 @@ class FloatingSmsService : Service() {
                         photoUri = item.photoUri,
                         params = params,
                         view = this,
+                        isVisible = isBubbleVisibleState.value,
                         onTap = {
                             val centerX = params.x + bubbleRadiusPx
                             val centerY = params.y + bubbleRadiusPx
-                            showChatWindow(item, centerX, centerY)
+                            scope.launch {
+                                activeBubbles.forEach { it.setBubbleVisible(false) }
+                                delay(180)
+                                showChatWindow(item, centerX, centerY)
+                            }
+                        },
+                        onDismiss = {
+                            holderRef[0]?.let { removeBubble(it) }
                         }
                     )
                 }
             }
         }
-        val holder = BubbleHolder(item, cv, params)
+        val holder = BubbleHolder(item, cv, params) { visible ->
+            isBubbleVisibleState.value = visible
+        }
+        holderRef[0] = holder
         activeBubbles.add(holder)
         try {
             wm.addView(cv, params)
@@ -250,14 +288,101 @@ class FloatingSmsService : Service() {
         }
     }
 
+    private class FloatingChatContainerView(
+        context: Context,
+        private val onBackPress: () -> Unit
+    ) : android.widget.FrameLayout(context) {
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    onBackPress()
+                }
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    findOnBackInvokedDispatcher()?.registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+                    ) {
+                        onBackPress()
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    @Composable
+    private fun DismissPill(visible: Boolean, onDismiss: () -> Unit) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(160)) + scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+            exit = fadeOut(tween(120)) + scaleOut(tween(120))
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .padding(vertical = 4.dp)
+                    .clickable { onDismiss() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = "Dismiss",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+
     @Composable
     private fun FloatingSmsBubbleUI(
         name: String,
         photoUri: String?,
         params: WindowManager.LayoutParams,
         view: View,
-        onTap: () -> Unit
+        isVisible: Boolean,
+        onTap: () -> Unit,
+        onDismiss: () -> Unit
     ) {
+        val density = LocalDensity.current
+        val config = LocalConfiguration.current
+        val screenWidthPx = with(density) { config.screenWidthDp.dp.roundToPx() }
+        val screenHeightPx = with(density) { config.screenHeightDp.dp.roundToPx() }
+        val bubbleSizePx = with(density) { 72.dp.roundToPx() }
+        val maxX = (screenWidthPx - bubbleSizePx).coerceAtLeast(0)
+        val maxY = (screenHeightPx - bubbleSizePx).coerceAtLeast(0)
+
+        var showDismissOption by remember { mutableStateOf(false) }
+
+        val animScale by animateFloatAsState(
+            targetValue = if (isVisible) 1f else 0f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+            label = "smsBubbleScale"
+        )
+        val animAlpha by animateFloatAsState(
+            targetValue = if (isVisible) 1f else 0f,
+            animationSpec = tween(180, easing = FastOutSlowInEasing),
+            label = "smsBubbleAlpha"
+        )
+
         val pressSource = remember { MutableInteractionSource() }
         val isPressed by pressSource.collectIsPressedAsState()
         val pressScale by animateFloatAsState(
@@ -266,63 +391,115 @@ class FloatingSmsService : Service() {
             label = "smsBubblePress"
         )
 
-        Box(
+        val showAbove = params.y >= with(density) { 80.dp.roundToPx() }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .size(72.dp)
-                .graphicsLayer(scaleX = pressScale, scaleY = pressScale)
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var dragged = false
-                        do {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            val delta = change.position - change.previousPosition
-                            if (!dragged && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                                dragged = true
-                            }
-                            if (dragged) {
-                                change.consume()
-                                params.x = (params.x + delta.x.toInt()).coerceAtLeast(0)
-                                params.y = (params.y + delta.y.toInt()).coerceAtLeast(0)
-                                try {
-                                    wm.updateViewLayout(view, params)
-                                } catch (_: Exception) {}
-                            }
-                            if (!change.pressed) {
-                                if (!dragged) {
-                                    onTap()
-                                }
-                                break
-                            }
-                        } while (true)
-                    }
-                },
-            contentAlignment = Alignment.Center
+                .wrapContentSize()
+                .graphicsLayer {
+                    scaleX = animScale
+                    scaleY = animScale
+                    alpha = animAlpha
+                }
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 8.dp,
-                modifier = Modifier.size(56.dp)
+            if (showAbove) {
+                DismissPill(
+                    visible = showDismissOption,
+                    onDismiss = onDismiss
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .graphicsLayer(scaleX = pressScale, scaleY = pressScale)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var dragged = false
+                            var isLongPress = false
+                            val downPos = down.position
+
+                            try {
+                                withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                            dragged = true
+                                            break
+                                        }
+                                        if (!change.pressed) {
+                                            break
+                                        }
+                                    } while (true)
+                                }
+                            } catch (_: PointerEventTimeoutCancellationException) {
+                                isLongPress = true
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                showDismissOption = !showDismissOption
+                            }
+
+                            var change = down
+                            while (change.pressed) {
+                                val event = awaitPointerEvent()
+                                val nextChange = event.changes.firstOrNull { it.id == down.id } ?: break
+                                change = nextChange
+                                val delta = nextChange.position - nextChange.previousPosition
+                                if (!dragged && (nextChange.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                    dragged = true
+                                    showDismissOption = false
+                                }
+                                if (dragged) {
+                                    nextChange.consume()
+                                    params.x = (params.x + delta.x.toInt()).coerceIn(0, maxX)
+                                    params.y = (params.y + delta.y.toInt()).coerceIn(0, maxY)
+                                    try {
+                                        wm.updateViewLayout(view, params)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+
+                            if (!isLongPress && !dragged) {
+                                showDismissOption = false
+                                onTap()
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                if (!photoUri.isNullOrEmpty()) {
-                    RivoAvatar(
-                        name = name,
-                        photoUri = photoUri,
-                        obeySolidIcons = false,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    if (!photoUri.isNullOrEmpty()) {
+                        RivoAvatar(
+                            name = name,
+                            photoUri = photoUri,
+                            obeySolidIcons = false,
+                            modifier = Modifier.fillMaxSize()
                         )
+                    } else {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
+            }
+
+            if (!showAbove) {
+                DismissPill(
+                    visible = showDismissOption,
+                    onDismiss = onDismiss
+                )
             }
         }
     }
@@ -331,6 +508,20 @@ class FloatingSmsService : Service() {
         if (chatView != null) return
         currentOpenData = item
         activeBubbles.forEach { it.view.visibility = View.GONE }
+
+        val container = FloatingChatContainerView(this) {
+            chatOverlayBackHandler?.invoke()
+        }.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            )
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+        }
 
         val cv = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -345,13 +536,19 @@ class FloatingSmsService : Service() {
                         photoUri = item.photoUri,
                         bubbleCenterX = bubbleCenterX,
                         bubbleCenterY = bubbleCenterY,
+                        registerBackHandler = { handler ->
+                            chatOverlayBackHandler = handler
+                        },
                         onHide = {
+                            chatOverlayBackHandler = null
                             dismissChatWindow(minimize = true)
                         },
                         onDismiss = {
+                            chatOverlayBackHandler = null
                             dismissChatWindow(minimize = false)
                         },
                         onOpenFullApp = {
+                            chatOverlayBackHandler = null
                             val intent = Intent(this@FloatingSmsService, MainActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                 putExtra("navigate_to_sms_thread_id", item.threadId)
@@ -364,11 +561,22 @@ class FloatingSmsService : Service() {
                 }
             }
         }
-        chatView = cv
+        container.addView(
+            cv,
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        chatView = container
         try {
-            wm.addView(cv, chatParams)
+            wm.addView(container, chatParams)
+            container.requestFocus()
         } catch (_: Exception) {
-            activeBubbles.forEach { it.view.visibility = View.VISIBLE }
+            activeBubbles.forEach {
+                it.view.visibility = View.VISIBLE
+                it.setBubbleVisible(true)
+            }
         }
     }
 
@@ -382,7 +590,10 @@ class FloatingSmsService : Service() {
         currentOpenData = null
 
         if (minimize) {
-            activeBubbles.forEach { it.view.visibility = View.VISIBLE }
+            activeBubbles.forEach {
+                it.view.visibility = View.VISIBLE
+                it.setBubbleVisible(true)
+            }
         } else {
             if (item != null) {
                 val iter = activeBubbles.iterator()
@@ -397,7 +608,10 @@ class FloatingSmsService : Service() {
             if (activeBubbles.isEmpty()) {
                 stopSelf()
             } else {
-                activeBubbles.forEach { it.view.visibility = View.VISIBLE }
+                activeBubbles.forEach {
+                    it.view.visibility = View.VISIBLE
+                    it.setBubbleVisible(true)
+                }
             }
         }
     }
@@ -458,7 +672,11 @@ private fun formatChatDateHeader(timestamp: Long): String {
     }
 }
 
-private fun buildClickableMessageText(text: String, linkColor: Color): AnnotatedString {
+private fun buildClickableMessageText(
+    text: String,
+    linkColor: Color,
+    onLinkClick: ((String) -> Unit)? = null
+): AnnotatedString {
     val urlPattern = android.util.Patterns.WEB_URL
     return buildAnnotatedString {
         var lastIdx = 0
@@ -476,7 +694,13 @@ private fun buildClickableMessageText(text: String, linkColor: Color): Annotated
                         color = linkColor,
                         textDecoration = TextDecoration.Underline
                     )
-                )
+                ),
+                linkInteractionListener = onLinkClick?.let { callback ->
+                    { annotation ->
+                        val u = (annotation as? LinkAnnotation.Url)?.url ?: fullUrl
+                        callback(u)
+                    }
+                }
             )
             withLink(link) {
                 append(rawUrl)
@@ -495,6 +719,7 @@ private fun FloatingChatOverlay(
     photoUri: String?,
     bubbleCenterX: Int,
     bubbleCenterY: Int,
+    registerBackHandler: (((() -> Unit) -> Unit))? = null,
     onHide: () -> Unit,
     onDismiss: () -> Unit,
     onOpenFullApp: () -> Unit
@@ -527,8 +752,21 @@ private fun FloatingChatOverlay(
     var isVisible by remember { mutableStateOf(false) }
     var isClosing by remember { mutableStateOf(false) }
 
+    fun animateAndClose(action: () -> Unit) {
+        if (isClosing) return
+        isClosing = true
+        isVisible = false
+        coroutineScope.launch {
+            delay(400)
+            action()
+        }
+    }
+
     LaunchedEffect(Unit) {
         isVisible = true
+        registerBackHandler?.invoke {
+            animateAndClose(onHide)
+        }
     }
 
     val animProgress by animateFloatAsState(
@@ -543,16 +781,6 @@ private fun FloatingChatOverlay(
     val cardScale = androidx.compose.ui.util.lerp(0.04f, 1f, animProgress)
     val cardAlpha = animProgress.coerceIn(0f, 1f)
     val backdropAlpha = (0.55f * animProgress).coerceIn(0f, 0.55f)
-
-    fun animateAndClose(action: () -> Unit) {
-        if (isClosing) return
-        isClosing = true
-        isVisible = false
-        coroutineScope.launch {
-            delay(400)
-            action()
-        }
-    }
 
     var effectiveThreadId by remember { mutableLongStateOf(threadId) }
     var messages by remember { mutableStateOf<List<SmsMessage>>(emptyList()) }
@@ -702,18 +930,39 @@ private fun FloatingChatOverlay(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = backdropAlpha))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { animateAndClose(onHide) }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
+    val handleOpenLink: (String) -> Unit = remember(context) {
+        { url ->
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "Cannot open link", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val customUriHandler = remember(handleOpenLink) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                handleOpenLink(uri)
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalUriHandler provides customUriHandler) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = backdropAlpha))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { animateAndClose(onHide) }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
@@ -745,35 +994,6 @@ private fun FloatingChatOverlay(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left: Dismiss Button
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { animateAndClose(onDismiss) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss",
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(Modifier.width(3.dp))
-                                Text(
-                                    text = "Dismiss",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(8.dp))
-
                         RivoAvatar(
                             name = contactName ?: address,
                             photoUri = photoUri,
@@ -897,6 +1117,9 @@ private fun FloatingChatOverlay(
                                 val bubbleColor = if (isOut) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                 val textColor = if (isOut) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                 val linkColor = MaterialTheme.colorScheme.primary
+                                var showMessageMenu by remember { mutableStateOf(false) }
+                                val isPinned = remember(msg.id) { prefs?.isSmsMessagePinned(msg.id) ?: false }
+                                val isStarred = remember(msg.id) { prefs?.isSmsMessageStarred(msg.id) ?: false }
 
                                 Box(
                                     modifier = Modifier.fillMaxWidth(),
@@ -912,13 +1135,18 @@ private fun FloatingChatOverlay(
                                         color = bubbleColor,
                                         modifier = Modifier
                                             .widthIn(max = 280.dp)
-                                            .clickable {
-                                                if (msg.body.isNotBlank()) {
-                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                    clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
-                                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                            .combinedClickable(
+                                                onClick = {
+                                                    if (msg.body.isNotBlank()) {
+                                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                        clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
+                                                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                onLongClick = {
+                                                    showMessageMenu = true
                                                 }
-                                            }
+                                            )
                                     ) {
                                         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                                             if (msg.isMms && msg.parts.isNotEmpty()) {
@@ -938,7 +1166,7 @@ private fun FloatingChatOverlay(
 
                                             if (msg.body.isNotBlank()) {
                                                 val annotated = remember(msg.body, linkColor) {
-                                                    buildClickableMessageText(msg.body, linkColor)
+                                                    buildClickableMessageText(msg.body, linkColor, handleOpenLink)
                                                 }
                                                 Text(
                                                     text = annotated,
@@ -948,11 +1176,109 @@ private fun FloatingChatOverlay(
                                             }
 
                                             Spacer(Modifier.height(2.dp))
-                                            Text(
-                                                text = timeFormat.format(Date(msg.date)),
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                                color = textColor.copy(alpha = 0.65f),
-                                                modifier = Modifier.align(Alignment.End)
+                                            Row(
+                                                modifier = Modifier.align(Alignment.End),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                if (isPinned) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.PushPin,
+                                                        contentDescription = "Pinned",
+                                                        tint = textColor.copy(alpha = 0.7f),
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                }
+                                                if (isStarred) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Star,
+                                                        contentDescription = "Starred",
+                                                        tint = Color(0xFFFFB300),
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = timeFormat.format(Date(msg.date)),
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                    color = textColor.copy(alpha = 0.65f)
+                                                )
+                                            }
+                                        }
+
+                                        RivoDropdownMenu(
+                                            expanded = showMessageMenu,
+                                            onDismissRequest = { showMessageMenu = false }
+                                        ) {
+                                            RivoDropdownMenuItem(
+                                                text = if (isPinned) "Unpin message" else "Pin message",
+                                                icon = Icons.Default.PushPin,
+                                                iconTint = Color(0xFFFF9800),
+                                                onClick = {
+                                                    showMessageMenu = false
+                                                    prefs?.setSmsMessagePinned(msg.id, !isPinned)
+                                                }
+                                            )
+                                            RivoDropdownMenuItem(
+                                                text = if (isStarred) "Unstar message" else "Star message",
+                                                icon = if (isStarred) Icons.Default.StarOutline else Icons.Default.Star,
+                                                iconTint = Color(0xFFFFB300),
+                                                onClick = {
+                                                    showMessageMenu = false
+                                                    prefs?.setSmsMessageStarred(msg.id, !isStarred)
+                                                }
+                                            )
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            RivoDropdownMenuItem(
+                                                text = "Copy text",
+                                                icon = Icons.Default.ContentCopy,
+                                                iconTint = Color(0xFF009688),
+                                                onClick = {
+                                                    showMessageMenu = false
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(ClipData.newPlainText("SMS Message", msg.body))
+                                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                            RivoDropdownMenuItem(
+                                                text = "Share",
+                                                icon = Icons.Default.Share,
+                                                iconTint = Color(0xFF2196F3),
+                                                onClick = {
+                                                    showMessageMenu = false
+                                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                                        putExtra(Intent.EXTRA_TEXT, msg.body)
+                                                        type = "text/plain"
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(Intent.createChooser(sendIntent, "Share Message").apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    })
+                                                }
+                                            )
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            RivoDropdownMenuItem(
+                                                text = "Delete",
+                                                icon = Icons.Outlined.Delete,
+                                                iconTint = MaterialTheme.colorScheme.error,
+                                                isDestructive = true,
+                                                onClick = {
+                                                    showMessageMenu = false
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        smsRepo?.deleteMessage(msg.id, msg.isMms)
+                                                        if (effectiveThreadId > 0) {
+                                                            val updated = smsRepo?.getMessagesForThread(effectiveThreadId) ?: emptyList()
+                                                            withContext(Dispatchers.Main) {
+                                                                messages = updated
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             )
                                         }
                                     }
@@ -1051,4 +1377,5 @@ private fun FloatingChatOverlay(
             }
         }
     }
+}
 }
