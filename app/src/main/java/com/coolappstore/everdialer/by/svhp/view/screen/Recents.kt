@@ -388,6 +388,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 .onGloballyPositioned { coordinates ->
                     fabCenter = coordinates.boundsInRoot().center
                 }
+                .scale(fabScale * dialpadExpandScale)
                 .then(
                     if (isLandscape) {
                         Modifier.navigationBarsPadding().padding(bottom = 12.dp, end = 8.dp)
