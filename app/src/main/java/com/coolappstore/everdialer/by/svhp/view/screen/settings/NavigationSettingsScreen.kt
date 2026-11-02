@@ -53,7 +53,7 @@ fun NavigationSettingsScreen(
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true))
     }
     var slideToOpen by remember {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, false))
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, true))
     }
     var iconOnlyNav by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false))

@@ -362,9 +362,13 @@ private class DrawBackdropNode(
 
     private fun updateEffects() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            effectScope.apply(effects)
-            graphicsLayer?.renderEffect = effectScope.renderEffect?.asComposeRenderEffect()
-            padding = effectScope.padding
+            try {
+                effectScope.apply(effects)
+                graphicsLayer?.renderEffect = effectScope.renderEffect?.asComposeRenderEffect()
+                padding = effectScope.padding
+            } catch (t: Throwable) {
+                android.util.Log.e("DrawBackdropNode", "updateEffects failed safely", t)
+            }
         }
     }
 

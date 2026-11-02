@@ -99,7 +99,7 @@ private val BackdropEffectScope.cornerRadii: FloatArray?
             )
         }
 
-        else -> null
+        else -> floatArrayOf(0f, 0f, 0f, 0f)
     }
 
 private fun throwUnsupportedSDFException(): Nothing {

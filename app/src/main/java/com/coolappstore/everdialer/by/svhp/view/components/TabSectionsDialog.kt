@@ -61,7 +61,7 @@ fun TabSectionsDialog(
     var tabShowDialpad    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)) }
     var scrollIndication  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION,     true)) }
     var pillNav           by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV,              true)) }
-    var slideToOpen       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         false)) }
+    var slideToOpen       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         true)) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var defaultTab        by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") }
 
@@ -132,7 +132,7 @@ fun TabSectionsDialog(
         tabShowDialpad    = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)
         scrollIndication  = true;  prefs.setBoolean(PreferenceManager.KEY_SCROLL_INDICATION,  true)
         pillNav           = true;  prefs.setBoolean(PreferenceManager.KEY_PILL_NAV,           true)
-        slideToOpen       = false; prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         false)
+        slideToOpen       = true;  prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         true)
         defaultTab        = "calls"; prefs.setString(PreferenceManager.KEY_DEFAULT_TAB,          "calls")
     }
 

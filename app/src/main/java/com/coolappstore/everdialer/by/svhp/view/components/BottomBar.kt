@@ -26,11 +26,19 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,7 +72,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
@@ -156,7 +166,7 @@ fun BottomBar(navController: NavController) {
     val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, true) }
     val lgBottomNavConfig = remember(settingsState) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_BOTTOM_NAV) }
     val blurBottomNavConfig = remember(settingsState) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_BOTTOM_NAV) }
-    val slideToOpen      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, false) }
+    val slideToOpen      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, true) }
     val globalBackdrop   = LocalLiquidGlassBackdrop.current
     val useLgBottomNav   = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
     val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
@@ -415,17 +425,180 @@ fun BottomBar(navController: NavController) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 var rowCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                val tabCenters = remember { mutableStateMapOf<String, Float>() }
+                val childCoordinates = remember { mutableMapOf<String, LayoutCoordinates>() }
+                val tabBounds = remember { mutableStateMapOf<String, Rect>() }
                 var isSliding by remember { mutableStateOf(false) }
                 var slideDragOffset by remember { mutableFloatStateOf(0f) }
+                var dragStartViewportX by remember { mutableFloatStateOf(0f) }
                 var hoveredTabKey by remember { mutableStateOf<String?>(null) }
 
+                fun updateTabBounds(rowCoords: LayoutCoordinates?) {
+                    val rc = rowCoords ?: return
+                    if (!rc.isAttached) return
+                    childCoordinates.forEach { (key, coords) ->
+                        if (coords.isAttached) {
+                            val pos = rc.localPositionOf(coords, Offset.Zero)
+                            tabBounds[key] = Rect(
+                                pos.x,
+                                pos.y,
+                                pos.x + coords.size.width,
+                                pos.y + coords.size.height
+                            )
+                        }
+                    }
+                }
+
+                LaunchedEffect(scrollState.value, rowCoordinates) {
+                    updateTabBounds(rowCoordinates)
+                }
+
                 val selectedTab = orderedTabs.firstOrNull { it.selected }
+                val selectedRect = selectedTab?.let { tabBounds[it.key] }
+                val boundsReady = selectedRect != null
+
+                val sortedTabsWithBounds = remember(orderedTabs, tabBounds.toMap(), scrollState.value) {
+                    orderedTabs.mapNotNull { tab ->
+                        tabBounds[tab.key]?.let { rect ->
+                            val contentRect = Rect(
+                                rect.left + scrollState.value,
+                                rect.top,
+                                rect.right + scrollState.value,
+                                rect.bottom
+                            )
+                            Pair(tab, contentRect)
+                        }
+                    }.sortedBy { it.second.left }
+                }
+
+                val viewportFingerX = dragStartViewportX + slideDragOffset
+                val currentContentCenterX = viewportFingerX + scrollState.value
+                val targetWidth = selectedRect?.width ?: 0f
+                val targetTop = selectedRect?.top ?: 0f
+                val targetHeight = selectedRect?.height ?: 0f
+
+                var calcWidth = targetWidth
+                var calcHeight = targetHeight
+                var calcTop = targetTop
+                var closestKey = selectedTab?.key
+
+                if (sortedTabsWithBounds.isNotEmpty()) {
+                    val first = sortedTabsWithBounds.first()
+                    val last = sortedTabsWithBounds.last()
+
+                    if (currentContentCenterX <= first.second.center.x) {
+                        val overdrag = first.second.center.x - currentContentCenterX
+                        calcWidth = first.second.width
+                        calcHeight = first.second.height
+                        calcTop = first.second.top
+                        closestKey = first.first.key
+                    } else if (currentContentCenterX >= last.second.center.x) {
+                        val overdrag = currentContentCenterX - last.second.center.x
+                        calcWidth = last.second.width
+                        calcHeight = last.second.height
+                        calcTop = last.second.top
+                        closestKey = last.first.key
+                    } else {
+                        for (i in 0 until sortedTabsWithBounds.size - 1) {
+                            val leftItem = sortedTabsWithBounds[i]
+                            val rightItem = sortedTabsWithBounds[i + 1]
+                            val cLeft = leftItem.second.center.x
+                            val cRight = rightItem.second.center.x
+                            if (currentContentCenterX in cLeft..cRight) {
+                                val span = cRight - cLeft
+                                val fraction = if (span > 0f) ((currentContentCenterX - cLeft) / span).coerceIn(0f, 1f) else 0f
+                                calcWidth = leftItem.second.width + fraction * (rightItem.second.width - leftItem.second.width)
+                                calcHeight = leftItem.second.height + fraction * (rightItem.second.height - leftItem.second.height)
+                                calcTop = leftItem.second.top + fraction * (rightItem.second.top - leftItem.second.top)
+                                closestKey = if (fraction < 0.5f) leftItem.first.key else rightItem.first.key
+                                break
+                            }
+                        }
+                    }
+                }
+
+                LaunchedEffect(closestKey, isSliding) {
+                    if (isSliding && closestKey != null && closestKey != hoveredTabKey) {
+                        hoveredTabKey = closestKey
+                        doHaptic()
+                    }
+                }
+
+                val localDensity = LocalDensity.current
+                LaunchedEffect(isSliding) {
+                    if (!isSliding) return@LaunchedEffect
+                    val edgeThresholdPx = with(localDensity) { 56.dp.toPx() }
+                    val maxScrollSpeed = with(localDensity) { 12.dp.toPx() }
+
+                    while (isActive && isSliding) {
+                        val rowWidth = rowCoordinates?.size?.width?.toFloat() ?: 0f
+                        if (rowWidth > 0f && scrollState.maxValue > 0) {
+                            val scrollDelta: Float = when {
+                                viewportFingerX > (rowWidth - edgeThresholdPx) -> {
+                                    val proximity = ((viewportFingerX - (rowWidth - edgeThresholdPx)) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                                    val canScroll = (scrollState.maxValue - scrollState.value).toFloat()
+                                    (maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                                }
+                                viewportFingerX < edgeThresholdPx -> {
+                                    val proximity = ((edgeThresholdPx - viewportFingerX) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                                    val canScroll = scrollState.value.toFloat()
+                                    -(maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                                }
+                                else -> 0f
+                            }
+
+                            if (scrollDelta != 0f) {
+                                scrollState.scrollBy(scrollDelta)
+                                updateTabBounds(rowCoordinates)
+                            }
+                        }
+                        delay(16)
+                    }
+                }
+
+                val animPillWidth by animateFloatAsState(
+                    targetValue = if (isSliding) calcWidth else targetWidth,
+                    animationSpec = spring(
+                        stiffness = Spring.StiffnessMediumLow,
+                        dampingRatio = Spring.DampingRatioMediumBouncy
+                    ),
+                    label = "slidingPillWidth"
+                )
+
+                val animPillLeft by animateFloatAsState(
+                    targetValue = if (isSliding) (viewportFingerX - (calcWidth / 2f)) else (selectedRect?.left ?: 0f),
+                    animationSpec = if (isSliding) {
+                        spring(stiffness = Spring.StiffnessHigh)
+                    } else {
+                        spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
+                    },
+                    label = "slidingPillLeft"
+                )
+
+                val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                val isSaturatedActive = remember(settingsState, isDark) { prefs.isSaturatedForTheme(isDark) }
+                val isDynamic = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
+                val usePrimary = isSaturatedActive || !isDynamic
+                val activeNavBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
 
                 val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
-                            .onGloballyPositioned { rowCoordinates = it }
+                            .onGloballyPositioned { rowCoords ->
+                                rowCoordinates = rowCoords
+                                updateTabBounds(rowCoords)
+                            }
+                            .drawBehind {
+                                if (slideToOpen && boundsReady && selectedRect != null && animPillWidth > 0f) {
+                                    val cornerRadiusPx = if (isExpressive) 18.dp.toPx() else (calcHeight / 2f)
+                                    drawRoundRect(
+                                        color = activeNavBg,
+                                        topLeft = Offset(animPillLeft, if (isSliding) calcTop else targetTop),
+                                        size = Size(animPillWidth, if (isSliding) calcHeight else targetHeight),
+                                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                                    )
+                                }
+                            }
                             .horizontalScroll(scrollState, enabled = !isSliding)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -445,11 +618,16 @@ fun BottomBar(navController: NavController) {
                                     modifier       = Modifier
                                         .bringIntoViewRequester(bringIntoViewRequester)
                                         .onGloballyPositioned { coords ->
-                                            rowCoordinates?.let { rowCoords ->
-                                                if (coords.isAttached && rowCoords.isAttached) {
-                                                    val posInRow = rowCoords.localPositionOf(coords, Offset.Zero)
-                                                    val centerX = posInRow.x + coords.size.width / 2f
-                                                    tabCenters[tab.key] = centerX
+                                            childCoordinates[tab.key] = coords
+                                            rowCoordinates?.let { parentCoords ->
+                                                if (coords.isAttached && parentCoords.isAttached) {
+                                                    val pos = parentCoords.localPositionOf(coords, Offset.Zero)
+                                                    tabBounds[tab.key] = Rect(
+                                                        pos.x,
+                                                        pos.y,
+                                                        pos.x + coords.size.width,
+                                                        pos.y + coords.size.height
+                                                    )
                                                 }
                                             }
                                         },
@@ -458,34 +636,23 @@ fun BottomBar(navController: NavController) {
                                     unselectedIcon = tab.unselectedIcon,
                                     label          = tab.label,
                                     iconOnly       = iconOnly,
-                                    isHovered      = isSliding && hoveredTabKey == tab.key && !tab.selected,
+                                    isHovered      = isSliding && (hoveredTabKey == tab.key),
+                                    isSliding      = isSliding,
                                     slideToOpen    = slideToOpen,
-                                    slideOffset    = if (isSliding && tab.selected) slideDragOffset else 0f,
+                                    boundsReady    = boundsReady,
                                     onSlideDragStart = {
                                         isSliding = true
                                         slideDragOffset = 0f
+                                        dragStartViewportX = selectedRect?.center?.x ?: 0f
                                         hoveredTabKey = tab.key
                                     },
                                     onSlideDrag    = { delta ->
                                         slideDragOffset += delta
-                                        val currentCenterX = (tabCenters[selectedTab?.key] ?: 0f) + slideDragOffset
-                                        var closestKey: String? = null
-                                        var minDist = Float.MAX_VALUE
-                                        tabCenters.forEach { (key, centerX) ->
-                                            val dist = kotlin.math.abs(centerX - currentCenterX)
-                                            if (dist < minDist) {
-                                                minDist = dist
-                                                closestKey = key
-                                            }
-                                        }
-                                        if (closestKey != null && closestKey != hoveredTabKey) {
-                                            hoveredTabKey = closestKey
-                                            doHaptic()
-                                        }
                                     },
                                     onSlideDragEnd = {
                                         if (isSliding) {
-                                            val targetTab = orderedTabs.firstOrNull { it.key == hoveredTabKey }
+                                            val targetKey = hoveredTabKey ?: closestKey
+                                            val targetTab = orderedTabs.firstOrNull { it.key == targetKey }
                                             if (targetTab != null && !targetTab.selected) {
                                                 triggerPillWidthAnimation()
                                                 targetTab.onClick()
@@ -505,10 +672,8 @@ fun BottomBar(navController: NavController) {
                                         tab.onClick()
                                     },
                                     onLongClick    = {
-                                        if (!slideToOpen) {
-                                            doHaptic()
-                                            showTabSectionsDialog = true
-                                        }
+                                        doHaptic()
+                                        showTabSectionsDialog = true
                                     }
                                 )
                             }
@@ -647,6 +812,163 @@ fun BottomBar(navController: NavController) {
             label         = "standardIndicatorProgress"
         )
 
+        val standardDensity = LocalDensity.current
+        var standardRowCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        val standardChildCoordinates = remember { mutableMapOf<String, LayoutCoordinates>() }
+        val standardTabBounds = remember { mutableStateMapOf<String, Rect>() }
+        var standardIsSliding by remember { mutableStateOf(false) }
+        var standardSlideDragOffset by remember { mutableFloatStateOf(0f) }
+        var standardDragStartViewportX by remember { mutableFloatStateOf(0f) }
+        var standardHoveredTabKey by remember { mutableStateOf<String?>(null) }
+
+        fun updateStandardTabBounds(rowCoords: LayoutCoordinates?) {
+            val rc = rowCoords ?: return
+            if (!rc.isAttached) return
+            standardChildCoordinates.forEach { (key, coords) ->
+                if (coords.isAttached) {
+                    val pos = rc.localPositionOf(coords, Offset.Zero)
+                    standardTabBounds[key] = Rect(
+                        pos.x,
+                        pos.y,
+                        pos.x + coords.size.width,
+                        pos.y + coords.size.height
+                    )
+                }
+            }
+        }
+
+        LaunchedEffect(standardScrollState.value, standardRowCoordinates) {
+            updateStandardTabBounds(standardRowCoordinates)
+        }
+
+        val standardSelectedTab = orderedTabs.firstOrNull { it.selected }
+        val standardSelectedRect = standardSelectedTab?.let { standardTabBounds[it.key] }
+        val standardBoundsReady = standardSelectedRect != null
+
+        val standardSortedTabs = remember(orderedTabs, standardTabBounds.toMap(), standardScrollState.value) {
+            orderedTabs.mapNotNull { tab ->
+                standardTabBounds[tab.key]?.let { rect ->
+                    val contentRect = Rect(
+                        rect.left + standardScrollState.value,
+                        rect.top,
+                        rect.right + standardScrollState.value,
+                        rect.bottom
+                    )
+                    Pair(tab, contentRect)
+                }
+            }.sortedBy { it.second.left }
+        }
+
+        val standardViewportFingerX = standardDragStartViewportX + standardSlideDragOffset
+        val standardContentCenterX = standardViewportFingerX + standardScrollState.value
+        val standardTargetWidth = standardSelectedRect?.width ?: 0f
+        val standardTargetTop = standardSelectedRect?.top ?: 0f
+        val standardTargetHeight = standardSelectedRect?.height ?: 0f
+
+        var standardCalcWidth = standardTargetWidth
+        var standardCalcHeight = standardTargetHeight
+        var standardCalcTop = standardTargetTop
+        var standardClosestKey = standardSelectedTab?.key
+
+        if (standardSortedTabs.isNotEmpty()) {
+            val first = standardSortedTabs.first()
+            val last = standardSortedTabs.last()
+
+            if (standardContentCenterX <= first.second.center.x) {
+                val overdrag = first.second.center.x - standardContentCenterX
+                standardCalcWidth = first.second.width
+                standardCalcHeight = first.second.height
+                standardCalcTop = first.second.top
+                standardClosestKey = first.first.key
+            } else if (standardContentCenterX >= last.second.center.x) {
+                val overdrag = standardContentCenterX - last.second.center.x
+                standardCalcWidth = last.second.width
+                standardCalcHeight = last.second.height
+                standardCalcTop = last.second.top
+                standardClosestKey = last.first.key
+            } else {
+                for (i in 0 until standardSortedTabs.size - 1) {
+                    val leftItem = standardSortedTabs[i]
+                    val rightItem = standardSortedTabs[i + 1]
+                    val cLeft = leftItem.second.center.x
+                    val cRight = rightItem.second.center.x
+                    if (standardContentCenterX in cLeft..cRight) {
+                        val span = cRight - cLeft
+                        val fraction = if (span > 0f) ((standardContentCenterX - cLeft) / span).coerceIn(0f, 1f) else 0f
+                        standardCalcWidth = leftItem.second.width + fraction * (rightItem.second.width - leftItem.second.width)
+                        standardCalcHeight = leftItem.second.height + fraction * (rightItem.second.height - leftItem.second.height)
+                        standardCalcTop = leftItem.second.top + fraction * (rightItem.second.top - leftItem.second.top)
+                        standardClosestKey = if (fraction < 0.5f) leftItem.first.key else rightItem.first.key
+                        break
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(standardClosestKey, standardIsSliding) {
+            if (standardIsSliding && standardClosestKey != null && standardClosestKey != standardHoveredTabKey) {
+                standardHoveredTabKey = standardClosestKey
+                doHaptic()
+            }
+        }
+
+        LaunchedEffect(standardIsSliding) {
+            if (!standardIsSliding) return@LaunchedEffect
+            val edgeThresholdPx = with(standardDensity) { 56.dp.toPx() }
+            val maxScrollSpeed = with(standardDensity) { 12.dp.toPx() }
+
+            while (isActive && standardIsSliding) {
+                val rowWidth = standardRowCoordinates?.size?.width?.toFloat() ?: 0f
+                if (rowWidth > 0f && standardScrollState.maxValue > 0) {
+                    val scrollDelta: Float = when {
+                        standardViewportFingerX > (rowWidth - edgeThresholdPx) -> {
+                            val proximity = ((standardViewportFingerX - (rowWidth - edgeThresholdPx)) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                            val canScroll = (standardScrollState.maxValue - standardScrollState.value).toFloat()
+                            (maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                        }
+                        standardViewportFingerX < edgeThresholdPx -> {
+                            val proximity = ((edgeThresholdPx - standardViewportFingerX) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                            val canScroll = standardScrollState.value.toFloat()
+                            -(maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                        }
+                        else -> 0f
+                    }
+
+                    if (scrollDelta != 0f) {
+                        standardScrollState.scrollBy(scrollDelta)
+                        updateStandardTabBounds(standardRowCoordinates)
+                    }
+                }
+                delay(16)
+            }
+        }
+
+        val standardAnimPillWidth by animateFloatAsState(
+            targetValue = if (standardIsSliding) standardCalcWidth else standardTargetWidth,
+            animationSpec = spring(
+                stiffness = Spring.StiffnessMediumLow,
+                dampingRatio = Spring.DampingRatioMediumBouncy
+            ),
+            label = "standardSlidingPillWidth"
+        )
+
+        val standardAnimPillLeft by animateFloatAsState(
+            targetValue = if (standardIsSliding) (standardViewportFingerX - (standardCalcWidth / 2f)) else (standardSelectedRect?.left ?: 0f),
+            animationSpec = if (standardIsSliding) {
+                spring(stiffness = Spring.StiffnessHigh)
+            } else {
+                spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
+            },
+            label = "standardSlidingPillLeft"
+        )
+
+        val isStandardExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+        val isStandardDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+        val isStandardSaturatedActive = remember(settingsState, isStandardDark) { prefs.isSaturatedForTheme(isStandardDark) }
+        val isStandardDynamic = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
+        val useStandardPrimary = isStandardSaturatedActive || !isStandardDynamic
+        val standardActiveNavBg = if (useStandardPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -676,7 +998,22 @@ fun BottomBar(navController: NavController) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(standardScrollState)
+                            .onGloballyPositioned { rowCoords ->
+                                standardRowCoordinates = rowCoords
+                                updateStandardTabBounds(rowCoords)
+                            }
+                            .drawBehind {
+                                if (slideToOpen && standardBoundsReady && standardSelectedRect != null && standardAnimPillWidth > 0f) {
+                                    val cornerRadiusPx = if (isStandardExpressive) 16.dp.toPx() else (standardCalcHeight / 2f)
+                                    drawRoundRect(
+                                        color = standardActiveNavBg,
+                                        topLeft = Offset(standardAnimPillLeft, if (standardIsSliding) standardCalcTop else standardTargetTop),
+                                        size = Size(standardAnimPillWidth, if (standardIsSliding) standardCalcHeight else standardTargetHeight),
+                                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                                    )
+                                }
+                            }
+                            .horizontalScroll(standardScrollState, enabled = !standardIsSliding)
                             .padding(horizontal = if (canStandardScroll) 12.dp else 0.dp),
                         horizontalArrangement = if (canStandardScroll) Arrangement.spacedBy(4.dp) else Arrangement.Center,
                         verticalAlignment     = Alignment.CenterVertically
@@ -685,7 +1022,7 @@ fun BottomBar(navController: NavController) {
                             key(tab.key) {
                                 val bringIntoViewRequester = remember { BringIntoViewRequester() }
                                 LaunchedEffect(tab.selected) {
-                                    if (tab.selected) {
+                                    if (tab.selected && !standardIsSliding) {
                                         try {
                                             bringIntoViewRequester.bringIntoView()
                                         } catch (_: Throwable) {}
@@ -701,12 +1038,54 @@ fun BottomBar(navController: NavController) {
                                     modifier       = Modifier
                                         .bringIntoViewRequester(bringIntoViewRequester)
                                         .width(itemWidth),
+                                    isHovered      = standardIsSliding && (standardHoveredTabKey == tab.key),
+                                    isSliding      = standardIsSliding,
+                                    slideToOpen    = slideToOpen,
+                                    boundsReady    = standardBoundsReady,
+                                    onSlideDragStart = {
+                                        standardIsSliding = true
+                                        standardSlideDragOffset = 0f
+                                        standardDragStartViewportX = standardSelectedRect?.center?.x ?: 0f
+                                        standardHoveredTabKey = tab.key
+                                    },
+                                    onSlideDrag    = { delta ->
+                                        standardSlideDragOffset += delta
+                                    },
+                                    onSlideDragEnd = {
+                                        if (standardIsSliding) {
+                                            val targetKey = standardHoveredTabKey ?: standardClosestKey
+                                            val targetTab = orderedTabs.firstOrNull { it.key == targetKey }
+                                            if (targetTab != null && !targetTab.selected) {
+                                                targetTab.onClick()
+                                            }
+                                        }
+                                        standardIsSliding = false
+                                        standardSlideDragOffset = 0f
+                                        standardHoveredTabKey = null
+                                    },
+                                    onSlideDragCancel = {
+                                        standardIsSliding = false
+                                        standardSlideDragOffset = 0f
+                                        standardHoveredTabKey = null
+                                    },
+                                    onIndicatorPositioned = { coords ->
+                                        standardChildCoordinates[tab.key] = coords
+                                        standardRowCoordinates?.let { parentCoords ->
+                                            if (coords.isAttached && parentCoords.isAttached) {
+                                                val pos = parentCoords.localPositionOf(coords, Offset.Zero)
+                                                standardTabBounds[tab.key] = Rect(
+                                                    pos.x,
+                                                    pos.y,
+                                                    pos.x + coords.size.width,
+                                                    pos.y + coords.size.height
+                                                )
+                                            }
+                                        }
+                                    },
                                     onClick        = tab.onClick,
                                     onLongClick    = {
-                                        if (!slideToOpen) {
-                                            doHaptic()
-                                            showTabSectionsDialog = true
-                                        }
+                                        doHaptic()
+                                        showTabSectionsDialog = true
                                     }
                                 )
                             }
@@ -733,15 +1112,17 @@ fun BottomBar(navController: NavController) {
                 }
             }
 
+            val standardBarShape = RoundedCornerShape(0.dp)
+
             if (useLgBottomNav && globalBackdrop != null) {
                 Surface(
-                    shape           = RectangleShape,
+                    shape           = standardBarShape,
                     color           = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
                     shadowElevation = 0.dp,
                     tonalElevation  = 0.dp,
                     modifier        = standardBarModifier.drawBackdrop(
                         backdrop = globalBackdrop,
-                        shape    = { RectangleShape },
+                        shape    = { standardBarShape },
                         effects  = {
                             val d = density
                             colorControls(brightness = lgBottomNavConfig.brightness, saturation = lgBottomNavConfig.saturation)
@@ -761,7 +1142,7 @@ fun BottomBar(navController: NavController) {
                 Box(
                     modifier = standardBarModifier.drawBackdrop(
                         backdrop = globalBackdrop,
-                        shape    = { RectangleShape },
+                        shape    = { standardBarShape },
                         effects  = {
                             val d = density
                             colorControls(saturation = blurBottomNavConfig.saturation)
@@ -807,14 +1188,31 @@ private fun AnimatedNavBarItem(
     iconOnly: Boolean,
     labelStyle: TextStyle,
     modifier: Modifier = Modifier,
+    isHovered: Boolean = false,
+    isSliding: Boolean = false,
+    slideToOpen: Boolean = false,
+    boundsReady: Boolean = false,
+    onSlideDragStart: () -> Unit = {},
+    onSlideDrag: (Float) -> Unit = {},
+    onSlideDragEnd: () -> Unit = {},
+    onSlideDragCancel: () -> Unit = {},
+    onIndicatorPositioned: (LayoutCoordinates) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnSlideDragStart by rememberUpdatedState(onSlideDragStart)
+    val currentOnSlideDrag by rememberUpdatedState(onSlideDrag)
+    val currentOnSlideDragEnd by rememberUpdatedState(onSlideDragEnd)
+    val currentOnSlideDragCancel by rememberUpdatedState(onSlideDragCancel)
+    val coroutineScope = rememberCoroutineScope()
+
     val iconSize by animateDpAsState(
-        targetValue   = if (selected) 26.dp else 22.dp,
+        targetValue   = if (selected || (isSliding && isHovered)) 26.dp else 22.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label         = "${label}Size"
     )
@@ -832,13 +1230,6 @@ private fun AnimatedNavBarItem(
             tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
-    // Fade the selected-state highlight pill in/out smoothly instead of the
-    // default indicator's abrupt show/hide.
-    val indicatorAlpha by animateFloatAsState(
-        targetValue   = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-        label         = "${label}IndicatorAlpha"
-    )
 
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
@@ -849,23 +1240,136 @@ private fun AnimatedNavBarItem(
     val activeNavBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
     val activeNavFg = if (isSaturatedActive && isDark) Color.Black else if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
 
+    val hasCustomHighlight = slideToOpen && boundsReady
+    val isCoveredByPill = if (slideToOpen) {
+        if (isSliding) isHovered else selected
+    } else {
+        selected
+    }
+
+    val indicatorAlpha by animateFloatAsState(
+        targetValue   = if (hasCustomHighlight) 0f else if (selected) 1f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label         = "${label}IndicatorAlpha"
+    )
+
+    val iconTint by animateColorAsState(
+        targetValue   = if (isCoveredByPill) activeNavFg else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label         = "${label}IconTint"
+    )
+
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val indicatorShape = if (isExpressive && (selected || isHovered)) {
+        RoundedCornerShape(16.dp)
+    } else {
+        RoundedCornerShape(50.dp)
+    }
+
+    val gestureModifier = if (slideToOpen && selected) {
+        Modifier.pointerInput(Unit) {
+            val touchSlop = viewConfiguration.touchSlop
+            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
+
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var isDragging = false
+                var longClickFired = false
+                var pressInteraction: PressInteraction.Press? = null
+
+                val pressJob = coroutineScope.launch {
+                    val press = PressInteraction.Press(down.position)
+                    pressInteraction = press
+                    interactionSource.emit(press)
+                }
+
+                val longPressJob = coroutineScope.launch {
+                    delay(longPressTimeout)
+                    if (!isDragging) {
+                        longClickFired = true
+                        currentOnLongClick()
+                    }
+                }
+
+                try {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+                        if (change.changedToUp()) {
+                            longPressJob.cancel()
+                            if (isDragging) {
+                                change.consume()
+                                currentOnSlideDragEnd()
+                            } else if (!longClickFired) {
+                                change.consume()
+                                currentOnClick()
+                            }
+                            break
+                        }
+
+                        if (!change.pressed) {
+                            longPressJob.cancel()
+                            if (isDragging) currentOnSlideDragCancel()
+                            break
+                        }
+
+                        val totalDeltaX = change.position.x - down.position.x
+                        val totalDeltaY = change.position.y - down.position.y
+
+                        if (!isDragging) {
+                            if (kotlin.math.abs(totalDeltaX) > touchSlop && kotlin.math.abs(totalDeltaX) > kotlin.math.abs(totalDeltaY)) {
+                                isDragging = true
+                                longPressJob.cancel()
+                                coroutineScope.launch {
+                                    pressInteraction?.let {
+                                        interactionSource.emit(PressInteraction.Cancel(it))
+                                    }
+                                }
+                                change.consume()
+                                currentOnSlideDragStart()
+                                currentOnSlideDrag(totalDeltaX)
+                            } else if (kotlin.math.abs(totalDeltaY) > touchSlop) {
+                                longPressJob.cancel()
+                            }
+                        } else {
+                            val delta = change.positionChange().x
+                            change.consume()
+                            currentOnSlideDrag(delta)
+                        }
+                    }
+                } finally {
+                    longPressJob.cancel()
+                    coroutineScope.launch {
+                        pressInteraction?.let {
+                            interactionSource.emit(PressInteraction.Release(it))
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    }
+
     Column(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
+            .then(gestureModifier)
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(50.dp))
+                .onGloballyPositioned { onIndicatorPositioned(it) }
+                .clip(indicatorShape)
                 .background(activeNavBg.copy(alpha = indicatorAlpha))
                 .padding(horizontal = 16.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center
@@ -879,7 +1383,7 @@ private fun AnimatedNavBarItem(
                     imageVector        = if (sel) selectedIcon else unselectedIcon,
                     contentDescription = label,
                     modifier           = Modifier.size(iconSize),
-                    tint               = if (sel) activeNavFg else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint               = iconTint
                 )
             }
         }
@@ -888,7 +1392,7 @@ private fun AnimatedNavBarItem(
             Text(
                 text     = label,
                 style    = labelStyle,
-                color    = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                color    = if (selected || (isSliding && isHovered)) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 softWrap = false
             )
@@ -908,8 +1412,9 @@ private fun PillNavItem(
     iconOnly: Boolean,
     modifier: Modifier = Modifier,
     isHovered: Boolean = false,
+    isSliding: Boolean = false,
     slideToOpen: Boolean = false,
-    slideOffset: Float = 0f,
+    boundsReady: Boolean = false,
     onSlideDragStart: () -> Unit = {},
     onSlideDrag: (Float) -> Unit = {},
     onSlideDragEnd: () -> Unit = {},
@@ -929,14 +1434,20 @@ private fun PillNavItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val hasCustomHighlight = slideToOpen && boundsReady
+    val isCoveredByPill = if (slideToOpen) {
+        if (isSliding) isHovered else selected
+    } else {
+        selected
+    }
+
     val bgAlpha by animateFloatAsState(
-        targetValue   = if (selected) 1f else if (isHovered) 0.35f else 0f,
+        targetValue   = if (hasCustomHighlight) 0f else if (selected) 1f else 0f,
         animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}BgAlpha"
     )
     val iconTint by animateColorAsState(
-        targetValue   = if (selected) activeNavFg
-                        else if (isHovered) MaterialTheme.colorScheme.primary
+        targetValue   = if (isCoveredByPill) activeNavFg
                         else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
@@ -945,8 +1456,8 @@ private fun PillNavItem(
     val scale by animateFloatAsState(
         targetValue   = when {
             isPressed -> 0.82f
-            selected  -> 1.10f
             isHovered -> 1.08f
+            selected  -> 1.10f
             else      -> 1f
         },
         animationSpec = if (isPressed)
@@ -958,12 +1469,6 @@ private fun PillNavItem(
         label         = "${label}Scale"
     )
 
-    val translationX by animateFloatAsState(
-        targetValue   = slideOffset,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
-        label         = "${label}SlideTranslation"
-    )
-
     val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
     val navShape = if (isExpressive && (selected || isHovered)) {
         RoundedCornerShape(18.dp)
@@ -971,37 +1476,111 @@ private fun PillNavItem(
         RoundedCornerShape(50.dp)
     }
 
-    val slideModifier = if (slideToOpen && selected) {
-        Modifier
-            .zIndex(10f)
-            .graphicsLayer { this.translationX = translationX }
-            .pointerInput(selected, slideToOpen) {
-                detectHorizontalDragGestures(
-                    onDragStart = { onSlideDragStart() },
-                    onDragEnd = { onSlideDragEnd() },
-                    onDragCancel = { onSlideDragCancel() },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        onSlideDrag(dragAmount)
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnSlideDragStart by rememberUpdatedState(onSlideDragStart)
+    val currentOnSlideDrag by rememberUpdatedState(onSlideDrag)
+    val currentOnSlideDragEnd by rememberUpdatedState(onSlideDragEnd)
+    val currentOnSlideDragCancel by rememberUpdatedState(onSlideDragCancel)
+    val coroutineScope = rememberCoroutineScope()
+
+    val gestureModifier = if (slideToOpen && selected) {
+        Modifier.pointerInput(Unit) {
+            val touchSlop = viewConfiguration.touchSlop
+            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
+
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var isDragging = false
+                var longClickFired = false
+                var pressInteraction: PressInteraction.Press? = null
+
+                val pressJob = coroutineScope.launch {
+                    val press = PressInteraction.Press(down.position)
+                    pressInteraction = press
+                    interactionSource.emit(press)
+                }
+
+                val longPressJob = coroutineScope.launch {
+                    delay(longPressTimeout)
+                    if (!isDragging) {
+                        longClickFired = true
+                        currentOnLongClick()
                     }
-                )
+                }
+
+                try {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+                        if (change.changedToUp()) {
+                            longPressJob.cancel()
+                            if (isDragging) {
+                                change.consume()
+                                currentOnSlideDragEnd()
+                            } else if (!longClickFired) {
+                                change.consume()
+                                currentOnClick()
+                            }
+                            break
+                        }
+
+                        if (!change.pressed) {
+                            longPressJob.cancel()
+                            if (isDragging) currentOnSlideDragCancel()
+                            break
+                        }
+
+                        val totalDeltaX = change.position.x - down.position.x
+                        val totalDeltaY = change.position.y - down.position.y
+
+                        if (!isDragging) {
+                            if (kotlin.math.abs(totalDeltaX) > touchSlop && kotlin.math.abs(totalDeltaX) > kotlin.math.abs(totalDeltaY)) {
+                                isDragging = true
+                                longPressJob.cancel()
+                                coroutineScope.launch {
+                                    pressInteraction?.let {
+                                        interactionSource.emit(PressInteraction.Cancel(it))
+                                    }
+                                }
+                                change.consume()
+                                currentOnSlideDragStart()
+                                currentOnSlideDrag(totalDeltaX)
+                            } else if (kotlin.math.abs(totalDeltaY) > touchSlop) {
+                                longPressJob.cancel()
+                            }
+                        } else {
+                            val delta = change.positionChange().x
+                            change.consume()
+                            currentOnSlideDrag(delta)
+                        }
+                    }
+                } finally {
+                    longPressJob.cancel()
+                    coroutineScope.launch {
+                        pressInteraction?.let {
+                            interactionSource.emit(PressInteraction.Release(it))
+                        }
+                    }
+                }
             }
+        }
     } else {
-        Modifier.zIndex(1f)
+        Modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
     }
 
     Box(
         modifier = modifier
-            .then(slideModifier)
             .scale(scale)
             .clip(navShape)
             .background(activeNavBg.copy(alpha = bgAlpha))
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
+            .then(gestureModifier)
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -1055,7 +1634,7 @@ private fun PillNavItem(
                     Text(
                         text  = label,
                         style = MaterialTheme.typography.labelLarge,
-                        color = activeNavFg,
+                        color = if (isCoveredByPill) activeNavFg else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         softWrap = false
                     )

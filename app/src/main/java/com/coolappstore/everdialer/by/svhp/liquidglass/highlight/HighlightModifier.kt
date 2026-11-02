@@ -113,20 +113,24 @@ internal class HighlightNode(
 
             configurePaint(highlight)
 
-            highlightLayer.alpha = highlight.alpha
-            highlightLayer.blendMode = highlight.style.blendMode
-            highlightLayer.record(safeSize) {
-                translate(1f, 1f) {
-                    val canvas = drawContext.canvas
-                    canvas.save()
-                    canvas.clipOutline(outline, clipPath)
-                    canvas.drawOutline(outline, paint)
-                    canvas.restore()
+            try {
+                highlightLayer.alpha = highlight.alpha
+                highlightLayer.blendMode = highlight.style.blendMode
+                highlightLayer.record(safeSize) {
+                    translate(1f, 1f) {
+                        val canvas = drawContext.canvas
+                        canvas.save()
+                        canvas.clipOutline(outline, clipPath)
+                        canvas.drawOutline(outline, paint)
+                        canvas.restore()
+                    }
                 }
-            }
 
-            translate(-1f, -1f) {
-                drawLayer(highlightLayer)
+                translate(-1f, -1f) {
+                    drawLayer(highlightLayer)
+                }
+            } catch (t: Throwable) {
+                // Safe highlight draw
             }
         }
     }
