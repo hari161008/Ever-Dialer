@@ -52,6 +52,9 @@ fun NavigationSettingsScreen(
     var pillNav by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true))
     }
+    var slideToOpen by remember {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, false))
+    }
     var iconOnlyNav by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ICON_ONLY_NAV, false))
     }
@@ -178,6 +181,22 @@ fun NavigationSettingsScreen(
                             onCheckedChange = {
                                 pillNav = it
                                 prefs.setBoolean(PreferenceManager.KEY_PILL_NAV, it)
+                            }
+                        )
+                        HorizontalDivider(
+                            Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoSwitchListItem(
+                            headline = "Slide to Open",
+                            supporting = "Drag the highlighted pill to slide across tabs and switch on release",
+                            leadingIcon = Icons.Outlined.Swipe,
+                            iconContainerColor = ColorTeal,
+                            checked = slideToOpen,
+                            modifier = Modifier.settingsSearchHighlight("slide_to_open", highlightedKey) { highlightedKey = null },
+                            onCheckedChange = {
+                                slideToOpen = it
+                                prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, it)
                             }
                         )
                         HorizontalDivider(

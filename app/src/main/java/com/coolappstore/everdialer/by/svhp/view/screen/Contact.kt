@@ -220,7 +220,17 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                 context.startActivity(intent)
             }
             if (useLiquidGlass) {
-                Box(
+                FloatingActionButton(
+                    onClick = fabOnClick,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    shape = fabShape,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp
+                    ),
                     modifier = baseModifier.drawBackdrop(
                         backdrop = contactBackdrop,
                         shape = { fabShape },
@@ -237,20 +247,7 @@ fun ContactScreen(navController: NavController, navigator: DestinationsNavigator
                         },
                         highlight = { Highlight.Default }
                     )
-                ) {
-                    FloatingActionButton(
-                        onClick = fabOnClick,
-                        containerColor = fabBg.copy(alpha = 0.0f),
-                        contentColor = fabFg,
-                        shape = fabShape,
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 6.dp,
-                            pressedElevation = 6.dp,
-                            focusedElevation = 6.dp,
-                            hoveredElevation = 6.dp
-                        ),
-                    ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
-                }
+                ) { Icon(Icons.Default.PersonAdd, "Add Contact") }
             } else if (useBlur) {
                 Box(
                     modifier = baseModifier.drawBackdrop(

@@ -195,6 +195,8 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         prefs.getBoolean(PreferenceManager.KEY_RATE_REVIEW_HIDDEN_SECRET, false)
     }
     var scrollAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, true)) }
+    var materialThemeStyle  by remember { mutableStateOf(prefs.getMaterialTheme()) }
+    var showMaterialThemeDialog by remember { mutableStateOf(false) }
     var animationStyle      by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) ?: PreferenceManager.ANIMATION_STYLE_ZOOM) }
     var showAnimationStyleDialog by remember { mutableStateOf(false) }
     var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
@@ -407,6 +409,87 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     }
 
 
+    // ── Material Theme Dialog ─────────────────────────────────────────────────
+    if (showMaterialThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showMaterialThemeDialog = false },
+            icon = { Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Material Theme") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Choose the overall design style for Ever Dialer.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    listOf(
+                        Triple(
+                            PreferenceManager.MATERIAL_THEME_YOU,
+                            "Material You",
+                            "Classic clean design with dynamic colors and rounded corners"
+                        ),
+                        Triple(
+                            PreferenceManager.MATERIAL_THEME_EXPRESSIVE,
+                            "Material Expressive",
+                            "Expressive shapes, fluid bouncy sliders, spring-morphed buttons, and rich icons"
+                        )
+                    ).forEach { (key, label, desc) ->
+                        val isSelected = materialThemeStyle == key
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        materialThemeStyle = key
+                                        prefs.setMaterialTheme(key)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        desc,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        materialThemeStyle = key
+                                        prefs.setMaterialTheme(key)
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary,
+                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMaterialThemeDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
     // ── Animation Style Dialog ───────────────────────────────────────────────
     if (showAnimationStyleDialog) {
         AlertDialog(
@@ -423,6 +506,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                     Spacer(Modifier.height(8.dp))
                     listOf(
                         PreferenceManager.ANIMATION_STYLE_ZOOM to "Zoom (in/out)",
+                        PreferenceManager.ANIMATION_STYLE_CARDS to "Cards",
                         PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE to "Windows Phone"
                     ).forEach { (key, label) ->
                         val isSelected = animationStyle == key
@@ -1594,8 +1678,25 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
                                 RivoListItem(
+                                    headline = "Material Theme",
+                                    supporting = if (materialThemeStyle == PreferenceManager.MATERIAL_THEME_EXPRESSIVE) "Material Expressive" else "Material You",
+                                    leadingIcon = Icons.Outlined.Palette,
+                                    iconContainerColor = MaterialTheme.colorScheme.primary,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("material_theme", highlightedKey) { highlightedKey = null },
+                                    onClick = { showMaterialThemeDialog = true }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            RivoExpressiveCard {
+                                val animSupporting = when (animationStyle) {
+                                    PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE -> "Windows Phone"
+                                    PreferenceManager.ANIMATION_STYLE_CARDS -> "Cards"
+                                    else -> "Zoom (in/out)"
+                                }
+                                RivoListItem(
                                     headline = "Animation Style",
-                                    supporting = if (animationStyle == PreferenceManager.ANIMATION_STYLE_WINDOWS_PHONE) "Windows Phone" else "Zoom (in/out)",
+                                    supporting = animSupporting,
                                     leadingIcon = Icons.Outlined.Animation,
                                     iconContainerColor = ColorTeal,
                                     trailingIcon = Icons.Default.ChevronRight,

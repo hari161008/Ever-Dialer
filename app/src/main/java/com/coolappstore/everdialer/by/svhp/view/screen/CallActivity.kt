@@ -778,8 +778,14 @@ private fun CallAvatar(
     modifier: Modifier = Modifier,
     overlayContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
     val isCircle = config.pfpShape != "square"
-    val avatarShape = if (isCircle) CircleShape else RoundedCornerShape(if (config.pfpSize >= 0.95f) 0.dp else 14.dp)
+    val avatarShape = if (isExpressive) {
+        val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
+        val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+        val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
+        avatarShapeList[idx].toShape()
+    } else if (isCircle) CircleShape else RoundedCornerShape(if (config.pfpSize >= 0.95f) 0.dp else 14.dp)
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val (callerAvatarBg, callerIconTint) = remember(contactName, phoneNumber) {
@@ -2621,7 +2627,12 @@ fun ExpressiveCallScreen(
                                             .fillMaxWidth(hangupWidthFraction.coerceIn(0.1f, 1.0f))
                                             .height(76.dp)
                                             .scale(if (endPressed) 0.96f else 1f),
-                                        shape = if (isCircleHangup) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(endRadius),
+                                        shape = if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
+                                            if (isCircleHangup) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Sunny.toShape()
+                                            else RoundedCornerShape(endRadius)
+                                        } else {
+                                            if (isCircleHangup) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(endRadius)
+                                        },
                                         color = Color(0xFFD32F2F),
                                         interactionSource = endInteraction
                                     ) {
@@ -3626,13 +3637,30 @@ fun AnimatedCallButton(
     val showLabel = LocalCallButtonShowNames.current
     val btnSize = (68.dp * sizeScale)
     val iconSize = (26.dp * sizeScale)
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
     val radius by animateDpAsState(if (isPressed) 16.dp * sizeScale else 32.dp * sizeScale, spring(stiffness = Spring.StiffnessMedium), label = "btnRadius")
+
+    val buttonShape = if (isExpressive) {
+        val shapeHolder = when (label.lowercase().trim()) {
+            "mute", "unmute" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Sunny
+            "speaker", "audio" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie9Sided
+            "keypad", "dialpad" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie12Sided
+            "hold", "resume" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Gem
+            "note", "notes" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Flower
+            "add person", "add call", "merge" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Clover4Leaf
+            else -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.featureShape(btnColor)
+        }
+        shapeHolder.toShape()
+    } else {
+        RoundedCornerShape(radius)
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
             Surface(
                 onClick = onClick,
-                modifier = Modifier.size(btnSize).scale(if (isPressed) 0.9f else 1f),
-                shape = RoundedCornerShape(radius),
+                modifier = Modifier.size(btnSize).scale(if (isPressed) (if (isExpressive) 0.88f else 0.9f) else 1f),
+                shape = buttonShape,
                 color = if (isActive) activeBtnColor else btnColor,
                 interactionSource = interaction
             ) {

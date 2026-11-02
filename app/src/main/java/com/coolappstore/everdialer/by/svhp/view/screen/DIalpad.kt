@@ -77,6 +77,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -1945,31 +1946,33 @@ fun DialPadContent(
 
         // ── Dialpad card — always at bottom, never moves ───────────────
         BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
-            // Scale based on the SMALLER of width-derived and height-derived factors
-            // so the dialpad always fits on screen regardless of device size.
-            val refWidth = 360f
             val availableWidth = maxWidth.value
-            val widthScale = (availableWidth / refWidth).coerceIn(0.6f, 1.4f)
+            val availableRowWidth = (availableWidth - 12f).coerceAtLeast(160f)
 
-            // Height budget: total screen height minus search bar (~64dp) minus spacing (~24dp)
-            // The dialpad card needs: header(~44dp) + 4 key rows + action row(~60dp) + padding(~28dp)
-            // Reference key height = 54dp, so 4 rows = 216dp + overhead ~140dp = ~356dp total card
-            // (kept intentionally compact so the scrollable search-results area above gets more room)
+            // Height budget for dialpad card: screen height minus search bar (~64dp) and spacing (~24dp)
             val cardHeightBudget = (screenHeight.value - 64f - 24f).coerceAtLeast(200f)
-            val refCardHeight = 400f
-            val heightScale = (cardHeightBudget / refCardHeight).coerceIn(0.55f, 1.4f)
+            val calculatedKeyH = ((cardHeightBudget - 52f - 16f - 40f) / 5f).coerceIn(52f, 66f)
+            val keyHeight: Dp = calculatedKeyH.dp
+            val callH: Dp = keyHeight
 
-            val scaleFactor = minOf(widthScale, heightScale)
+            // Scale factor relative to standard 58dp height
+            val scaleFactor = (calculatedKeyH / 58f).coerceIn(0.8f, 1.3f)
+            val actionSize: Dp = keyHeight
 
-            val contentWidth = (availableWidth - 16f).coerceAtLeast(200f)
-            val keySpacing: Dp = (8 * scaleFactor).coerceIn(6f, 12f).dp
-            val maxKeyW = ((contentWidth - (keySpacing.value * 2f + 8f)) / 3f).coerceIn(64f, 96f).dp
-            val keyWidth: Dp  = minOf((92 * scaleFactor).dp, maxKeyW)
-            val keyHeight: Dp = (58 * scaleFactor).coerceIn(48f, 66f).dp
-            val actionSize: Dp = (58 * scaleFactor).dp
-            val callH: Dp  = (62 * scaleFactor).coerceIn(52f, 68f).dp
+            // Spacing between keys dynamically adapts to row width
+            val keySpacing: Dp = (8.dp * scaleFactor).coerceIn(6.dp, 10.dp)
+
+            // Dynamic key width for 3 keys in a row — balanced and comfortably proportioned
+            val maxAllowedKeyW = ((availableRowWidth - keySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
+            val keyWidth: Dp = minOf(98.dp * scaleFactor, maxAllowedKeyW)
+
+            // SIM button width for 4 buttons in a row with 3 gaps
+            val simBtnW: Dp = minOf(
+                keyWidth,
+                ((availableRowWidth - keySpacing.value * 3f) / 4f).coerceAtLeast(36f).dp
+            )
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -1977,7 +1980,7 @@ fun DialPadContent(
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = (13 * scaleFactor).coerceIn(5f, 13f).dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = (12 * scaleFactor).coerceIn(6f, 14f).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
@@ -2154,7 +2157,6 @@ fun DialPadContent(
                 Spacer(modifier = Modifier.height(keySpacing))
 
                 if (showSimButtons) {
-                    val simBtnW = ((contentWidth - (keySpacing.value * 3f + 8f)) / 4f).coerceIn(52f, 72f).dp
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -2290,9 +2292,9 @@ fun SimCardIconWithNumber(
     isLarge: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val iconWidth = if (isLarge) 32.dp else 24.dp
-    val iconHeight = if (isLarge) 40.dp else 30.dp
-    val fontSize = if (isLarge) 20.sp else 15.sp
+    val iconWidth = if (isLarge) 28.dp else 22.dp
+    val iconHeight = if (isLarge) 36.dp else 28.dp
+    val fontSize = if (isLarge) 18.sp else 14.sp
 
     Box(
         modifier = modifier.size(width = iconWidth, height = iconHeight),
@@ -2440,7 +2442,18 @@ fun DialerActionExpressive(
     val animatedContentColor by animateColorAsState(targetContentColor, spring(stiffness = Spring.StiffnessMedium), "ActionBtnContentColor")
 
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
-    val buttonShape = RoundedCornerShape(cornerRadius)
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val buttonShape = if (isExpressive) {
+        if (isCallButton) {
+            if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie12Sided.toShape()
+            else com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Sunny.toShape()
+        } else {
+            if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie6Sided.toShape()
+            else RoundedCornerShape(cornerRadius)
+        }
+    } else {
+        RoundedCornerShape(cornerRadius)
+    }
     val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val actionContent = @Composable {
@@ -2452,7 +2465,7 @@ fun DialerActionExpressive(
                     isLarge = isLarge
                 )
             } else {
-                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 32.dp else 24.dp))
+                Icon(icon, contentDescription, modifier = Modifier.size(if (isLarge) 28.dp else 24.dp))
             }
         }
     }
@@ -2605,11 +2618,46 @@ fun DialPadKey(
 
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
-    val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
     val isStarKey = number == "*"
     val isPlusSubKey = letters.trim() == "+"
-    val mainFontSize = (if (isStarKey) (if (compact) 26f else 32f) else (if (compact) 18f else 22f)) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
-    val subFontSize = (if (isPlusSubKey) 16f else 10f) * scaleFactor.coerceIn(0.6f, 1.4f) * fontScale
+    val hasLetters = letters.isNotBlank()
+
+    val density = LocalDensity.current
+    val currentFontScale = density.fontScale
+
+    // Base font sizes
+    val baseMainSize = if (isStarKey) {
+        if (compact) 22f else 25f
+    } else {
+        if (compact) 18f else 21f
+    }
+    val baseSubSize = if (isPlusSubKey) {
+        if (compact) 10f else 11f
+    } else {
+        if (compact) 8.5f else 9f
+    }
+
+    // Height budget inside the button: guarantee at least 14dp vertical margin (7dp top + 7dp bottom)
+    val buttonHeightVal = keyHeight.value
+    val maxContentHeight = (buttonHeightVal - 14f).coerceAtLeast(18f)
+
+    // Gap between digit and letters
+    val gapHeight = if (hasLetters) 1f else 0f
+
+    // Estimated total text height with font metrics (~1.15x em size) and fontScale
+    val estimatedMainH = baseMainSize * 1.15f * currentFontScale
+    val estimatedSubH = if (hasLetters) (baseSubSize * 1.15f * currentFontScale + gapHeight) else 0f
+    val totalEstimatedH = (estimatedMainH + estimatedSubH) * scaleFactor
+
+    // If text exceeds button height budget, scale down smoothly so it NEVER reaches or crosses the button edge
+    val fitRatio = if (totalEstimatedH > maxContentHeight) {
+        (maxContentHeight / totalEstimatedH).coerceIn(0.5f, 1.0f)
+    } else {
+        1.0f
+    }
+
+    val finalMainFontSize = (baseMainSize * scaleFactor * fitRatio).coerceAtLeast(10f)
+    val finalSubFontSize = (baseSubSize * scaleFactor * fitRatio).coerceAtLeast(6f)
 
     val triggerTapPulse = {
         tapJob?.cancel()
@@ -2639,23 +2687,47 @@ fun DialPadKey(
                     onLongClick()
                 }) else null
             ),
-        shape = RoundedCornerShape(cornerRadius),
+        shape = if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
+            if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie4Sided.toShape()
+            else RoundedCornerShape(cornerRadius)
+        } else {
+            RoundedCornerShape(cornerRadius)
+        },
         color = bgColor
     ) {
-        Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
+        Column(
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+        ) {
             Text(
                 text = number,
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = mainFontSize.sp),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = finalMainFontSize.sp,
+                    lineHeight = finalMainFontSize.sp,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
                 color = mainTextColor,
-                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium
+                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false
             )
-            if (letters.isNotBlank()) {
+            if (hasLetters) {
+                Spacer(modifier = Modifier.height(gapHeight.dp))
                 Text(
                     text = letters,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = subFontSize.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = finalSubFontSize.sp,
+                        lineHeight = finalSubFontSize.sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
                     color = subTextColor,
-                    letterSpacing = if (isPlusSubKey) 0.sp else 1.sp,
-                    fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal
+                    letterSpacing = if (isPlusSubKey) 0.sp else 0.4.sp,
+                    fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

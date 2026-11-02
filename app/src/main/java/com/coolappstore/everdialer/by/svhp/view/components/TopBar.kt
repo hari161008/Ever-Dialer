@@ -321,9 +321,12 @@ fun SettingsIconButton(
         }
     }
 
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
     val appRoundness = LocalCardCornerRadius.current.value.coerceAtLeast(0f)
     val settingsShape = if (circleIcons) {
         CircleShape
+    } else if (isExpressive) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie9Sided.toShape()
     } else {
         RoundedCornerShape((appRoundness * (16f / 28f)).dp)
     }

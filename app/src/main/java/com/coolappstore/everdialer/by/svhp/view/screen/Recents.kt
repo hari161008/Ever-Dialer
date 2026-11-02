@@ -392,7 +392,17 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier.navigationBarsPadding().padding(bottom = 80.dp))
                 .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
             if (useLiquidGlass) {
-                Box(
+                FloatingActionButton(
+                    onClick = onOpenDialpad,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    shape = fabShape,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp
+                    ),
                     modifier = baseModifier.drawBackdrop(
                         backdrop = recentsBackdrop,
                         shape = { fabShape },
@@ -409,20 +419,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         },
                         highlight = { Highlight.Default }
                     )
-                ) {
-                    FloatingActionButton(
-                        onClick = onOpenDialpad,
-                        containerColor = fabBg.copy(alpha = 0.0f),
-                        contentColor = fabFg,
-                        shape = fabShape,
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = dialpadFabElevation,
-                            pressedElevation = dialpadFabElevation,
-                            focusedElevation = dialpadFabElevation,
-                            hoveredElevation = dialpadFabElevation
-                        ),
-                    ) { Icon(Icons.Default.Dialpad, "Dialpad") }
-                }
+                ) { Icon(Icons.Default.Dialpad, "Dialpad") }
             } else if (useBlur) {
                 Box(
                     modifier = baseModifier.drawBackdrop(

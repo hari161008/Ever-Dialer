@@ -109,6 +109,22 @@ fun isWindowsPhoneAnimation(): Boolean {
     }
 }
 
+val PetalM3EmphasizedEasing = CubicBezierEasing(0.2f, 0.0f, 0.2f, 1.0f)
+val PetalPopSlideEasing = CubicBezierEasing(0.2f, 0.0f, 0.2f, 1.0f)
+val PetalPopExitSlideEasing = CubicBezierEasing(0.2f, 0.0f, 0.2f, 1.0f)
+const val CARDS_ANIM_DURATION = 750
+const val CARDS_PUSH_DURATION = 780
+const val CARDS_POP_DURATION = 700
+
+fun isCardsAnimation(): Boolean {
+    return try {
+        val prefs = GlobalContext.getOrNull()?.getOrNull<PreferenceManager>()
+        prefs?.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) == PreferenceManager.ANIMATION_STYLE_CARDS
+    } catch (_: Throwable) {
+        false
+    }
+}
+
 /**
  * Tracks the last tap/click location so zoom-in originates directly from where the user clicked.
  */
@@ -370,6 +386,14 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
             fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+        } else if (isCardsAnimation()) {
+            slideInHorizontally(
+                initialOffsetX = { full -> full },
+                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+            ) + scaleIn(
+                initialScale = 0.91f,
+                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+            )
         } else {
             scaleIn(
                 animationSpec = tween(duration, easing = easing),
@@ -396,6 +420,14 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
         if (isWindowsPhoneAnimation()) {
             fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+        } else if (isCardsAnimation()) {
+            slideOutHorizontally(
+                targetOffsetX = { full -> -full / 8 },
+                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+            ) + scaleOut(
+                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing),
+                targetScale = 0.95f
+            ) + fadeOut(tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing), targetAlpha = 0.70f)
         } else {
             scaleOut(
                 animationSpec = tween(duration, easing = easing),
@@ -428,6 +460,14 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
             fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+        } else if (isCardsAnimation()) {
+            slideInHorizontally(
+                initialOffsetX = { full -> -full / 8 },
+                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing)
+            ) + scaleIn(
+                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                initialScale = 0.95f
+            ) + fadeIn(tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing), initialAlpha = 0.70f)
         } else {
             scaleIn(
                 animationSpec = tween(duration, easing = easing),
@@ -475,6 +515,17 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
                 animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
                 targetOffsetX = { full -> full / 6 }
             ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+        } else if (isCardsAnimation()) {
+            slideOutHorizontally(
+                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                targetOffsetX = { full -> full }
+            ) + scaleOut(
+                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                targetScale = 0.85f
+            ) + fadeOut(
+                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                targetAlpha = 0.85f
+            )
         } else {
             val fadeEasing = if (isContact || isExpanding) SettingsSmoothEase else easingIn
             scaleOut(
@@ -553,6 +604,27 @@ fun Modifier.settingsMotionBlur(maxBlurDp: Float = 10f): Modifier {
         val blurRadius = (blurFactor * maxBlurDp).dp
         if (blurRadius > 0.1.dp) {
             mod = mod.blur(radius = blurRadius, edgeTreatment = BlurredEdgeTreatment.Rectangle)
+        }
+    }
+
+    if (isCardsAnimation()) {
+        var isSettled by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            isSettled = true
+        }
+        val cardProgress by animateFloatAsState(
+            targetValue = if (isSettled) 0f else 1f,
+            animationSpec = tween(durationMillis = CARDS_PUSH_DURATION, easing = PetalPopSlideEasing),
+            label = "cardsCornerProgress"
+        )
+        val corner = 32.dp * cardProgress
+        val elevation = 16.dp * cardProgress
+        if (corner > 0.5.dp) {
+            mod = mod.graphicsLayer {
+                shape = RoundedCornerShape(corner)
+                clip = true
+                shadowElevation = elevation.toPx()
+            }
         }
     }
 

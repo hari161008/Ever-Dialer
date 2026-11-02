@@ -31,6 +31,13 @@ import org.koin.compose.koinInject
 import java.io.File
 import kotlin.math.roundToInt
 
+val LocalMaterialThemeStyle = androidx.compose.runtime.compositionLocalOf { PreferenceManager.MATERIAL_THEME_YOU }
+
+@Composable
+fun isMaterialExpressive(): Boolean {
+    return LocalMaterialThemeStyle.current == PreferenceManager.MATERIAL_THEME_EXPRESSIVE
+}
+
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80
 )
@@ -484,9 +491,12 @@ fun Rivo4Theme(
         )
     }
 
+    val materialThemeStyle = prefs.getMaterialTheme()
+
     CompositionLocalProvider(
         LocalLayoutDirection provides layoutDirection,
         LocalCardCornerRadius provides cornerRadius.dp,
+        LocalMaterialThemeStyle provides materialThemeStyle,
         com.coolappstore.everdialer.by.svhp.controller.util.LocalAppLanguage provides appLanguage
     ) {
         MaterialTheme(

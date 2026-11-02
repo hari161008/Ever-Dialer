@@ -14,7 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Tab
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -59,6 +61,9 @@ fun TabSectionsDialog(
     var tabShowDialpad    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)) }
     var scrollIndication  by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SCROLL_INDICATION,     true)) }
     var pillNav           by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_PILL_NAV,              true)) }
+    var slideToOpen       by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         false)) }
+    var showDefaultTabDialog by remember { mutableStateOf(false) }
+    var defaultTab        by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls") }
 
     val tabOptions = remember {
         listOf(
@@ -127,6 +132,8 @@ fun TabSectionsDialog(
         tabShowDialpad    = false; prefs.setBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)
         scrollIndication  = true;  prefs.setBoolean(PreferenceManager.KEY_SCROLL_INDICATION,  true)
         pillNav           = true;  prefs.setBoolean(PreferenceManager.KEY_PILL_NAV,           true)
+        slideToOpen       = false; prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN,         false)
+        defaultTab        = "calls"; prefs.setString(PreferenceManager.KEY_DEFAULT_TAB,          "calls")
     }
 
     AlertDialog(
@@ -344,6 +351,93 @@ fun TabSectionsDialog(
                                         }
                                     )
                                 }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // Slide to Open toggle
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val newValue = !slideToOpen
+                                            slideToOpen = newValue
+                                            prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, newValue)
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Swipe,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Slide to Open",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Drag the highlighted pill to slide across tabs and switch on release",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = slideToOpen,
+                                        onCheckedChange = {
+                                            slideToOpen = it
+                                            prefs.setBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, it)
+                                        }
+                                    )
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // Default Tab Section container
+                                val defaultTabLabel = remember(defaultTab) {
+                                    tabOptions.firstOrNull { it.key == defaultTab }?.label ?: "Calls"
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showDefaultTabDialog = true }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tab,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Default Tab Section",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Choose which tab opens when the app starts (currently: $defaultTabLabel)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -367,6 +461,15 @@ fun TabSectionsDialog(
             TextButton(onClick = { resetTabSectionsToDefault() }) { Text("Default") }
         }
     )
+
+    if (showDefaultTabDialog) {
+        DefaultTabSectionDialog(
+            onDismissRequest = {
+                showDefaultTabDialog = false
+                defaultTab = prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls"
+            }
+        )
+    }
 }
 
 @Composable
@@ -434,3 +537,108 @@ private fun VerticalScrollIndicator(
         }
     }
 }
+
+@Composable
+fun DefaultTabSectionDialog(
+    onDismissRequest: () -> Unit
+) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    var defaultTab by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_DEFAULT_TAB, "calls") ?: "calls")
+    }
+
+    val tabOptions = remember {
+        listOf(
+            TabSectionItem("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
+            TabSectionItem("calls",      "Calls",      Icons.Outlined.History),
+            TabSectionItem("contacts",   "Contacts",   Icons.Outlined.Person),
+            TabSectionItem("sms",        "SMS",        Icons.Outlined.Chat),
+            TabSectionItem("groups",     "Groups",     Icons.Outlined.Group),
+            TabSectionItem("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
+            TabSectionItem("notes",      "Note",       Icons.Outlined.Note)
+        )
+    }
+
+    val availableTabOptions = remember(settingsVer) {
+        tabOptions.filter { option ->
+            when (option.key) {
+                "favorites"  -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES, true)
+                "calls"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS, true)
+                "contacts"   -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
+                "sms"        -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
+                "groups"     -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
+                "recordings" -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+                "notes"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
+                else         -> true
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Tab, null, tint = MaterialTheme.colorScheme.primary) },
+        title = { Text("Default Tab Section") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Choose which tab opens when the app starts.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                availableTabOptions.forEach { option ->
+                    val isSelected = defaultTab == option.key
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    defaultTab = option.key
+                                    prefs.setString(PreferenceManager.KEY_DEFAULT_TAB, option.key)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = option.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                option.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f),
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    defaultTab = option.key
+                                    prefs.setString(PreferenceManager.KEY_DEFAULT_TAB, option.key)
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) { Text("Done") }
+        }
+    )
+}
+

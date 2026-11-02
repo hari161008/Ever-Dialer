@@ -88,6 +88,16 @@ import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import com.coolappstore.everdialer.by.svhp.liquidglass.LocalLiquidGlassBackdrop
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.ExpressiveShapeHolder
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.featureShape
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 
 // ─── App Haptics Helper ────────────────────────────────────────────────────────
 
@@ -359,15 +369,18 @@ fun RivoExpressiveCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     icon: ImageVector? = null,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(LocalCardCornerRadius.current),
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    shape: androidx.compose.ui.graphics.Shape? = null,
+    containerColor: Color? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val isExpressive = isMaterialExpressive()
+    val resolvedShape = shape ?: RoundedCornerShape(if (isExpressive) 28.dp else LocalCardCornerRadius.current)
+    val resolvedContainerColor = containerColor ?: if (isExpressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerLow
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = resolvedShape,
+        colors = CardDefaults.cardColors(containerColor = resolvedContainerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -666,9 +679,104 @@ internal fun adjustIconColorForTheme(color: Color, isDark: Boolean): Color {
     }
 }
 
+// ─── Feature Icon & Hero (Material Expressive) ──────────────────────────────
+
+/**
+ * Feature icon in a Material 3 Expressive shape (cookie, sunny, clover, flower...)
+ * with a translucent tinted fill.
+ */
+@Composable
+fun FeatureIcon(
+    icon: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    iconSize: Dp = 22.dp,
+    backgroundAlpha: Float = 0.16f,
+    shape: ExpressiveShapeHolder = featureShape(tint),
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(shape.toShape())
+            .background(tint.copy(alpha = backgroundAlpha)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+/**
+ * Hero banner at the top of settings screens: a slowly rotating Material 3 Expressive shape
+ * carrying the feature icon, over a soft tinted container.
+ */
+@Composable
+fun PetalFeatureHero(
+    icon: ImageVector,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    shape: ExpressiveShapeHolder = featureShape(tint),
+) {
+    val spin = rememberInfiniteTransition(label = "heroSpin")
+    val angle by spin.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(32_000, easing = LinearEasing), RepeatMode.Restart),
+        label = "heroAngle",
+    )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = tint.copy(alpha = 0.14f).compositeOver(MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(modifier = Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = angle }
+                        .clip(shape.toShape())
+                        .background(tint),
+                )
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 // ─── Icon Container Helper ────────────────────────────────────────────────────
 /**
- * Renders a colored square icon box with translucent tinted background.
+ * Renders a colored square or expressive-shaped icon box with translucent tinted background.
  * iconContainerColor = null → falls back to secondaryContainer theming.
  */
 @Composable
@@ -695,6 +803,7 @@ fun RivoIconBox(
 
     val prefs = koinInject<PreferenceManager>()
     val settingsVer by prefs.settingsChanged.collectAsState()
+    val isExpressive = isMaterialExpressive()
     val solidIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
     val circleIcons = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CIRCLE_ICONS, false) }
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
@@ -729,18 +838,40 @@ fun RivoIconBox(
     }
 
     val cornerRadius = (size.value * (14f / 44f)).dp
-    val defaultShape = if (circleIcons) CircleShape else RoundedCornerShape(cornerRadius)
+    val defaultShape = if (circleIcons) {
+        CircleShape
+    } else if (isExpressive) {
+        val baseColor = iconContainerColor ?: MaterialTheme.colorScheme.primary
+        featureShape(baseColor).toShape()
+    } else {
+        RoundedCornerShape(cornerRadius)
+    }
+
+    val finalBgColor = if (isExpressive && !solidIcons) {
+        val baseColor = iconContainerColor ?: MaterialTheme.colorScheme.primary
+        val adjusted = adjustIconColorForTheme(baseColor, isDark)
+        adjusted.copy(alpha = if (isDark) 0.22f else 0.16f)
+    } else {
+        bgColor
+    }
+
+    val finalFgColor = if (isExpressive && !solidIcons) {
+        val baseColor = iconContainerColor ?: MaterialTheme.colorScheme.primary
+        adjustIconColorForTheme(baseColor, isDark)
+    } else {
+        fgColor
+    }
 
     Surface(
         modifier = modifier.size(size).scale(iconScale).alpha(iconAlpha),
         shape = shape ?: defaultShape,
-        color = bgColor,
+        color = finalBgColor,
         shadowElevation = 0.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon, null,
-                tint = fgColor,
+                tint = finalFgColor,
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -786,9 +917,10 @@ fun RivoListItem(
     val prefs = koinInject<PreferenceManager>()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isExpressive = isMaterialExpressive()
     val scale by animateFloatAsState(
-        targetValue = if (isMenuOpen) 0.97f else if (isPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        targetValue = if (isMenuOpen) 0.97f else if (isPressed) (if (isExpressive) 0.96f else 0.95f) else 1f,
+        animationSpec = spring(stiffness = if (isExpressive) Spring.StiffnessMediumLow else Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "ListItemScale"
     )
 
@@ -814,6 +946,7 @@ fun RivoListItem(
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
     val isInteractive = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
     var lastClickTime by remember { mutableLongStateOf(0L) }
+    val itemCornerRadius = if (isExpressive) 20.dp else (LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp
 
     Surface(
         color = Color.Transparent,
@@ -829,7 +962,7 @@ fun RivoListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { coords -> rowCoords = coords }
-                .clip(RoundedCornerShape((LocalCardCornerRadius.current.value.coerceAtLeast(0f) * (16f / 28f)).dp))
+                .clip(RoundedCornerShape(itemCornerRadius))
                 .then(
                     if (isInteractive) {
                         Modifier
@@ -1699,5 +1832,35 @@ fun RivoBlurFab(
             elevation = FloatingActionButtonDefaults.elevation(0.dp),
             modifier = modifier
         ) { content() }
+    }
+}
+
+/**
+ * Expressive slider that seamlessly delegates to [FancyExpressiveSlider] when
+ * Material Expressive is selected, or standard Material [Slider] when in Material You mode.
+ */
+@Composable
+fun RivoExpressiveSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    displayValue: String? = null
+) {
+    if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.FancyExpressiveSlider(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier,
+            valueRange = valueRange,
+            displayValue = displayValue
+        )
+    } else {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = modifier
+        )
     }
 }

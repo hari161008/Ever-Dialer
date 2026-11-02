@@ -493,6 +493,12 @@ class PreferenceManager(context: Context) {
 
     fun getContactInfoOrder(): List<String> = parseContactInfoOrder(getString(KEY_CONTACT_INFO_ORDER, null))
 
+    fun getMaterialTheme(): String =
+        getString(KEY_MATERIAL_THEME, MATERIAL_THEME_YOU) ?: MATERIAL_THEME_YOU
+
+    fun setMaterialTheme(theme: String) =
+        setString(KEY_MATERIAL_THEME, theme)
+
     fun getAnimationStyle(): String =
         getString(KEY_ANIMATION_STYLE, ANIMATION_STYLE_ZOOM) ?: ANIMATION_STYLE_ZOOM
 
@@ -655,28 +661,27 @@ class PreferenceManager(context: Context) {
     fun getLiquidGlassDefaultConfig(elementKey: String): LiquidGlassElementConfig {
         val defaultBlur = when (elementKey) {
             KEY_LG_DROPDOWN_MENU -> 6f
-            KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 0f
+            KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 2f
             else -> 2f
         }
         val defaultRefractionHeight = when (elementKey) {
-            KEY_LG_BOTTOM_NAV -> 23f
+            KEY_LG_BOTTOM_NAV, KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 23f
             KEY_LG_DROPDOWN_MENU -> 40f
             else -> 18f
         }
         val defaultRefractionAmount = when (elementKey) {
-            KEY_LG_BOTTOM_NAV -> 64f
+            KEY_LG_BOTTOM_NAV, KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 64f
             KEY_LG_DROPDOWN_MENU -> 248f
             KEY_LG_DIALPAD_CALL_BUTTON -> 52f
             else -> 48f
         }
         val defaultSaturation = when (elementKey) {
-            KEY_LG_BOTTOM_NAV, KEY_LG_DROPDOWN_MENU -> 1.4f
+            KEY_LG_BOTTOM_NAV, KEY_LG_DROPDOWN_MENU, KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> 1.4f
             KEY_LG_DIALPAD_CALL_BUTTON -> 1.3f
             else -> 1.0f
         }
         val defaultBrightness = when (elementKey) {
             KEY_LG_DROPDOWN_MENU -> -0.13f
-            KEY_LG_CONTACTS_FAB, KEY_LG_RECENTS_FAB -> -0.15f
             else -> 0f
         }
         return LiquidGlassElementConfig(
@@ -692,14 +697,32 @@ class PreferenceManager(context: Context) {
 
     fun getLiquidGlassConfig(elementKey: String): LiquidGlassElementConfig {
         val def = getLiquidGlassDefaultConfig(elementKey)
+        val rawBrightness = getFloat("${elementKey}_brightness", def.brightness)
+        val brightness = if ((elementKey == KEY_LG_CONTACTS_FAB || elementKey == KEY_LG_RECENTS_FAB) && rawBrightness == -0.15f) {
+            def.brightness
+        } else {
+            rawBrightness
+        }
+        val rawBlur = getFloat("${elementKey}_blur", def.blurRadiusDp)
+        val blurRadiusDp = if ((elementKey == KEY_LG_CONTACTS_FAB || elementKey == KEY_LG_RECENTS_FAB) && rawBlur == 0f) {
+            def.blurRadiusDp
+        } else {
+            rawBlur
+        }
+        val rawSat = getFloat("${elementKey}_saturation", def.saturation)
+        val saturation = if ((elementKey == KEY_LG_CONTACTS_FAB || elementKey == KEY_LG_RECENTS_FAB) && rawSat == 1.0f) {
+            def.saturation
+        } else {
+            rawSat
+        }
         return LiquidGlassElementConfig(
-            blurRadiusDp = getFloat("${elementKey}_blur", def.blurRadiusDp),
+            blurRadiusDp = blurRadiusDp,
             refractionHeightDp = getFloat("${elementKey}_refraction_h", def.refractionHeightDp),
             refractionAmountDp = getFloat("${elementKey}_refraction_a", def.refractionAmountDp),
             chromaticAberration = getBoolean("${elementKey}_chromatic", def.chromaticAberration),
             depthEffect = getBoolean("${elementKey}_depth", def.depthEffect),
-            saturation = getFloat("${elementKey}_saturation", def.saturation),
-            brightness = getFloat("${elementKey}_brightness", def.brightness)
+            saturation = saturation,
+            brightness = brightness
         )
     }
 
@@ -999,6 +1022,7 @@ class PreferenceManager(context: Context) {
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
         const val KEY_SCROLL_INDICATION     = "scroll_indication"
         const val KEY_PILL_NAV              = "pill_style_nav"
+        const val KEY_SLIDE_TO_OPEN         = "slide_to_open"
         const val KEY_GROUP_CALLS_BY_LATEST = "group_calls_by_latest"
         const val KEY_SHOW_SIMS_IN_CALL_LOGS = "show_sims_in_call_logs"
         const val KEY_SHOW_TOTAL_CALLS_MADE = "show_total_calls_made"
@@ -1064,8 +1088,13 @@ class PreferenceManager(context: Context) {
         // Dialer role popup shown after welcome
         const val KEY_DIALER_POPUP_SHOWN    = "dialer_popup_shown"
         const val KEY_TELEGRAM_SHOWN        = "telegram_shown"
+        const val KEY_MATERIAL_THEME        = "material_theme"
+        const val MATERIAL_THEME_YOU        = "material_you"
+        const val MATERIAL_THEME_EXPRESSIVE = "material_expressive"
+
         const val KEY_ANIMATION_STYLE       = "animation_style"
         const val ANIMATION_STYLE_ZOOM      = "zoom"
+        const val ANIMATION_STYLE_CARDS     = "cards"
         const val ANIMATION_STYLE_WINDOWS_PHONE = "windows_phone"
         const val KEY_MOTION_BLUR_ANIMATION = "motion_blur_animation_enabled"
         const val KEY_PREDICTIVE_BACK_GESTURE = "predictive_back_gesture_enabled"

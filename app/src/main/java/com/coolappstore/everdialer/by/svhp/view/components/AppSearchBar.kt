@@ -134,6 +134,8 @@ fun AppSearchBar(
                     text = placeholderText,
                     style = MaterialTheme.typography.bodyLarge,
                     color = searchBarFg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (onVoiceClick != null) {

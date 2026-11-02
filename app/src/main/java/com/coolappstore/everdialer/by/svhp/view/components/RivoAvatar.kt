@@ -208,6 +208,16 @@ fun RivoAvatar(
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
 
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val resolvedShape = if (isExpressive && shape == CircleShape) {
+        val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
+        val key = if (hasName) name else (photoUri ?: "unknown_caller")
+        val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
+        avatarShapeList[idx].toShape()
+    } else {
+        shape
+    }
+
     if (size != null) {
         val letterFontSize = (size.value * 0.40f).coerceIn(14f, 72f).sp
         val iconSize       = (size.value * 0.55f).coerceIn(16f, 130f).dp
@@ -215,8 +225,8 @@ fun RivoAvatar(
         Box(
             modifier = modifier
                 .size(size)
-                .background(backgroundColor, shape)
-                .clip(shape),
+                .background(backgroundColor, resolvedShape)
+                .clip(resolvedShape),
             contentAlignment = Alignment.Center
         ) {
             when {
@@ -248,8 +258,8 @@ fun RivoAvatar(
     } else {
         BoxWithConstraints(
             modifier = modifier
-                .background(backgroundColor, shape)
-                .clip(shape),
+                .background(backgroundColor, resolvedShape)
+                .clip(resolvedShape),
             contentAlignment = Alignment.Center
         ) {
             val letterFontSize = (maxWidth.value * 0.40f).coerceIn(14f, 72f).sp

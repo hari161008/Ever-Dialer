@@ -418,6 +418,8 @@ fun GlobalSearchPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 text = "Search in Ever Dialer",
                 style = MaterialTheme.typography.bodyLarge,
                 color = searchBarFg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
         }

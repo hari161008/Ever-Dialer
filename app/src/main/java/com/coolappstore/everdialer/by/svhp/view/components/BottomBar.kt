@@ -26,6 +26,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -64,9 +66,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -149,6 +156,10 @@ fun BottomBar(navController: NavController) {
     val blurBottomNav = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_BLUR_BOTTOM_NAV, true) }
     val lgBottomNavConfig = remember(settingsState) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_BOTTOM_NAV) }
     val blurBottomNavConfig = remember(settingsState) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_BOTTOM_NAV) }
+    val slideToOpen      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SLIDE_TO_OPEN, false) }
+    val globalBackdrop   = LocalLiquidGlassBackdrop.current
+    val useLgBottomNav   = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
+    val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
     val showFavoritesTab  = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_FAVORITES,  true) }
     val showCallsTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CALLS,      true) }
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
@@ -342,11 +353,7 @@ fun BottomBar(navController: NavController) {
                 .graphicsLayer { alpha = pillAlpha },
             contentAlignment = Alignment.Center
         ) {
-            val globalBackdrop = LocalLiquidGlassBackdrop.current
             val pillShape = RoundedCornerShape(percent = 50)
-
-            val useLgBottomNav = liquidGlass && lgBottomNav && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && globalBackdrop != null
-            val useBlurBottomNav = blurEffects && blurBottomNav && !useLgBottomNav
 
             val screenWidth = configuration.screenWidthDp.dp
             val horizontalGap = 24.dp
@@ -407,10 +414,19 @@ fun BottomBar(navController: NavController) {
                     .padding(bottom = currentBottomPadding),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                var rowCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                val tabCenters = remember { mutableStateMapOf<String, Float>() }
+                var isSliding by remember { mutableStateOf(false) }
+                var slideDragOffset by remember { mutableFloatStateOf(0f) }
+                var hoveredTabKey by remember { mutableStateOf<String?>(null) }
+
+                val selectedTab = orderedTabs.firstOrNull { it.selected }
+
                 val pillContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier
-                            .horizontalScroll(scrollState)
+                            .onGloballyPositioned { rowCoordinates = it }
+                            .horizontalScroll(scrollState, enabled = !isSliding)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically
@@ -419,26 +435,80 @@ fun BottomBar(navController: NavController) {
                             key(tab.key) {
                                 val bringIntoViewRequester = remember { BringIntoViewRequester() }
                                 LaunchedEffect(tab.selected) {
-                                    if (tab.selected) {
+                                    if (tab.selected && !isSliding) {
                                         try {
                                             bringIntoViewRequester.bringIntoView()
                                         } catch (_: Throwable) {}
                                     }
                                 }
                                 PillNavItem(
-                                    modifier       = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                                    modifier       = Modifier
+                                        .bringIntoViewRequester(bringIntoViewRequester)
+                                        .onGloballyPositioned { coords ->
+                                            rowCoordinates?.let { rowCoords ->
+                                                if (coords.isAttached && rowCoords.isAttached) {
+                                                    val posInRow = rowCoords.localPositionOf(coords, Offset.Zero)
+                                                    val centerX = posInRow.x + coords.size.width / 2f
+                                                    tabCenters[tab.key] = centerX
+                                                }
+                                            }
+                                        },
                                     selected       = tab.selected,
                                     selectedIcon   = tab.selectedIcon,
                                     unselectedIcon = tab.unselectedIcon,
                                     label          = tab.label,
                                     iconOnly       = iconOnly,
+                                    isHovered      = isSliding && hoveredTabKey == tab.key && !tab.selected,
+                                    slideToOpen    = slideToOpen,
+                                    slideOffset    = if (isSliding && tab.selected) slideDragOffset else 0f,
+                                    onSlideDragStart = {
+                                        isSliding = true
+                                        slideDragOffset = 0f
+                                        hoveredTabKey = tab.key
+                                    },
+                                    onSlideDrag    = { delta ->
+                                        slideDragOffset += delta
+                                        val currentCenterX = (tabCenters[selectedTab?.key] ?: 0f) + slideDragOffset
+                                        var closestKey: String? = null
+                                        var minDist = Float.MAX_VALUE
+                                        tabCenters.forEach { (key, centerX) ->
+                                            val dist = kotlin.math.abs(centerX - currentCenterX)
+                                            if (dist < minDist) {
+                                                minDist = dist
+                                                closestKey = key
+                                            }
+                                        }
+                                        if (closestKey != null && closestKey != hoveredTabKey) {
+                                            hoveredTabKey = closestKey
+                                            doHaptic()
+                                        }
+                                    },
+                                    onSlideDragEnd = {
+                                        if (isSliding) {
+                                            val targetTab = orderedTabs.firstOrNull { it.key == hoveredTabKey }
+                                            if (targetTab != null && !targetTab.selected) {
+                                                triggerPillWidthAnimation()
+                                                targetTab.onClick()
+                                            }
+                                        }
+                                        isSliding = false
+                                        slideDragOffset = 0f
+                                        hoveredTabKey = null
+                                    },
+                                    onSlideDragCancel = {
+                                        isSliding = false
+                                        slideDragOffset = 0f
+                                        hoveredTabKey = null
+                                    },
                                     onClick        = {
                                         triggerPillWidthAnimation()
                                         tab.onClick()
                                     },
                                     onLongClick    = {
-                                        doHaptic()
-                                        showTabSectionsDialog = true
+                                        if (!slideToOpen) {
+                                            doHaptic()
+                                            showTabSectionsDialog = true
+                                        }
                                     }
                                 )
                             }
@@ -478,7 +548,8 @@ fun BottomBar(navController: NavController) {
                                     depthEffect = lgBottomNavConfig.depthEffect
                                 )
                             },
-                            highlight = { Highlight.Default }
+                            highlight = { Highlight.Default },
+                            shadow    = null
                         )
                     ) { pillContent() }
                 } else if (useBlurBottomNav && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -491,7 +562,8 @@ fun BottomBar(navController: NavController) {
                                 colorControls(saturation = blurBottomNavConfig.saturation)
                                 blur(blurBottomNavConfig.blurRadiusDp * d)
                             },
-                            highlight = { Highlight.Default }
+                            highlight = { Highlight.Default },
+                            shadow = null
                         )
                     ) {
                         Box(
@@ -584,18 +656,16 @@ fun BottomBar(navController: NavController) {
                 .graphicsLayer { alpha = navBarAlpha },
             contentAlignment = Alignment.BottomCenter
         ) {
-            Surface(
-                color          = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 2.dp,
-                modifier       = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .onSizeChanged { size ->
-                        if (size.height > 0) {
-                            barHeightPx = size.height.toFloat()
-                        }
+            val standardBarModifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .onSizeChanged { size ->
+                    if (size.height > 0) {
+                        barHeightPx = size.height.toFloat()
                     }
-            ) {
+                }
+
+            val standardBarContent: @Composable () -> Unit = {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -633,8 +703,10 @@ fun BottomBar(navController: NavController) {
                                         .width(itemWidth),
                                     onClick        = tab.onClick,
                                     onLongClick    = {
-                                        doHaptic()
-                                        showTabSectionsDialog = true
+                                        if (!slideToOpen) {
+                                            doHaptic()
+                                            showTabSectionsDialog = true
+                                        }
                                     }
                                 )
                             }
@@ -653,11 +725,66 @@ fun BottomBar(navController: NavController) {
                         if (standardIndicatorProgress > 0.01f) {
                             ScrollIndicatorPill(
                                 scrollState = standardScrollState,
-                                useLg       = false,
-                                useBlur     = false
+                                useLg       = useLgBottomNav,
+                                useBlur     = useBlurBottomNav
                             )
                         }
                     }
+                }
+            }
+
+            if (useLgBottomNav && globalBackdrop != null) {
+                Surface(
+                    shape           = RectangleShape,
+                    color           = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
+                    shadowElevation = 0.dp,
+                    tonalElevation  = 0.dp,
+                    modifier        = standardBarModifier.drawBackdrop(
+                        backdrop = globalBackdrop,
+                        shape    = { RectangleShape },
+                        effects  = {
+                            val d = density
+                            colorControls(brightness = lgBottomNavConfig.brightness, saturation = lgBottomNavConfig.saturation)
+                            if (lgBottomNavConfig.blurRadiusDp > 0f) blur(lgBottomNavConfig.blurRadiusDp * d)
+                            lens(
+                                refractionHeight = lgBottomNavConfig.refractionHeightDp * d,
+                                refractionAmount = lgBottomNavConfig.refractionAmountDp * d,
+                                chromaticAberration = lgBottomNavConfig.chromaticAberration,
+                                depthEffect = lgBottomNavConfig.depthEffect
+                            )
+                        },
+                        highlight = { Highlight.Default },
+                        shadow    = null
+                    )
+                ) { standardBarContent() }
+            } else if (useBlurBottomNav && globalBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Box(
+                    modifier = standardBarModifier.drawBackdrop(
+                        backdrop = globalBackdrop,
+                        shape    = { RectangleShape },
+                        effects  = {
+                            val d = density
+                            colorControls(saturation = blurBottomNavConfig.saturation)
+                            blur(blurBottomNavConfig.blurRadiusDp * d)
+                        },
+                        highlight = { Highlight.Default },
+                        shadow    = null
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.45f))
+                    )
+                    standardBarContent()
+                }
+            } else {
+                Surface(
+                    color          = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 2.dp,
+                    modifier       = standardBarModifier
+                ) {
+                    standardBarContent()
                 }
             }
         }
@@ -780,6 +907,13 @@ private fun PillNavItem(
     label: String,
     iconOnly: Boolean,
     modifier: Modifier = Modifier,
+    isHovered: Boolean = false,
+    slideToOpen: Boolean = false,
+    slideOffset: Float = 0f,
+    onSlideDragStart: () -> Unit = {},
+    onSlideDrag: (Float) -> Unit = {},
+    onSlideDragEnd: () -> Unit = {},
+    onSlideDragCancel: () -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -796,14 +930,15 @@ private fun PillNavItem(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val bgAlpha by animateFloatAsState(
-        targetValue   = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        targetValue   = if (selected) 1f else if (isHovered) 0.35f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}BgAlpha"
     )
     val iconTint by animateColorAsState(
         targetValue   = if (selected) activeNavFg
+                        else if (isHovered) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label         = "${label}IconTint"
     )
     // Tap-press squish → spring back bounce
@@ -811,23 +946,62 @@ private fun PillNavItem(
         targetValue   = when {
             isPressed -> 0.82f
             selected  -> 1.10f
+            isHovered -> 1.08f
             else      -> 1f
         },
         animationSpec = if (isPressed)
             tween(durationMillis = 80, easing = FastOutSlowInEasing)
-        else if (selected)
+        else if (selected || isHovered)
             spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)
         else
             tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label         = "${label}Scale"
     )
 
+    val translationX by animateFloatAsState(
+        targetValue   = slideOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label         = "${label}SlideTranslation"
+    )
+
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val navShape = if (isExpressive && (selected || isHovered)) {
+        RoundedCornerShape(18.dp)
+    } else {
+        RoundedCornerShape(50.dp)
+    }
+
+    val slideModifier = if (slideToOpen && selected) {
+        Modifier
+            .zIndex(10f)
+            .graphicsLayer { this.translationX = translationX }
+            .pointerInput(selected, slideToOpen) {
+                detectHorizontalDragGestures(
+                    onDragStart = { onSlideDragStart() },
+                    onDragEnd = { onSlideDragEnd() },
+                    onDragCancel = { onSlideDragCancel() },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        onSlideDrag(dragAmount)
+                    }
+                )
+            }
+    } else {
+        Modifier.zIndex(1f)
+    }
+
     Box(
         modifier = modifier
+            .then(slideModifier)
             .scale(scale)
-            .clip(RoundedCornerShape(50.dp))
+            .clip(navShape)
             .background(activeNavBg.copy(alpha = bgAlpha))
-            .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(horizontal = if (iconOnly) 16.dp else 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
