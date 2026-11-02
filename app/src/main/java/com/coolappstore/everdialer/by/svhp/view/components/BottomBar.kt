@@ -524,24 +524,38 @@ fun BottomBar(navController: NavController) {
                 }
 
                 val localDensity = LocalDensity.current
+                val currentFingerViewportX by rememberUpdatedState(dragStartViewportX + slideDragOffset)
+                val currentCalcWidth by rememberUpdatedState(calcWidth)
+
                 LaunchedEffect(isSliding) {
                     if (!isSliding) return@LaunchedEffect
-                    val edgeThresholdPx = with(localDensity) { 56.dp.toPx() }
-                    val maxScrollSpeed = with(localDensity) { 12.dp.toPx() }
+                    val edgeThresholdPx = with(localDensity) { 64.dp.toPx() }
+                    val edgeMarginPx = with(localDensity) { 24.dp.toPx() }
+                    val baseScrollSpeed = with(localDensity) { 5.dp.toPx() }
+                    val maxScrollSpeed = with(localDensity) { 7.5.dp.toPx() }
 
                     while (isActive && isSliding) {
                         val rowWidth = rowCoordinates?.size?.width?.toFloat() ?: 0f
                         if (rowWidth > 0f && scrollState.maxValue > 0) {
+                            val fingerX = currentFingerViewportX
+                            val pillW = currentCalcWidth
+                            val pillLeft = fingerX - (pillW / 2f)
+                            val pillRight = fingerX + (pillW / 2f)
+
                             val scrollDelta: Float = when {
-                                viewportFingerX > (rowWidth - edgeThresholdPx) -> {
-                                    val proximity = ((viewportFingerX - (rowWidth - edgeThresholdPx)) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                                (fingerX > rowWidth - edgeThresholdPx || pillRight > rowWidth - edgeMarginPx) -> {
+                                    val overDist = (fingerX - (rowWidth - edgeThresholdPx)).coerceAtLeast(0f)
+                                    val factor = (overDist / edgeThresholdPx).coerceIn(0f, 1f)
+                                    val speed = baseScrollSpeed + factor * (maxScrollSpeed - baseScrollSpeed)
                                     val canScroll = (scrollState.maxValue - scrollState.value).toFloat()
-                                    (maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                                    if (canScroll > 0f) speed.coerceAtMost(canScroll) else 0f
                                 }
-                                viewportFingerX < edgeThresholdPx -> {
-                                    val proximity = ((edgeThresholdPx - viewportFingerX) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                                (fingerX < edgeThresholdPx || pillLeft < edgeMarginPx) -> {
+                                    val overDist = (edgeThresholdPx - fingerX).coerceAtLeast(0f)
+                                    val factor = (overDist / edgeThresholdPx).coerceIn(0f, 1f)
+                                    val speed = baseScrollSpeed + factor * (maxScrollSpeed - baseScrollSpeed)
                                     val canScroll = scrollState.value.toFloat()
-                                    -(maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                                    if (canScroll > 0f) -speed.coerceAtMost(canScroll) else 0f
                                 }
                                 else -> 0f
                             }
@@ -912,24 +926,38 @@ fun BottomBar(navController: NavController) {
             }
         }
 
+        val standardLiveFingerViewportX by rememberUpdatedState(standardDragStartViewportX + standardSlideDragOffset)
+        val standardLiveCalcWidth by rememberUpdatedState(standardCalcWidth)
+
         LaunchedEffect(standardIsSliding) {
             if (!standardIsSliding) return@LaunchedEffect
-            val edgeThresholdPx = with(standardDensity) { 56.dp.toPx() }
-            val maxScrollSpeed = with(standardDensity) { 12.dp.toPx() }
+            val edgeThresholdPx = with(standardDensity) { 64.dp.toPx() }
+            val edgeMarginPx = with(standardDensity) { 24.dp.toPx() }
+            val baseScrollSpeed = with(standardDensity) { 5.dp.toPx() }
+            val maxScrollSpeed = with(standardDensity) { 7.5.dp.toPx() }
 
             while (isActive && standardIsSliding) {
                 val rowWidth = standardRowCoordinates?.size?.width?.toFloat() ?: 0f
                 if (rowWidth > 0f && standardScrollState.maxValue > 0) {
+                    val fingerX = standardLiveFingerViewportX
+                    val pillW = standardLiveCalcWidth
+                    val pillLeft = fingerX - (pillW / 2f)
+                    val pillRight = fingerX + (pillW / 2f)
+
                     val scrollDelta: Float = when {
-                        standardViewportFingerX > (rowWidth - edgeThresholdPx) -> {
-                            val proximity = ((standardViewportFingerX - (rowWidth - edgeThresholdPx)) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                        (fingerX > rowWidth - edgeThresholdPx || pillRight > rowWidth - edgeMarginPx) -> {
+                            val overDist = (fingerX - (rowWidth - edgeThresholdPx)).coerceAtLeast(0f)
+                            val factor = (overDist / edgeThresholdPx).coerceIn(0f, 1f)
+                            val speed = baseScrollSpeed + factor * (maxScrollSpeed - baseScrollSpeed)
                             val canScroll = (standardScrollState.maxValue - standardScrollState.value).toFloat()
-                            (maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                            if (canScroll > 0f) speed.coerceAtMost(canScroll) else 0f
                         }
-                        standardViewportFingerX < edgeThresholdPx -> {
-                            val proximity = ((edgeThresholdPx - standardViewportFingerX) / edgeThresholdPx).coerceIn(0.1f, 1.5f)
+                        (fingerX < edgeThresholdPx || pillLeft < edgeMarginPx) -> {
+                            val overDist = (edgeThresholdPx - fingerX).coerceAtLeast(0f)
+                            val factor = (overDist / edgeThresholdPx).coerceIn(0f, 1f)
+                            val speed = baseScrollSpeed + factor * (maxScrollSpeed - baseScrollSpeed)
                             val canScroll = standardScrollState.value.toFloat()
-                            -(maxScrollSpeed * proximity).coerceAtMost(canScroll)
+                            if (canScroll > 0f) -speed.coerceAtMost(canScroll) else 0f
                         }
                         else -> 0f
                     }

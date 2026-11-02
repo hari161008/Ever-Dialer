@@ -18,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupContent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -160,6 +161,28 @@ class CallActivity : FragmentActivity() {
     private fun releaseActivityProxWakeLock() {
         if (activityProxWakeLock?.isHeld == true) {
             try { activityProxWakeLock?.release() } catch (_: Throwable) {}
+        }
+    }
+
+    fun finishWithHangupAnimation(animated: Boolean) {
+        if (animated) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, R.anim.call_screen_stay, R.anim.call_screen_slide_down)
+            }
+            finish()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                @Suppress("DEPRECATION")
+                overridePendingTransition(R.anim.call_screen_stay, R.anim.call_screen_slide_down)
+            }
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0)
+            }
+            finish()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                @Suppress("DEPRECATION")
+                overridePendingTransition(0, 0)
+            }
         }
     }
 
@@ -331,22 +354,31 @@ class CallActivity : FragmentActivity() {
                 if (session != null) {
                     lastKnownSession = session
                 }
-                val effectiveSession = session ?: if (isCallingCardActive) lastKnownSession else null
+                val effectiveSession = session ?: lastKnownSession
                 val call = effectiveSession?.call
                 val isCallEnded = session == null || session?.state == Call.STATE_DISCONNECTED || call?.state == Call.STATE_DISCONNECTED
                 val callState = if (isCallEnded) Call.STATE_DISCONNECTED else (session?.state ?: effectiveSession?.state ?: Call.STATE_ACTIVE)
 
+                val hangupAnimationEnabled = remember(settingsVersion) {
+                    if (!prefs.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)) {
+                        prefs.setBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)
+                    }
+                    true
+                }
+
                 LaunchedEffect(session, callState) {
-                    // Real near-ear screen-off (plain + orientation-gated) is now handled
-                    // entirely by CallService regardless of which Activity is on top — this
-                    // effect only needs to worry about auto-closing the call screen.
-                    if (session == null || callState == Call.STATE_DISCONNECTED) {
-                        delay(800)
+                    // Auto-close the call screen when disconnected or disconnecting
+                    if (session == null || callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING) {
+                        if (hangupAnimationEnabled) {
+                            delay(120)
+                        } else {
+                            delay(40)
+                        }
                         // Wait for any pending auto-redial dialog or job or calling card popup to complete before closing
                         while (keepAliveForRedial.value || keepAliveForCallingCard.value) {
-                            delay(300)
+                            delay(200)
                         }
-                        finishAndRemoveTask()
+                        finishWithHangupAnimation(hangupAnimationEnabled)
                     }
                 }
 
@@ -1512,20 +1544,13 @@ fun ExpressiveCallScreen(
 
     var isDisconnecting by remember { mutableStateOf(false) }
     // Settings → Appearance → Visual Effects → "Hangup Animation". When off, the call screen
-    // should close immediately instead of smoothly sliding/fading away.
+    // closes immediately; when on, it exits with a smooth slide down window transition.
     val hangupAnimationEnabled = remember(settingsVersion) {
-        prefs?.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true) ?: true
+        if (prefs?.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true) == false) {
+            prefs.setBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)
+        }
+        true
     }
-    val disconnectOffset by animateDpAsState(
-        if (isDisconnecting) 120.dp else 0.dp,
-        if (hangupAnimationEnabled) tween(600) else snap(),
-        label = "disconnectSlide"
-    )
-    val disconnectAlpha by animateFloatAsState(
-        if (isDisconnecting) 0f else 1f,
-        if (hangupAnimationEnabled) tween(600) else snap(),
-        label = "disconnectAlpha"
-    )
 
     var wasRinging by remember { mutableStateOf(callState == Call.STATE_RINGING && !skipIncomingScreen) }
     var screenEntered by remember { mutableStateOf(true) }
@@ -1546,7 +1571,7 @@ fun ExpressiveCallScreen(
     }
 
     val isCallEnded = callState == Call.STATE_DISCONNECTED || callState == Call.STATE_DISCONNECTING || (call.state == Call.STATE_DISCONNECTED)
-    val isIncomingMode = !isCallEnded && (callState == Call.STATE_RINGING || (wasRinging && !callAnswered)) && !skipIncomingScreen
+    val isIncomingMode = (callState == Call.STATE_RINGING || (wasRinging && !callAnswered)) && !skipIncomingScreen
 
     val answerProgress by animateFloatAsState(
         targetValue = if (wasRinging && !callAnswered) 0f else 1f,
@@ -2063,8 +2088,6 @@ fun ExpressiveCallScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
-            .offset(y = disconnectOffset)
-            .alpha(disconnectAlpha)
     ) {
         Box(
             modifier = Modifier.fillMaxSize()
@@ -2191,9 +2214,9 @@ fun ExpressiveCallScreen(
                                         callState == Call.STATE_RINGING -> "Incoming"
                                         callState == Call.STATE_CONNECTING -> "Calling"
                                         callState == Call.STATE_DISCONNECTING || isDisconnecting || callState == Call.STATE_DISCONNECTED -> {
-                                            if (isIncomingMode) "Declined" else "Hanging up..."
+                                            if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Declined") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Hanging up...")
                                         }
-                                        else -> if (isIncomingMode) "Connecting..." else "Calling"
+                                        else -> if (isIncomingMode) com.coolappstore.everdialer.by.svhp.controller.util.tr("Connecting...") else com.coolappstore.everdialer.by.svhp.controller.util.tr("Calling")
                                     },
                                     color = if (isOnHold) Color(0xFFFFB74D) else subtleColor,
                                     style = lsBaseStatusStyle.copy(fontSize = lsBaseStatusStyle.fontSize * currentBgConfig.fontSizeScale)
@@ -2286,7 +2309,19 @@ fun ExpressiveCallScreen(
                             }
                         }
                     } else {
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        val incomingControlsAlpha by animateFloatAsState(
+                            targetValue = if (isCallEnded) 0f else 1f,
+                            animationSpec = tween(durationMillis = 150),
+                            label = "incomingControlsAlphaLandscape"
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .graphicsLayer { alpha = incomingControlsAlpha },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
                             if (incomingAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) {
                                 ClassicSwipeToAnswer(
                                     onAnswer = {
@@ -2646,10 +2681,16 @@ fun ExpressiveCallScreen(
                         }
                     } else {
                         // Ringing state — swipe to answer, also anchored to bottom
+                        val incomingControlsAlpha by animateFloatAsState(
+                            targetValue = if (isCallEnded) 0f else 1f,
+                            animationSpec = tween(durationMillis = 150),
+                            label = "incomingControlsAlpha"
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.BottomCenter)
+                                .graphicsLayer { alpha = incomingControlsAlpha }
                         ) {
                             if (incomingAnswerStyle == PreferenceManager.ANSWER_STYLE_CLASSIC) {
                                 ClassicSwipeToAnswer(
@@ -3200,7 +3241,8 @@ fun ExpressiveCallScreen(
             showCallingCardPopup = false
             CallActivity.keepAliveForCallingCard.value = false
             if (isCallEnded || call.state == Call.STATE_DISCONNECTED) {
-                (context as? Activity)?.finishAndRemoveTask()
+                (context as? CallActivity)?.finishWithHangupAnimation(hangupAnimationEnabled)
+                    ?: (context as? Activity)?.finishAndRemoveTask()
             }
         }
         BackHandler(enabled = true) {

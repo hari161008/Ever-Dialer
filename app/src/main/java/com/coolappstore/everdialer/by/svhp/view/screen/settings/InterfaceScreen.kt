@@ -202,7 +202,6 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
     val liquidGlass = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
     val blurEffects = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
-    var hangupAnimation     by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, true)) }
 
     // App Name preset picker
     var showAppNameDialog by remember { mutableStateOf(false) }
@@ -1732,23 +1731,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         prefs.setBoolean(PreferenceManager.KEY_SCROLL_ANIMATION, it)
                                     }
                                 )
-                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                RivoSwitchListItem(
-                                    headline = "Hangup Animation",
-                                    supporting = if (hangupAnimation)
-                                        "The call screen smoothly slides away when a call ends"
-                                    else
-                                        "The call screen closes immediately when a call ends, with no slide animation",
-                                    leadingIcon = Icons.Default.CallEnd,
-                                    iconContainerColor = Color(0xFFE53935),
-                                    checked = hangupAnimation,
-                                    modifier = Modifier.settingsSearchHighlight("hangup_animation", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        hangupAnimation = it
-                                        prefs.setBoolean(PreferenceManager.KEY_HANGUP_ANIMATION, it)
-                                    }
-                                )
+
                             }
                             }
                         }

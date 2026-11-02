@@ -388,9 +388,15 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 .onGloballyPositioned { coordinates ->
                     fabCenter = coordinates.boundsInRoot().center
                 }
-                .scale(fabScale * dialpadExpandScale)
-                .then(if (pillNav) Modifier.navigationBarsPadding().padding(bottom = 92.dp) else Modifier.navigationBarsPadding().padding(bottom = 80.dp))
-                .then(if (isLandscape) Modifier.navigationBarsPadding().padding(bottom = 8.dp) else Modifier)
+                .then(
+                    if (isLandscape) {
+                        Modifier.navigationBarsPadding().padding(bottom = 12.dp, end = 8.dp)
+                    } else if (pillNav) {
+                        Modifier.navigationBarsPadding().padding(bottom = 92.dp)
+                    } else {
+                        Modifier.navigationBarsPadding().padding(bottom = 80.dp)
+                    }
+                )
             if (useLiquidGlass) {
                 FloatingActionButton(
                     onClick = onOpenDialpad,
