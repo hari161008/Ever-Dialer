@@ -361,7 +361,7 @@ class CallService : InCallService() {
 
     companion object {
         private const val CHANNEL_ID = "call_channel"
-        private const val CHANNEL_INCOMING_ID = "call_incoming_channel"
+        private const val CHANNEL_INCOMING_ID = "call_incoming_channel_v2"
         private const val NOTIFICATION_ID = 101
 
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
@@ -1156,8 +1156,12 @@ class CallService : InCallService() {
         if (call.state == Call.STATE_SELECT_PHONE_ACCOUNT) return
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Delete legacy channel that may have cached default notification sound
+            try { nm.deleteNotificationChannel("call_incoming_channel") } catch (_: Exception) {}
+
             nm.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING_ID, "Incoming Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
                 enableVibration(true)
                 setBypassDnd(true)
             })
@@ -1258,8 +1262,8 @@ class CallService : InCallService() {
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(false)
-            .setSilent(!isRinging || isFullScreenIncoming)
-            .setDefaults(if (isRinging && !isFullScreenIncoming) NotificationCompat.DEFAULT_ALL else 0)
+            .setSound(null)
+            .setDefaults(if (isRinging && !isFullScreenIncoming) NotificationCompat.DEFAULT_VIBRATE else 0)
             .setWhen(connectTime)
             .setShowWhen(!isRinging)
             .setUsesChronometer(!isRinging)

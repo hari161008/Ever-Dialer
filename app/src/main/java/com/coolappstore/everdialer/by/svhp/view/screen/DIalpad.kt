@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -82,6 +83,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.view.WindowManager
@@ -1129,7 +1131,34 @@ fun DialPadContent(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
+    val currentDensity = LocalDensity.current
+    val rawDisplayScale = remember(settingsState) {
+        prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f).coerceIn(0.5f, 2.0f)
+    }
+    val rawFontScale = remember(settingsState) {
+        prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f).coerceIn(0.5f, 2.0f)
+    }
+
+    // Recover unscaled base density so dialpad is not hyper-sensitized by nested scaling
+    val unscaledDensity = remember(currentDensity.density, rawDisplayScale) {
+        if (rawDisplayScale > 0.01f) currentDensity.density / rawDisplayScale else currentDensity.density
+    }
+    val unscaledFontScale = remember(currentDensity.fontScale, rawFontScale) {
+        if (rawFontScale > 0.01f) currentDensity.fontScale / rawFontScale else currentDensity.fontScale
+    }
+
+    // Reduced sensitivity: dialpad page adapts gently (35% slope) to display and font scale configs
+    val dialpadDisplayScale = 1.0f + (rawDisplayScale - 1.0f) * 0.35f
+    val dialpadFontScale = 1.0f + (rawFontScale - 1.0f) * 0.35f
+
+    val dialpadDensity = remember(unscaledDensity, unscaledFontScale, dialpadDisplayScale, dialpadFontScale) {
+        Density(
+            density = unscaledDensity * dialpadDisplayScale,
+            fontScale = unscaledFontScale * dialpadFontScale
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides dialpadDensity) {
         if (isLandscape) {
             // Landscape: side-by-side layout — left=search+search results, right=dialpad keys+number+actions
             Row(
@@ -1162,7 +1191,15 @@ fun DialPadContent(
                             // guarantees the keyboard can't be re-triggered by window refocus or
                             // any other later event during the close animation/teardown.
                             .focusProperties { canFocus = !closing },
-                        placeholder = { Text("Search contacts...", color = dialpadSearchBarPlaceholder) },
+                        placeholder = {
+                            Text(
+                                text = "Search contacts...",
+                                color = dialpadSearchBarPlaceholder,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = dialpadSearchBarPlaceholder) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -1460,6 +1497,18 @@ fun DialPadContent(
             }
 
             // Right panel: dialpad keys + action buttons below
+            val currentDensity = LocalDensity.current
+            val displayScale = remember(settingsState) {
+                prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f).coerceIn(0.5f, 2.0f)
+            }
+            val dialpadDensity = remember(currentDensity.density, currentDensity.fontScale, displayScale) {
+                Density(
+                    density = if (displayScale > 0.01f) currentDensity.density / displayScale else currentDensity.density,
+                    fontScale = currentDensity.fontScale
+                )
+            }
+
+            CompositionLocalProvider(LocalDensity provides dialpadDensity) {
             Surface(
                 modifier = Modifier
                     .weight(1f)
@@ -1475,21 +1524,21 @@ fun DialPadContent(
                     val panelH = maxHeight
 
                     // 5 rows total: 4 key rows + 1 action row
-                    val vertPadding = 8.dp
+                    val vertPadding = 6.dp
                     val horizPadding = 8.dp
                     val availableH = (panelH - vertPadding * 2).value.coerceAtLeast(180f)
                     val availableW = (panelW - horizPadding * 2).value.coerceAtLeast(160f)
 
                     // Vertical row spacing and row height
-                    val rowSpacing = 6.dp
-                    val calculatedKeyH = ((availableH - (4f * rowSpacing.value)) / 5f).coerceIn(40f, 58f)
+                    val rowSpacing = 4.dp
+                    val calculatedKeyH = ((availableH - (4f * rowSpacing.value)) / 5f).coerceIn(40f, 66f)
                     val keyHeight = calculatedKeyH.dp
-                    val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.75f, 1.25f)
+                    val scaleFactor = (calculatedKeyH / 46f).coerceIn(0.75f, 1.15f)
 
                     // 3 columns: 2 horizontal gaps
-                    val colSpacing = (8.dp * scaleFactor).coerceIn(6.dp, 12.dp)
+                    val colSpacing = (8.dp * scaleFactor).coerceIn(6.dp, 10.dp)
                     val maxKeyW = ((availableW - (2f * colSpacing.value)) / 3f).coerceAtLeast(48f)
-                    val keyWidth = minOf(94.dp * scaleFactor, maxKeyW.dp)
+                    val keyWidth = (maxKeyW.dp * 0.91f).coerceIn(48.dp, 114.dp)
 
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Column(
@@ -1644,6 +1693,7 @@ fun DialPadContent(
                     }
                 }
             }
+            }
         }
     } else {
         // Prevent keyboard from auto-opening on composition
@@ -1681,7 +1731,15 @@ fun DialPadContent(
                         // during the close animation/teardown.
                         .focusProperties { canFocus = !closing }
                         .onFocusChanged { focusState -> searchFieldFocused = focusState.isFocused },
-                    placeholder = { Text("Search contacts...", color = dialpadSearchBarPlaceholder) },
+                    placeholder = {
+                        Text(
+                            text = "Search contacts...",
+                            color = dialpadSearchBarPlaceholder,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = dialpadSearchBarPlaceholder) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -2068,28 +2126,41 @@ fun DialPadContent(
         Spacer(modifier = Modifier.height(2.dp))
 
         // ── Dialpad card — always at bottom, never moves ───────────────
+        val currentDensity = LocalDensity.current
+        val displayScale = remember(settingsState) {
+            prefs.getFloat(PreferenceManager.KEY_DISPLAY_SCALE, 1.0f).coerceIn(0.5f, 2.0f)
+        }
+        val dialpadDensity = remember(currentDensity.density, currentDensity.fontScale, displayScale) {
+            Density(
+                density = if (displayScale > 0.01f) currentDensity.density / displayScale else currentDensity.density,
+                fontScale = currentDensity.fontScale
+            )
+        }
+
+        CompositionLocalProvider(LocalDensity provides dialpadDensity) {
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
             val availableWidth = maxWidth.value
             val availableRowWidth = (availableWidth - 12f).coerceAtLeast(160f)
 
-            // Height budget for dialpad card: screen height minus search bar (~64dp) and spacing (~24dp)
-            val cardHeightBudget = (screenHeight.value - 64f - 24f).coerceAtLeast(200f)
-            val calculatedKeyH = ((cardHeightBudget - 52f - 16f - 40f) / 5f).coerceIn(52f, 66f)
+            // Screen height in unscaled base dp:
+            val baseScreenHeight = configuration.screenHeightDp.toFloat()
+            val cardHeightBudget = (baseScreenHeight - 140f).coerceIn(260f, 480f)
+            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(54f, 67f)
             val keyHeight: Dp = calculatedKeyH.dp
             val callH: Dp = keyHeight
 
-            // Scale factor relative to standard 58dp height
-            val scaleFactor = (calculatedKeyH / 58f).coerceIn(0.8f, 1.3f)
+            // Scale factor relative to standard 50dp height
+            val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.85f, 1.15f)
             val actionSize: Dp = keyHeight
 
             // Spacing between keys dynamically adapts to row width
-            val keySpacing: Dp = (8.dp * scaleFactor).coerceIn(6.dp, 10.dp)
+            val keySpacing: Dp = (6.dp * scaleFactor).coerceIn(5.dp, 8.dp)
 
-            // Dynamic key width for 3 keys in a row — balanced and comfortably proportioned
+            // Dynamic key width for 3 keys in a row — nicely proportioned across all scales
             val maxAllowedKeyW = ((availableRowWidth - keySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
-            val keyWidth: Dp = minOf(98.dp * scaleFactor, maxAllowedKeyW)
+            val keyWidth: Dp = (maxAllowedKeyW * 0.91f).coerceIn(80.dp, 114.dp)
 
             // SIM button width for 4 buttons in a row with 3 gaps
             val simBtnW: Dp = minOf(
@@ -2103,7 +2174,7 @@ fun DialPadContent(
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = (12 * scaleFactor).coerceIn(6f, 14f).dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = (8 * scaleFactor).coerceIn(6f, 10f).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
@@ -2125,7 +2196,7 @@ fun DialPadContent(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .defaultMinSize(minHeight = 58.dp)
+                                .defaultMinSize(minHeight = (46 * scaleFactor).coerceIn(40f, 48f).dp)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(
                                     if (number.isNotEmpty())
@@ -2140,7 +2211,7 @@ fun DialPadContent(
                                         showOverflowMenu = true
                                     }
                                 )
-                                .padding(vertical = 9.dp, horizontal = 12.dp),
+                                .padding(vertical = (5 * scaleFactor).coerceIn(4f, 6f).dp, horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             DialpadNumberDisplay(
@@ -2277,8 +2348,6 @@ fun DialPadContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(keySpacing))
-
                 if (showSimButtons) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2398,6 +2467,7 @@ fun DialPadContent(
             }
         }
         } // end BoxWithConstraints (dialpad card)
+        } // end CompositionLocalProvider (LocalDensity)
 
         } // end AnimatedVisibility (dialpad card)
 
@@ -2747,9 +2817,8 @@ fun DialPadKey(
 
     val density = LocalDensity.current
     val currentFontScale = density.fontScale
-    val appFontSizeScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
     val appFontHeightScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f) }
-    val userFontFactor = (appFontSizeScale * appFontHeightScale).coerceIn(0.65f, 1.4f)
+    val userFontFactor = appFontHeightScale.coerceIn(0.7f, 1.3f)
 
     // Base font sizes in sp
     val baseMainSize = if (isStarKey) {
@@ -2971,7 +3040,7 @@ private fun DialpadNumberDisplay(
         ) {
             val density = LocalDensity.current
             val systemFontScale = density.fontScale
-            val combinedScale = (fontScale * systemFontScale).coerceAtLeast(0.5f)
+            val combinedScale = systemFontScale.coerceAtLeast(0.5f)
             val sideSpacerWidth = when {
                 number.length <= 6 -> 24.dp
                 number.length <= 13 -> (24.dp - (number.length - 6).dp * 2).coerceAtLeast(10.dp)
