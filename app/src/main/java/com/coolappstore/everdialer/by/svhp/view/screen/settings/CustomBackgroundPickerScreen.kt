@@ -449,6 +449,7 @@ fun CustomBackgroundPickerScreen(
             bgType = type,
             prefixOverride = prefix,
             isPfpEditor = isEditingPfp,
+            pfpShape = pfpShape,
             initialZoom = if (isEditingPfp) pfpZoom else bgZoom,
             initialPanX = if (isEditingPfp) pfpPanX else bgPanX,
             initialPanY = if (isEditingPfp) pfpPanY else bgPanY,

@@ -4,8 +4,10 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -14,6 +16,7 @@ import android.util.AttributeSet
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -21,6 +24,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,13 +42,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +69,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.max
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
@@ -100,11 +111,22 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val textureView = TextureView(context)
-    private var mediaPlayer: MediaPlayer? = null
-    private var surface: Surface? = null
+    private val texture0 = TextureView(context)
+    private val texture1 = TextureView(context)
+    private var surface0: Surface? = null
+    private var surface1: Surface? = null
+    private var player0: MediaPlayer? = null
+    private var player1: MediaPlayer? = null
+    private var isPrepared0 = false
+    private var isPrepared1 = false
+
+    private var activeIndex = 0
+    private var isCrossfading = false
+    private var crossfadeAnimator: ValueAnimator? = null
+    private val loopCheckHandler = Handler(Looper.getMainLooper())
+
     private var videoFile: File? = null
-    private var isPrepared = false
+    private var videoDurationMs = 0
 
     var isCircular: Boolean = false
         set(value) {
@@ -116,7 +138,9 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         set(value) {
             field = value
             val vol = if (value) 0f else 1f
-            try { mediaPlayer?.setVolume(vol, vol) } catch (_: Exception) {}
+            if (!isCrossfading) {
+                try { getActivePlayer()?.setVolume(vol, vol) } catch (_: Exception) {}
+            }
         }
 
     var videoSpeed: Float = 1.0f
@@ -124,12 +148,21 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             val clamped = value.coerceIn(0.25f, 3.0f)
             if (field == clamped) return
             field = clamped
-            if (isPrepared && mediaPlayer != null) applyPlaybackSpeed(mediaPlayer, clamped)
+            player0?.let { if (isPrepared0) applyPlaybackSpeed(it, clamped) }
+            player1?.let { if (isPrepared1) applyPlaybackSpeed(it, clamped) }
         }
 
+    private fun getActivePlayer(): MediaPlayer? = if (activeIndex == 0) player0 else player1
+    private fun getStandbyPlayer(): MediaPlayer? = if (activeIndex == 0) player1 else player0
+    private fun getActiveTexture(): TextureView = if (activeIndex == 0) texture0 else texture1
+    private fun getStandbyTexture(): TextureView = if (activeIndex == 0) texture1 else texture0
+
     init {
-        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        setupTextureListener()
+        addView(texture0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(texture1, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        texture0.alpha = 1f
+        texture1.alpha = 0f
+        setupTextureListeners()
     }
 
     private fun updateOutline() {
@@ -157,29 +190,49 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0) {
             updateOutline()
-            mediaPlayer?.let { if (isPrepared) applyCenterCrop(textureView, it, w, h) }
+            getActivePlayer()?.let { p ->
+                if (isPrepared0 || isPrepared1) {
+                    applyCenterCrop(texture0, p, w, h)
+                    applyCenterCrop(texture1, p, w, h)
+                }
+            }
         }
     }
 
-    private fun setupTextureListener() {
-        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+    private fun setupTextureListeners() {
+        texture0.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                surface?.release()
-                surface = Surface(st)
-                initPlayer(w, h)
+                surface0?.release()
+                surface0 = Surface(st)
+                initPlayersIfReady(w, h)
             }
-
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                mediaPlayer?.let { if (isPrepared) applyCenterCrop(textureView, it, w, h) }
+                getActivePlayer()?.let { p -> applyCenterCrop(texture0, p, w, h) }
             }
-
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                surface?.release()
-                surface = null
-                releasePlayer()
+                surface0?.release()
+                surface0 = null
+                releasePlayer(0)
                 return true
             }
+            override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+        }
 
+        texture1.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                surface1?.release()
+                surface1 = Surface(st)
+                initPlayersIfReady(w, h)
+            }
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                getActivePlayer()?.let { p -> applyCenterCrop(texture1, p, w, h) }
+            }
+            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                surface1?.release()
+                surface1 = null
+                releasePlayer(1)
+                return true
+            }
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
         }
     }
@@ -188,26 +241,34 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         if (!file.exists()) return
         val isSameFile = videoFile?.absolutePath == file.absolutePath
         videoFile = file
-        if (isSameFile && mediaPlayer != null) {
+        if (isSameFile && getActivePlayer() != null) {
             try {
-                if (isPrepared && !mediaPlayer!!.isPlaying) {
-                    mediaPlayer?.start()
+                val p = getActivePlayer()
+                if ((isPrepared0 || isPrepared1) && p?.isPlaying == false) {
+                    p.start()
+                    startProgressLoop()
                 }
             } catch (_: Exception) {}
             return
         }
 
-        ensureSurface()
-        if (textureView.isAvailable && surface != null && surface!!.isValid) {
-            initPlayer(textureView.width, textureView.height)
-        }
+        ensureSurfaces()
+        val w = if (width > 0) width else measuredWidth
+        val h = if (height > 0) height else measuredHeight
+        initPlayersIfReady(w, h)
     }
 
-    private fun ensureSurface() {
-        if ((surface == null || !surface!!.isValid) && textureView.isAvailable && textureView.surfaceTexture != null) {
+    private fun ensureSurfaces() {
+        if ((surface0 == null || !surface0!!.isValid) && texture0.isAvailable && texture0.surfaceTexture != null) {
             try {
-                surface?.release()
-                surface = Surface(textureView.surfaceTexture)
+                surface0?.release()
+                surface0 = Surface(texture0.surfaceTexture)
+            } catch (_: Exception) {}
+        }
+        if ((surface1 == null || !surface1!!.isValid) && texture1.isAvailable && texture1.surfaceTexture != null) {
+            try {
+                surface1?.release()
+                surface1 = Surface(texture1.surfaceTexture)
             } catch (_: Exception) {}
         }
     }
@@ -254,16 +315,11 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         texture.setTransform(matrix)
     }
 
-    private fun initPlayer(w: Int, h: Int) {
-        val file = videoFile ?: return
-        ensureSurface()
-        val surf = surface ?: return
-        if (!file.exists() || !surf.isValid) return
-
-        try {
-            releasePlayer()
-            isPrepared = false
-            val mp = MediaPlayer().apply {
+    private fun createPlayerInstance(surf: Surface, index: Int, w: Int, h: Int): MediaPlayer? {
+        val file = videoFile ?: return null
+        if (!file.exists() || !surf.isValid) return null
+        return try {
+            MediaPlayer().apply {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                     setAudioAttributes(
                         android.media.AudioAttributes.Builder()
@@ -274,59 +330,222 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
                 }
                 setDataSource(file.absolutePath)
                 setSurface(surf)
-                isLooping = true
                 val vol = if (isMuted) 0f else 1f
                 setVolume(vol, vol)
 
                 setOnVideoSizeChangedListener { p, _, _ ->
-                    applyCenterCrop(textureView, p, w, h)
+                    applyCenterCrop(texture0, p, w, h)
+                    applyCenterCrop(texture1, p, w, h)
                 }
 
                 setOnPreparedListener { p ->
-                    isPrepared = true
-                    applyCenterCrop(textureView, p, w, h)
-                    applyPlaybackSpeed(p, videoSpeed)
-                    try { p.start() } catch (_: Exception) {}
+                    if (index == 0) {
+                        isPrepared0 = true
+                        videoDurationMs = p.duration
+                        applyCenterCrop(texture0, p, w, h)
+                        applyCenterCrop(texture1, p, w, h)
+                        applyPlaybackSpeed(p, videoSpeed)
+                        if (activeIndex == 0) {
+                            try { p.start() } catch (_: Exception) {}
+                            startProgressLoop()
+                        }
+                        if (surface1?.isValid == true && player1 == null) {
+                            player1 = createPlayerInstance(surface1!!, 1, w, h)
+                        }
+                    } else {
+                        isPrepared1 = true
+                        applyCenterCrop(texture1, p, w, h)
+                        applyPlaybackSpeed(p, videoSpeed)
+                        if (activeIndex == 1) {
+                            try { p.start() } catch (_: Exception) {}
+                            startProgressLoop()
+                        }
+                    }
                 }
 
-                setOnCompletionListener { p ->
-                    try {
-                        p.seekTo(0)
-                        p.start()
-                    } catch (_: Exception) {}
+                setOnCompletionListener {
+                    handlePlayerCompletion(index)
                 }
 
-                setOnErrorListener { p, what, extra ->
+                setOnErrorListener { p, _, _ ->
                     try { p.reset() } catch (_: Exception) {}
                     true
                 }
 
                 prepareAsync()
             }
-            mediaPlayer = mp
         } catch (e: Exception) {
             e.printStackTrace()
+            null
         }
     }
 
-    private fun releasePlayer() {
-        isPrepared = false
+    private fun initPlayersIfReady(w: Int, h: Int) {
+        val file = videoFile ?: return
+        ensureSurfaces()
+        if (!file.exists()) return
+
+        stopProgressLoop()
+        crossfadeAnimator?.cancel()
+        isCrossfading = false
+
+        activeIndex = 0
+        texture0.alpha = 1f
+        texture1.alpha = 0f
+
+        val surf0 = surface0
+        if (surf0 != null && surf0.isValid) {
+            releasePlayer(0)
+            player0 = createPlayerInstance(surf0, 0, w, h)
+        }
+        val surf1 = surface1
+        if (surf1 != null && surf1.isValid) {
+            releasePlayer(1)
+            player1 = createPlayerInstance(surf1, 1, w, h)
+        }
+    }
+
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            checkAndTriggerCrossfade()
+            loopCheckHandler.postDelayed(this, 30L)
+        }
+    }
+
+    private fun startProgressLoop() {
+        stopProgressLoop()
+        loopCheckHandler.post(progressRunnable)
+    }
+
+    private fun stopProgressLoop() {
+        loopCheckHandler.removeCallbacksAndMessages(null)
+    }
+
+    private fun checkAndTriggerCrossfade() {
+        if (isCrossfading || videoDurationMs <= 0) return
+        val activePlayer = getActivePlayer() ?: return
+        if (!activePlayer.isPlaying) return
+
+        val currentPos = try { activePlayer.currentPosition } catch (_: Exception) { 0 }
+        // User requested: "smooth and slow overlapping animation to join the video"
+        val overlapMs = (videoDurationMs / 3).coerceIn(500, 1200)
+
+        if (currentPos >= (videoDurationMs - overlapMs) && currentPos > 0) {
+            startLoopCrossfade(overlapMs.toLong())
+        }
+    }
+
+    private fun startLoopCrossfade(durationMs: Long) {
+        if (isCrossfading) return
+        val outgoingPlayer = getActivePlayer() ?: return
+        val outgoingTexture = getActiveTexture()
+        val incomingPlayer = getStandbyPlayer()
+        val incomingTexture = getStandbyTexture()
+
+        if (incomingPlayer == null) {
+            try {
+                outgoingPlayer.seekTo(0)
+                outgoingPlayer.start()
+            } catch (_: Exception) {}
+            return
+        }
+
+        isCrossfading = true
+        crossfadeAnimator?.cancel()
+
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-        } catch (_: Exception) {}
-        mediaPlayer = null
+            incomingPlayer.seekTo(0)
+            applyPlaybackSpeed(incomingPlayer, videoSpeed)
+            val baseVol = if (isMuted) 0f else 1f
+            incomingPlayer.setVolume(0f, 0f)
+            incomingPlayer.start()
+        } catch (_: Exception) {
+            isCrossfading = false
+            try {
+                outgoingPlayer.seekTo(0)
+                outgoingPlayer.start()
+            } catch (_: Exception) {}
+            return
+        }
+
+        incomingTexture.bringToFront()
+        incomingTexture.alpha = 0f
+
+        val baseVol = if (isMuted) 0f else 1f
+        crossfadeAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedFraction
+                incomingTexture.alpha = f
+                outgoingTexture.alpha = 1f - f
+                if (!isMuted) {
+                    try {
+                        incomingPlayer.setVolume(baseVol * f, baseVol * f)
+                        outgoingPlayer.setVolume(baseVol * (1f - f), baseVol * (1f - f))
+                    } catch (_: Exception) {}
+                }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    incomingTexture.alpha = 1f
+                    outgoingTexture.alpha = 0f
+                    try {
+                        outgoingPlayer.pause()
+                        outgoingPlayer.seekTo(0)
+                    } catch (_: Exception) {}
+                    activeIndex = if (activeIndex == 0) 1 else 0
+                    isCrossfading = false
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    isCrossfading = false
+                }
+            })
+            start()
+        }
+    }
+
+    private fun handlePlayerCompletion(index: Int) {
+        if (index == activeIndex) {
+            if (!isCrossfading) {
+                startLoopCrossfade(500L)
+            }
+        }
+    }
+
+    private fun releasePlayer(index: Int) {
+        if (index == 0) {
+            isPrepared0 = false
+            try { player0?.stop(); player0?.release() } catch (_: Exception) {}
+            player0 = null
+        } else {
+            isPrepared1 = false
+            try { player1?.stop(); player1?.release() } catch (_: Exception) {}
+            player1 = null
+        }
+    }
+
+    private fun releaseAllPlayers() {
+        stopProgressLoop()
+        crossfadeAnimator?.cancel()
+        releasePlayer(0)
+        releasePlayer(1)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        ensureSurface()
-        if (mediaPlayer == null && videoFile != null && textureView.isAvailable) {
-            initPlayer(textureView.width, textureView.height)
+        ensureSurfaces()
+        if (getActivePlayer() == null && videoFile != null) {
+            val w = if (width > 0) width else measuredWidth
+            val h = if (height > 0) height else measuredHeight
+            initPlayersIfReady(w, h)
         }
         try {
-            if (mediaPlayer != null && !mediaPlayer!!.isPlaying && isPrepared) {
-                mediaPlayer?.start()
+            val p = getActivePlayer()
+            if (p != null && !p.isPlaying && (isPrepared0 || isPrepared1)) {
+                p.start()
+                startProgressLoop()
             }
         } catch (_: Exception) {}
     }
@@ -334,21 +553,30 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         if (visibility == View.VISIBLE) {
-            ensureSurface()
-            if (mediaPlayer == null && videoFile != null && textureView.isAvailable) {
-                initPlayer(textureView.width, textureView.height)
+            ensureSurfaces()
+            if (getActivePlayer() == null && videoFile != null) {
+                val w = if (width > 0) width else measuredWidth
+                val h = if (height > 0) height else measuredHeight
+                initPlayersIfReady(w, h)
             }
             try {
-                if (mediaPlayer != null && !mediaPlayer!!.isPlaying && isPrepared) {
-                    mediaPlayer?.start()
+                val p = getActivePlayer()
+                if (p != null && !p.isPlaying && (isPrepared0 || isPrepared1)) {
+                    p.start()
+                    startProgressLoop()
                 }
             } catch (_: Exception) {}
+        } else {
+            stopProgressLoop()
+            crossfadeAnimator?.cancel()
+            try { getActivePlayer()?.pause() } catch (_: Exception) {}
+            try { getStandbyPlayer()?.pause() } catch (_: Exception) {}
         }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        releasePlayer()
+        releaseAllPlayers()
     }
 }
 
@@ -690,6 +918,7 @@ fun CustomBackgroundEditorDialog(
     bgType: String,
     prefixOverride: String? = null,
     isPfpEditor: Boolean = false,
+    pfpShape: String = "circle",
     initialZoom: Float = 1.0f,
     initialPanX: Float = 0f,
     initialPanY: Float = 0f,
@@ -715,6 +944,30 @@ fun CustomBackgroundEditorDialog(
     var activeSlider by remember { mutableStateOf<String?>(null) }
 
     var isSaving by remember { mutableStateOf(false) }
+
+    // Retrieve intrinsic dimensions of the media
+    val (mediaWidth, mediaHeight) = remember(mediaFile) {
+        if (!mediaFile.exists()) 1080 to 1920
+        else if (!isVideo) {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(mediaFile.absolutePath, options)
+            val w = if (options.outWidth > 0) options.outWidth else 1080
+            val h = if (options.outHeight > 0) options.outHeight else 1920
+            w to h
+        } else {
+            try {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(mediaFile.absolutePath)
+                val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                val rawW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 1080
+                val rawH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 1920
+                retriever.release()
+                if (rotation == 90 || rotation == 270) rawH to rawW else rawW to rawH
+            } catch (_: Exception) {
+                1080 to 1920
+            }
+        }
+    }
 
     fun handleDismiss() {
         scope.launch(Dispatchers.IO) {
@@ -785,54 +1038,90 @@ fun CustomBackgroundEditorDialog(
             decorFitsSystemWindows = false
         )
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Media Layer with Transform Gestures - allow horizontal & vertical panning even at 1x zoom
+            val density = LocalDensity.current
+            val screenW = constraints.maxWidth.toFloat()
+            val screenH = constraints.maxHeight.toFloat()
+
+            val isSquare = isPfpEditor && pfpShape == "square"
+            val cropShape = if (isSquare) RoundedCornerShape(20.dp) else CircleShape
+
+            val cropSizeDp = 240.dp
+            val cropSizePx = with(density) { cropSizeDp.toPx() }
+
+            // Viewport dimensions for cropping
+            val viewW = if (isPfpEditor) cropSizePx else screenW
+            val viewH = if (isPfpEditor) cropSizePx else screenH
+
+            val mediaRatio = (mediaWidth.toFloat() / mediaHeight.toFloat()).coerceIn(0.05f, 20f)
+            val viewRatio = (viewW / viewH).coerceIn(0.05f, 20f)
+
+            val baseRenderedW = if (mediaRatio > viewRatio) viewH * mediaRatio else viewW
+            val baseRenderedH = if (mediaRatio > viewRatio) viewH else viewW / mediaRatio
+
+            val effW = baseRenderedW * zoom
+            val effH = baseRenderedH * zoom
+            val maxPanX = max(0f, (effW - viewW) / 2f)
+            val maxPanY = max(0f, (effH - viewH) / 2f)
+
+            // Ensure pan remains within bounded frame (no black borders)
+            LaunchedEffect(zoom, maxPanX, maxPanY) {
+                panX = if (maxPanX <= 0f) 0f else panX.coerceIn(-maxPanX, maxPanX)
+                panY = if (maxPanY <= 0f) 0f else panY.coerceIn(-maxPanY, maxPanY)
+            }
+
+            // Media Layer with Transform Gestures - strictly bounded to content boundary
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(baseRenderedW, baseRenderedH, viewW, viewH) {
                         detectTransformGestures { _, pan, gestureZoom, _ ->
-                            zoom = (zoom * gestureZoom).coerceIn(1f, 4f)
-                            val maxPanX = 1200f * zoom
-                            val maxPanY = 1600f * zoom
-                            panX = (panX + pan.x).coerceIn(-maxPanX, maxPanX)
-                            panY = (panY + pan.y).coerceIn(-maxPanY, maxPanY)
+                            val newZoom = (zoom * gestureZoom).coerceIn(1f, 4f)
+                            zoom = newZoom
+
+                            val curEffW = baseRenderedW * newZoom
+                            val curEffH = baseRenderedH * newZoom
+                            val curMaxPanX = max(0f, (curEffW - viewW) / 2f)
+                            val curMaxPanY = max(0f, (curEffH - viewH) / 2f)
+
+                            panX = if (curMaxPanX <= 0f) 0f else (panX + pan.x).coerceIn(-curMaxPanX, curMaxPanX)
+                            panY = if (curMaxPanY <= 0f) 0f else (panY + pan.y).coerceIn(-curMaxPanY, curMaxPanY)
                         }
-                    }
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                if (isVideo) {
-                    LoopingVideoPlayer(
-                        videoFile = mediaFile,
-                        videoSpeed = videoSpeed,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = zoom
-                                scaleY = zoom
-                                translationX = panX
-                                translationY = panY
-                            }
-                            .then(if (blurValue > 0f) Modifier.blur(blurValue.dp) else Modifier)
-                    )
-                } else {
-                    AsyncImage(
-                        model = mediaFile,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = zoom
-                                scaleY = zoom
-                                translationX = panX
-                                translationY = panY
-                            }
-                            .then(if (blurValue > 0f) Modifier.blur(blurValue.dp) else Modifier)
-                    )
+                val mediaWidthDp = with(density) { baseRenderedW.toDp() }
+                val mediaHeightDp = with(density) { baseRenderedH.toDp() }
+
+                Box(
+                    modifier = Modifier
+                        .size(mediaWidthDp, mediaHeightDp)
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX
+                            translationY = panY
+                        }
+                        .then(if (blurValue > 0f) Modifier.blur(blurValue.dp) else Modifier)
+                ) {
+                    if (isVideo) {
+                        LoopingVideoPlayer(
+                            videoFile = mediaFile,
+                            videoSpeed = videoSpeed,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        AsyncImage(
+                            model = mediaFile,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 // Dim overlay
@@ -844,13 +1133,42 @@ fun CustomBackgroundEditorDialog(
                     )
                 }
 
-                // Avatar circular frame overlay for PFP editor
+                // Avatar shape-aware frame overlay for PFP editor (Circle or Square preview)
                 if (isPfpEditor) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                    ) {
+                        // Dark scrim outside crop frame
+                        drawRect(Color.Black.copy(alpha = 0.65f))
+                        val left = (size.width - cropSizePx) / 2f
+                        val top = (size.height - cropSizePx) / 2f
+
+                        if (isSquare) {
+                            drawRoundRect(
+                                color = Color.Transparent,
+                                topLeft = Offset(left, top),
+                                size = Size(cropSizePx, cropSizePx),
+                                cornerRadius = CornerRadius(20.dp.toPx()),
+                                blendMode = BlendMode.Clear
+                            )
+                        } else {
+                            drawCircle(
+                                color = Color.Transparent,
+                                radius = cropSizePx / 2f,
+                                center = Offset(size.width / 2f, size.height / 2f),
+                                blendMode = BlendMode.Clear
+                            )
+                        }
+                    }
+
+                    // Precise crop border (square with rounded corners or circle)
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(240.dp)
-                            .border(2.5.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                            .size(cropSizeDp)
+                            .border(2.5.dp, Color.White.copy(alpha = 0.90f), cropShape)
                     )
                 }
             }
@@ -878,13 +1196,13 @@ fun CustomBackgroundEditorDialog(
                     ) {
                         Column {
                             Text(
-                                if (isPfpEditor) "Contact PFP Editor" else "Background Editor",
+                                if (isPfpEditor) (if (isSquare) "Square PFP Editor" else "Circle PFP Editor") else "Background Editor",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                if (isPfpEditor) "Pinch or drag within avatar frame" else "Pinch or drag to position & scale",
+                                if (isPfpEditor) "Pinch or drag within ${if (isSquare) "square" else "circle"} frame" else "Pinch or drag to position & scale",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

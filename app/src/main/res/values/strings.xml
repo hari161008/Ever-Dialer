@@ -6,4 +6,19 @@
     <string name="widget_contact_info_title">Contact Info</string>
     <string name="widget_contact_info_description">Quick access to a contact\'s details</string>
     <string name="volume_dnd_accessibility_description">Allows Ever Dialer to detect volume button combinations to toggle Do Not Disturb (DND) mode.</string>
+
+    <string name="pattern_click">Click</string>
+    <string name="pattern_click_desc">Crisp, confirmed tap</string>
+    <string name="pattern_tick">Tick</string>
+    <string name="pattern_tick_desc">Subtle, low-energy pulse</string>
+    <string name="pattern_heavy_click">Heavy</string>
+    <string name="pattern_heavy_click_desc">Strong, punchy feedback</string>
+    <string name="pattern_double_click">Double</string>
+    <string name="pattern_double_click_desc">Two rapid taps in sequence</string>
+    <string name="pattern_soft_bump">Soft Bump</string>
+    <string name="pattern_soft_bump_desc">Gentle tap like hitting a soft wall</string>
+    <string name="pattern_double_tick">Double Tick</string>
+    <string name="pattern_double_tick_desc">Firm bump-bump boundary feel</string>
+    <string name="pattern_selected">Selected</string>
+    <string name="pattern_not_selected">Not selected</string>
 </resources>

@@ -70,6 +70,29 @@ class PreferenceManager(context: Context) {
     fun getAllKeys(): Set<String>                      = prefs.all.keys
     fun notifyChanged()                                { _settingsChanged.value += 1 }
 
+    fun getRingHapticCustomSequence(): com.coolappstore.everdialer.by.svhp.haptics.CustomHapticSequence {
+        val raw = getString(KEY_RING_HAPTIC_CUSTOM_SEQUENCE, "")
+        if (raw.isNullOrBlank()) return com.coolappstore.everdialer.by.svhp.haptics.CustomHapticSequence()
+        return try {
+            val beats = raw.split(";").mapNotNull { token ->
+                val parts = token.split(":")
+                if (parts.size == 2) {
+                    val ms = parts[0].toLongOrNull()
+                    val amp = parts[1].toIntOrNull()
+                    if (ms != null && amp != null) com.coolappstore.everdialer.by.svhp.haptics.HapticBeat(ms, amp) else null
+                } else null
+            }
+            com.coolappstore.everdialer.by.svhp.haptics.CustomHapticSequence(beats)
+        } catch (_: Exception) {
+            com.coolappstore.everdialer.by.svhp.haptics.CustomHapticSequence()
+        }
+    }
+
+    fun setRingHapticCustomSequence(seq: com.coolappstore.everdialer.by.svhp.haptics.CustomHapticSequence) {
+        val raw = seq.beats.joinToString(";") { "${it.offsetMs}:${it.amplitude}" }
+        setString(KEY_RING_HAPTIC_CUSTOM_SEQUENCE, raw)
+    }
+
     /** Returns true if an incoming call from [phoneNumber] should be gated behind biometric. */
     fun shouldGateCallWithBiometric(phoneNumber: String?): Boolean {
         if (!getBoolean(KEY_BIOMETRICS_CALL_LOCK, false)) return false
@@ -958,6 +981,14 @@ class PreferenceManager(context: Context) {
         const val KEY_APP_HAPTICS_STRENGTH     = "app_haptics_strength"
         const val KEY_HAPTICS_CUSTOM_INTENSITY = "haptics_custom_intensity"
         const val KEY_HAPTIC_TOUCH_ONLY        = "haptic_trigger_touch_screen_only"
+        const val KEY_RING_HAPTIC_ENABLED      = "ring_haptic_enabled"
+        const val KEY_RING_HAPTIC_PATTERN      = "ring_haptic_pattern"
+        const val KEY_RING_HAPTIC_INTENSITY    = "ring_haptic_intensity"
+        const val KEY_RING_HAPTIC_CUSTOM_SEQUENCE = "ring_haptic_custom_sequence"
+        const val KEY_RING_HAPTIC_AUTO         = "ring_haptic_auto"
+        const val KEY_RING_HAPTIC_AUTO_SENSITIVITY = "ring_haptic_auto_sensitivity"
+        const val KEY_RING_HAPTIC_AUTO_STRENGTH = "ring_haptic_auto_strength"
+        const val KEY_RING_HAPTIC_FORCE_TOUCH_ROUTING = "ring_haptic_force_touch_routing"
         const val KEY_NOTES_ENABLED         = "notes_enabled"
         // When true (default), the app's Notes section and the call recording notes
         // (inside Ever Call Recorder's recording playback screen) are kept as two

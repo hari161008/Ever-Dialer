@@ -668,7 +668,9 @@ class CallService : InCallService() {
 
             if (state == Call.STATE_RINGING) {
                 callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.startIncomingCallHaptics(this@CallService)
             } else if (state == Call.STATE_ACTIVE || state == Call.STATE_DIALING) {
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.stopIncomingCallHaptics()
                 if (state == Call.STATE_ACTIVE) {
                     callAnsweredSet.add(call)
                     callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
@@ -679,6 +681,7 @@ class CallService : InCallService() {
             }
 
             if (state == Call.STATE_DISCONNECTED) {
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.stopIncomingCallHaptics()
                 defaultAudioAppliedForCall.remove(call)
                 recordMissedCallDurationIfNeeded(call)
                 val cause = call.details?.disconnectCause
@@ -762,13 +765,16 @@ class CallService : InCallService() {
                 callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
                 _incomingCallSession.value = CallSession(call, state)
                 updateNotification(call)
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.startIncomingCallHaptics(this@CallService)
             } else if (state == Call.STATE_ACTIVE) {
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.stopIncomingCallHaptics()
                 callAnsweredSet.add(call)
                 callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
                 _incomingCallSession.value = null
                 _currentCallSession.value = CallSession(call, state)
                 updateNotification(call)
             } else if (state == Call.STATE_DISCONNECTED) {
+                com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.stopIncomingCallHaptics()
                 recordMissedCallDurationIfNeeded(call)
                 _incomingCallSession.value = null
                 _currentCallSession.value?.call?.let { updateNotification(it) }
@@ -778,6 +784,7 @@ class CallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
+        com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.stopIncomingCallHaptics()
         RaiseToAnswerManager.stop(this)
         RainModeManager.onCallStateChanged(this, call)
         recordMissedCallDurationIfNeeded(call)
@@ -1008,6 +1015,7 @@ class CallService : InCallService() {
             callRingStartTimes.getOrPut(call) { System.currentTimeMillis() }
             RaiseToAnswerManager.onCallStateChanged(this, call)
             RainModeManager.onCallStateChanged(this, call)
+            com.coolappstore.everdialer.by.svhp.haptics.RingHapticManager.startIncomingCallHaptics(this)
         } else {
             RainModeManager.onCallStateChanged(this, call)
         }

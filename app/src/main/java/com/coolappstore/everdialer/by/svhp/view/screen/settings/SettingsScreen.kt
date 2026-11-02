@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.CallReceived
 import androidx.compose.material.icons.outlined.TextFormat
+import androidx.compose.material.icons.rounded.RingVolume
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -146,6 +147,11 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
         )
     }
 
+    var ringHapticEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RING_HAPTIC_ENABLED, false)) }
+    var ringPattern by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_RING_HAPTIC_PATTERN, "Heavy") ?: "Heavy") }
+    var isRingAuto by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_RING_HAPTIC_AUTO, false)) }
+    var hasCustomSeq by remember { mutableStateOf(!prefs.getRingHapticCustomSequence().isEmpty) }
+
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         SettingsClickTracker.isSettingsOpening = true
@@ -154,6 +160,10 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             if (event == Lifecycle.Event.ON_RESUME) {
                 SettingsClickTracker.isSettingsOpening = true
                 blockedContactsList = com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager.getBlockedList(context, prefs)
+                ringHapticEnabled = prefs.getBoolean(PreferenceManager.KEY_RING_HAPTIC_ENABLED, false)
+                ringPattern = prefs.getString(PreferenceManager.KEY_RING_HAPTIC_PATTERN, "Heavy") ?: "Heavy"
+                isRingAuto = prefs.getBoolean(PreferenceManager.KEY_RING_HAPTIC_AUTO, false)
+                hasCustomSeq = !prefs.getRingHapticCustomSequence().isEmpty
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1112,6 +1122,24 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                 trailingIcon = Icons.Default.ChevronRight,
                                 modifier = Modifier.settingsSearchHighlight("tap_haptics", highlightedSettingKey) { highlightedSettingKey = null },
                                 onClick = { showHapticsDialog = true }
+                            )
+                            CardDivider()
+                            val ringSupporting = when {
+                                !ringHapticEnabled -> "Off"
+                                isRingAuto -> "On · Auto"
+                                hasCustomSeq -> "On · Custom"
+                                else -> "On · ${ringPattern.lowercase().replaceFirstChar { it.uppercase() }.replace("_", " ")}"
+                            }
+                            RivoListItem(
+                                headline = "Ring Haptic",
+                                supporting = ringSupporting,
+                                leadingIcon = Icons.Rounded.RingVolume,
+                                iconContainerColor = ColorPurple,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier.settingsSearchHighlight("ring_haptic", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = {
+                                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.RingHapticScreenDestination)
+                                }
                             )
                             CardDivider()
                             RivoSwitchListItem(

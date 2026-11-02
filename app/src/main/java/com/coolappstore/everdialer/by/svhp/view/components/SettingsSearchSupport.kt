@@ -238,6 +238,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Donate", "Support this open source project", "donate", Icons.Default.Favorite, GsColorRed),
         GlobalSettingsSearchEntry("Interface", "Themes, colors, and layout", "interface", Icons.Outlined.Palette, GsColorPurple),
         GlobalSettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, GsColorPurple),
+        GlobalSettingsSearchEntry("Ring Haptic", "Incoming call vibration pattern, beat sync, and intensity", "ring_haptic", Icons.Outlined.RingVolume, GsColorPurple) { it.navigate(com.ramcosta.composedestinations.generated.destinations.RingHapticScreenDestination) },
         GlobalSettingsSearchEntry("Scroll Haptics", "Vibrate on scroll gestures across the app", "scroll_haptics", Icons.Outlined.SwipeVertical, GsColorIndigo),
         GlobalSettingsSearchEntry("Authentication", "App lock, biometrics, and PIN/password", "authentication", Icons.Default.Fingerprint, Color(0xFF6750A4)),
         GlobalSettingsSearchEntry("Contacts Hider", "Hide contacts behind a secret code", "contacts_hider", Icons.Outlined.Lock, Color(0xFF5E35B1)),
