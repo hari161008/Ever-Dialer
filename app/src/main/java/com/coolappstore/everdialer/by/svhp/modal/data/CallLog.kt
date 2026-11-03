@@ -18,7 +18,13 @@ data class CallLogEntry(
     /** 0-based SIM slot this call was made/received on, or -1 if unknown/single-SIM device. */
     val simSlot: Int = -1,
     val callIds: List<Long> = emptyList(),
-    val dates: List<Long> = emptyList()
+    val dates: List<Long> = emptyList(),
+    val isMultiCall: Boolean = false,
+    val isMergedCall: Boolean = false,
+    val secondNumber: String? = null,
+    val secondName: String? = null,
+    val secondContactId: String? = null,
+    val secondPhotoUri: String? = null
 ) {
     val count: Int get() = types.size.coerceAtLeast(1)
 }

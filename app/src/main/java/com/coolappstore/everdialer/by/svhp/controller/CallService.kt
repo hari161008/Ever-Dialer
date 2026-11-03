@@ -569,31 +569,193 @@ class CallService : InCallService() {
             } catch (_: Exception) {}
         }
 
-        fun mergeCalls() {
-            val primary = _currentCallSession.value?.call ?: return
-            val secondary = _heldCallSession.value?.call ?: return
-            if (secondary.state != Call.STATE_HOLDING && secondary.state != Call.STATE_ACTIVE) return
-            isMerging = true
-            var mergeSucceeded = false
-            try {
-                primary.conference(secondary)
-                mergeSucceeded = true
-            } catch (_: Exception) {}
-            if (!mergeSucceeded) {
-                try {
-                    secondary.conference(primary)
-                    mergeSucceeded = true
-                } catch (_: Exception) { isMerging = false }
+        fun syncCallSessions() {
+            val service = instance ?: return
+            val allCalls = try { service.calls } catch (_: Throwable) { emptyList() }
+            if (allCalls.isEmpty()) return
+
+            val confCall = allCalls.find {
+                it.state != Call.STATE_DISCONNECTED && (
+                    it.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true || it.children.isNotEmpty()
+                )
             }
+
+            if (confCall != null) {
+                _currentCallSession.value = CallSession(confCall, confCall.state)
+                try {
+                    confCall.unregisterCallback(service.callCallback)
+                    confCall.registerCallback(service.callCallback)
+                } catch (_: Throwable) {}
+                val heldCall = _heldCallSession.value?.call
+                if (heldCall != null && (heldCall.parent == confCall || confCall.children.contains(heldCall) || heldCall.state == Call.STATE_DISCONNECTED)) {
+                    _heldCallSession.value = null
+                }
+                val children = confCall.children
+                val num1 = children.getOrNull(0)?.details?.handle?.schemeSpecificPart
+                val num2 = children.getOrNull(1)?.details?.handle?.schemeSpecificPart
+                if (!num1.isNullOrBlank() && !num2.isNullOrBlank()) {
+                    com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                        service, num1, null, num2, null, isMerged = true
+                    )
+                    com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(service)
+                        .updateMultiCall(num2, isMerged = true)
+                }
+                service.updateNotification(confCall)
+                return
+            }
+
+            val activeCall = allCalls.find { it.state == Call.STATE_ACTIVE || it.state == Call.STATE_DIALING || it.state == Call.STATE_CONNECTING }
+            val heldCall = allCalls.find { it.state == Call.STATE_HOLDING && it.parent == null }
+            val ringingCall = allCalls.find { it.state == Call.STATE_RINGING }
+
+            if (activeCall != null && heldCall != null) {
+                val num1 = activeCall.details?.handle?.schemeSpecificPart
+                val num2 = heldCall.details?.handle?.schemeSpecificPart
+                if (!num1.isNullOrBlank() && !num2.isNullOrBlank()) {
+                    com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                        service, num1, null, num2, null, isMerged = false
+                    )
+                    com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(service)
+                        .updateMultiCall(num2, isMerged = false)
+                }
+            }
+
+            if (activeCall != null && _currentCallSession.value?.call != activeCall) {
+                _currentCallSession.value = CallSession(activeCall, activeCall.state)
+                try {
+                    activeCall.unregisterCallback(service.callCallback)
+                    activeCall.registerCallback(service.callCallback)
+                } catch (_: Throwable) {}
+                service.updateNotification(activeCall)
+            }
+            if (heldCall != null) {
+                if (_heldCallSession.value?.call != heldCall) {
+                    _heldCallSession.value = CallSession(heldCall, heldCall.state)
+                    try {
+                        heldCall.unregisterCallback(service.heldCallCallback)
+                        heldCall.registerCallback(service.heldCallCallback)
+                    } catch (_: Throwable) {}
+                }
+            } else if (_heldCallSession.value?.call?.state == Call.STATE_DISCONNECTED || _heldCallSession.value?.call?.parent != null) {
+                _heldCallSession.value = null
+            }
+            if (ringingCall != null && _incomingCallSession.value?.call != ringingCall) {
+                _incomingCallSession.value = CallSession(ringingCall, ringingCall.state)
+                try {
+                    ringingCall.unregisterCallback(service.incomingCallCallback)
+                    ringingCall.registerCallback(service.incomingCallCallback)
+                } catch (_: Throwable) {}
+            }
+        }
+
+        fun mergeCalls() {
+            val primary = _currentCallSession.value?.call
+                ?: instance?.calls?.find { it.state == Call.STATE_ACTIVE }
+                ?: return
+            val secondary = _heldCallSession.value?.call
+                ?: instance?.calls?.find { it.state == Call.STATE_HOLDING }
+                ?: return
+
+            if (primary == secondary) return
+            isMerging = true
+
+            val num1 = primary.details?.handle?.schemeSpecificPart
+            val num2 = secondary.details?.handle?.schemeSpecificPart
+            val svc = instance
+            if (!num1.isNullOrBlank() && !num2.isNullOrBlank() && svc != null) {
+                com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                    svc, num1, null, num2, null, isMerged = true
+                )
+                com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(svc)
+                    .updateMultiCall(num2, isMerged = true)
+            }
+
+            android.util.Log.d(
+                "EverDialerCall",
+                "mergeCalls: starting merge. primary=$primary state=${primary.state} caps=${primary.details?.callCapabilities}, " +
+                    "secondary=$secondary state=${secondary.state} caps=${secondary.details?.callCapabilities}"
+            )
+
+            var mergeTriggered = false
+
+            // 1. If telecom framework explicitly lists the other call as conferenceable, use conference()
+            try {
+                if (primary.conferenceableCalls.contains(secondary)) {
+                    android.util.Log.d("EverDialerCall", "mergeCalls: primary.conference(secondary)")
+                    primary.conference(secondary)
+                    mergeTriggered = true
+                } else if (secondary.conferenceableCalls.contains(primary)) {
+                    android.util.Log.d("EverDialerCall", "mergeCalls: secondary.conference(primary)")
+                    secondary.conference(primary)
+                    mergeTriggered = true
+                }
+            } catch (t: Throwable) {
+                android.util.Log.w("EverDialerCall", "mergeCalls: conferenceableCalls attempt threw", t)
+            }
+
+            // 2. Check CAPABILITY_MERGE_CONFERENCE (standard for VoLTE/IMS and CDMA carriers)
+            if (!mergeTriggered) {
+                try {
+                    val primaryCanMerge = primary.details?.can(Call.Details.CAPABILITY_MERGE_CONFERENCE) == true
+                    val secondaryCanMerge = secondary.details?.can(Call.Details.CAPABILITY_MERGE_CONFERENCE) == true
+                    android.util.Log.d("EverDialerCall", "mergeCalls: primaryCanMerge=$primaryCanMerge, secondaryCanMerge=$secondaryCanMerge")
+                    if (primaryCanMerge) {
+                        primary.mergeConference()
+                        mergeTriggered = true
+                    } else if (secondaryCanMerge) {
+                        secondary.mergeConference()
+                        mergeTriggered = true
+                    }
+                } catch (t: Throwable) {
+                    android.util.Log.w("EverDialerCall", "mergeCalls: mergeConference capability attempt threw", t)
+                }
+            }
+
+            // 3. Fallbacks: try mergeConference then conference in both directions
+            if (!mergeTriggered) {
+                try {
+                    android.util.Log.d("EverDialerCall", "mergeCalls: fallback trying primary.mergeConference()")
+                    primary.mergeConference()
+                    mergeTriggered = true
+                } catch (t1: Throwable) {
+                    try {
+                        android.util.Log.d("EverDialerCall", "mergeCalls: fallback trying secondary.mergeConference()")
+                        secondary.mergeConference()
+                        mergeTriggered = true
+                    } catch (t2: Throwable) {
+                        try {
+                            android.util.Log.d("EverDialerCall", "mergeCalls: fallback trying primary.conference(secondary)")
+                            primary.conference(secondary)
+                            mergeTriggered = true
+                        } catch (t3: Throwable) {
+                            try {
+                                android.util.Log.d("EverDialerCall", "mergeCalls: fallback trying secondary.conference(primary)")
+                                secondary.conference(primary)
+                                mergeTriggered = true
+                            } catch (t4: Throwable) {
+                                android.util.Log.e("EverDialerCall", "mergeCalls: all merge attempts failed", t4)
+                                isMerging = false
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if merge completed after delay
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                syncCallSessions()
+                if (isMerging) {
+                    isMerging = false
+                    syncCallSessions()
+                }
+            }, 1200)
+
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 if (isMerging) {
                     isMerging = false
-                    if (_currentCallSession.value == null && _heldCallSession.value != null) {
-                        _currentCallSession.value = _heldCallSession.value
-                        _heldCallSession.value = null
-                    }
+                    syncCallSessions()
                 }
-            }, 4000)
+            }, 3000)
         }
 
         fun hasHeldCall(): Boolean = _heldCallSession.value != null && _heldCallSession.value?.state == Call.STATE_HOLDING
@@ -602,8 +764,32 @@ class CallService : InCallService() {
 
     // Callback for the primary (active/dialing) call
     private val callCallback: Call.Callback = object : Call.Callback() {
+        override fun onChildrenChanged(call: Call, children: MutableList<Call>?) {
+            super.onChildrenChanged(call, children)
+            android.util.Log.d("EverDialerCall", "callCallback onChildrenChanged call=$call childrenCount=${children?.size}")
+            isMerging = false
+            syncCallSessions()
+        }
+
+        override fun onParentChanged(call: Call, parent: Call?) {
+            super.onParentChanged(call, parent)
+            android.util.Log.d("EverDialerCall", "callCallback onParentChanged call=$call parent=$parent")
+            isMerging = false
+            syncCallSessions()
+        }
+
+        override fun onConferenceableCallsChanged(call: Call, conferenceableCalls: MutableList<Call>?) {
+            super.onConferenceableCallsChanged(call, conferenceableCalls)
+            android.util.Log.d("EverDialerCall", "callCallback onConferenceableCallsChanged call=$call count=${conferenceableCalls?.size}")
+        }
+
         override fun onDetailsChanged(call: Call, details: Call.Details) {
             super.onDetailsChanged(call, details)
+            val isConf = details.hasProperty(Call.Details.PROPERTY_CONFERENCE)
+            if (isConf) {
+                isMerging = false
+                syncCallSessions()
+            }
             // The call's handle/caller info can arrive or change AFTER onCallAdded (e.g. some
             // carriers/OEMs deliver the ringing call before its number is attached, or update
             // caller ID data slightly later). Since the notification and the incoming/ongoing
@@ -720,8 +906,27 @@ class CallService : InCallService() {
     }
 
     private val heldCallCallback: Call.Callback = object : Call.Callback() {
+        override fun onChildrenChanged(call: Call, children: MutableList<Call>?) {
+            super.onChildrenChanged(call, children)
+            android.util.Log.d("EverDialerCall", "heldCallCallback onChildrenChanged call=$call childrenCount=${children?.size}")
+            isMerging = false
+            syncCallSessions()
+        }
+
+        override fun onParentChanged(call: Call, parent: Call?) {
+            super.onParentChanged(call, parent)
+            android.util.Log.d("EverDialerCall", "heldCallCallback onParentChanged call=$call parent=$parent")
+            isMerging = false
+            syncCallSessions()
+        }
+
         override fun onDetailsChanged(call: Call, details: Call.Details) {
             super.onDetailsChanged(call, details)
+            val isConf = details.hasProperty(Call.Details.PROPERTY_CONFERENCE)
+            if (isConf) {
+                isMerging = false
+                syncCallSessions()
+            }
             if (_heldCallSession.value?.call == call) {
                 _heldCallSession.value = CallSession(call, call.state)
                 updateNotification(call)
@@ -801,9 +1006,27 @@ class CallService : InCallService() {
         }
 
         if (isMerging) {
-            if (_currentCallSession.value?.call == call) _currentCallSession.value = null
-            if (_heldCallSession.value?.call == call)   _heldCallSession.value   = null
-            return
+            if (_heldCallSession.value?.call == call) {
+                _heldCallSession.value = null
+            }
+            if (_currentCallSession.value?.call == call) {
+                val remaining = try { calls.filter { it != call && it.state != Call.STATE_DISCONNECTED } } catch (_: Throwable) { emptyList() }
+                val conf = remaining.find { it.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true || it.children.isNotEmpty() }
+                val nextActive = conf ?: remaining.find { it.state == Call.STATE_ACTIVE } ?: remaining.firstOrNull()
+                if (nextActive != null) {
+                    _currentCallSession.value = CallSession(nextActive, nextActive.state)
+                    try {
+                        nextActive.unregisterCallback(callCallback)
+                        nextActive.registerCallback(callCallback)
+                    } catch (_: Throwable) {}
+                    updateNotification(nextActive)
+                } else {
+                    _currentCallSession.value = null
+                }
+            }
+            if (_currentCallSession.value != null) {
+                return
+            }
         }
 
         // Normal removal — if the current call is removed, promote held call if any
@@ -823,6 +1046,7 @@ class CallService : InCallService() {
         }
 
         if (_currentCallSession.value == null) {
+            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.endMultiCall(this)
             instance = null
             removeForeground()
             cancelNotification()
@@ -1020,12 +1244,17 @@ class CallService : InCallService() {
             RainModeManager.onCallStateChanged(this, call)
         }
 
-        if (isMerging) {
+        val isConference = call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true || call.children.isNotEmpty()
+        if (isConference || isMerging) {
             isMerging = false
-            call.registerCallback(callCallback)
+            try {
+                call.unregisterCallback(callCallback)
+                call.registerCallback(callCallback)
+            } catch (_: Throwable) {}
             _currentCallSession.value = CallSession(call, call.state)
             _heldCallSession.value = null
             updateNotification(call)
+            launchCallActivity()
             return
         }
 
@@ -1181,7 +1410,9 @@ class CallService : InCallService() {
         val hiddenIdsRaw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
         val hiddenIds = if (hiddenIdsRaw.isBlank()) emptySet() else hiddenIdsRaw.split(",").filter { it.isNotBlank() }.toSet()
         val isHiddenContact = contact != null && contact.id in hiddenIds
+        val isConf = (call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true) || call.children.isNotEmpty()
         val contactName = when {
+            isConf -> "Conference call"
             isHiddenContact && hideNames -> number.ifEmpty { "Unknown Number" }
             else -> contact?.name ?: number.ifEmpty { "Unknown Number" }
         }

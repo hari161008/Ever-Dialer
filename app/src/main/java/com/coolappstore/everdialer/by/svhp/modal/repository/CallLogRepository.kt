@@ -251,7 +251,80 @@ class CallLogRepository(
             }
         }
 
-        return callLogs
+        val multiRecords = com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.getAllRecords(context)
+        return combineMultiCalls(callLogs, multiRecords)
+    }
+
+    private fun combineMultiCalls(
+        callLogs: List<CallLogEntry>,
+        multiRecords: List<com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecord>
+    ): List<CallLogEntry> {
+        if (callLogs.size < 2) return callLogs
+
+        val result = mutableListOf<CallLogEntry>()
+        val consumed = mutableSetOf<Int>()
+
+        for (i in callLogs.indices) {
+            if (i in consumed) continue
+            val entryA = callLogs[i]
+            var combinedEntry: CallLogEntry? = null
+
+            for (j in (i + 1) until minOf(i + 10, callLogs.size)) {
+                if (j in consumed) continue
+                val entryB = callLogs[j]
+
+                if (entryA.number == entryB.number) continue
+                if (!isSameCalendarDay(entryA.date, entryB.date)) continue
+
+                // Check 1: MultiCallRecordStore
+                val matchedRecord = multiRecords.firstOrNull { rec ->
+                    val numMatch = (com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number1, entryA.number) &&
+                            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number2, entryB.number)) ||
+                            (com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number1, entryB.number) &&
+                            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number2, entryA.number))
+                    if (!numMatch) return@firstOrNull false
+                    val recEnd = if (rec.endTime > 0L) rec.endTime else rec.startTime + 1_800_000L
+                    (entryA.date in (rec.startTime - 600_000L)..(recEnd + 600_000L)) ||
+                        (entryB.date in (rec.startTime - 600_000L)..(recEnd + 600_000L))
+                }
+
+                // Check 2: Direct call timing overlap (active call intervals overlap)
+                val isTimeOverlapping = if (entryA.duration > 0 && entryB.duration > 0) {
+                    val startA = entryA.date
+                    val endA = entryA.date + entryA.duration * 1000L
+                    val startB = entryB.date
+                    val endB = entryB.date + entryB.duration * 1000L
+                    val overlapStart = maxOf(startA, startB)
+                    val overlapEnd = minOf(endA, endB)
+                    overlapEnd - overlapStart >= 3000L
+                } else false
+
+                if (matchedRecord != null || isTimeOverlapping) {
+                    consumed.add(j)
+                    val isMerged = matchedRecord?.isMerged ?: false
+                    combinedEntry = entryA.copy(
+                        duration = maxOf(entryA.duration, entryB.duration),
+                        types = entryA.types + entryB.types,
+                        callIds = (entryA.callIds + entryB.callIds).distinct(),
+                        dates = (entryA.dates + entryB.dates).distinct(),
+                        isMultiCall = true,
+                        isMergedCall = isMerged,
+                        secondNumber = entryB.number,
+                        secondName = entryB.name,
+                        secondContactId = entryB.contactId,
+                        secondPhotoUri = entryB.photoUri
+                    )
+                    break
+                }
+            }
+
+            if (combinedEntry != null) {
+                result.add(combinedEntry)
+            } else {
+                result.add(entryA)
+            }
+        }
+        return result
     }
 
     // ── Raw provider reads ──────────────────────────────────────────────────────

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsIconButton
+import com.coolappstore.everdialer.by.svhp.view.components.MultiCallContactSelectionDialog
+import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
 import com.coolappstore.evercallrecorder.by.svhp.ui.screens.AppLockScreen
@@ -89,6 +91,20 @@ fun RecordingsScreen(
     var highlightQuery by remember { mutableStateOf("") }
     var isRecordingSelectionMode by remember { mutableStateOf(false) }
     var directEntryUriToOpen by remember { mutableStateOf(openedRecordingUri) }
+    var multiCallItemToSelect by remember { mutableStateOf<RecordingItem?>(null) }
+
+    val onOpenContactInfo: (RecordingItem) -> Unit = { item ->
+        if (item.isMultiCall && !item.secondPhoneNumber.isNullOrBlank()) {
+            multiCallItemToSelect = item
+        } else {
+            navigator.navigate(
+                ContactDetailsScreenDestination(
+                    contactId = item.contactId ?: "null",
+                    phoneNumber = item.phoneNumber
+                )
+            )
+        }
+    }
 
     // Jump straight into the player for the requested recording as soon as it's found in the
     // (already-loading) recordings list, instead of showing the list first.
@@ -228,7 +244,8 @@ fun RecordingsScreen(
                                     modifier = Modifier.padding(end = 8.dp)
                                 )
                             }
-                        }
+                        },
+                        onOpenContactInfo = onOpenContactInfo
                     )
 
                     var lastSelectedRecording by remember { mutableStateOf<RecordingItem?>(null) }
@@ -249,9 +266,35 @@ fun RecordingsScreen(
                                     highlightQuery = ""
                                 },
                                 highlightQuery = highlightQuery,
+                                onOpenContactInfo = onOpenContactInfo,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
+                    }
+
+                    if (multiCallItemToSelect != null) {
+                        val multiItem = multiCallItemToSelect!!
+                        MultiCallContactSelectionDialog(
+                            name1 = multiItem.contactName,
+                            number1 = multiItem.phoneNumber,
+                            contactId1 = multiItem.contactId,
+                            photoUri1 = multiItem.photoUri,
+                            name2 = multiItem.secondContactName,
+                            number2 = multiItem.secondPhoneNumber ?: "",
+                            contactId2 = multiItem.secondContactId,
+                            photoUri2 = multiItem.secondPhotoUri,
+                            isMergedCall = multiItem.isMergedCall,
+                            onSelectContact = { selectedId, selectedNum ->
+                                multiCallItemToSelect = null
+                                navigator.navigate(
+                                    ContactDetailsScreenDestination(
+                                        contactId = selectedId ?: "null",
+                                        phoneNumber = selectedNum
+                                    )
+                                )
+                            },
+                            onDismiss = { multiCallItemToSelect = null }
+                        )
                     }
                 }
             }

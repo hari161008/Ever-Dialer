@@ -97,8 +97,12 @@ class CallSessionManager private constructor(context: Context) {
                 val isLateNumberDiscovery = field?.rawPhoneNumber.isNullOrBlank() && !value.rawPhoneNumber.isNullOrBlank()
                 // Enrichment Bypass: It's the same number and call direction, just more data
                 val isEnrichmentUpdate = field?.rawPhoneNumber == value.rawPhoneNumber && value.isEnriched
+                // Multi-call update (2nd call added, or calls merged)
+                val isMultiCallUpdate = value.isMultiCall || value.isMergedCall || !value.secondPhoneNumber.isNullOrBlank()
 
-                if (isSameCallDirection && (isLateNumberDiscovery || isEnrichmentUpdate) && !wasRecordingServiceStartIntentSend) {
+                if (isMultiCallUpdate) {
+                    field = value
+                } else if (isSameCallDirection && (isLateNumberDiscovery || isEnrichmentUpdate) && !wasRecordingServiceStartIntentSend) {
                     // We are in the same direction, but we previously had a blank/unknown number, and now we have a real number! This is part of the
                     // "Verification Window" flow, where we MAY first receive an anonymous/unknown number, then, WE MAY receive a real number within 500ms. In this case,
                     // it's the same call session, we want to allow updating the phone number. The only exception is if we already sent a start intent to
@@ -369,6 +373,24 @@ class CallSessionManager private constructor(context: Context) {
         }
         session.answeredViaDialer = true
         evaluateAndStartService()
+    }
+
+    /**
+     * Updates ongoing recording session metadata when a second call is added (one held, one active)
+     * or when calls are merged into a conference call.
+     */
+    @Synchronized
+    fun updateMultiCall(secondNumber: String?, isMerged: Boolean) {
+        val meta = session.currentMetadata
+        if (meta != null) {
+            val updated = meta.copy(
+                secondPhoneNumber = secondNumber ?: meta.secondPhoneNumber,
+                isMultiCall = true,
+                isMergedCall = isMerged || meta.isMergedCall
+            )
+            session.currentMetadata = updated
+            AppLogger.i(TAG, "updateMultiCall: secondNum=$secondNumber, isMerged=$isMerged")
+        }
     }
 
     /**

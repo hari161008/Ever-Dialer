@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -23,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
 import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.DualRecordingAvatar
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +70,7 @@ fun HomeScreen(
     onEverDialerSettingsClick: () -> Unit = {},
     everDialerSettingsButton: (@Composable () -> Unit)? = null,
     onBackClick: (() -> Unit)? = null,
+    onOpenContactInfo: ((com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val vm: HomeViewModel = viewModel()
@@ -224,6 +229,7 @@ fun HomeScreen(
                                     onFavouriteToggle = { vm.toggleFavourite(it) },
                                     onRecordingClick  = { recording -> onRecordingClick(recording, query) },
                                     onToggleSelect    = { vm.toggleSelection(it.uri) },
+                                    onOpenContactInfo = onOpenContactInfo,
                                     modifier = Modifier.animateItem(fadeInSpec = tween(380, easing = FastOutSlowInEasing), placementSpec = spring(stiffness = Spring.StiffnessLow), fadeOutSpec = tween(240))
                                 )
                             }
@@ -508,6 +514,7 @@ private fun RecordingGroupCard(
     onFavouriteToggle: (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit,
     onRecordingClick:  (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit,
     onToggleSelect:    (com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit,
+    onOpenContactInfo: ((com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -535,7 +542,8 @@ private fun RecordingGroupCard(
                         if (isSelectionMode) onToggleSelect(item)
                         else onRecordingClick(item)
                     },
-                    onEnterSelectionMode = { onToggleSelect(item) }
+                    onEnterSelectionMode = { onToggleSelect(item) },
+                    onOpenContactInfo = onOpenContactInfo
                 )
                 if (index < items.lastIndex) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
@@ -614,7 +622,8 @@ private fun RecordingRow(
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(0.dp),
     onFavouriteToggle: () -> Unit,
     onClick: () -> Unit,
-    onEnterSelectionMode: () -> Unit
+    onEnterSelectionMode: () -> Unit,
+    onOpenContactInfo: ((com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem) -> Unit)? = null
 ) {
     val vm: HomeViewModel = viewModel()
     val context = LocalContext.current
@@ -649,7 +658,14 @@ private fun RecordingRow(
     val directionIcon  = if (isIncoming) Icons.Rounded.CallReceived else Icons.Rounded.CallMade
     val directionLabel = if (isIncoming) "Incoming" else "Outgoing"
     val timeStr    = item.date?.let { java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(it) } ?: ""
-    val displayName = item.contactName ?: item.phoneNumber
+    val displayName = when {
+        item.isMergedCall || item.isMultiCall -> {
+            val p1 = item.contactName?.ifBlank { null } ?: item.phoneNumber
+            val p2 = item.secondContactName?.ifBlank { null } ?: item.secondPhoneNumber ?: ""
+            if (p2.isNotBlank()) "$p1 & $p2" else p1
+        }
+        else -> item.contactName?.ifBlank { null } ?: item.phoneNumber
+    }
 
     var showMenu        by remember { mutableStateOf(false) }
     var showInfoDialog  by remember { mutableStateOf(false) }
@@ -696,6 +712,12 @@ private fun RecordingRow(
 
     var photoBitmap by remember(item.phoneNumber) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item.phoneNumber) { photoBitmap = vm.loadContactPhoto(context, item.phoneNumber) }
+    var secondPhotoBitmap by remember(item.secondPhoneNumber) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(item.secondPhoneNumber) {
+        if (!item.secondPhoneNumber.isNullOrBlank()) {
+            secondPhotoBitmap = vm.loadContactPhoto(context, item.secondPhoneNumber!!)
+        }
+    }
 
     val lowerQuery = searchQuery.trim().lowercase()
     val noteSnippet: String? = remember(item.noteText, lowerQuery) {
@@ -767,24 +789,39 @@ private fun RecordingRow(
                             .size(44.dp)
                             .graphicsLayer { alpha = avatarAlpha }
                             .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.12f)),
+                            .background(accentColor.copy(alpha = 0.12f))
+                            .then(if (onOpenContactInfo != null && !isSelectionMode) Modifier.clickable { onOpenContactInfo(item) } else Modifier),
                         contentAlignment = Alignment.Center
                     ) {
-                        val isContact = !item.contactName.isNullOrBlank() &&
-                            item.contactName != item.phoneNumber &&
-                            !item.contactName.equals("Unknown", ignoreCase = true)
-                        if (photoBitmap != null) {
-                            Image(bitmap = photoBitmap!!, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        } else if (isContact) {
-                            val initial = item.contactName?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-                            Text(initial, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accentColor)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Person,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(24.dp)
+                        if (item.isMultiCall && !item.secondPhoneNumber.isNullOrBlank()) {
+                            val p1 = item.contactName?.ifBlank { null } ?: item.phoneNumber
+                            val p2 = item.secondContactName?.ifBlank { null } ?: item.secondPhoneNumber ?: ""
+                            DualRecordingAvatar(
+                                name1 = p1,
+                                number1 = item.phoneNumber,
+                                photo1 = photoBitmap,
+                                name2 = p2,
+                                number2 = item.secondPhoneNumber ?: "",
+                                photo2 = secondPhotoBitmap,
+                                size = 44.dp
                             )
+                        } else {
+                            val isContact = !item.contactName.isNullOrBlank() &&
+                                item.contactName != item.phoneNumber &&
+                                !item.contactName.equals("Unknown", ignoreCase = true)
+                            if (photoBitmap != null) {
+                                Image(bitmap = photoBitmap!!, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            } else if (isContact) {
+                                val initial = item.contactName?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                                Text(initial, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accentColor)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
 
@@ -813,6 +850,22 @@ private fun RecordingRow(
             },
             supportingContent = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (item.isMergedCall || item.isMultiCall) {
+                        val num1 = item.phoneNumber
+                        val num2 = item.secondPhoneNumber ?: ""
+                        val subText = if (item.isMergedCall) {
+                            if (num2.isNotBlank()) "$num1 • $num2" else num1
+                        } else {
+                            if (num2.isNotBlank()) "1 active, 1 on hold • $num1 & $num2" else "2 calls connected"
+                        }
+                        Text(
+                            text = subText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = directionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(11.dp))
                         Text(text = directionLabel, style = MaterialTheme.typography.labelSmall, color = accentColor)
@@ -879,6 +932,16 @@ private fun RecordingRow(
                 leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
                 onClick = { showMenu = false; onEnterSelectionMode() }
             )
+            if (onOpenContactInfo != null) {
+                DropdownMenuItem(
+                    text = { Text(if (item.isMultiCall) "View Contacts" else "View Contact") },
+                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onOpenContactInfo(item)
+                    }
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Share") },
                 leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
@@ -945,8 +1008,16 @@ private fun RecordingInfoDialog(item: com.coolappstore.evercallrecorder.by.svhp.
         title = { Text("Recording Info", fontWeight = FontWeight.SemiBold) },
         text  = {
             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                InfoRow("Contact",   item.contactName ?: "\u2014")
-                InfoRow("Number",    item.phoneNumber)
+                if (item.isMultiCall) {
+                    InfoRow("Type", if (item.isMergedCall) "Merged Call (2 people)" else "Multi-party Call")
+                    InfoRow("Contact 1", item.contactName ?: "\u2014")
+                    InfoRow("Number 1", item.phoneNumber)
+                    InfoRow("Contact 2", item.secondContactName ?: "\u2014")
+                    InfoRow("Number 2", item.secondPhoneNumber ?: "\u2014")
+                } else {
+                    InfoRow("Contact",   item.contactName ?: "\u2014")
+                    InfoRow("Number",    item.phoneNumber)
+                }
                 InfoRow("Direction", if (isIncoming) "Incoming" else "Outgoing")
                 InfoRow("Date",      item.date?.let { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(it) } ?: "\u2014")
                 InfoRow("Time",      item.date?.let { java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(it) } ?: "\u2014")

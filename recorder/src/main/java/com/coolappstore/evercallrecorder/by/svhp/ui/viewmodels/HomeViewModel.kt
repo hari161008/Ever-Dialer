@@ -41,7 +41,15 @@ data class RecordingItem(
     val durationMs: Long = 0L,
     val extension: String,
     val isFavourite: Boolean = false,
-    val noteText: String = ""
+    val noteText: String = "",
+    val contactId: String? = null,
+    val photoUri: String? = null,
+    val secondPhoneNumber: String? = null,
+    val secondContactName: String? = null,
+    val secondPhotoUri: String? = null,
+    val secondContactId: String? = null,
+    val isMultiCall: Boolean = false,
+    val isMergedCall: Boolean = false
 )
 
 // SortField.DATE kept for safe deserialization of old prefs, treated as TIME
@@ -656,6 +664,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             var contactName: String? = null
             var photoUri: String? = null
+            var contactId: String? = null
 
             val contactFromFile = if (template.contains("{contact_name}"))
                 parsed.contactName.ifBlank { null } else null
@@ -667,6 +676,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     if (nameMatchedEntry != null) {
                         phoneNumber = nameMatchedEntry.savedDigits
                         if (photoUri == null) photoUri = nameMatchedEntry.photoUri
+                        if (contactId == null) contactId = nameMatchedEntry.contactId.toString()
                     } else if (contactFromFile.any { it.isDigit() } && contactFromFile.filter { it.isDigit() }.length >= 7) {
                         phoneNumber = contactFromFile
                     }
@@ -678,6 +688,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (match != null) {
                     contactName = match.name
                     photoUri = match.photoUri
+                    contactId = match.contactId.toString()
                 }
             }
 
@@ -692,6 +703,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val noteText = notesPrefs.getString(entry.uri.toString(), "") ?: ""
             val fileSize = entry.length
             val durationMs = resolveAudioDuration(context, entry.uri, fileSize)
+
+            val recDateMs = date?.time ?: 0L
+            val multiCall = if (recDateMs > 0L) {
+                com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.findRecordForTime(context, recDateMs)
+            } else null
+
+            var secondPhoneNumber: String? = null
+            var secondContactName: String? = null
+            var secondPhotoUri: String? = null
+            var secondContactId: String? = null
+            var isMultiCall = false
+            var isMergedCall = false
+
+            if (multiCall != null) {
+                isMultiCall = true
+                isMergedCall = multiCall.isMerged
+                val isPrimaryMatch1 = com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(phoneNumber, multiCall.number1)
+                secondPhoneNumber = if (isPrimaryMatch1) multiCall.number2 else multiCall.number1
+                if (secondPhoneNumber.isNotBlank()) {
+                    val secondMatch = resolveContactFromIndex(secondPhoneNumber, exactContactIndex, suffixContactIndex)
+                    secondContactName = secondMatch?.name ?: (if (isPrimaryMatch1) multiCall.name2 else multiCall.name1)
+                    secondPhotoUri = secondMatch?.photoUri
+                    secondContactId = secondMatch?.contactId?.toString()
+                }
+            }
+
             RecordingItem(
                 uri         = entry.uri,
                 displayName = name,
@@ -703,7 +740,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 durationMs  = durationMs,
                 extension   = ext,
                 isFavourite = isFavourite(entry.uri),
-                noteText    = noteText
+                noteText    = noteText,
+                contactId   = contactId,
+                photoUri    = photoUri,
+                secondPhoneNumber = secondPhoneNumber,
+                secondContactName = secondContactName,
+                secondPhotoUri = secondPhotoUri,
+                secondContactId = secondContactId,
+                isMultiCall = isMultiCall,
+                isMergedCall = isMergedCall
             )
         }
     }

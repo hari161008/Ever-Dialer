@@ -904,6 +904,7 @@ fun RivoListItem(
     avatarForcePersonIcon: Boolean = false,
     photoUri: String? = null,
     avatarObeySolidIcons: Boolean = true,
+    customAvatar: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
     onAvatarClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -1002,7 +1003,27 @@ fun RivoListItem(
                 .padding(horizontal = 12.dp, vertical = if (compact) 6.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (avatarName != null || photoUri != null) {
+            if (customAvatar != null) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .onGloballyPositioned { coords -> avatarCoords = coords }
+                        .then(
+                            if (onAvatarClick != null)
+                                Modifier
+                                     .clip(CircleShape)
+                                     .combinedClickable(onClick = {
+                                         recordAvatarClick()
+                                         onAvatarClick()
+                                     })
+                            else Modifier
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    customAvatar()
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+            } else if (avatarName != null || photoUri != null) {
                 RivoAvatar(
                     name = avatarName ?: "",
                     photoUri = photoUri,

@@ -43,7 +43,10 @@ data class RecordingMetadata(
     val standardizedNumber: String? = null,
     val isCrossCountry: Boolean = false,
     val isEnriched: Boolean = false,
-    val sourceApp: String? = null
+    val sourceApp: String? = null,
+    val secondPhoneNumber: String? = null,
+    val isMultiCall: Boolean = false,
+    val isMergedCall: Boolean = false
 ) : Parcelable {
     /**
      * Returns the best available phone number for display and filename purposes.

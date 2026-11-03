@@ -7,11 +7,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.coolappstore.evercallrecorder.by.svhp.ui.common.DualRecordingAvatar
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.PlaybackViewModel
 import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
@@ -42,6 +46,7 @@ fun PlaybackScreen(
     recording: RecordingItem,
     onBack: () -> Unit,
     highlightQuery: String = "",
+    onOpenContactInfo: ((RecordingItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val vm: PlaybackViewModel = viewModel()
@@ -56,8 +61,22 @@ fun PlaybackScreen(
     DisposableEffect(Unit) { onDispose { vm.resetOnLeave() } }
     BackHandler { onBack() }
 
-    val title = recording.contactName ?: recording.phoneNumber
-    val subtitle = recording.contactName?.let { recording.phoneNumber } ?: ""
+    val title = when {
+        recording.isMergedCall || recording.isMultiCall -> {
+            val p1 = recording.contactName?.ifBlank { null } ?: recording.phoneNumber
+            val p2 = recording.secondContactName?.ifBlank { null } ?: recording.secondPhoneNumber ?: ""
+            if (p2.isNotBlank()) "$p1 & $p2" else p1
+        }
+        else -> recording.contactName?.ifBlank { null } ?: recording.phoneNumber
+    }
+    val subtitle = when {
+        recording.isMergedCall || recording.isMultiCall -> {
+            val n1 = recording.phoneNumber
+            val n2 = recording.secondPhoneNumber ?: ""
+            if (n2.isNotBlank()) "$n1 • $n2" else n1
+        }
+        else -> recording.contactName?.let { recording.phoneNumber } ?: ""
+    }
     val dateStr = recording.date?.let { SimpleDateFormat("MMMM d, yyyy • hh:mm a", Locale.getDefault()).format(it) } ?: ""
     val isIncoming  = recording.direction == "in"
     // accentColor is theme-driven and the same for both directions — direction is shown via badge
@@ -67,6 +86,12 @@ fun PlaybackScreen(
     var photoBitmap by remember(recording.phoneNumber) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(recording.phoneNumber) {
         photoBitmap = homeVm.loadContactPhoto(context, recording.phoneNumber)
+    }
+    var secondPhotoBitmap by remember(recording.secondPhoneNumber) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(recording.secondPhoneNumber) {
+        if (!recording.secondPhoneNumber.isNullOrBlank()) {
+            secondPhotoBitmap = homeVm.loadContactPhoto(context, recording.secondPhoneNumber!!)
+        }
     }
 
     Scaffold(
@@ -106,37 +131,57 @@ fun PlaybackScreen(
         ) {
             // ── Call info card ────────────────────────────────────────────────
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (onOpenContactInfo != null) {
+                            Modifier.clickable { onOpenContactInfo(recording) }
+                        } else Modifier
+                    ),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Row(modifier = Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(accentColor.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        val isContact = !recording.contactName.isNullOrBlank() &&
-                            recording.contactName != recording.phoneNumber &&
-                            !recording.contactName.equals("Unknown", ignoreCase = true)
-                        if (photoBitmap != null) {
-                            Image(
-                                bitmap = photoBitmap!!,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (isContact) {
-                            Text(
-                                text = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = accentColor
+                        if (recording.isMultiCall && !recording.secondPhoneNumber.isNullOrBlank()) {
+                            val p1 = recording.contactName?.ifBlank { null } ?: recording.phoneNumber
+                            val p2 = recording.secondContactName?.ifBlank { null } ?: recording.secondPhoneNumber ?: ""
+                            DualRecordingAvatar(
+                                name1 = p1,
+                                number1 = recording.phoneNumber,
+                                photo1 = photoBitmap,
+                                name2 = p2,
+                                number2 = recording.secondPhoneNumber ?: "",
+                                photo2 = secondPhotoBitmap,
+                                size = 56.dp
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Person,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(28.dp)
-                            )
+                            val isContact = !recording.contactName.isNullOrBlank() &&
+                                recording.contactName != recording.phoneNumber &&
+                                !recording.contactName.equals("Unknown", ignoreCase = true)
+                            if (photoBitmap != null) {
+                                Image(
+                                    bitmap = photoBitmap!!,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (isContact) {
+                                Text(
+                                    text = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = accentColor
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
