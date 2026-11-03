@@ -1368,6 +1368,10 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.5f (50%)
         const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square"
 
+        // Contact Info PFP Customization (Size & Shape)
+        const val KEY_CONTACT_INFO_PFP_SIZE                 = "contact_info_pfp_size"            // Float 0.1f..1.0f, default 0.60f (60%)
+        const val KEY_CONTACT_INFO_PFP_SHAPE                = "contact_info_pfp_shape"           // "circle" | "square", default "circle"
+
         // Volume DND — toggle system DND via volume button sequence using Accessibility
         const val KEY_VOLUME_DND_ENABLED           = "volume_dnd_enabled"
         const val KEY_VOLUME_DND_SEQUENCE          = "volume_dnd_sequence"

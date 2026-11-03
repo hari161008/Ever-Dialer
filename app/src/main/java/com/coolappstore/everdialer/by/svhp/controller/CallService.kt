@@ -361,7 +361,7 @@ class CallService : InCallService() {
 
     companion object {
         private const val CHANNEL_ID = "call_channel"
-        private const val CHANNEL_INCOMING_ID = "call_incoming_channel_v2"
+        private const val CHANNEL_INCOMING_ID = "call_incoming_channel_v3"
         private const val NOTIFICATION_ID = 101
 
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
@@ -1156,19 +1156,22 @@ class CallService : InCallService() {
         if (call.state == Call.STATE_SELECT_PHONE_ACCOUNT) return
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Delete legacy channel that may have cached default notification sound
+            // Delete legacy channels that may have cached default notification sound or vibration
             try { nm.deleteNotificationChannel("call_incoming_channel") } catch (_: Exception) {}
+            try { nm.deleteNotificationChannel("call_incoming_channel_v2") } catch (_: Exception) {}
 
             nm.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING_ID, "Incoming Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(null, null)
-                enableVibration(true)
+                enableVibration(false)
+                vibrationPattern = longArrayOf(0L)
                 setBypassDnd(true)
             })
             nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Ongoing Calls", NotificationManager.IMPORTANCE_LOW).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(null, null)
                 enableVibration(false)
+                vibrationPattern = longArrayOf(0L)
             })
         }
 
@@ -1263,7 +1266,9 @@ class CallService : InCallService() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(false)
             .setSound(null)
-            .setDefaults(if (isRinging && !isFullScreenIncoming) NotificationCompat.DEFAULT_VIBRATE else 0)
+            .setDefaults(0)
+            .setVibrate(longArrayOf(0L))
+            .setOnlyAlertOnce(true)
             .setWhen(connectTime)
             .setShowWhen(!isRinging)
             .setUsesChronometer(!isRinging)
