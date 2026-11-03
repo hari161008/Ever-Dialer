@@ -263,12 +263,7 @@ private fun DialpadRecentCallLogsList(
                 }
             },
             onAvatarClick = { clickedLog ->
-                if (showSimButtons && clickedLog.number.isNotEmpty()) {
-                    replaceNumber(clickedLog.number)
-                    clearSearch()
-                } else {
-                    navigateToContact(clickedLog.contactId, clickedLog.number)
-                }
+                navigateToContact(clickedLog.contactId, clickedLog.number)
             }
         )
         if (index < recentLogs.size - 1) {
@@ -1368,13 +1363,7 @@ fun DialPadContent(
                                                     subtitle = contactNum,
                                                     photoUri = contact.photoUri,
                                                     onAvatarClick = {
-                                                        if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                                            replaceNumber(contactNum)
-                                                            searchQuery = ""
-                                                            focusManager.clearFocus()
-                                                        } else {
-                                                            navigateToContact(contactId = contact.id)
-                                                        }
+                                                        navigateToContact(contactId = contact.id)
                                                     },
                                                     onClick  = {
                                                         if (showSimButtons && !contactNum.isNullOrEmpty()) {
@@ -1405,13 +1394,7 @@ fun DialPadContent(
                                                         }
                                                     },
                                                     onOpenContactInfo = { num ->
-                                                        if (showSimButtons) {
-                                                            replaceNumber(num)
-                                                            searchQuery = ""
-                                                            focusManager.clearFocus()
-                                                        } else {
-                                                            navigateToContact(phoneNumber = num)
-                                                        }
+                                                        navigateToContact(phoneNumber = num)
                                                     }
                                                 )
                                             }
@@ -1948,13 +1931,7 @@ fun DialPadContent(
                                             photoUri = contact.photoUri,
                                             onAvatarClick = {
                                                 saveDialpadSearchQuery()
-                                                if (showSimButtons && !contactNum.isNullOrEmpty()) {
-                                                    replaceNumber(contactNum)
-                                                    searchQuery = ""
-                                                    focusManager.clearFocus()
-                                                } else {
-                                                    navigateToContact(contactId = contact.id)
-                                                }
+                                                navigateToContact(contactId = contact.id)
                                             },
                                             onClick  = {
                                                 saveDialpadSearchQuery()
@@ -1988,13 +1965,7 @@ fun DialPadContent(
                                             },
                                             onOpenContactInfo = { num ->
                                                 saveDialpadSearchQuery()
-                                                if (showSimButtons) {
-                                                    replaceNumber(num)
-                                                    searchQuery = ""
-                                                    focusManager.clearFocus()
-                                                } else {
-                                                    navigateToContact(phoneNumber = num)
-                                                }
+                                                navigateToContact(phoneNumber = num)
                                             }
                                         )
                                     }
