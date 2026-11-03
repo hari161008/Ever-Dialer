@@ -257,16 +257,16 @@ fun BottomBar(navController: NavController) {
     val pillOffsetY by animateFloatAsState(
         targetValue   = if (pillVisible) 0f else pillExitOffsetY,
         animationSpec = tween(
-            durationMillis = if (pillVisible) 600 else 460,
-            easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.08f, 0.85f, 0.18f, 1f)
+            durationMillis = if (pillVisible) 600 else 700,
+            easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.3f, 0f, 0.2f, 1f)
         ),
         label         = "pillSlideIn"
     )
     val pillAlpha by animateFloatAsState(
         targetValue   = if (pillVisible) 1f else 0f,
         animationSpec = tween(
-            durationMillis = if (pillVisible) 550 else 300,
-            easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else LinearEasing
+            durationMillis = if (pillVisible) 550 else 650,
+            easing         = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
         ),
         label         = "pillFadeIn"
     )
@@ -791,16 +791,16 @@ fun BottomBar(navController: NavController) {
         val navBarOffsetY by animateFloatAsState(
             targetValue   = if (isOnTabScreen) 0f else maxOffsetPx,
             animationSpec = tween(
-                durationMillis = if (isOnTabScreen) 420 else 460,
-                easing         = if (isOnTabScreen) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.08f, 0.85f, 0.18f, 1f)
+                durationMillis = if (isOnTabScreen) 420 else 700,
+                easing         = if (isOnTabScreen) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.3f, 0f, 0.2f, 1f)
             ),
             label         = "navBarOffsetY"
         )
         val navBarAlpha by animateFloatAsState(
             targetValue   = if (isOnTabScreen) 1f else 0f,
             animationSpec = tween(
-                durationMillis = if (isOnTabScreen) 350 else 300,
-                easing         = LinearEasing
+                durationMillis = if (isOnTabScreen) 350 else 650,
+                easing         = if (isOnTabScreen) LinearEasing else CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
             ),
             label         = "navBarAlpha"
         )
