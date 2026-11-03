@@ -54,6 +54,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactInfoSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
@@ -282,6 +283,7 @@ fun ContactDetailsScreen(
     val showRingtone = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true) }
     val showChooseDefaultNumber = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true) }
     val showSavedIn = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true) }
+    val showContactInfoSettings = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CONTACT_INFO_SETTINGS, true) }
 
     // All this contact's saved numbers, so the Social card can offer a choice when there's more
     // than one (e.g. one saved with a country code, one without) instead of always defaulting to
@@ -2650,6 +2652,26 @@ fun ContactDetailsScreen(
                                             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    // Contact Info Settings — quick shortcut to Settings → Appearance → Contact Info Settings
+                    "contact_info_settings" -> {
+                        if (showContactInfoSettings) {
+                            item {
+                                RivoExpressiveCard {
+                                    RivoListItem(
+                                        headline = "Contact Info Settings",
+                                        supporting = "Customize contact display, profile picture size, shape, and element order",
+                                        leadingIcon = Icons.Default.Settings,
+                                        iconContainerColor = Color(0xFF673AB7),
+                                        trailingIcon = Icons.Default.ChevronRight,
+                                        onClick = {
+                                            navigator.navigate(ContactInfoSettingsScreenDestination())
+                                        }
+                                    )
                                 }
                             }
                         }

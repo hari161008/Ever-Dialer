@@ -903,8 +903,9 @@ class PreferenceManager(context: Context) {
         const val KEY_CONTACT_INFO_SHOW_RINGTONE              = "contact_info_show_ringtone"
         const val KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER = "contact_info_show_choose_default_number"
         const val KEY_CONTACT_INFO_SHOW_SAVED_IN              = "contact_info_show_saved_in"
+        const val KEY_CONTACT_INFO_SHOW_CONTACT_INFO_SETTINGS = "contact_info_show_contact_info_settings"
         const val KEY_CONTACT_INFO_ORDER                      = "contact_info_order"
-        const val DEFAULT_CONTACT_INFO_ORDER                  = "quick_actions,contact_info,social,description,notes,events,recent_activity,choose_sim,calling_backgrounds,ringtone,choose_default_number,saved_in"
+        const val DEFAULT_CONTACT_INFO_ORDER                  = "quick_actions,contact_info,social,description,notes,events,recent_activity,choose_sim,calling_backgrounds,ringtone,choose_default_number,saved_in,contact_info_settings"
 
         fun parseContactInfoOrder(raw: String?): List<String> {
             val fallback = DEFAULT_CONTACT_INFO_ORDER.split(",")

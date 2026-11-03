@@ -63,7 +63,8 @@ private val contactInfoElementOptions = listOf(
     ContactInfoElementOption("calling_backgrounds",   "Background And Contact PFP Customisation",     Icons.Default.Wallpaper),
     ContactInfoElementOption("ringtone",              "Ringtone",                                     Icons.Default.MusicNote),
     ContactInfoElementOption("choose_default_number", "Choose Default Number",                        Icons.Default.Numbers),
-    ContactInfoElementOption("saved_in",              "Saved In",                                     Icons.Default.Storage)
+    ContactInfoElementOption("saved_in",              "Saved In",                                     Icons.Default.Storage),
+    ContactInfoElementOption("contact_info_settings", "Contact Info Settings",                        Icons.Default.Settings)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,6 +102,7 @@ fun ContactInfoSettingsScreen(
     var contactInfoShowRingtone            by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true)) }
     var contactInfoShowChooseDefaultNumber by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true)) }
     var contactInfoShowSavedIn             by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true)) }
+    var contactInfoShowContactInfoSettings by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CONTACT_INFO_SETTINGS, true)) }
 
     val contactInfoElementOrder = remember {
         mutableStateListOf<String>().apply {
@@ -129,6 +131,7 @@ fun ContactInfoSettingsScreen(
         contactInfoShowRingtone            = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, true)
         contactInfoShowChooseDefaultNumber = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, true)
         contactInfoShowSavedIn             = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, true)
+        contactInfoShowContactInfoSettings = true; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CONTACT_INFO_SETTINGS, true)
     }
 
     if (showContactInfoElementsDialog) {
@@ -152,6 +155,7 @@ fun ContactInfoSettingsScreen(
             "ringtone"              -> contactInfoShowRingtone
             "choose_default_number" -> contactInfoShowChooseDefaultNumber
             "saved_in"              -> contactInfoShowSavedIn
+            "contact_info_settings" -> contactInfoShowContactInfoSettings
             else                    -> true
         }
         fun setContactInfoChecked(key: String, value: Boolean) {
@@ -168,6 +172,7 @@ fun ContactInfoSettingsScreen(
                 "ringtone"              -> { contactInfoShowRingtone = value;            prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_RINGTONE, value) }
                 "choose_default_number" -> { contactInfoShowChooseDefaultNumber = value; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CHOOSE_DEFAULT_NUMBER, value) }
                 "saved_in"              -> { contactInfoShowSavedIn = value;             prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_SAVED_IN, value) }
+                "contact_info_settings" -> { contactInfoShowContactInfoSettings = value; prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_CONTACT_INFO_SETTINGS, value) }
             }
         }
 
