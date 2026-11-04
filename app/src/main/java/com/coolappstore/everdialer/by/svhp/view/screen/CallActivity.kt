@@ -387,7 +387,7 @@ class CallActivity : FragmentActivity() {
                 if (call != null && effectiveSession != null) {
                     val isConference = (call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true) || call.children.isNotEmpty()
                     val number = call.details?.handle?.schemeSpecificPart ?: ""
-                    val simSlot = remember(call) { getSimSlotForCall(this@CallActivity, call) }
+                    val simSlot = remember(call, effectiveSession?.updateTime, call?.details?.accountHandle) { getSimSlotForCall(this@CallActivity, call) }
                     val isDualSim = remember { prefs.getActiveSimCount() >= 2 }
                     // Stable initial values — number shown immediately, replaced by
                     val hideNames = prefs.getBoolean(PreferenceManager.KEY_CONTACTS_HIDER_HIDE_NAMES, false)
@@ -499,7 +499,7 @@ class CallActivity : FragmentActivity() {
 
                     val incomingCall = incomingSession?.call
                     val incomingNumber = incomingCall?.details?.handle?.schemeSpecificPart ?: ""
-                    val incomingSimSlot = remember(incomingCall) { getSimSlotForCall(this@CallActivity, incomingCall) }
+                    val incomingSimSlot = remember(incomingCall, incomingSession?.updateTime, incomingCall?.details?.accountHandle) { getSimSlotForCall(this@CallActivity, incomingCall) }
                     val initialIncomingContact = remember(incomingNumber) {
                         if (incomingNumber.isNotEmpty()) {
                             try { contactsRepo.getContactByNumber(incomingNumber) } catch (_: Exception) { null }
@@ -631,6 +631,8 @@ class CallActivity : FragmentActivity() {
                             com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog(
                                 title = "Call via",
                                 availableAccounts = availableAccounts,
+                                number = number,
+                                contactName = contactName,
                                 onDismissRequest = {
                                     try { call.disconnect() } catch (_: Throwable) {}
                                     finishAndRemoveTask()
@@ -2408,7 +2410,7 @@ fun ExpressiveCallScreen(
                             }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
                                 if (showSimBadge && simSlot in 0..1) {
-                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp), shape = RoundedCornerShape(percent = 25))
+                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = 16.dp, height = 19.dp))
                                 }
                                 val lsBaseStatusStyle = MaterialTheme.typography.titleSmall.copy(shadow = textShadow)
                                 Text(
@@ -2715,7 +2717,7 @@ fun ExpressiveCallScreen(
                                             modifier = Modifier.padding(top = 4.dp)
                                         ) {
                                             if (showSimBadge && simSlot in 0..1) {
-                                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
+                                                SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp))
                                                 if (isCircleShape) Spacer(Modifier.width(6.dp))
                                             }
                                             Text(
@@ -2780,7 +2782,7 @@ fun ExpressiveCallScreen(
 
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                                 if (showSimBadge && simSlot in 0..1) {
-                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp), shape = RoundedCornerShape(percent = 25))
+                                    SimSlotBadge(slot = simSlot, modifier = Modifier.size(width = if (isIncomingRinging) 18.dp else 20.dp, height = if (isIncomingRinging) 21.dp else 23.dp))
                                 }
                                 Text(
                                     text = when {
@@ -4706,8 +4708,7 @@ fun CallWaitingCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     SimSlotBadge(
                         slot = incomingSimSlot,
-                        modifier = Modifier.size(width = 22.dp, height = 25.dp),
-                        shape = RoundedCornerShape(percent = 28)
+                        modifier = Modifier.size(width = 22.dp, height = 25.dp)
                     )
                 }
 

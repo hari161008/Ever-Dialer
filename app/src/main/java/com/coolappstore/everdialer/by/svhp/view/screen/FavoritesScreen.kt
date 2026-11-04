@@ -53,6 +53,7 @@ import com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.FakeCallManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringContactSim
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.ContactSortButton
@@ -250,6 +251,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
     if (showSimPicker && pendingCallNumber != null) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
+            number = pendingCallNumber,
             onSimSelected = { handle ->
                 makeCall(context, pendingCallNumber!!, handle)
                 showSimPicker = false
@@ -999,8 +1001,8 @@ private fun FavoriteContactCard(
                     val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
                     val tm = remember(context) { context.getSystemService(android.content.Context.TELECOM_SERVICE) as? TelecomManager }
                     val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-                    val account1 = accounts.getOrNull(0)
-                    val account2 = accounts.getOrNull(1)
+                    val account1 = getPhoneAccountForSimSlot(context, accounts, 0)
+                    val account2 = getPhoneAccountForSimSlot(context, accounts, 1)
 
                     RivoDropdownMenuItem(
                         text = "Call",

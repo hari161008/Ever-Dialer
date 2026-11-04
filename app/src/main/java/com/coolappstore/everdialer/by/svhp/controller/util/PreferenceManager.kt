@@ -505,6 +505,10 @@ class PreferenceManager(context: Context) {
         setDefaultCallCategory("all")
     }
 
+    fun isNotifyUpdatesEnabled(): Boolean = getBoolean(KEY_NOTIFY_UPDATES_ENABLED, false)
+    fun getNotifyUpdatesValue(): Int = getInt(KEY_NOTIFY_UPDATES_VALUE, 6).coerceAtLeast(1)
+    fun getNotifyUpdatesUnit(): String = getString(KEY_NOTIFY_UPDATES_UNIT, "hours") ?: "hours"
+
 
 
     /** Returns the user-configured tab order (Settings > Appearance > Tab Sections) as an
@@ -973,6 +977,7 @@ class PreferenceManager(context: Context) {
         const val KEY_BLOCK_UNKNOWN         = "block_unknown_callers"
         const val KEY_BLOCK_HIDDEN          = "block_hidden_callers"
         const val KEY_OPEN_DIALPAD_DEFAULT  = "open_dialpad_default"
+        const val KEY_DIALPAD_CIRCLE_BUTTONS = "dialpad_circle_buttons"
         const val KEY_HIDE_RATE_AND_REVIEW  = "hide_rate_and_review"
         const val KEY_RATE_REVIEW_HIDDEN_SECRET = "rate_review_hidden_secret"
         // Written by the bundled Ever Call Recorder module (:recorder) directly into this same
@@ -1052,6 +1057,10 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_UI_SHOW_CONTACTS  = "call_ui_show_contacts"
         const val KEY_CALL_UI_SHOW_GROUPS    = "call_ui_show_groups"
         const val KEY_AUTO_UPDATE_CHECK     = "auto_update_check"
+        const val KEY_NOTIFY_UPDATES_ENABLED = "notify_updates_enabled"
+        const val KEY_NOTIFY_UPDATES_VALUE   = "notify_updates_value"
+        const val KEY_NOTIFY_UPDATES_UNIT    = "notify_updates_unit"
+        const val KEY_LAST_NOTIFIED_UPDATE_VERSION = "last_notified_update_version"
         const val KEY_SCROLL_INDICATION     = "scroll_indication"
         const val KEY_PILL_NAV              = "pill_style_nav"
         const val KEY_SLIDE_TO_OPEN         = "slide_to_open"

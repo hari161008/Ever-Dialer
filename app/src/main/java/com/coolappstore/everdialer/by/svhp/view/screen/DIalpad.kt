@@ -124,6 +124,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
+import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenuItem
@@ -1042,7 +1043,7 @@ fun DialPadContent(
         }
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         val accounts = try { telecomManager?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-        val targetAccount = if (accounts.size > simSlotIndex) accounts[simSlotIndex] else accounts.firstOrNull()
+        val targetAccount = getPhoneAccountForSimSlot(context, accounts, simSlotIndex)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
             makeCall(context, cleanNum, targetAccount)
             forgetNumberIfMemoryDisabled()
@@ -1053,10 +1054,12 @@ fun DialPadContent(
     }
 
     if (showSimPicker) {
+        val callTargetNumber = pendingSearchCallNumber ?: number
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
+            number = callTargetNumber,
             onSimSelected = { handle ->
-                makeCall(context, pendingSearchCallNumber ?: number, handle)
+                makeCall(context, callTargetNumber, handle)
                 pendingSearchCallNumber = null
                 showSimPicker = false
                 forgetNumberIfMemoryDisabled()
@@ -2117,13 +2120,13 @@ fun DialPadContent(
 
             // Screen height in unscaled base dp:
             val baseScreenHeight = configuration.screenHeightDp.toFloat()
-            val cardHeightBudget = (baseScreenHeight - 140f).coerceIn(260f, 480f)
-            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(54f, 67f)
+            val cardHeightBudget = (baseScreenHeight - 128f).coerceIn(275f, 510f)
+            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(58f, 72f)
             val keyHeight: Dp = calculatedKeyH.dp
             val callH: Dp = keyHeight
 
             // Scale factor relative to standard 50dp height
-            val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.85f, 1.15f)
+            val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.85f, 1.25f)
             val actionSize: Dp = keyHeight
 
             // Spacing between keys dynamically adapts to row width
@@ -2145,7 +2148,7 @@ fun DialPadContent(
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = (8 * scaleFactor).coerceIn(6f, 10f).dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = (9 * scaleFactor).coerceIn(8f, 13f).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(keySpacing)
             ) {
@@ -2607,7 +2610,12 @@ fun DialerActionExpressive(
 
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
-    val buttonShape = if (isExpressive) {
+    val isCircleButtons = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    }
+    val buttonShape = if (isCircleButtons) {
+        CircleShape
+    } else if (isExpressive) {
         if (isCallButton) {
             if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie12Sided.toShape()
             else com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Sunny.toShape()
@@ -2634,81 +2642,89 @@ fun DialerActionExpressive(
         }
     }
 
-    if (useLiquidGlass && liquidGlassBackdrop != null) {
-        Box(
-            modifier = modifier
-                .scale(scale)
-                .drawBackdrop(
-                    backdrop = liquidGlassBackdrop,
-                    shape = { buttonShape },
-                    effects = {
-                        val d = density
-                        colorControls(brightness = lgCallButtonConfig.brightness, saturation = lgCallButtonConfig.saturation)
-                        if (lgCallButtonConfig.blurRadiusDp > 0f) blur(lgCallButtonConfig.blurRadiusDp * d)
-                        lens(
-                            refractionHeight = lgCallButtonConfig.refractionHeightDp * d,
-                            refractionAmount = lgCallButtonConfig.refractionAmountDp * d,
-                            chromaticAberration = lgCallButtonConfig.chromaticAberration,
-                            depthEffect = lgCallButtonConfig.depthEffect
-                        )
-                    },
-                    highlight = { Highlight.Default }
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        val targetSize = if (isCircleButtons) minOf(maxWidth, maxHeight) else null
+        val btnModifier = if (targetSize != null) Modifier.size(targetSize) else Modifier.fillMaxSize()
+
+        if (useLiquidGlass && liquidGlassBackdrop != null) {
+            Box(
+                modifier = btnModifier
+                    .scale(scale)
+                    .drawBackdrop(
+                        backdrop = liquidGlassBackdrop,
+                        shape = { buttonShape },
+                        effects = {
+                            val d = density
+                            colorControls(brightness = lgCallButtonConfig.brightness, saturation = lgCallButtonConfig.saturation)
+                            if (lgCallButtonConfig.blurRadiusDp > 0f) blur(lgCallButtonConfig.blurRadiusDp * d)
+                            lens(
+                                refractionHeight = lgCallButtonConfig.refractionHeightDp * d,
+                                refractionAmount = lgCallButtonConfig.refractionAmountDp * d,
+                                chromaticAberration = lgCallButtonConfig.chromaticAberration,
+                                depthEffect = lgCallButtonConfig.depthEffect
+                            )
+                        },
+                        highlight = { Highlight.Default }
+                    )
+                    .combinedClickable(
+                        onClick = wrappedOnClick,
+                        onLongClick = wrappedOnLongClick,
+                        interactionSource = interactionSource,
+                        indication = null
+                    )
+            ) {
+                Surface(
+                    shape = buttonShape,
+                    color = animatedBgColor.copy(alpha = 0.5f),
+                    contentColor = animatedContentColor,
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    actionContent()
+                }
+            }
+        } else if (useBackdropBlur && liquidGlassBackdrop != null) {
+            Box(
+                modifier = btnModifier
+                    .scale(scale)
+                    .drawBackdrop(
+                        backdrop = liquidGlassBackdrop,
+                        shape    = { buttonShape },
+                        effects  = {
+                            val d = density
+                            colorControls(saturation = blurCallButtonConfig.saturation)
+                            blur(blurCallButtonConfig.blurRadiusDp * d)
+                        },
+                        highlight = { Highlight.Default }
+                    )
+                    .combinedClickable(
+                        onClick = wrappedOnClick,
+                        onLongClick = wrappedOnLongClick,
+                        interactionSource = interactionSource,
+                        indication = null
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(animatedBgColor.copy(alpha = 0.45f), buttonShape)
                 )
-                .combinedClickable(
-                    onClick = wrappedOnClick,
-                    onLongClick = wrappedOnLongClick,
-                    interactionSource = interactionSource,
-                    indication = null
-                )
-        ) {
+                actionContent()
+            }
+        } else {
             Surface(
+                modifier = btnModifier
+                    .scale(scale)
+                    .combinedClickable(onClick = wrappedOnClick, onLongClick = wrappedOnLongClick, interactionSource = interactionSource, indication = null),
                 shape = buttonShape,
-                color = animatedBgColor.copy(alpha = 0.5f),
-                contentColor = animatedContentColor,
-                modifier = Modifier.matchParentSize()
+                color = animatedBgColor,
+                contentColor = animatedContentColor
             ) {
                 actionContent()
             }
-        }
-    } else if (useBackdropBlur && liquidGlassBackdrop != null) {
-        Box(
-            modifier = modifier
-                .scale(scale)
-                .drawBackdrop(
-                    backdrop = liquidGlassBackdrop,
-                    shape    = { buttonShape },
-                    effects  = {
-                        val d = density
-                        colorControls(saturation = blurCallButtonConfig.saturation)
-                        blur(blurCallButtonConfig.blurRadiusDp * d)
-                    },
-                    highlight = { Highlight.Default }
-                )
-                .combinedClickable(
-                    onClick = wrappedOnClick,
-                    onLongClick = wrappedOnLongClick,
-                    interactionSource = interactionSource,
-                    indication = null
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(animatedBgColor.copy(alpha = 0.45f), buttonShape)
-            )
-            actionContent()
-        }
-    } else {
-        Surface(
-            modifier = modifier
-                .scale(scale)
-                .combinedClickable(onClick = wrappedOnClick, onLongClick = wrappedOnLongClick, interactionSource = interactionSource, indication = null),
-            shape = buttonShape,
-            color = animatedBgColor,
-            contentColor = animatedContentColor
-        ) {
-            actionContent()
         }
     }
 }
@@ -2743,6 +2759,11 @@ fun DialPadKey(
 
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
+    val isCircleButtons = remember(settingsState) {
+        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    }
+    val buttonWidth = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyWidth
+    val buttonHeight = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyHeight
     val isStarKey = number == "*"
     val isPlusSubKey = letters.trim() == "+"
     val hasLetters = letters.isNotBlank()
@@ -2752,6 +2773,14 @@ fun DialPadKey(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "ButtonShapeAnimation"
     )
+    val buttonShape = if (isCircleButtons) {
+        CircleShape
+    } else if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
+        if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie4Sided.toShape()
+        else RoundedCornerShape(cornerRadius)
+    } else {
+        RoundedCornerShape(cornerRadius)
+    }
     val scale by animateFloatAsState(
         targetValue = if (isVisuallyPressed) 0.88f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -2793,18 +2822,18 @@ fun DialPadKey(
 
     // Base font sizes in sp
     val baseMainSize = if (isStarKey) {
-        if (compact) 20f else 23f
+        if (compact) 22f else 25f
     } else {
-        if (compact) 17f else 20f
+        if (compact) 19f else 22f
     }
     val baseSubSize = if (isPlusSubKey) {
-        if (compact) 9.5f else 10.5f
+        if (compact) 10.5f else 11.5f
     } else {
-        if (compact) 8f else 8.5f
+        if (compact) 9f else 9.5f
     }
 
     // Safe height budget inside button: leave at least 16dp total margin (8dp top + 8dp bottom)
-    val buttonHeightVal = keyHeight.value
+    val buttonHeightVal = buttonHeight.value
     val maxContentHeight = (buttonHeightVal - 16f).coerceAtLeast(14f)
 
     // Gap between digit and letters (0 in compact to save space, 1dp in normal)
@@ -2834,77 +2863,77 @@ fun DialPadKey(
         }
     }
 
-    Surface(
-        modifier = Modifier
-            .size(width = keyWidth, height = keyHeight)
-            .scale(scale)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {
-                    triggerTapPulse()
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
-                    onClick(number)
-                },
-                onLongClick = if (onLongClick != null) ({
-                    triggerTapPulse()
-                    if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLongClick()
-                }) else null
-            ),
-        shape = if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
-            if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie4Sided.toShape()
-            else RoundedCornerShape(cornerRadius)
-        } else {
-            RoundedCornerShape(cornerRadius)
-        },
-        color = bgColor
+    Box(
+        modifier = Modifier.size(width = keyWidth, height = keyHeight),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = number,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = finalMainFontSize.sp,
-                    lineHeight = finalMainFontSize.sp,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both
-                    ),
-                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                .size(width = buttonWidth, height = buttonHeight)
+                .scale(scale)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {
+                        triggerTapPulse()
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
+                        onClick(number)
+                    },
+                    onLongClick = if (onLongClick != null) ({
+                        triggerTapPulse()
+                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick()
+                    }) else null
                 ),
-                color = mainTextColor,
-                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                softWrap = false
-            )
-            if (hasLetters) {
-                if (gapHeight > 0f) {
-                    Spacer(modifier = Modifier.height(gapHeight.dp))
-                }
+            shape = buttonShape,
+            color = bgColor
+        ) {
+            Column(
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
                 Text(
-                    text = letters,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = finalSubFontSize.sp,
-                        lineHeight = finalSubFontSize.sp,
+                    text = number,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = finalMainFontSize.sp,
+                        lineHeight = finalMainFontSize.sp,
                         lineHeightStyle = LineHeightStyle(
                             alignment = LineHeightStyle.Alignment.Center,
                             trim = LineHeightStyle.Trim.Both
                         ),
                         platformStyle = PlatformTextStyle(includeFontPadding = false)
                     ),
-                    color = subTextColor,
-                    letterSpacing = if (isPlusSubKey) 0.sp else 0.4.sp,
-                    fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal,
+                    color = mainTextColor,
+                    fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                     softWrap = false
                 )
+                if (hasLetters) {
+                    if (gapHeight > 0f) {
+                        Spacer(modifier = Modifier.height(gapHeight.dp))
+                    }
+                    Text(
+                        text = letters,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = finalSubFontSize.sp,
+                            lineHeight = finalSubFontSize.sp,
+                            lineHeightStyle = LineHeightStyle(
+                                alignment = LineHeightStyle.Alignment.Center,
+                                trim = LineHeightStyle.Trim.Both
+                            ),
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
+                        color = subTextColor,
+                        letterSpacing = if (isPlusSubKey) 0.sp else 0.4.sp,
+                        fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Lens
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,9 +26,10 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
-private val ColorBlue  = Color(0xFF2196F3)
-private val ColorTeal  = Color(0xFF009688)
-private val ColorAmber = Color(0xFFFFC107)
+private val ColorBlue   = Color(0xFF2196F3)
+private val ColorTeal   = Color(0xFF009688)
+private val ColorAmber  = Color(0xFFFFC107)
+private val ColorPurple = Color(0xFF9C27B0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
@@ -42,6 +44,7 @@ fun DialpadSettingsScreen(
     var dialpadMemory by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
     var showCallLogsInDialpadSearchList by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, true)) }
     var openDialpadDefault by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
+    var circleButtons by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)) }
 
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
@@ -113,6 +116,31 @@ fun DialpadSettingsScreen(
                             onCheckedChange = {
                                 openDialpadDefault = it
                                 prefs.setBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, it)
+                            }
+                        )
+                    }
+                }
+            }
+
+            RivoAnimatedSection(delayMs = 40L) {
+                Column {
+                    Text(
+                        "Buttons Style",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = rivoHeadingColor(),
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                    )
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Circle buttons",
+                            supporting = "Use circular buttons on the dialpad",
+                            leadingIcon = Icons.Outlined.Lens,
+                            iconContainerColor = ColorPurple,
+                            checked = circleButtons,
+                            modifier = Modifier.settingsSearchHighlight("circle_buttons", highlightedKey) { highlightedKey = null },
+                            onCheckedChange = {
+                                circleButtons = it
+                                prefs.setBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, it)
                             }
                         )
                     }

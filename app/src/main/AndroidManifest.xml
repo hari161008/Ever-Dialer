@@ -1965,6 +1965,16 @@
         </receiver>
 
         <receiver
+            android:name=".controller.util.UpdateNotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.coolappstore.everdialer.by.svhp.UPDATE_CHECK_TRIGGER" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".controller.util.MissedCallDismissReceiver"
             android:exported="false" />
 

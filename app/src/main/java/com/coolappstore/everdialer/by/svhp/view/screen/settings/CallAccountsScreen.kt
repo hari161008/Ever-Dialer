@@ -73,13 +73,27 @@ fun CallAccountsScreen(
         ) {
 
             item {
+                val context = androidx.compose.ui.platform.LocalContext.current
                 RivoExpressiveCard {
                     RivoListItem(
                         headline = "Manage Calling Accounts",
                         supporting = "SIM cards and calling accounts",
                         leadingIcon = Icons.Outlined.SimCard,
                         iconContainerColor = ColorBlue,
-                        onClick = { /* no-op: system handles */ }
+                        onClick = {
+                            val intent = android.content.Intent(android.telecom.TelecomManager.ACTION_CHANGE_PHONE_ACCOUNTS).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Throwable) {
+                                try {
+                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).apply {
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    })
+                                } catch (_: Throwable) {}
+                            }
+                        }
                     )
                 }
             }

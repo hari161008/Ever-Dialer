@@ -66,6 +66,7 @@ import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
@@ -81,7 +82,7 @@ import org.koin.compose.viewmodel.koinActivityViewModel
  * anti-alias as cleanly). Text is centered using a matched line height and no font padding
  * (rather than a fixed manual offset) so the digit stays perfectly centered at every size.
  */
-private val SimCardNotchShape = GenericShape { size, _ ->
+internal val SimCardNotchShape = GenericShape { size, _ ->
     val notch = size.minDimension * 0.42f
     moveTo(notch, 0f)
     lineTo(size.width, 0f)
@@ -837,8 +838,8 @@ fun CallLogTile(
                             val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
                             val tm = remember(context) { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
                             val accounts: List<PhoneAccountHandle> = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-                            val account1 = accounts.getOrNull(0)
-                            val account2 = accounts.getOrNull(1)
+                            val account1 = getPhoneAccountForSimSlot(context, accounts, 0)
+                            val account2 = getPhoneAccountForSimSlot(context, accounts, 1)
 
                             RivoDropdownMenuItem(
                                 text     = "Call back",

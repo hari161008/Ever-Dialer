@@ -90,6 +90,7 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.QrCodeUtils
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithSimPreference
 import com.coolappstore.everdialer.by.svhp.controller.util.placeCallWithContactSimPreference
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
@@ -481,7 +482,7 @@ fun ContactDetailsScreen(
     val callWithSimSlot: (Int) -> Unit = { slot ->
         val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-        val targetAccount = if (accounts.size > slot) accounts[slot] else accounts.firstOrNull()
+        val targetAccount = getPhoneAccountForSimSlot(context, accounts, slot)
 
         val targetNumber = when {
             contactDefaultNumber != null -> contactDefaultNumber
@@ -506,7 +507,7 @@ fun ContactDetailsScreen(
                 pendingSimSlotToCall = null
                 val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
                 val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-                val targetAccount = if (accounts.size > slot) accounts[slot] else accounts.firstOrNull()
+                val targetAccount = getPhoneAccountForSimSlot(context, accounts, slot)
                 makeCall(context, num, targetAccount)
             }
         )
@@ -516,7 +517,15 @@ fun ContactDetailsScreen(
         NumberPickerDialog(numbers = contactPhoneNumbers, onDismissRequest = { showNumberPicker = false }, onNumberSelected = { showNumberPicker = false; initiateCall(it) })
     }
     if (showSimPicker && pendingNumber != null) {
-        SimPickerDialog(onDismissRequest = { showSimPicker = false }, onSimSelected = { handle -> makeCall(context, pendingNumber!!, handle); showSimPicker = false })
+        SimPickerDialog(
+            onDismissRequest = { showSimPicker = false },
+            number = pendingNumber,
+            contactName = contact?.name,
+            onSimSelected = { handle ->
+                makeCall(context, pendingNumber!!, handle)
+                showSimPicker = false
+            }
+        )
     }
     if (showChooseSimDialog) {
         ChooseSimDialog(

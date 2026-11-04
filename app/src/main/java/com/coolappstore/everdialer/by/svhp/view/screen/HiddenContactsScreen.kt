@@ -57,6 +57,7 @@ fun HiddenContactsScreen(navigator: DestinationsNavigator) {
     if (showSimPicker) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
+            number = callNumber,
             onSimSelected = { handle ->
                 makeCall(context, callNumber, handle)
                 showSimPicker = false

@@ -452,14 +452,7 @@ class CallLogRepository(
     }
 
     private fun getSimSlotForPhoneAccountId(phoneAccountId: String): Int {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return -1
-        return try {
-            val subId = phoneAccountId.toIntOrNull() ?: return -1
-            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
-                    as? SubscriptionManager ?: return -1
-            val info = sm.getActiveSubscriptionInfo(subId) ?: return -1
-            info.simSlotIndex
-        } catch (_: Exception) { -1 }
+        return com.coolappstore.everdialer.by.svhp.controller.util.getSimSlotForPhoneAccountId(context, phoneAccountId)
     }
 
     // ── Contact index (built once per refresh, from a single query) ────────────

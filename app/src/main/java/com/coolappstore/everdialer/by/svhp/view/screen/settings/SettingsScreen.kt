@@ -1102,7 +1102,17 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     Column {
                         SectionLabel("Appearance")
                         RivoExpressiveCard {
-                            RivoListItem(headline = "Interface", supporting = "Themes, colors, and layout", leadingIcon = Icons.Outlined.Palette, iconContainerColor = ColorPurple, trailingIcon = Icons.Default.ChevronRight, modifier = Modifier.settingsSearchHighlight("interface", highlightedSettingKey) { highlightedSettingKey = null }, onClick = { navigator.navigate(InterfaceScreenDestination()) })
+                            RivoListItem(
+                                headline = "Appearance",
+                                supporting = "Themes, colors, and layout",
+                                leadingIcon = Icons.Outlined.Palette,
+                                iconContainerColor = ColorPurple,
+                                trailingIcon = Icons.Default.ChevronRight,
+                                modifier = Modifier
+                                    .settingsSearchHighlight("appearance", highlightedSettingKey) { highlightedSettingKey = null }
+                                    .settingsSearchHighlight("interface", highlightedSettingKey) { highlightedSettingKey = null },
+                                onClick = { navigator.navigate(InterfaceScreenDestination()) }
+                            )
                         }
                     }
                 }

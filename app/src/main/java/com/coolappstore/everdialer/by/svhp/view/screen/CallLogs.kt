@@ -108,6 +108,8 @@ fun CallLogFullScreen(
     if (showSimPicker && pendingNumber != null) {
         SimPickerDialog(
             onDismissRequest = { showSimPicker = false },
+            number = pendingNumber,
+            contactName = contactName,
             onSimSelected = { handle ->
                 makeCall(context, pendingNumber!!, handle)
                 showSimPicker = false

@@ -18,11 +18,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -32,6 +38,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import com.coolappstore.everdialer.by.svhp.controller.util.UpdateNotificationManager
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -109,13 +119,14 @@ private val ColorBluGrey = Color(0xFF607D8B)
 private val ColorAmber   = Color(0xFFFFC107)
 private val ColorCyan    = Color(0xFF00BCD4)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
 fun UpdatesScreen(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
     val scope = rememberCoroutineScope()
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
     var checkState by remember { mutableStateOf<CheckState>(CheckState.Idle) }
     var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
@@ -124,8 +135,19 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
     var showCompareSheet by remember { mutableStateOf(false) }
 
     val settingsVersion by prefs.settingsChanged.collectAsState()
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     var autoUpdateEnabled by remember(settingsVersion) {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, true))
+    }
+    var notifyUpdatesEnabled by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_NOTIFY_UPDATES_ENABLED, false))
+    }
+    var notifyUpdatesValue by remember(settingsVersion) {
+        mutableStateOf(prefs.getInt(PreferenceManager.KEY_NOTIFY_UPDATES_VALUE, 6).toString())
+    }
+    var notifyUpdatesUnit by remember(settingsVersion) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_NOTIFY_UPDATES_UNIT, "hours") ?: "hours")
     }
 
     fun triggerHaptic() {
@@ -275,11 +297,13 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
-                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .verticalScroll(scrollState)
                 .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -362,6 +386,100 @@ fun UpdatesScreen(navigator: DestinationsNavigator) {
                                 prefs.setBoolean(PreferenceManager.KEY_AUTO_UPDATE_CHECK, enabled)
                             }
                         )
+                    }
+
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Notify Updates",
+                            supporting = if (notifyUpdatesEnabled)
+                                "Checking every $notifyUpdatesValue ${if (notifyUpdatesUnit == "hours") "hour(s)" else "day(s)"} in the background"
+                            else
+                                "Periodically check for new releases in background and notify when an update is available",
+                            leadingIcon = Icons.Outlined.NotificationsActive,
+                            iconContainerColor = MaterialTheme.colorScheme.primary,
+                            checked = notifyUpdatesEnabled,
+                            onCheckedChange = { enabled ->
+                                notifyUpdatesEnabled = enabled
+                                prefs.setBoolean(PreferenceManager.KEY_NOTIFY_UPDATES_ENABLED, enabled)
+                                if (enabled) {
+                                    val n = notifyUpdatesValue.toIntOrNull()?.coerceAtLeast(1) ?: 6
+                                    notifyUpdatesValue = n.toString()
+                                    prefs.setInt(PreferenceManager.KEY_NOTIFY_UPDATES_VALUE, n)
+                                    prefs.setString(PreferenceManager.KEY_NOTIFY_UPDATES_UNIT, notifyUpdatesUnit)
+                                    UpdateNotificationManager.scheduleUpdateCheck(context)
+                                } else {
+                                    UpdateNotificationManager.cancelUpdateCheck(context)
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .bringIntoViewRequester(bringIntoViewRequester)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = notifyUpdatesValue,
+                                onValueChange = { raw ->
+                                    val digitsOnly = raw.filter { it.isDigit() }.take(4)
+                                    notifyUpdatesValue = digitsOnly
+                                    scope.launch {
+                                        bringIntoViewRequester.bringIntoView()
+                                    }
+                                    val n = digitsOnly.toIntOrNull()
+                                    if (n != null && n > 0) {
+                                        prefs.setInt(PreferenceManager.KEY_NOTIFY_UPDATES_VALUE, n)
+                                        if (notifyUpdatesEnabled) {
+                                            UpdateNotificationManager.scheduleUpdateCheck(context)
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .width(90.dp)
+                                    .onFocusEvent { focusState ->
+                                        if (focusState.isFocused) {
+                                            scope.launch {
+                                                delay(200)
+                                                bringIntoViewRequester.bringIntoView()
+                                            }
+                                        }
+                                    }
+                            )
+                            FilterChip(
+                                selected = notifyUpdatesUnit == "hours",
+                                onClick = {
+                                    notifyUpdatesUnit = "hours"
+                                    prefs.setString(PreferenceManager.KEY_NOTIFY_UPDATES_UNIT, "hours")
+                                    if (notifyUpdatesEnabled) {
+                                        UpdateNotificationManager.scheduleUpdateCheck(context)
+                                    }
+                                },
+                                label = { Text("Hours") }
+                            )
+                            FilterChip(
+                                selected = notifyUpdatesUnit == "days",
+                                onClick = {
+                                    notifyUpdatesUnit = "days"
+                                    prefs.setString(PreferenceManager.KEY_NOTIFY_UPDATES_UNIT, "days")
+                                    if (notifyUpdatesEnabled) {
+                                        UpdateNotificationManager.scheduleUpdateCheck(context)
+                                    }
+                                },
+                                label = { Text("Days") }
+                            )
+                        }
                     }
                 }
             }

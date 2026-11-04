@@ -940,6 +940,7 @@ fun CallLogFullContent(
         if (showSimPicker && pendingNumber != null) {
             SimPickerDialog(
                 onDismissRequest = { showSimPicker = false },
+                number = pendingNumber,
                 onSimSelected = { handle ->
                     makeCall(context, pendingNumber!!, handle)
                     showSimPicker = false

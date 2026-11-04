@@ -66,6 +66,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.deduplicatePhoneNumbe
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
+import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.view.screen.SimCardIconWithNumber
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
@@ -708,8 +709,8 @@ fun ContactListItem(
                         val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
                         val tm = remember(context) { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
                         val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
-                        val account1 = accounts.getOrNull(0)
-                        val account2 = accounts.getOrNull(1)
+                        val account1 = getPhoneAccountForSimSlot(context, accounts, 0)
+                        val account2 = getPhoneAccountForSimSlot(context, accounts, 1)
 
                         RivoDropdownMenuItem(
                             text     = "Call",

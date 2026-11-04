@@ -957,6 +957,7 @@ class MainActivity : FragmentActivity() {
                 if (showSimPicker && pendingSimPickerNumber != null) {
                     SimPickerDialog(
                         onDismissRequest = { showSimPicker = false },
+                        number = pendingSimPickerNumber,
                         onSimSelected = { handle ->
                             makeCall(this@MainActivity, pendingSimPickerNumber!!, handle)
                             showSimPicker = false
@@ -1243,6 +1244,12 @@ class MainActivity : FragmentActivity() {
         }
 
         when (action) {
+            "com.coolappstore.everdialer.OPEN_UPDATES" -> {
+                navController.navigate(UpdatesScreenDestination.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                }
+            }
             "com.coolappstore.everdialer.OPEN_RECENTS" -> {
                 navController.navigate(RecentScreenDestination.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
