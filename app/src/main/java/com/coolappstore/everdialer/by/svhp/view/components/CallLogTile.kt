@@ -82,7 +82,7 @@ import org.koin.compose.viewmodel.koinActivityViewModel
  * anti-alias as cleanly). Text is centered using a matched line height and no font padding
  * (rather than a fixed manual offset) so the digit stays perfectly centered at every size.
  */
-internal val SimCardNotchShape = GenericShape { size, _ ->
+val SimCardNotchShape = GenericShape { size, _ ->
     val notch = size.minDimension * 0.42f
     moveTo(notch, 0f)
     lineTo(size.width, 0f)
@@ -858,16 +858,11 @@ fun CallLogTile(
                                                     makeCall(context, log.number, account1)
                                                 },
                                                 shape = RoundedCornerShape(8.dp),
-                                                color = sim1Color,
-                                                contentColor = Color.White,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                                 modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
-                                                    SimCardIconWithNumber(
-                                                        simSlotNumber = "1",
-                                                        tint = Color.White,
-                                                        isLarge = false
-                                                    )
+                                                    SimSlotBadge(slot = 0)
                                                 }
                                             }
                                             Surface(
@@ -876,16 +871,11 @@ fun CallLogTile(
                                                     makeCall(context, log.number, account2)
                                                 },
                                                 shape = RoundedCornerShape(8.dp),
-                                                color = sim2Color,
-                                                contentColor = Color.White,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                                 modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
-                                                    SimCardIconWithNumber(
-                                                        simSlotNumber = "2",
-                                                        tint = Color.White,
-                                                        isLarge = false
-                                                    )
+                                                    SimSlotBadge(slot = 1)
                                                 }
                                             }
                                         }

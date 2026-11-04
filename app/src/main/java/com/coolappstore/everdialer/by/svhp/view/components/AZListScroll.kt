@@ -734,16 +734,11 @@ fun ContactListItem(
                                                 makeCall(context, numToCall, account1)
                                             },
                                             shape = RoundedCornerShape(8.dp),
-                                            color = sim1Color,
-                                            contentColor = Color.White,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                             modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                SimCardIconWithNumber(
-                                                    simSlotNumber = "1",
-                                                    tint = Color.White,
-                                                    isLarge = false
-                                                )
+                                                SimSlotBadge(slot = 0)
                                             }
                                         }
                                         Surface(
@@ -752,16 +747,11 @@ fun ContactListItem(
                                                 makeCall(context, numToCall, account2)
                                             },
                                             shape = RoundedCornerShape(8.dp),
-                                            color = sim2Color,
-                                            contentColor = Color.White,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                             modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                SimCardIconWithNumber(
-                                                    simSlotNumber = "2",
-                                                    tint = Color.White,
-                                                    isLarge = false
-                                                )
+                                                SimSlotBadge(slot = 1)
                                             }
                                         }
                                     }

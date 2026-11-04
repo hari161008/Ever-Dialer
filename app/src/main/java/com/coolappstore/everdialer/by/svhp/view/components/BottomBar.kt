@@ -385,7 +385,7 @@ fun BottomBar(navController: NavController) {
             val canScroll = if (scrollStateMeasured) scrollState.maxValue > 0 else (likelyCanScroll || scrollState.maxValue > 0)
 
             val indicatorProgress by animateFloatAsState(
-                targetValue   = if (canScroll && scrollIndication) 1f else 0f,
+                targetValue   = if (pillVisible && canScroll && scrollIndication) 1f else 0f,
                 animationSpec = tween(durationMillis = 350, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
                 label         = "pillIndicatorProgress"
             )
@@ -452,9 +452,26 @@ fun BottomBar(navController: NavController) {
                     updateTabBounds(rowCoordinates)
                 }
 
-                val selectedTab = orderedTabs.firstOrNull { it.selected }
+                var lastSelectedKey by remember { mutableStateOf<String?>(null) }
+                val currentSelectedTab = orderedTabs.firstOrNull { it.selected }
+                LaunchedEffect(currentSelectedTab?.key) {
+                    if (currentSelectedTab != null) {
+                        lastSelectedKey = currentSelectedTab.key
+                    }
+                }
+                val effectiveSelectedTab = currentSelectedTab ?: orderedTabs.firstOrNull { it.key == lastSelectedKey }
+                val selectedTab = effectiveSelectedTab
                 val selectedRect = selectedTab?.let { tabBounds[it.key] }
                 val boundsReady = selectedRect != null
+
+                val highlightPillProgress by animateFloatAsState(
+                    targetValue = if (pillVisible) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = if (pillVisible) 400 else 450,
+                        easing = if (pillVisible) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+                    ),
+                    label = "highlightPillProgress"
+                )
 
                 val sortedTabsWithBounds = remember(orderedTabs, tabBounds.toMap(), scrollState.value) {
                     orderedTabs.mapNotNull { tab ->
@@ -603,13 +620,20 @@ fun BottomBar(navController: NavController) {
                                 updateTabBounds(rowCoords)
                             }
                             .drawBehind {
-                                if (slideToOpen && boundsReady && selectedRect != null && animPillWidth > 0f) {
+                                if (slideToOpen && boundsReady && selectedRect != null && animPillWidth > 0f && highlightPillProgress > 0.005f) {
                                     val cornerRadiusPx = if (isExpressive) 18.dp.toPx() else (calcHeight / 2f)
+                                    val scale = 0.85f + 0.15f * highlightPillProgress
+                                    val scaledW = animPillWidth * scale
+                                    val currentH = if (isSliding) calcHeight else targetHeight
+                                    val scaledH = currentH * scale
+                                    val currentTop = if (isSliding) calcTop else targetTop
+                                    val leftOffset = animPillLeft + (animPillWidth - scaledW) / 2f
+                                    val topOffset = currentTop + (currentH - scaledH) / 2f
                                     drawRoundRect(
-                                        color = activeNavBg,
-                                        topLeft = Offset(animPillLeft, if (isSliding) calcTop else targetTop),
-                                        size = Size(animPillWidth, if (isSliding) calcHeight else targetHeight),
-                                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                                        color = activeNavBg.copy(alpha = activeNavBg.alpha * highlightPillProgress),
+                                        topLeft = Offset(leftOffset, topOffset),
+                                        size = Size(scaledW, scaledH),
+                                        cornerRadius = CornerRadius(cornerRadiusPx * scale, cornerRadiusPx * scale)
                                     )
                                 }
                             }
@@ -821,7 +845,7 @@ fun BottomBar(navController: NavController) {
         val itemWidth = if (canStandardScroll) minItemWidth else naturalItemWidth.coerceAtLeast(minItemWidth)
 
         val standardIndicatorProgress by animateFloatAsState(
-            targetValue   = if (canStandardScroll && scrollIndication) 1f else 0f,
+            targetValue   = if (isOnTabScreen && canStandardScroll && scrollIndication) 1f else 0f,
             animationSpec = tween(durationMillis = 320, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
             label         = "standardIndicatorProgress"
         )
@@ -855,9 +879,26 @@ fun BottomBar(navController: NavController) {
             updateStandardTabBounds(standardRowCoordinates)
         }
 
-        val standardSelectedTab = orderedTabs.firstOrNull { it.selected }
+        var standardLastSelectedKey by remember { mutableStateOf<String?>(null) }
+        val standardCurrentSelectedTab = orderedTabs.firstOrNull { it.selected }
+        LaunchedEffect(standardCurrentSelectedTab?.key) {
+            if (standardCurrentSelectedTab != null) {
+                standardLastSelectedKey = standardCurrentSelectedTab.key
+            }
+        }
+        val standardEffectiveSelectedTab = standardCurrentSelectedTab ?: orderedTabs.firstOrNull { it.key == standardLastSelectedKey }
+        val standardSelectedTab = standardEffectiveSelectedTab
         val standardSelectedRect = standardSelectedTab?.let { standardTabBounds[it.key] }
         val standardBoundsReady = standardSelectedRect != null
+
+        val standardHighlightPillProgress by animateFloatAsState(
+            targetValue = if (isOnTabScreen) 1f else 0f,
+            animationSpec = tween(
+                durationMillis = if (isOnTabScreen) 400 else 450,
+                easing = if (isOnTabScreen) CubicBezierEasing(0.2f, 0f, 0f, 1f) else CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+            ),
+            label = "standardHighlightPillProgress"
+        )
 
         val standardSortedTabs = remember(orderedTabs, standardTabBounds.toMap(), standardScrollState.value) {
             orderedTabs.mapNotNull { tab ->
@@ -1031,13 +1072,20 @@ fun BottomBar(navController: NavController) {
                                 updateStandardTabBounds(rowCoords)
                             }
                             .drawBehind {
-                                if (slideToOpen && standardBoundsReady && standardSelectedRect != null && standardAnimPillWidth > 0f) {
+                                if (slideToOpen && standardBoundsReady && standardSelectedRect != null && standardAnimPillWidth > 0f && standardHighlightPillProgress > 0.005f) {
                                     val cornerRadiusPx = if (isStandardExpressive) 16.dp.toPx() else (standardCalcHeight / 2f)
+                                    val scale = 0.85f + 0.15f * standardHighlightPillProgress
+                                    val scaledW = standardAnimPillWidth * scale
+                                    val currentH = if (standardIsSliding) standardCalcHeight else standardTargetHeight
+                                    val scaledH = currentH * scale
+                                    val currentTop = if (standardIsSliding) standardCalcTop else standardTargetTop
+                                    val leftOffset = standardAnimPillLeft + (standardAnimPillWidth - scaledW) / 2f
+                                    val topOffset = currentTop + (currentH - scaledH) / 2f
                                     drawRoundRect(
-                                        color = standardActiveNavBg,
-                                        topLeft = Offset(standardAnimPillLeft, if (standardIsSliding) standardCalcTop else standardTargetTop),
-                                        size = Size(standardAnimPillWidth, if (standardIsSliding) standardCalcHeight else standardTargetHeight),
-                                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                                        color = standardActiveNavBg.copy(alpha = standardActiveNavBg.alpha * standardHighlightPillProgress),
+                                        topLeft = Offset(leftOffset, topOffset),
+                                        size = Size(scaledW, scaledH),
+                                        cornerRadius = CornerRadius(cornerRadiusPx * scale, cornerRadiusPx * scale)
                                     )
                                 }
                             }

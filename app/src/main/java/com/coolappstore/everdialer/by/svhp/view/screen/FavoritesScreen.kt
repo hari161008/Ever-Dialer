@@ -58,6 +58,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.placeCallHonoringCont
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.ContactSortButton
 import com.coolappstore.everdialer.by.svhp.view.components.ContactSortOption
+import com.coolappstore.everdialer.by.svhp.view.components.SimSlotBadge
 import com.coolappstore.everdialer.by.svhp.view.components.sortContacts
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu
@@ -1024,16 +1025,11 @@ private fun FavoriteContactCard(
                                             makeCall(context, phoneNumber, account1)
                                         },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = sim1Color,
-                                        contentColor = Color.White,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            SimCardIconWithNumber(
-                                                simSlotNumber = "1",
-                                                tint = Color.White,
-                                                isLarge = false
-                                            )
+                                            SimSlotBadge(slot = 0)
                                         }
                                     }
                                     Surface(
@@ -1042,16 +1038,11 @@ private fun FavoriteContactCard(
                                             makeCall(context, phoneNumber, account2)
                                         },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = sim2Color,
-                                        contentColor = Color.White,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         modifier = Modifier.size(width = 36.dp, height = 32.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            SimCardIconWithNumber(
-                                                simSlotNumber = "2",
-                                                tint = Color.White,
-                                                isLarge = false
-                                            )
+                                            SimSlotBadge(slot = 1)
                                         }
                                     }
                                 }

@@ -123,6 +123,7 @@ import com.ramcosta.composedestinations.generated.destinations.ContactEditScreen
 import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
+import com.coolappstore.everdialer.by.svhp.view.components.SimCardNotchShape
 import com.coolappstore.everdialer.by.svhp.view.components.SimPickerDialog
 import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.view.components.TopBar
@@ -1521,10 +1522,18 @@ fun DialPadContent(
                     val keyHeight = calculatedKeyH.dp
                     val scaleFactor = (calculatedKeyH / 46f).coerceIn(0.75f, 1.15f)
 
+                    val isCircleButtons = remember(settingsState) {
+                        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+                    }
+
                     // 3 columns: 2 horizontal gaps
-                    val colSpacing = (8.dp * scaleFactor).coerceIn(6.dp, 10.dp)
+                    val colSpacing: Dp = if (isCircleButtons) {
+                        ((availableW - calculatedKeyH * 3f) / 2.5f).coerceIn(12f, 32f).dp
+                    } else {
+                        (8.dp * scaleFactor).coerceIn(6.dp, 10.dp)
+                    }
                     val maxKeyW = ((availableW - (2f * colSpacing.value)) / 3f).coerceAtLeast(48f)
-                    val keyWidth = (maxKeyW.dp * 0.91f).coerceIn(48.dp, 114.dp)
+                    val keyWidth: Dp = if (isCircleButtons) keyHeight else (maxKeyW.dp * 0.91f).coerceIn(48.dp, 114.dp)
 
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Column(
@@ -2117,30 +2126,63 @@ fun DialPadContent(
         ) {
             val availableWidth = maxWidth.value
             val availableRowWidth = (availableWidth - 12f).coerceAtLeast(160f)
+            val isCircleButtons = remember(settingsState) {
+                prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+            }
 
             // Screen height in unscaled base dp:
             val baseScreenHeight = configuration.screenHeightDp.toFloat()
-            val cardHeightBudget = (baseScreenHeight - 128f).coerceIn(275f, 510f)
-            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(58f, 72f)
-            val keyHeight: Dp = calculatedKeyH.dp
-            val callH: Dp = keyHeight
+            val maxCardH = if (isCircleButtons) 545f else 515f
+            val cardHeightBudget = (baseScreenHeight - 118f).coerceIn(275f, maxCardH)
+            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(58f, 74f)
+            val baseKeyHeight: Dp = calculatedKeyH.dp
 
             // Scale factor relative to standard 50dp height
             val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.85f, 1.25f)
-            val actionSize: Dp = keyHeight
+            val actionSize: Dp = baseKeyHeight
 
             // Spacing between keys dynamically adapts to row width
-            val keySpacing: Dp = (6.dp * scaleFactor).coerceIn(5.dp, 8.dp)
+            val standardKeySpacing: Dp = (6.dp * scaleFactor).coerceIn(5.dp, 8.dp)
 
-            // Dynamic key width for 3 keys in a row — nicely proportioned across all scales
-            val maxAllowedKeyW = ((availableRowWidth - keySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
-            val keyWidth: Dp = (maxAllowedKeyW * 0.91f).coerceIn(80.dp, 114.dp)
+            // Dynamic key width for 3 keys in a row
+            val maxAllowedKeyW = ((availableRowWidth - standardKeySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
+            val standardKeyWidth: Dp = (maxAllowedKeyW * 0.91f).coerceIn(80.dp, 114.dp)
+
+            // For circle buttons: make circles noticeably larger, with balanced spacing and paddings
+            val circleSpacingV: Dp = (12.dp * scaleFactor).coerceIn(10.dp, 15.dp)
+            val availableHeightForKeys = cardHeightBudget - 44f - 16f - 24f
+            val maxCircleDiameterFromH = ((availableHeightForKeys - circleSpacingV.value * 4f) / 5f).coerceIn(72f, 85f)
+            val maxCircleDiameterFromW = ((availableRowWidth - 48f) / 3f).coerceIn(72f, 85f)
+            val circleDiameter: Dp = minOf(maxCircleDiameterFromH, maxCircleDiameterFromW).dp
+
+            val circleSpacingH: Dp = run {
+                val sideMarginTarget = (availableRowWidth * 0.07f).coerceIn(16f, 28f) * 2f
+                val remainingForGaps = (availableRowWidth - (circleDiameter.value * 3f) - sideMarginTarget).coerceAtLeast(24f)
+                (remainingForGaps / 2f).coerceIn(20f, 40f).dp
+            }
+
+            val effectiveKeySpacingV: Dp = if (isCircleButtons) circleSpacingV else standardKeySpacing
+            val effectiveKeySpacingH: Dp = if (isCircleButtons) circleSpacingH else standardKeySpacing
+            val keyWidth: Dp = if (isCircleButtons) circleDiameter else standardKeyWidth
+            val keyHeight: Dp = if (isCircleButtons) circleDiameter else baseKeyHeight
+            val callH: Dp = keyHeight
+
+            // Digit row total width
+            val digitRowWidth = keyWidth * 3 + effectiveKeySpacingH * 2
 
             // SIM button width for 4 buttons in a row with 3 gaps
-            val simBtnW: Dp = minOf(
-                keyWidth,
-                ((availableRowWidth - keySpacing.value * 3f) / 4f).coerceAtLeast(36f).dp
-            )
+            val simBtnW: Dp = if (isCircleButtons) {
+                minOf(circleDiameter * 0.86f, ((digitRowWidth.value - 36f) / 4f).dp).coerceIn(56.dp, 70.dp)
+            } else {
+                minOf(
+                    keyWidth,
+                    ((availableRowWidth - effectiveKeySpacingH.value * 3f) / 4f).coerceAtLeast(36f).dp
+                )
+            }
+            val effectiveSimCallH: Dp = if (isCircleButtons) simBtnW else callH
+            val simRowSpacingH: Dp = if (isCircleButtons) {
+                ((digitRowWidth.value - simBtnW.value * 4f) / 3f).coerceIn(10f, 28f).dp
+            } else effectiveKeySpacingH
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -2150,7 +2192,7 @@ fun DialPadContent(
             Column(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = (9 * scaleFactor).coerceIn(8f, 13f).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(keySpacing)
+                verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
             ) {
                 // Header row
                 Box(
@@ -2295,12 +2337,12 @@ fun DialPadContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(if (needDialpadBackdrop) Modifier.layerBackdrop(dialpadBackdrop) else Modifier),
-                    verticalArrangement = Arrangement.spacedBy(keySpacing)
+                    verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
                 ) {
                     keys.forEach { row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally),
+                            horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             row.forEach { key ->
@@ -2326,7 +2368,7 @@ fun DialPadContent(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally)
+                        horizontalArrangement = Arrangement.spacedBy(simRowSpacingH, Alignment.CenterHorizontally)
                     ) {
                         DialerActionExpressive(
                             onClick = {
@@ -2335,7 +2377,7 @@ fun DialPadContent(
                             icon = Icons.Default.PersonAdd,
                             contentDescription = "Add Contact",
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.width(simBtnW).height(callH),
+                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true
                         )
 
@@ -2357,7 +2399,7 @@ fun DialPadContent(
                             containerColor = sim1Color,
                             customColor = sim1Color,
                             contentColor = Color.White,
-                            modifier = Modifier.width(simBtnW).height(callH),
+                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
@@ -2383,7 +2425,7 @@ fun DialPadContent(
                             containerColor = sim2Color,
                             customColor = sim2Color,
                             contentColor = Color.White,
-                            modifier = Modifier.width(simBtnW).height(callH),
+                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
@@ -2397,7 +2439,7 @@ fun DialPadContent(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(keySpacing, Alignment.CenterHorizontally)
+                        horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally)
                     ) {
                         DialerActionExpressive(
                             onClick = {
@@ -2459,64 +2501,39 @@ fun SimCardIconWithNumber(
     isLarge: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val iconWidth = if (isLarge) 28.dp else 22.dp
-    val iconHeight = if (isLarge) 36.dp else 28.dp
-    val fontSize = if (isLarge) 18.sp else 14.sp
+    val iconWidth = if (isLarge) 24.dp else 18.dp
+    val iconHeight = if (isLarge) 28.dp else 21.dp
+    val fontSize = if (isLarge) 15.sp else 11.sp
+
+    val isTintWhite = tint == Color.White || (tint.red > 0.9f && tint.green > 0.9f && tint.blue > 0.9f)
+    val bgColor = if (isTintWhite) Color.White else tint
+    val textColor = if (isTintWhite) {
+        val prefs = org.koin.compose.koinInject<PreferenceManager>()
+        val settingsVer by prefs.settingsChanged.collectAsState()
+        val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+        val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+        if (simSlotNumber == "1") sim1Color else if (simSlotNumber == "2") sim2Color else Color.Black
+    } else {
+        Color.White
+    }
 
     Box(
-        modifier = modifier.size(width = iconWidth, height = iconHeight),
+        modifier = modifier
+            .size(width = iconWidth, height = iconHeight)
+            .clip(SimCardNotchShape)
+            .background(bgColor),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = (if (isLarge) 2.6.dp else 2.0.dp).toPx()
-            val cut = (if (isLarge) 10.dp else 7.dp).toPx()
-            val r = (if (isLarge) 5.dp else 4.dp).toPx()
-            val inset = strokeWidth / 2f
-            val w = size.width - inset
-            val h = size.height - inset
-
-            val path = Path().apply {
-                // Top-left cut corner notch
-                moveTo(inset, cut)
-                lineTo(cut, inset)
-                // Top edge to top-right corner
-                lineTo(w - r, inset)
-                quadraticTo(w, inset, w, inset + r)
-                // Right edge to bottom-right corner
-                lineTo(w, h - r)
-                quadraticTo(w, h, w - r, h)
-                // Bottom edge to bottom-left corner
-                lineTo(inset + r, h)
-                quadraticTo(inset, h, inset, h - r)
-                // Left edge back to cut
-                lineTo(inset, cut)
-                close()
-            }
-
-            // Subtle inner tint
-            drawPath(
-                path = path,
-                color = tint.copy(alpha = 0.15f),
-                style = Fill
-            )
-            // Crisp, bold outer SIM border
-            drawPath(
-                path = path,
-                color = tint,
-                style = Stroke(
-                    width = strokeWidth,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
-                )
-            )
-        }
-
         Text(
             text = simSlotNumber,
-            fontWeight = FontWeight.Black,
+            color = textColor,
             fontSize = fontSize,
-            color = tint,
-            textAlign = TextAlign.Center
+            lineHeight = fontSize,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = androidx.compose.ui.text.TextStyle(
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+            )
         )
     }
 }
@@ -2820,11 +2837,19 @@ fun DialPadKey(
     val appFontHeightScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f) }
     val userFontFactor = appFontHeightScale.coerceIn(0.7f, 1.3f)
 
-    // Base font sizes in sp
+    // Base font sizes in sp - numbers font size safely increased alone
     val baseMainSize = if (isStarKey) {
-        if (compact) 22f else 25f
+        if (isCircleButtons) {
+            if (compact) 26f else 32f
+        } else {
+            if (compact) 23f else 28f
+        }
     } else {
-        if (compact) 19f else 22f
+        if (isCircleButtons) {
+            if (compact) 23f else 28f
+        } else {
+            if (compact) 20f else 25f
+        }
     }
     val baseSubSize = if (isPlusSubKey) {
         if (compact) 10.5f else 11.5f
@@ -2832,9 +2857,9 @@ fun DialPadKey(
         if (compact) 9f else 9.5f
     }
 
-    // Safe height budget inside button: leave at least 16dp total margin (8dp top + 8dp bottom)
+    // Safe height budget inside button: leave at least 14dp total margin (7dp top + 7dp bottom)
     val buttonHeightVal = buttonHeight.value
-    val maxContentHeight = (buttonHeightVal - 16f).coerceAtLeast(14f)
+    val maxContentHeight = (buttonHeightVal - 14f).coerceAtLeast(14f)
 
     // Gap between digit and letters (0 in compact to save space, 1dp in normal)
     val gapHeight = if (hasLetters) (if (compact) 0f else 1f) else 0f
@@ -2864,7 +2889,10 @@ fun DialPadKey(
     }
 
     Box(
-        modifier = Modifier.size(width = keyWidth, height = keyHeight),
+        modifier = Modifier.size(
+            width = if (isCircleButtons) buttonWidth else keyWidth,
+            height = if (isCircleButtons) buttonHeight else keyHeight
+        ),
         contentAlignment = Alignment.Center
     ) {
         Surface(
