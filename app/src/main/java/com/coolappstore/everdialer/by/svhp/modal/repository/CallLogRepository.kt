@@ -251,13 +251,13 @@ class CallLogRepository(
             }
         }
 
-        val multiRecords = com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.getAllRecords(context)
+        val multiRecords = com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.getAllRecords(context)
         return combineMultiCalls(callLogs, multiRecords)
     }
 
     private fun combineMultiCalls(
         callLogs: List<CallLogEntry>,
-        multiRecords: List<com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecord>
+        multiRecords: List<com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecord>
     ): List<CallLogEntry> {
         if (callLogs.size < 2) return callLogs
 
@@ -278,10 +278,10 @@ class CallLogRepository(
 
                 // Check 1: MultiCallRecordStore
                 val matchedRecord = multiRecords.firstOrNull { rec ->
-                    val numMatch = (com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number1, entryA.number) &&
-                            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number2, entryB.number)) ||
-                            (com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number1, entryB.number) &&
-                            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.numbersMatch(rec.number2, entryA.number))
+                    val numMatch = (com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.numbersMatch(rec.number1, entryA.number) &&
+                            com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.numbersMatch(rec.number2, entryB.number)) ||
+                            (com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.numbersMatch(rec.number1, entryB.number) &&
+                            com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.numbersMatch(rec.number2, entryA.number))
                     if (!numMatch) return@firstOrNull false
                     val recEnd = if (rec.endTime > 0L) rec.endTime else rec.startTime + 1_800_000L
                     (entryA.date in (rec.startTime - 600_000L)..(recEnd + 600_000L)) ||

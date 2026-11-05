@@ -225,16 +225,18 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var tabShowNotes      by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true)) }
     var tabShowDialpad    by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false)) }
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-    val tabOptions = listOf(
-        TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
-        TabOption("calls",      "Calls",      Icons.Outlined.History),
-        TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
-        TabOption("sms",        "SMS",        Icons.Outlined.Chat),
-        TabOption("groups",     "Groups",     Icons.Outlined.Group),
-        TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
-        TabOption("notes",      "Note",       Icons.Outlined.Note),
-        TabOption("dialpad",    "Dialpad",    Icons.Outlined.Dialpad)
-    )
+    val tabOptions = buildList {
+        add(TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder))
+        add(TabOption("calls",      "Calls",      Icons.Outlined.History))
+        add(TabOption("contacts",   "Contacts",   Icons.Outlined.Person))
+        add(TabOption("sms",        "SMS",        Icons.Outlined.Chat))
+        add(TabOption("groups",     "Groups",     Icons.Outlined.Group))
+        if (com.coolappstore.everdialer.by.svhp.feature.AppFeatures.isCallRecorderAvailable) {
+            add(TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord))
+        }
+        add(TabOption("notes",      "Note",       Icons.Outlined.Note))
+        add(TabOption("dialpad",    "Dialpad",    Icons.Outlined.Dialpad))
+    }
 
     // Custom order of tab keys, persisted as a comma-separated string. Any tab keys
     // missing from a previously-saved (older) order are appended so new tabs always show.

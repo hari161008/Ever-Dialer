@@ -43,7 +43,7 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.NoteManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeableItemContainer
 import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoDropdownMenu

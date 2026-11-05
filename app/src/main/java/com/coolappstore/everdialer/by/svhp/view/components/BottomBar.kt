@@ -101,6 +101,7 @@ import com.ramcosta.composedestinations.generated.destinations.GroupsScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.ramcosta.composedestinations.generated.destinations.SmsScreenDestination
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.outlined.Chat
@@ -175,7 +176,9 @@ fun BottomBar(navController: NavController) {
     val showContactsTab   = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS,   true) }
     val showSmsTab        = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS,        true) }
     val showGroupsTab     = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS,     false) }
-    val showRecordingsTab = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true) }
+    val showRecordingsTab = remember(settingsState) {
+        AppFeatures.isCallRecorderAvailable && prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+    }
     val showNotesTab      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES,      true) }
     val showDialpadTab    = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD,    false) }
     val tabOrder          = remember(settingsState) { parseTabOrder(prefs.getString(PreferenceManager.KEY_TAB_ORDER, null)) }

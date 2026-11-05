@@ -1,17 +1,17 @@
 package com.coolappstore.everdialer.by.svhp
 
-import com.coolappstore.evercallrecorder.by.svhp.ShizuApplication
+import android.app.Application
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.applyIcon
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.buildIcons
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
-// Extends ShizuApplication (Ever Call Recorder's Application class) so its own
-// startup init (AppLogger, etc.) still runs now that Recorder is bundled in-app.
-class RivoApp : ShizuApplication() {
+class RivoApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        AppFeatures.init(this)
         startKoin {
             androidContext(this@RivoApp)
             modules(appModule)

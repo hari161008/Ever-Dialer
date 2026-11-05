@@ -62,6 +62,22 @@ android {
         }
     }
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        github {
+            dimension "distribution"
+            applicationId "com.coolappstore.everdialer.by.svhp"
+        }
+        fdroid {
+            dimension "distribution"
+            applicationId "com.everlasting.projects.by.svhp.freedroid"
+        }
+        play {
+            dimension "distribution"
+            applicationId "com.everlasting.projects.by.svhp.play"
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -69,8 +85,9 @@ android {
 }
 
 dependencies {
-    implementation project(':recorder')
-    implementation project(':networkswitch')
+    githubImplementation project(':recorder')
+    githubImplementation project(':networkswitch')
+    fdroidImplementation project(':networkswitch')
 
     implementation platform('androidx.compose:compose-bom:2025.12.01')
     implementation 'androidx.compose.ui:ui'

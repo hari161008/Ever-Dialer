@@ -61,16 +61,18 @@ fun NavigationSettingsScreen(
 
     data class TabOption(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
     val allTabOptions = remember {
-        listOf(
-            TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder),
-            TabOption("calls",      "Calls",      Icons.Outlined.History),
-            TabOption("contacts",   "Contacts",   Icons.Outlined.Person),
-            TabOption("sms",        "SMS",        Icons.Outlined.Chat),
-            TabOption("groups",     "Groups",     Icons.Outlined.Group),
-            TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord),
-            TabOption("notes",      "Note",       Icons.Outlined.Note),
-            TabOption("dialpad",    "Dialpad",    Icons.Outlined.Dialpad)
-        )
+        buildList {
+            add(TabOption("favorites",  "Favourites", Icons.Outlined.FavoriteBorder))
+            add(TabOption("calls",      "Calls",      Icons.Outlined.History))
+            add(TabOption("contacts",   "Contacts",   Icons.Outlined.Person))
+            add(TabOption("sms",        "SMS",        Icons.Outlined.Chat))
+            add(TabOption("groups",     "Groups",     Icons.Outlined.Group))
+            if (com.coolappstore.everdialer.by.svhp.feature.AppFeatures.isCallRecorderAvailable) {
+                add(TabOption("recordings", "Recordings", Icons.Outlined.FiberManualRecord))
+            }
+            add(TabOption("notes",      "Note",       Icons.Outlined.Note))
+            add(TabOption("dialpad",    "Dialpad",    Icons.Outlined.Dialpad))
+        }
     }
 
     fun isTabEnabled(key: String): Boolean {
@@ -80,7 +82,7 @@ fun NavigationSettingsScreen(
             "contacts"   -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
             "sms"        -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
             "groups"     -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
-            "recordings" -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+            "recordings" -> com.coolappstore.everdialer.by.svhp.feature.AppFeatures.isCallRecorderAvailable && prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
             "notes"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
             "dialpad"    -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false)
             else         -> true

@@ -88,7 +88,6 @@ import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.SimSlotBadge
 import com.coolappstore.everdialer.by.svhp.view.theme.Rivo4Theme
-import com.coolappstore.evercallrecorder.by.svhp.services.recording.RecordingForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -414,7 +413,7 @@ class CallActivity : FragmentActivity() {
                         } else null
                     }
                     val activeMultiCall = remember(call, effectiveSession.updateTime) {
-                        com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.getActiveRecord(this@CallActivity)
+                        com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.getActiveRecord(this@CallActivity)
                     }
 
                     val confChild0 = call.children.getOrNull(0)
@@ -2143,19 +2142,7 @@ fun ExpressiveCallScreen(
                 btnColor = controlBtnColor, activeBtnColor = Color(0xFFE53935),
                 fgColor = controlBtnFg, activeFgColor = Color.White
             ) {
-                val action = if (isManuallyRecording) {
-                    RecordingForegroundService.ACTION_STOP_RECORDING
-                } else {
-                    RecordingForegroundService.ACTION_MANUAL_START
-                }
-                try {
-                    context.startService(
-                        Intent(context, RecordingForegroundService::class.java).setAction(action)
-                    )
-                } catch (_: Exception) {
-                    // Recording permissions/service unavailable on this device — ignore, the
-                    // button simply won't toggle recording state below.
-                }
+                com.coolappstore.everdialer.by.svhp.feature.AppFeatures.toggleManualRecording(context, isManuallyRecording)
                 isManuallyRecording = !isManuallyRecording
             }
             // Only reached when Freeform is on — Hang Up is otherwise rendered separately as the

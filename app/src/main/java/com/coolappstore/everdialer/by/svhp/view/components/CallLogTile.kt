@@ -47,7 +47,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.WHATSAPP_PACKAGES
 import com.coolappstore.everdialer.by.svhp.controller.util.isAnyPackageInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isTelegramInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.isGoogleMeetInstalled
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeableItemContainer
 import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.isTruecallerInstalled
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
@@ -58,11 +58,11 @@ import android.content.ContentUris
 import android.net.Uri
 import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
-import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
+import com.coolappstore.everdialer.by.svhp.modal.data.RecordingItem
 import androidx.compose.material.icons.rounded.PlayArrow
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeActionItem
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall

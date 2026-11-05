@@ -20,10 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.coolappstore.evercallrecorder.by.svhp.data.AppPreferences
 import com.coolappstore.everdialer.by.svhp.controller.PcSyncService
 import com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
@@ -35,7 +35,6 @@ import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import com.supernova.networkswitch.util.AutomationSwitchStore
 import org.koin.compose.koinInject
 
 private val ColorBlue   = Color(0xFF1E88E5)
@@ -53,7 +52,6 @@ fun NotificationsSettingsScreen(
 ) {
     val context = LocalContext.current
     val prefs = koinInject<PreferenceManager>()
-    val recorderPrefs = remember { AppPreferences(context) }
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     // Missed Call notification state (default on, provider default system)
@@ -76,21 +74,18 @@ fun NotificationsSettingsScreen(
 
     // Call Recording notification states
     var recordingNotifications by remember {
-        mutableStateOf(recorderPrefs.isRecordingNotificationsEnabled())
+        mutableStateOf(if (AppFeatures.isCallRecorderAvailable) AppFeatures.isRecordingNotificationsEnabled(context) else false)
     }
     var postRecordingNotification by remember {
-        mutableStateOf(recorderPrefs.isPostRecordingFileActionsNotificationEnabled())
+        mutableStateOf(if (AppFeatures.isCallRecorderAvailable) AppFeatures.isPostRecordingNotificationEnabled(context) else false)
     }
     var showToasts by remember {
-        mutableStateOf(recorderPrefs.isShowToastsEnabled())
+        mutableStateOf(if (AppFeatures.isCallRecorderAvailable) AppFeatures.isShowToastsEnabled(context) else false)
     }
 
     // 4G/5G Switcher notification state
-    val nsNotificationsFlow = remember { AutomationSwitchStore.notificationsEnabled }
-    val nsNotifications by nsNotificationsFlow.collectAsState()
-
-    LaunchedEffect(Unit) {
-        AutomationSwitchStore.init(context)
+    var nsNotifications by remember {
+        mutableStateOf(if (AppFeatures.isNetworkSwitchAvailable) AppFeatures.isNetworkSwitchNotificationsEnabled(context) else false)
     }
 
     Scaffold(
@@ -246,85 +241,89 @@ fun NotificationsSettingsScreen(
             }
 
             // ── Call Recording ────────────────────────────────────────────────────
-            RivoAnimatedSection(delayMs = 40L) {
-                Column {
-                    Text(
-                        "Call Recording",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = rivoHeadingColor(),
-                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                    )
-                    RivoExpressiveCard {
-                        RivoSwitchListItem(
-                            headline = "Recording Notifications",
-                            supporting = "Show notification during call recording",
-                            leadingIcon = Icons.Outlined.Notifications,
-                            iconContainerColor = ColorRed,
-                            checked = recordingNotifications,
-                            modifier = Modifier.settingsSearchHighlight("recording_notifications", highlightedKey) { highlightedKey = null },
-                            onCheckedChange = { isChecked ->
-                                recordingNotifications = isChecked
-                                recorderPrefs.setRecordingNotificationsEnabled(isChecked)
-                            }
+            if (AppFeatures.isCallRecorderAvailable) {
+                RivoAnimatedSection(delayMs = 40L) {
+                    Column {
+                        Text(
+                            "Call Recording",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = rivoHeadingColor(),
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        RivoSwitchListItem(
-                            headline = "Post-recording Notification",
-                            supporting = "Show notification with options to play, share, or delete after recording finishes",
-                            leadingIcon = Icons.Outlined.NotificationImportant,
-                            iconContainerColor = ColorOrange,
-                            checked = postRecordingNotification,
-                            modifier = Modifier.settingsSearchHighlight("post_recording_notification", highlightedKey) { highlightedKey = null },
-                            onCheckedChange = { isChecked ->
-                                postRecordingNotification = isChecked
-                                recorderPrefs.setPostRecordingFileActionsNotificationEnabled(isChecked)
-                            }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        RivoSwitchListItem(
-                            headline = "Toast Notifications",
-                            supporting = "Show status toasts for recording actions",
-                            leadingIcon = Icons.Outlined.Info,
-                            iconContainerColor = ColorGreen,
-                            checked = showToasts,
-                            modifier = Modifier.settingsSearchHighlight("show_recording_toasts", highlightedKey) { highlightedKey = null },
-                            onCheckedChange = { isChecked ->
-                                showToasts = isChecked
-                                recorderPrefs.setShowToastsEnabled(isChecked)
-                            }
-                        )
+                        RivoExpressiveCard {
+                            RivoSwitchListItem(
+                                headline = "Recording Notifications",
+                                supporting = "Show notification during call recording",
+                                leadingIcon = Icons.Outlined.Notifications,
+                                iconContainerColor = ColorRed,
+                                checked = recordingNotifications,
+                                modifier = Modifier.settingsSearchHighlight("recording_notifications", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { isChecked ->
+                                    recordingNotifications = isChecked
+                                    AppFeatures.setRecordingNotificationsEnabled(context, isChecked)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Post-recording Notification",
+                                supporting = "Show notification with options to play, share, or delete after recording finishes",
+                                leadingIcon = Icons.Outlined.NotificationImportant,
+                                iconContainerColor = ColorOrange,
+                                checked = postRecordingNotification,
+                                modifier = Modifier.settingsSearchHighlight("post_recording_notification", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { isChecked ->
+                                    postRecordingNotification = isChecked
+                                    AppFeatures.setPostRecordingNotificationEnabled(context, isChecked)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Toast Notifications",
+                                supporting = "Show status toasts for recording actions",
+                                leadingIcon = Icons.Outlined.Info,
+                                iconContainerColor = ColorGreen,
+                                checked = showToasts,
+                                modifier = Modifier.settingsSearchHighlight("show_recording_toasts", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { isChecked ->
+                                    showToasts = isChecked
+                                    AppFeatures.setShowToastsEnabled(context, isChecked)
+                                }
+                            )
+                        }
                     }
                 }
             }
 
             // ── 4G/5G Switcher ────────────────────────────────────────────────────
-            RivoAnimatedSection(delayMs = 80L) {
-                Column {
-                    Text(
-                        "4G/5G Switcher",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = rivoHeadingColor(),
-                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                    )
-                    RivoExpressiveCard {
-                        RivoSwitchListItem(
-                            headline = "Automation Service Notification",
-                            supporting = "Show notification in status bar while automation service is running",
-                            leadingIcon = Icons.Outlined.SignalCellularAlt,
-                            iconContainerColor = ColorTeal,
-                            checked = nsNotifications,
-                            modifier = Modifier.settingsSearchHighlight("automation_notifications", highlightedKey) { highlightedKey = null },
-                            onCheckedChange = { isChecked ->
-                                AutomationSwitchStore.setNotificationsEnabled(context, isChecked)
-                                com.supernova.networkswitch.service.AutomationService.updateNotification(context)
-                            }
+            if (AppFeatures.isNetworkSwitchAvailable) {
+                RivoAnimatedSection(delayMs = 80L) {
+                    Column {
+                        Text(
+                            "4G/5G Switcher",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = rivoHeadingColor(),
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                         )
+                        RivoExpressiveCard {
+                            RivoSwitchListItem(
+                                headline = "Automation Service Notification",
+                                supporting = "Show notification in status bar while automation service is running",
+                                leadingIcon = Icons.Outlined.SignalCellularAlt,
+                                iconContainerColor = ColorTeal,
+                                checked = nsNotifications,
+                                modifier = Modifier.settingsSearchHighlight("automation_notifications", highlightedKey) { highlightedKey = null },
+                                onCheckedChange = { isChecked ->
+                                    nsNotifications = isChecked
+                                    AppFeatures.setNetworkSwitchNotificationsEnabled(context, isChecked)
+                                }
+                            )
+                        }
                     }
                 }
             }

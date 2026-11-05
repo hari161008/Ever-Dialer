@@ -49,7 +49,7 @@ object TabNavigationHelper {
         "contacts"   -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_CONTACTS, true)
         "sms"        -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_SMS, true)
         "groups"     -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_GROUPS, false)
-        "recordings" -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
+        "recordings" -> com.coolappstore.everdialer.by.svhp.feature.AppFeatures.isCallRecorderAvailable && prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_RECORDINGS, true)
         "notes"      -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_NOTES, true)
         "dialpad"    -> prefs.getBoolean(PreferenceManager.KEY_TAB_SHOW_DIALPAD, false)
         else         -> false

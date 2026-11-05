@@ -68,6 +68,7 @@ import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.controller.util.BackupManager
 import com.coolappstore.everdialer.by.svhp.controller.util.DefaultDialerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
 import com.coolappstore.everdialer.by.svhp.controller.util.VoiceSearchHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.rememberVoiceSearchLauncher
@@ -998,7 +999,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             }
 
             // ── Updates ──────────────────────────────────────────────────────
-            item {
+            if (AppFeatures.isUpdaterAvailable) item {
                 RivoAnimatedSection(delayMs = 0L) {
                     Column {
                         SectionLabel("Updates")
@@ -1020,7 +1021,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             }
 
             // ── Call Recording (moved here via "Show Recording Menu Below Updates") ──
-            if (showRecordingMenuBelowUpdates) item {
+            if (AppFeatures.isCallRecorderAvailable && showRecordingMenuBelowUpdates) item {
                 RivoAnimatedSection(delayMs = 10L) {
                     Column {
                         SectionLabel("Call Recording")
@@ -1375,7 +1376,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // ── Call Recording (bundled Ever Call Recorder app) ────
-                        if (!showRecordingMenuBelowUpdates) {
+                        if (AppFeatures.isCallRecorderAvailable && !showRecordingMenuBelowUpdates) {
                         RivoExpressiveCard {
                             RivoListItem(
                                 headline = "Call Recording",

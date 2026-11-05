@@ -59,7 +59,7 @@ import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundP
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.findMatchingRecording
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
 import com.coolappstore.everdialer.by.svhp.view.components.ContactPfpPreviewDialog
@@ -148,12 +148,7 @@ fun ContactDetailsScreen(
 
     val contacts by contactsViewModel.allContacts.collectAsState()
     val allLogs by callLogViewModel.allCallLogs.collectAsState()
-    val recordingsVM: HomeViewModel = viewModel()
-    val allRecordings by recordingsVM.allRecordings.collectAsState()
-
-    LaunchedEffect(Unit) {
-        recordingsVM.refresh()
-    }
+    val allRecordings by AppFeatures.rememberRecordings()
 
     val contact = remember(contactId, phoneNumber, contacts) {
         if (contactId != null && contactId != "null") contacts.find { it.id == contactId }
@@ -2437,13 +2432,12 @@ fun ContactDetailsScreen(
                                     val integrateNotes = remember(settingsVer) {
                                         prefs.getBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, true)
                                     }
-                                    if (!integrateNotes) {
+                                    if (AppFeatures.isCallRecorderAvailable && !integrateNotes) {
                                         HorizontalDivider(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         TextButton(
                                             onClick = {
                                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                                    val launch = Intent(context, com.coolappstore.evercallrecorder.by.svhp.MainActivity::class.java)
-                                                    try { context.startActivity(launch) } catch (_: Exception) {}
+                                                    AppFeatures.openRecorderMainActivity(context)
                                                 } else {
                                                     android.widget.Toast.makeText(context, "Call Recording requires Android 11 or newer", android.widget.Toast.LENGTH_SHORT).show()
                                                 }

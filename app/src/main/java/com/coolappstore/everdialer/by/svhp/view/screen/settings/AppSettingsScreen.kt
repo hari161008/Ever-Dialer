@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.coolappstore.everdialer.by.svhp.controller.MissedCallPopupService
 import com.coolappstore.everdialer.by.svhp.controller.RaiseToAnswerManager
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
@@ -592,66 +593,80 @@ fun AppSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
             }
 
             // ── More Settings ─────────────────────────────────────────────────
-            RivoAnimatedSection(delayMs = 30L) {
-                Column {
-                    AppSettingsSectionLabel("More Settings")
-                    RivoExpressiveCard {
-                        RivoListItem(
-                            headline = "4G/5G Switcher",
-                            supporting = "Quickly toggle your network mode",
-                            leadingIcon = Icons.Outlined.SignalCellularAlt,
-                            iconContainerColor = Color(0xFF00897B),
-                            trailingIcon = Icons.Default.ChevronRight,
-                            modifier = Modifier.settingsSearchHighlight("network_switcher", highlightedKey) { highlightedKey = null },
-                            onClick = {
-                                try {
-                                    context.startActivity(
-                                        Intent(context, com.supernova.networkswitch.presentation.ui.activity.MainActivity::class.java)
-                                    )
-                                } catch (_: Exception) {}
-                            }
-                        )
-                        CardDivider()
-                        RivoListItem(
-                            headline = "Volume DND",
-                            supporting = "Toggle Do Not Disturb using a volume button sequence",
-                            leadingIcon = Icons.Outlined.DoNotDisturbOn,
-                            iconContainerColor = Color(0xFF7C4DFF),
-                            trailingIcon = Icons.Default.ChevronRight,
-                            modifier = Modifier.settingsSearchHighlight("volume_dnd", highlightedKey) { highlightedKey = null },
-                            onClick = { navigator.navigate(VolumeDndScreenDestination()) }
-                        )
-                        CardDivider()
-                        RivoSwitchListItem(
-                            headline   = "Integrate Notes Section",
-                            supporting = if (integrateNotes)
-                                "Call recording notes stay separate from the app's Notes section"
-                            else
-                                "Call recording notes are merged into the app's Notes section",
-                            leadingIcon = Icons.Default.Note,
-                            iconContainerColor = Color(0xFFE53935),
-                            checked = integrateNotes,
-                            modifier = Modifier.settingsSearchHighlight("integrate_notes", highlightedKey) { highlightedKey = null },
-                            onCheckedChange = {
-                                integrateNotes = it
-                                prefs.setBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, it)
-                            }
-                        )
-                        AnimatedVisibility(visible = integrateNotes) {
-                            Column {
-                                CardDivider()
-                                RivoSwitchListItem(
-                                    headline   = "Delete Notes With Recording",
-                                    supporting = "Also delete the linked note in Notes when its call recording is deleted",
-                                    leadingIcon = Icons.Default.DeleteSweep,
-                                    iconContainerColor = Color(0xFF6D4C41),
-                                    checked = deleteNotesWithRecording,
-                                    modifier = Modifier.settingsSearchHighlight("delete_notes_with_recording", highlightedKey) { highlightedKey = null },
-                                    onCheckedChange = {
-                                        deleteNotesWithRecording = it
-                                        prefs.setBoolean(PreferenceManager.KEY_DELETE_NOTES_WITH_RECORDING, it)
+            val showMoreSettings = AppFeatures.isNetworkSwitchAvailable ||
+                    AppFeatures.isVolumeDndAvailable ||
+                    AppFeatures.isCallRecorderAvailable
+
+            if (showMoreSettings) {
+                RivoAnimatedSection(delayMs = 30L) {
+                    Column {
+                        AppSettingsSectionLabel("More Settings")
+                        RivoExpressiveCard {
+                            var needsDivider = false
+
+                            if (AppFeatures.isNetworkSwitchAvailable) {
+                                RivoListItem(
+                                    headline = "4G/5G Switcher",
+                                    supporting = "Quickly toggle your network mode",
+                                    leadingIcon = Icons.Outlined.SignalCellularAlt,
+                                    iconContainerColor = Color(0xFF00897B),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("network_switcher", highlightedKey) { highlightedKey = null },
+                                    onClick = {
+                                        AppFeatures.openNetworkSwitch(context)
                                     }
                                 )
+                                needsDivider = true
+                            }
+
+                            if (AppFeatures.isVolumeDndAvailable) {
+                                if (needsDivider) CardDivider()
+                                RivoListItem(
+                                    headline = "Volume DND",
+                                    supporting = "Toggle Do Not Disturb using a volume button sequence",
+                                    leadingIcon = Icons.Outlined.DoNotDisturbOn,
+                                    iconContainerColor = Color(0xFF7C4DFF),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("volume_dnd", highlightedKey) { highlightedKey = null },
+                                    onClick = { navigator.navigate(VolumeDndScreenDestination()) }
+                                )
+                                needsDivider = true
+                            }
+
+                            if (AppFeatures.isCallRecorderAvailable) {
+                                if (needsDivider) CardDivider()
+                                RivoSwitchListItem(
+                                    headline   = "Integrate Notes Section",
+                                    supporting = if (integrateNotes)
+                                        "Call recording notes stay separate from the app's Notes section"
+                                    else
+                                        "Call recording notes are merged into the app's Notes section",
+                                    leadingIcon = Icons.Default.Note,
+                                    iconContainerColor = Color(0xFFE53935),
+                                    checked = integrateNotes,
+                                    modifier = Modifier.settingsSearchHighlight("integrate_notes", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = {
+                                        integrateNotes = it
+                                        prefs.setBoolean(PreferenceManager.KEY_INTEGRATE_NOTES, it)
+                                    }
+                                )
+                                AnimatedVisibility(visible = integrateNotes) {
+                                    Column {
+                                        CardDivider()
+                                        RivoSwitchListItem(
+                                            headline   = "Delete Notes With Recording",
+                                            supporting = "Also delete the linked note in Notes when its call recording is deleted",
+                                            leadingIcon = Icons.Default.DeleteSweep,
+                                            iconContainerColor = Color(0xFF6D4C41),
+                                            checked = deleteNotesWithRecording,
+                                            modifier = Modifier.settingsSearchHighlight("delete_notes_with_recording", highlightedKey) { highlightedKey = null },
+                                            onCheckedChange = {
+                                                deleteNotesWithRecording = it
+                                                prefs.setBoolean(PreferenceManager.KEY_DELETE_NOTES_WITH_RECORDING, it)
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

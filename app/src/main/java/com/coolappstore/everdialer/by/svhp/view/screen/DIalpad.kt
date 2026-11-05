@@ -121,6 +121,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.SelectExistingContact
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
 import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
+import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
+import com.coolappstore.everdialer.by.svhp.modal.data.RecordingItem
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
 import com.coolappstore.everdialer.by.svhp.view.components.SimCardNotchShape
@@ -136,9 +138,6 @@ import com.coolappstore.everdialer.by.svhp.controller.util.SearchHistoryManager
 import com.coolappstore.everdialer.by.svhp.view.components.SearchHistorySection
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.AddMode
 import com.coolappstore.everdialer.by.svhp.view.screen.settings.FakeCallAddSheet
-import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
-import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.HomeViewModel
-import com.coolappstore.evercallrecorder.by.svhp.ui.viewmodels.RecordingItem
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -713,8 +712,6 @@ fun DialPadContent(
     }
     val callLogVM: CallLogViewModel = koinActivityViewModel()
     val callLogsForSearch by callLogVM.allCallLogs.collectAsState()
-    val recordingsVM: HomeViewModel = viewModel()
-    val recordingsForSearch by recordingsVM.allRecordings.collectAsState()
 
     // Extra (non-contact) results shown below matched contacts while searching — numbers from
     // the call log that aren't saved contacts, plus contact/recording notes whose content
@@ -723,7 +720,7 @@ fun DialPadContent(
     // up while dialing a number too, not just while using the text search field. The name/note
     // based sections (contact notes, recordings, recording notes) stay text-query-only since
     // there's nothing meaningful to match against a bare typed number for those.
-    val extraSearchResults = remember(searchQuery, number, callLogsForSearch, recordingsForSearch, searchFilterState) {
+    val extraSearchResults = remember(searchQuery, number, callLogsForSearch, searchFilterState) {
         val q = searchQuery.trim()
         val numberQuery = number.trim()
         val effectiveQuery = q.ifEmpty { numberQuery }

@@ -873,6 +873,7 @@ class PreferenceManager(context: Context) {
          *  missing from a stale/older saved order (so newly-added tabs always show up). */
         fun parseTabOrder(raw: String?): List<String> {
             val fallback = DEFAULT_TAB_ORDER.split(",")
+                .filter { it != "recordings" || com.coolappstore.everdialer.by.svhp.feature.AppFeatures.isCallRecorderAvailable }
             if (raw.isNullOrBlank()) return fallback
             val parsed = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
             val merged = parsed.toMutableList()

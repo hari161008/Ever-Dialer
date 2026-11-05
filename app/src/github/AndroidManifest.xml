@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-sdk tools:overrideLibrary="com.coolappstore.evercallrecorder.by.svhp,com.supernova.networkswitch" />
+
+    <!-- Needed for GitHub in-app APK updater -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- Volume DND: accessibility service for volume key combination detection -->
+        <service
+            android:name=".controller.VolumeDndAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/volume_dnd_accessibility_service" />
+        </service>
+
+        <!-- Ever Call Recorder's MainActivity is bundled as a screen inside this app now,
+             not a separate launcher entry, so strip its own MAIN/LAUNCHER intent-filter. -->
+        <activity
+            android:name="com.coolappstore.evercallrecorder.by.svhp.MainActivity"
+            tools:node="merge">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+    </application>
+
+</manifest>

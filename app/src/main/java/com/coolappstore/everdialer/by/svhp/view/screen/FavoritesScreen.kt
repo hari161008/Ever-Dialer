@@ -106,7 +106,7 @@ import com.ramcosta.composedestinations.generated.destinations.RecentScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeableItemContainer
 import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
 import android.content.ClipData

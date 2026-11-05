@@ -594,11 +594,10 @@ class CallService : InCallService() {
                 val num1 = children.getOrNull(0)?.details?.handle?.schemeSpecificPart
                 val num2 = children.getOrNull(1)?.details?.handle?.schemeSpecificPart
                 if (!num1.isNullOrBlank() && !num2.isNullOrBlank()) {
-                    com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                    com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.recordMultiCall(
                         service, num1, null, num2, null, isMerged = true
                     )
-                    com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(service)
-                        .updateMultiCall(num2, isMerged = true)
+                    com.coolappstore.everdialer.by.svhp.feature.AppFeatures.updateMultiCall(service, num2, isMerged = true)
                 }
                 service.updateNotification(confCall)
                 return
@@ -612,11 +611,10 @@ class CallService : InCallService() {
                 val num1 = activeCall.details?.handle?.schemeSpecificPart
                 val num2 = heldCall.details?.handle?.schemeSpecificPart
                 if (!num1.isNullOrBlank() && !num2.isNullOrBlank()) {
-                    com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                    com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.recordMultiCall(
                         service, num1, null, num2, null, isMerged = false
                     )
-                    com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(service)
-                        .updateMultiCall(num2, isMerged = false)
+                    com.coolappstore.everdialer.by.svhp.feature.AppFeatures.updateMultiCall(service, num2, isMerged = false)
                 }
             }
 
@@ -663,11 +661,10 @@ class CallService : InCallService() {
             val num2 = secondary.details?.handle?.schemeSpecificPart
             val svc = instance
             if (!num1.isNullOrBlank() && !num2.isNullOrBlank() && svc != null) {
-                com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.recordMultiCall(
+                com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.recordMultiCall(
                     svc, num1, null, num2, null, isMerged = true
                 )
-                com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(svc)
-                    .updateMultiCall(num2, isMerged = true)
+                com.coolappstore.everdialer.by.svhp.feature.AppFeatures.updateMultiCall(svc, num2, isMerged = true)
             }
 
             android.util.Log.d(
@@ -860,8 +857,7 @@ class CallService : InCallService() {
                 if (state == Call.STATE_ACTIVE) {
                     callAnsweredSet.add(call)
                     callConnectTimes.getOrPut(call) { System.currentTimeMillis() }
-                    com.coolappstore.evercallrecorder.by.svhp.services.call.CallSessionManager.getInstance(this@CallService)
-                        .notifyCallAnsweredInDialer()
+                    com.coolappstore.everdialer.by.svhp.feature.AppFeatures.onCallAnswered(this@CallService)
                 }
                 applyDefaultAudioRouting(call)
             }
@@ -1046,7 +1042,7 @@ class CallService : InCallService() {
         }
 
         if (_currentCallSession.value == null) {
-            com.coolappstore.evercallrecorder.by.svhp.services.call.MultiCallRecordStore.endMultiCall(this)
+            com.coolappstore.everdialer.by.svhp.controller.call.MultiCallRecordStore.endMultiCall(this)
             instance = null
             removeForeground()
             cancelNotification()

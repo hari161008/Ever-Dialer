@@ -65,8 +65,8 @@ import android.telecom.TelecomManager
 import com.coolappstore.everdialer.by.svhp.controller.util.getPhoneAccountForSimSlot
 import com.coolappstore.everdialer.by.svhp.view.components.SimSlotBadge
 import com.coolappstore.everdialer.by.svhp.controller.util.makeCall
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeableItemContainer
-import com.coolappstore.evercallrecorder.by.svhp.ui.common.SwipeActionItem
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeableItemContainer
+import com.coolappstore.everdialer.by.svhp.view.components.SwipeActionItem
 import com.coolappstore.everdialer.by.svhp.controller.FloatingSmsService
 import com.coolappstore.everdialer.by.svhp.controller.util.SwipeActionHelper
 import com.coolappstore.everdialer.by.svhp.modal.data.Contact
