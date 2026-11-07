@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Message
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import androidx.compose.material.icons.outlined.NetworkCell
 import androidx.compose.material.icons.outlined.NoteAlt
 import androidx.compose.material.icons.outlined.Notes
@@ -229,13 +230,13 @@ private val GsColorRed     = Color(0xFFE53935)
 private val GsColorPink    = Color(0xFFE91E63)
 
 val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
-    listOf(
+    listOfNotNull(
         // ── Rows that live directly on the main Settings screen ─────────────────
         GlobalSettingsSearchEntry("Check For Updates", "Current version: v$APP_VERSION", "check_for_updates", Icons.Default.SystemUpdate, GsColorAmber),
         GlobalSettingsSearchEntry("Rate and Review", "Share your feedback about Ever Dialer", "rate_and_review", Icons.Default.Star, GsColorCyan),
         GlobalSettingsSearchEntry("Check Ratings and Reviews", "See what others are saying about Ever Dialer", "check_ratings", Icons.Default.Reviews, GsColorGreen),
         GlobalSettingsSearchEntry("More Apps", "Check out other apps from the developer", "more_apps", Icons.Default.Apps, GsColorIndigo),
-        GlobalSettingsSearchEntry("Donate", "Support this open source project", "donate", Icons.Default.Favorite, GsColorRed),
+        if (AppFeatures.isDonationAvailable) GlobalSettingsSearchEntry("Donate", "Support this open source project", "donate", Icons.Default.Favorite, GsColorRed) else null,
         GlobalSettingsSearchEntry("Appearance", "Themes, colors, and layout", "appearance", Icons.Outlined.Palette, GsColorPurple),
         GlobalSettingsSearchEntry("Tap Haptics", "Vibration on taps across the app", "tap_haptics", Icons.Outlined.Vibration, GsColorPurple),
         GlobalSettingsSearchEntry("Ring Haptic", "Incoming call vibration pattern, beat sync, and intensity", "ring_haptic", Icons.Outlined.RingVolume, GsColorPurple) { it.navigate(com.ramcosta.composedestinations.generated.destinations.RingHapticScreenDestination) },
@@ -421,6 +422,7 @@ val globalSettingsSearchEntries: List<GlobalSettingsSearchEntry> by lazy {
         GlobalSettingsSearchEntry("Telegram App Support Group", "Get help and discuss the app", "telegram_support", Icons.Outlined.Info, GsColorBlue) { it.navigate(AboutAppScreenDestination(highlightKey = "telegram_support")) },
         GlobalSettingsSearchEntry("App Recommending Channel in Telegram", "Follow for app announcements", "telegram_channel", Icons.Outlined.Info, GsColorBlue) { it.navigate(AboutAppScreenDestination(highlightKey = "telegram_channel")) },
         GlobalSettingsSearchEntry("My Other App (Everlasting Android Tweak)", "Check out the developer's other app", "other_app_link", Icons.Outlined.Info, GsColorIndigo) { it.navigate(AboutAppScreenDestination(highlightKey = "other_app_link")) },
+        if (AppFeatures.isPlayStore) GlobalSettingsSearchEntry("Privacy Policy", "Read how Ever Dialer protects your privacy", "privacy_policy", Icons.Outlined.Security, GsColorTeal) { it.navigate(AboutAppScreenDestination(highlightKey = "privacy_policy")) } else null,
 
         // ── PC Connect & PC Sync ─────────────────────────────────────────────────
         GlobalSettingsSearchEntry("PC Connect", "Connect and sync with Ever Dialer PC over Bluetooth", "pc_connect", Icons.Outlined.Devices, GsColorBlue) { it.navigate(PcConnectScreenDestination()) },

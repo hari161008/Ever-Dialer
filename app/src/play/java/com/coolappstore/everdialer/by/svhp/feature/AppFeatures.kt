@@ -13,6 +13,11 @@ object AppFeatures {
     val isNetworkSwitchAvailable: Boolean = false
     val isVolumeDndAvailable: Boolean = false
     val isUpdaterAvailable: Boolean = false
+    val showAndroid14WelcomeDialog: Boolean = false
+    val installedBuildName: String = "Play"
+    val isFdroidOrPlay: Boolean = true
+    val isDonationAvailable: Boolean = false
+    val isPlayStore: Boolean = true
 
     fun init(application: Application) {}
 

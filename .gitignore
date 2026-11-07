@@ -16,6 +16,7 @@ local.properties
 .cxx
 *.apk
 *.aab
+release/
 captures/
 .navigation/
 .kotlin/

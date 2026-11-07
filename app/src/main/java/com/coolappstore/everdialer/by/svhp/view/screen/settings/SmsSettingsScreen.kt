@@ -47,6 +47,7 @@ import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
@@ -123,10 +124,11 @@ private fun updateSmsLauncherAlias(
         "yellow" -> "_Yellow"
         else -> ""
     }
-    val targetAlias = "${context.packageName}.SmsLauncherAlias${nameSuffix}${iconSuffix}"
+    val manifestNamespace = "com.coolappstore.everdialer.by.svhp"
+    val targetAlias = "$manifestNamespace.SmsLauncherAlias${nameSuffix}${iconSuffix}"
 
     // Disable legacy alias if still enabled
-    val oldAlias = "${context.packageName}.SmsLauncherAlias"
+    val oldAlias = "$manifestNamespace.SmsLauncherAlias"
     try {
         pm.setComponentEnabledSetting(
             ComponentName(context.packageName, oldAlias),
@@ -152,7 +154,7 @@ private fun updateSmsLauncherAlias(
                 "yellow" -> "_Yellow"
                 else -> ""
             }
-            val aliasComponentStr = "${context.packageName}.SmsLauncherAlias${curNameSuffix}${curIconSuffix}"
+            val aliasComponentStr = "$manifestNamespace.SmsLauncherAlias${curNameSuffix}${curIconSuffix}"
             try {
                 val shouldEnable = enabled && (aliasComponentStr == targetAlias)
                 val newState = if (shouldEnable) {
@@ -533,13 +535,13 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
 
                                 // SMS App Icon
                                 val smsAppIconLabel = when (smsAppIcon) {
-                                    "google" -> "Google"
+                                    "google" -> if (AppFeatures.isFdroidOrPlay) "Ggl" else "Google"
                                     "nothing" -> "NOTHING"
-                                    "lineageos" -> "LineageOS"
+                                    "lineageos" -> if (AppFeatures.isFdroidOrPlay) "Line" else "LineageOS"
                                     "windows_phone" -> "Windows Phone"
                                     "bubble_blue" -> "Bubble Blue"
                                     "purple" -> "Purple Velvet"
-                                    "amoled" -> "GrapheneOS"
+                                    "amoled" -> if (AppFeatures.isFdroidOrPlay) "Black" else "GrapheneOS"
                                     "coral" -> "Coral Sunset"
                                     "neon_green" -> "Neon Mint"
                                     "yellow" -> "Yellow"

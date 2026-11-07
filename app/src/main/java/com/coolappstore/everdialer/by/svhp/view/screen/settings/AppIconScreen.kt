@@ -35,6 +35,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import org.koin.compose.koinInject
 
 internal const val KEY_SELECTED_APP_ICON = "selected_app_icon"
@@ -51,9 +52,9 @@ internal fun buildIcons(context: android.content.Context) = listOf(
     AppIconEntry("phone",    "Phone",   "MainActivityPhoneIcon",        context.resources.getIdentifier("ic_launcher_phone",        "mipmap", context.packageName)),
     AppIconEntry("custom_phone", "Vertical phone", "MainActivityCustomPhoneIcon", context.resources.getIdentifier("ic_launcher_custom_phone", "mipmap", context.packageName)),
     AppIconEntry("radium_green_phone", "Radium Green Phone", "MainActivityRadiumGreenPhoneIcon", context.resources.getIdentifier("ic_launcher_radium_green_phone", "mipmap", context.packageName)),
-    AppIconEntry("google",   "Google",  "MainActivityGoogleDialerIcon", context.resources.getIdentifier("ic_launcher_google_dialer","mipmap", context.packageName)),
+    AppIconEntry("google",   if (AppFeatures.isFdroidOrPlay) "Ggl" else "Google",  "MainActivityGoogleDialerIcon", context.resources.getIdentifier("ic_launcher_google_dialer","mipmap", context.packageName)),
     AppIconEntry("nothing",  "NOTHING", "MainActivityNothingIcon",      context.resources.getIdentifier("ic_launcher_nothing",      "mipmap", context.packageName)),
-    AppIconEntry("lineageos", "LineageOS Dialer", "MainActivityLineageOSIcon", context.resources.getIdentifier("ic_launcher_lineageos", "mipmap", context.packageName))
+    AppIconEntry("lineageos", if (AppFeatures.isFdroidOrPlay) "Line" else "LineageOS Dialer", "MainActivityLineageOSIcon", context.resources.getIdentifier("ic_launcher_lineageos", "mipmap", context.packageName))
 )
 
 // Curated App Name presets. "default" reuses the same alias as the Default app icon in
@@ -121,9 +122,10 @@ private fun allLauncherAliasNames(): List<String> =
 internal fun applyLauncherAlias(context: android.content.Context, targetAliasName: String) {
     val pm  = context.packageManager
     val pkg = context.packageName
+    val manifestNamespace = "com.coolappstore.everdialer.by.svhp"
 
-    val allAliasComponents = allLauncherAliasNames().map { ComponentName(pkg, "$pkg.$it") }
-    val target = ComponentName(pkg, "$pkg.$targetAliasName")
+    val allAliasComponents = allLauncherAliasNames().map { ComponentName(pkg, "$manifestNamespace.$it") }
+    val target = ComponentName(pkg, "$manifestNamespace.$targetAliasName")
 
     allAliasComponents.forEach { component ->
         val state = if (component == target)

@@ -34,6 +34,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import org.koin.compose.koinInject
 
 private fun loadSmsBitmapFromRes(context: android.content.Context, resId: Int): Bitmap? {
@@ -62,13 +63,13 @@ data class SmsAppIconEntry(
 
 internal fun buildSmsIcons(context: android.content.Context) = listOf(
     SmsAppIconEntry("default", "Default", context.resources.getIdentifier("ic_launcher_sms", "mipmap", context.packageName)),
-    SmsAppIconEntry("google", "Google", context.resources.getIdentifier("ic_launcher_sms_google", "mipmap", context.packageName)),
+    SmsAppIconEntry("google", if (AppFeatures.isFdroidOrPlay) "Ggl" else "Google", context.resources.getIdentifier("ic_launcher_sms_google", "mipmap", context.packageName)),
     SmsAppIconEntry("nothing", "NOTHING", context.resources.getIdentifier("ic_launcher_sms_nothing", "mipmap", context.packageName)),
-    SmsAppIconEntry("lineageos", "LineageOS", context.resources.getIdentifier("ic_launcher_sms_lineageos", "mipmap", context.packageName)),
+    SmsAppIconEntry("lineageos", if (AppFeatures.isFdroidOrPlay) "Line" else "LineageOS", context.resources.getIdentifier("ic_launcher_sms_lineageos", "mipmap", context.packageName)),
     SmsAppIconEntry("windows_phone", "Windows Phone", context.resources.getIdentifier("ic_launcher_sms_windows_phone", "mipmap", context.packageName)),
     SmsAppIconEntry("bubble_blue", "Bubble Blue", context.resources.getIdentifier("ic_launcher_sms_bubble_blue", "mipmap", context.packageName)),
     SmsAppIconEntry("purple", "Purple Velvet", context.resources.getIdentifier("ic_launcher_sms_purple", "mipmap", context.packageName)),
-    SmsAppIconEntry("amoled", "GrapheneOS", context.resources.getIdentifier("ic_launcher_sms_amoled", "mipmap", context.packageName)),
+    SmsAppIconEntry("amoled", if (AppFeatures.isFdroidOrPlay) "Black" else "GrapheneOS", context.resources.getIdentifier("ic_launcher_sms_amoled", "mipmap", context.packageName)),
     SmsAppIconEntry("coral", "Coral Sunset", context.resources.getIdentifier("ic_launcher_sms_coral", "mipmap", context.packageName)),
     SmsAppIconEntry("neon_green", "Neon Mint", context.resources.getIdentifier("ic_launcher_sms_neon_green", "mipmap", context.packageName)),
     SmsAppIconEntry("yellow", "Yellow", context.resources.getIdentifier("ic_launcher_sms_yellow", "mipmap", context.packageName))
@@ -105,10 +106,11 @@ internal fun updateSmsLauncherAliasFull(
         "yellow" -> "_Yellow"
         else -> ""
     }
-    val targetAlias = "${context.packageName}.SmsLauncherAlias${nameSuffix}${iconSuffix}"
+    val manifestNamespace = "com.coolappstore.everdialer.by.svhp"
+    val targetAlias = "$manifestNamespace.SmsLauncherAlias${nameSuffix}${iconSuffix}"
 
     // Disable legacy alias
-    val oldAlias = "${context.packageName}.SmsLauncherAlias"
+    val oldAlias = "$manifestNamespace.SmsLauncherAlias"
     try {
         pm.setComponentEnabledSetting(
             ComponentName(context.packageName, oldAlias),
@@ -134,7 +136,7 @@ internal fun updateSmsLauncherAliasFull(
                 "yellow" -> "_Yellow"
                 else -> ""
             }
-            val aliasComponentStr = "${context.packageName}.SmsLauncherAlias${curNameSuffix}${curIconSuffix}"
+            val aliasComponentStr = "$manifestNamespace.SmsLauncherAlias${curNameSuffix}${curIconSuffix}"
             try {
                 val shouldEnable = enabled && (aliasComponentStr == targetAlias)
                 val newState = if (shouldEnable) {

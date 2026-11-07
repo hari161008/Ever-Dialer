@@ -75,6 +75,8 @@ android {
         play {
             dimension "distribution"
             applicationId "com.everlasting.projects.by.svhp.play"
+            targetSdk = 36
+            versionCode = 18
         }
     }
 
@@ -127,5 +129,37 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
+}
 
+tasks.configureEach { task ->
+    if (task.name == "bundlePlayRelease") {
+        task.doLast {
+            def aabFile = file("${layout.buildDirectory.get()}/outputs/bundle/playRelease/app-play-release.aab")
+            if (aabFile.exists()) {
+                if (project.hasProperty('android.injected.output.dir')) {
+                    def destDir = file(project.property('android.injected.output.dir'))
+                    destDir.mkdirs()
+                    copy {
+                        from aabFile
+                        into destDir
+                    }
+                    def flavorDir = new File(destDir, "playRelease")
+                    flavorDir.mkdirs()
+                    copy {
+                        from aabFile
+                        into flavorDir
+                    }
+                }
+                def rootReleaseDir = file("${rootDir}/release")
+                rootReleaseDir.mkdirs()
+                copy {
+                    from aabFile
+                    into rootReleaseDir
+                }
+                // Move instead of copy: remove original from build cache
+                aabFile.delete()
+                file("${layout.buildDirectory.get()}/outputs/bundle/playRelease").deleteDir()
+            }
+        }
+    }
 }

@@ -2,13 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Google Play Policy: remove exact alarm & special use foreground service declarations -->
+    <!-- Google Play Policy: remove exact alarm declaration -->
     <uses-permission
         android:name="android.permission.USE_EXACT_ALARM"
         tools:node="remove" />
 
+    <!-- Google Play Policy: remove unused audio recording permission -->
     <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+        android:name="android.permission.RECORD_AUDIO"
         tools:node="remove" />
+
+    <application>
+        <!-- Google Play Policy: remove GitHub update checker receiver in Play build -->
+        <receiver
+            android:name="com.coolappstore.everdialer.by.svhp.controller.util.UpdateNotificationReceiver"
+            tools:node="remove" />
+    </application>
 
 </manifest>

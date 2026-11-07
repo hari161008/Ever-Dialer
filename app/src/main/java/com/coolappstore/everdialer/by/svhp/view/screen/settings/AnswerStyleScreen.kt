@@ -1,6 +1,7 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import androidx.compose.animation.core.*
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -444,7 +445,7 @@ fun AnswerStyleScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Google modern style",
+                                    if (AppFeatures.isFdroidOrPlay) "Modern style" else "Google modern style",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -498,13 +499,13 @@ fun AnswerStyleScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Google classic",
+                                    if (AppFeatures.isFdroidOrPlay) "Classic" else "Google classic",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    "LineageOS style • Swipe up or down to answer or decline",
+                                    if (AppFeatures.isFdroidOrPlay) "Swipe style • Swipe up or down to answer or decline" else "LineageOS style • Swipe up or down to answer or decline",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

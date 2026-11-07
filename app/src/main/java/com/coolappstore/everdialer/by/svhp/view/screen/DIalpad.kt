@@ -420,16 +420,20 @@ fun DialPadScreen(
                 }
                 if (predictiveBackEnabled) {
                     PredictiveBackHandler(enabled = !dialpadClosing && !didNavigateAway) { progressFlow ->
+                        var isCommitted = false
                         try {
                             progressFlow.collect { backEvent ->
                                 closeProgress.snapTo(backEvent.progress * 0.45f)
                             }
-                            dialpadClosing = true
-                            closeProgress.animateTo(1f, slowSlideSpec)
-                            finishDismiss()
+                            isCommitted = true
                         } catch (e: CancellationException) {
-                            dialpadClosing = false
-                            closeProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            if (!isCommitted) {
+                                dialpadClosing = false
+                                closeProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                        if (isCommitted) {
+                            closeWithSlowAnimation()
                         }
                     }
                 } else {

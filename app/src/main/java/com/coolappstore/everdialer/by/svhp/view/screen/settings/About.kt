@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.*
@@ -54,12 +55,14 @@ import com.coolappstore.everdialer.by.svhp.APP_VERSION
 import com.coolappstore.everdialer.by.svhp.view.components.DonateOptionDialog
 import com.coolappstore.everdialer.by.svhp.EVERLASTING_TWEAK_URL
 import com.coolappstore.everdialer.by.svhp.GITHUB_URL
+import com.coolappstore.everdialer.by.svhp.PLAYSTORE_PRIVACY_POLICY_URL
 import com.coolappstore.everdialer.by.svhp.R
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_CHANNEL_URL
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_DEV_URL
 import com.coolappstore.everdialer.by.svhp.TELEGRAM_SUPPORT_URL
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.controller.util.openLink
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
@@ -270,7 +273,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         ) {
                             AboutStatCard(
                                 label = "Installed Build",
-                                value = "v$APP_VERSION",
+                                value = AppFeatures.installedBuildName,
                                 icon = Icons.Outlined.PhoneAndroid,
                                 modifier = Modifier.weight(1f)
                             )
@@ -317,13 +320,15 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                         )
                     }
 
-                    // Huge modern Donate container with animated Mount Fuji vector elements in the background
-                    DonateContainer(
-                        modifier = Modifier.settingsSearchHighlight("donate", highlightedKey) { highlightedKey = null },
-                        onDonateClick = { showDonateDialog = true },
-                        onBuyMeACoffeeClick = { showBmacDialog = true },
-                        onGitHubSponsorClick = { showGithubSponsorDialog = true }
-                    )
+                    if (AppFeatures.isDonationAvailable) {
+                        // Huge modern Donate container with animated Mount Fuji vector elements in the background
+                        DonateContainer(
+                            modifier = Modifier.settingsSearchHighlight("donate", highlightedKey) { highlightedKey = null },
+                            onDonateClick = { showDonateDialog = true },
+                            onBuyMeACoffeeClick = { showBmacDialog = true },
+                            onGitHubSponsorClick = { showGithubSponsorDialog = true }
+                        )
+                    }
 
                     RivoExpressiveCard {
                         RivoListItem(
@@ -335,6 +340,24 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.settingsSearchHighlight("source_code", highlightedKey) { highlightedKey = null },
                             onClick = { openLink(context, GITHUB_URL) }
                         )
+                    }
+
+                    if (AppFeatures.isPlayStore) {
+                        RivoExpressiveCard {
+                            RivoListItem(
+                                headline = "Privacy Policy",
+                                supporting = "Read how Ever Dialer protects your privacy",
+                                leadingIcon = Icons.Outlined.Security,
+                                iconContainerColor = ColorTeal,
+                                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                                modifier = Modifier.settingsSearchHighlight("privacy_policy", highlightedKey) { highlightedKey = null },
+                                onClick = {
+                                    DonateWebViewConfig.targetUrl = PLAYSTORE_PRIVACY_POLICY_URL
+                                    DonateWebViewConfig.targetTitle = "Privacy Policy"
+                                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -398,73 +421,75 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
             }
         }
 
-        if (showDonateDialog) {
-            DonateOptionDialog(
-                title = "Donate",
-                description = "Choose how you'd like to open the donation page:",
-                icon = Icons.Default.Favorite,
-                iconTint = MaterialTheme.colorScheme.primary,
-                onDismiss = { showDonateDialog = false },
-                onOpenBrowser = {
-                    showDonateDialog = false
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.DEFAULT_DONATE_URL)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (AppFeatures.isDonationAvailable) {
+            if (showDonateDialog) {
+                DonateOptionDialog(
+                    title = "Donate",
+                    description = "Choose how you'd like to open the donation page:",
+                    icon = Icons.Default.Favorite,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onDismiss = { showDonateDialog = false },
+                    onOpenBrowser = {
+                        showDonateDialog = false
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.DEFAULT_DONATE_URL)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    onOpenInApp = {
+                        showDonateDialog = false
+                        DonateWebViewConfig.targetUrl = DonateWebViewConfig.DEFAULT_DONATE_URL
+                        DonateWebViewConfig.targetTitle = "Donate"
+                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
                     }
-                    context.startActivity(intent)
-                },
-                onOpenInApp = {
-                    showDonateDialog = false
-                    DonateWebViewConfig.targetUrl = DonateWebViewConfig.DEFAULT_DONATE_URL
-                    DonateWebViewConfig.targetTitle = "Donate"
-                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
-                }
-            )
-        }
+                )
+            }
 
-        if (showBmacDialog) {
-            DonateOptionDialog(
-                title = "Buy Me A Coffee",
-                description = "Choose how you'd like to open Buy Me A Coffee:",
-                icon = Icons.Filled.LocalCafe,
-                iconTint = Color(0xFFFF9800),
-                onDismiss = { showBmacDialog = false },
-                onOpenBrowser = {
-                    showBmacDialog = false
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.BUY_ME_A_COFFEE_URL)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (showBmacDialog) {
+                DonateOptionDialog(
+                    title = "Buy Me A Coffee",
+                    description = "Choose how you'd like to open Buy Me A Coffee:",
+                    icon = Icons.Filled.LocalCafe,
+                    iconTint = Color(0xFFFF9800),
+                    onDismiss = { showBmacDialog = false },
+                    onOpenBrowser = {
+                        showBmacDialog = false
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.BUY_ME_A_COFFEE_URL)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    onOpenInApp = {
+                        showBmacDialog = false
+                        DonateWebViewConfig.targetUrl = DonateWebViewConfig.BUY_ME_A_COFFEE_URL
+                        DonateWebViewConfig.targetTitle = "Buy Me A Coffee"
+                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
                     }
-                    context.startActivity(intent)
-                },
-                onOpenInApp = {
-                    showBmacDialog = false
-                    DonateWebViewConfig.targetUrl = DonateWebViewConfig.BUY_ME_A_COFFEE_URL
-                    DonateWebViewConfig.targetTitle = "Buy Me A Coffee"
-                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
-                }
-            )
-        }
+                )
+            }
 
-        if (showGithubSponsorDialog) {
-            DonateOptionDialog(
-                title = "GitHub Sponsors",
-                description = "Choose how you'd like to open GitHub Sponsors:",
-                icon = Icons.Default.Favorite,
-                iconTint = Color(0xFFEA4AAA),
-                onDismiss = { showGithubSponsorDialog = false },
-                onOpenBrowser = {
-                    showGithubSponsorDialog = false
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.GITHUB_SPONSORS_URL)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (showGithubSponsorDialog) {
+                DonateOptionDialog(
+                    title = "GitHub Sponsors",
+                    description = "Choose how you'd like to open GitHub Sponsors:",
+                    icon = Icons.Default.Favorite,
+                    iconTint = Color(0xFFEA4AAA),
+                    onDismiss = { showGithubSponsorDialog = false },
+                    onOpenBrowser = {
+                        showGithubSponsorDialog = false
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DonateWebViewConfig.GITHUB_SPONSORS_URL)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    onOpenInApp = {
+                        showGithubSponsorDialog = false
+                        DonateWebViewConfig.targetUrl = DonateWebViewConfig.GITHUB_SPONSORS_URL
+                        DonateWebViewConfig.targetTitle = "GitHub Sponsors"
+                        navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
                     }
-                    context.startActivity(intent)
-                },
-                onOpenInApp = {
-                    showGithubSponsorDialog = false
-                    DonateWebViewConfig.targetUrl = DonateWebViewConfig.GITHUB_SPONSORS_URL
-                    DonateWebViewConfig.targetTitle = "GitHub Sponsors"
-                    navigator.navigate(com.ramcosta.composedestinations.generated.destinations.DonateWebViewScreenDestination)
-                }
-            )
+                )
+            }
         }
     }
 }

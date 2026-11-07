@@ -151,7 +151,9 @@ class MainActivity : FragmentActivity() {
         // When permission prompt dismisses, prompt for default dialer if not already held and welcome dialog not needed
         val prefs = GlobalContext.get().get<PreferenceManager>()
         val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
-        val needsWelcome = !DefaultDialerManager.isDefaultDialer(this) && (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val needsWelcome = AppFeatures.showAndroid14WelcomeDialog &&
+            !DefaultDialerManager.isDefaultDialer(this) &&
+            (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         if (!DefaultDialerManager.isDefaultDialer(this) && !needsWelcome) {
             requestDefaultDialer()
         }
@@ -213,7 +215,9 @@ class MainActivity : FragmentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
 
         val isFirstLaunch = !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
-        val needsWelcome = !DefaultDialerManager.isDefaultDialer(this) && (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val needsWelcome = AppFeatures.showAndroid14WelcomeDialog &&
+            !DefaultDialerManager.isDefaultDialer(this) &&
+            (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 
         if (!hasBasicPermissions) {
             requestRequiredPermissions()
@@ -294,6 +298,7 @@ class MainActivity : FragmentActivity() {
                     !prefs.getBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, false)
                 }
                 val needsWelcomeDialog = remember {
+                    AppFeatures.showAndroid14WelcomeDialog &&
                     !DefaultDialerManager.isDefaultDialer(this@MainActivity) &&
                     (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
                 }
@@ -306,13 +311,18 @@ class MainActivity : FragmentActivity() {
                     if (needsWelcomeDialog) {
                         kotlinx.coroutines.delay(400)
                         showWelcomeDialog = true
-                    } else if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
-                        // Welcome already done but Telegram dialog not yet shown — show it
-                        kotlinx.coroutines.delay(800)
-                        showTelegramDialog = true
-                    } else if (needsFullScreenIntentPermission()) {
-                        kotlinx.coroutines.delay(800)
-                        showFullScreenIntentDialog = true
+                    } else {
+                        if (isFirstLaunch) {
+                            prefs.setBoolean(PreferenceManager.KEY_FIRST_LAUNCH_DONE, true)
+                        }
+                        if (!prefs.getBoolean(PreferenceManager.KEY_TELEGRAM_SHOWN, false)) {
+                            // Welcome already done but Telegram dialog not yet shown — show it
+                            kotlinx.coroutines.delay(800)
+                            showTelegramDialog = true
+                        } else if (needsFullScreenIntentPermission()) {
+                            kotlinx.coroutines.delay(800)
+                            showFullScreenIntentDialog = true
+                        }
                     }
                 }
 
@@ -461,25 +471,27 @@ class MainActivity : FragmentActivity() {
                 // ── Donate popup state ──────────────────────────────────────
                 var showDonateDialog by remember { mutableStateOf(false) }
 
-                LaunchedEffect(Unit) {
-                    val lastVersion = prefs.getString(PreferenceManager.KEY_LAST_APP_VERSION, null)
-                    val openCount = prefs.getInt(PreferenceManager.KEY_APP_OPEN_COUNT, 0) + 1
-                    prefs.setInt(PreferenceManager.KEY_APP_OPEN_COUNT, openCount)
+                if (AppFeatures.isDonationAvailable) {
+                    LaunchedEffect(Unit) {
+                        val lastVersion = prefs.getString(PreferenceManager.KEY_LAST_APP_VERSION, null)
+                        val openCount = prefs.getInt(PreferenceManager.KEY_APP_OPEN_COUNT, 0) + 1
+                        prefs.setInt(PreferenceManager.KEY_APP_OPEN_COUNT, openCount)
 
-                    if (lastVersion == null) {
-                        // Fresh install
-                        prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
-                        if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
+                        if (lastVersion == null) {
+                            // Fresh install
+                            prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
+                            if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
+                                showDonateDialog = true
+                            }
+                        } else if (lastVersion != APP_VERSION) {
+                            // App update!
+                            prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
                             showDonateDialog = true
-                        }
-                    } else if (lastVersion != APP_VERSION) {
-                        // App update!
-                        prefs.setString(PreferenceManager.KEY_LAST_APP_VERSION, APP_VERSION)
-                        showDonateDialog = true
-                    } else {
-                        // Same version
-                        if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
-                            showDonateDialog = true
+                        } else {
+                            // Same version
+                            if (openCount == 4 && !prefs.getBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, false)) {
+                                showDonateDialog = true
+                            }
                         }
                     }
                 }
@@ -499,7 +511,7 @@ class MainActivity : FragmentActivity() {
                 val hasOngoingCall = isCallActive && callSession?.state != android.telecom.Call.STATE_RINGING
 
                 // ── Donate Popup Dialog (shows on update or 4th launch; if in call, waits until call ends) ──
-                if (showDonateDialog && !isCallActive && !showWelcomeDialog && !showTelegramDialog && !showFullScreenIntentDialog) {
+                if (AppFeatures.isDonationAvailable && showDonateDialog && !isCallActive && !showWelcomeDialog && !showTelegramDialog && !showFullScreenIntentDialog) {
                     com.coolappstore.everdialer.by.svhp.view.components.DonateDialog(
                         onDonate = {
                             prefs.setBoolean(PreferenceManager.KEY_DONATE_POPUP_SHOWN_INSTALL, true)

@@ -179,25 +179,22 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
 
     if (predictiveBackEnabled) {
         PredictiveBackHandler(enabled = showDialpad && !dialpadClosing) { progressFlow ->
+            var isCommitted = false
             try {
                 progressFlow.collect { backEvent ->
                     // Interactive scrub: scale down smoothly with gesture progress
                     val p = 1f - (backEvent.progress * 0.45f)
                     dialpadProgress.snapTo(p)
                 }
-                // When back gesture commits, collapse back into FAB
-                dialpadClosing = true
-                NavBarVisibilityState.hideForDialpad = false
-                dialpadProgress.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 520, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
-                )
-                showDialpad = false
-                dialpadClosing = false
+                isCommitted = true
             } catch (e: CancellationException) {
-                // If user cancels back gesture, snap/animate back to full open state
-                dialpadClosing = false
-                dialpadProgress.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                if (!isCommitted) {
+                    dialpadClosing = false
+                    dialpadProgress.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+                }
+            }
+            if (isCommitted) {
+                closeDialpad(null)
             }
         }
     } else {

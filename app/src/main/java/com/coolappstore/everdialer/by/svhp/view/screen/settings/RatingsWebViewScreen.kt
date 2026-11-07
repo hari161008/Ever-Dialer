@@ -36,11 +36,12 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 
-
+import com.coolappstore.everdialer.by.svhp.PLAYSTORE_URL
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 
-private const val RATINGS_URL = "https://hariprabhu.com/Ever-Dialer"
+private val RATINGS_URL = if (AppFeatures.isPlayStore) PLAYSTORE_URL else "https://hariprabhu.com/Ever-Dialer"
 
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
