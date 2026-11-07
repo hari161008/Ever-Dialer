@@ -144,6 +144,9 @@ class MainActivity : FragmentActivity() {
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
+        if (AppFeatures.isPlayStore) {
+            showPlayPermissionsPage = false
+        }
         try {
             GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel>()?.fetchContacts()
             GlobalContext.get().getOrNull<com.coolappstore.everdialer.by.svhp.controller.CallLogViewModel>()?.refreshLogs()
@@ -198,6 +201,7 @@ class MainActivity : FragmentActivity() {
     private var isAppUnlocked by mutableStateOf(true)
     private var callAuthRequired by mutableStateOf(false)
     private var pendingDirectCallAction: (() -> Unit)? = null
+    private var showPlayPermissionsPage by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -220,7 +224,11 @@ class MainActivity : FragmentActivity() {
             (isFirstLaunch || Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 
         if (!hasBasicPermissions) {
-            requestRequiredPermissions()
+            if (AppFeatures.isPlayStore) {
+                showPlayPermissionsPage = true
+            } else {
+                requestRequiredPermissions()
+            }
         } else if (!DefaultDialerManager.isDefaultDialer(this) && !needsWelcome) {
             requestDefaultDialer()
         }
@@ -307,7 +315,8 @@ class MainActivity : FragmentActivity() {
                 var showWelcomeDialog by remember { mutableStateOf(false) }
                 var showTelegramDialog by remember { mutableStateOf(false) }
                 var showFullScreenIntentDialog by remember { mutableStateOf(false) }
-                LaunchedEffect(Unit) {
+                LaunchedEffect(showPlayPermissionsPage) {
+                    if (showPlayPermissionsPage) return@LaunchedEffect
                     if (needsWelcomeDialog) {
                         kotlinx.coroutines.delay(400)
                         showWelcomeDialog = true
@@ -967,6 +976,19 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                     }
+                    if (AppFeatures.isPlayStore && showPlayPermissionsPage) {
+                        com.coolappstore.everdialer.by.svhp.view.screen.PlayPermissionsScreen(
+                            onGrantPermissions = {
+                                requestRequiredPermissions()
+                            },
+                            onRequestDefaultDialer = {
+                                requestDefaultDialer()
+                            },
+                            onDismiss = {
+                                showPlayPermissionsPage = false
+                            }
+                        )
+                    }
                 } // end outer Box
 
                 if (showSimPicker && pendingSimPickerNumber != null) {
@@ -980,10 +1002,12 @@ class MainActivity : FragmentActivity() {
                     )
                 }
 
-                LaunchedEffect(pendingIntent) {
-                    pendingIntent?.let {
-                        handleIntent(it, navController)
-                        pendingIntent = null
+                LaunchedEffect(pendingIntent, showPlayPermissionsPage) {
+                    if (!showPlayPermissionsPage) {
+                        pendingIntent?.let {
+                            handleIntent(it, navController)
+                            pendingIntent = null
+                        }
                     }
                 }
             }
@@ -1492,6 +1516,14 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         isAppInForeground = true
+        if (AppFeatures.isPlayStore && showPlayPermissionsPage) {
+            val hasBasic = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+            if (hasBasic) {
+                showPlayPermissionsPage = false
+            }
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED) {
             com.coolappstore.everdialer.by.svhp.controller.util.MissedCallBadgeManager.markMissedCallsAsRead(this)
             try {
