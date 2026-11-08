@@ -64,7 +64,7 @@ class ContactsViewModel(
             observerJob = viewModelScope.launch(Dispatchers.IO) {
                 kotlinx.coroutines.delay(300)
                 fetchContacts()
-                fetchContactGroups()
+                fetchContactGroups(syncSystemGroups = true)
                 fetchAvailableAccounts()
             }
         }
@@ -86,13 +86,13 @@ class ContactsViewModel(
 
     init {
         _enabledAccountKeys.value = getEnabledAccountKeys()
-        val isNewContactsLogic = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, false)
+        val isNewContactsLogic = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, true)
         if (isNewContactsLogic) {
             _contactGroups.value = prefs.getContactGroups()
             loadCachedContactsThenRefresh()
             viewModelScope.launch(Dispatchers.IO) {
-                delay(4000)
-                fetchContactGroups()
+                delay(2000)
+                fetchContactGroups(syncSystemGroups = true)
                 fetchAvailableAccounts()
             }
         } else {
@@ -103,8 +103,9 @@ class ContactsViewModel(
         ensureContentObservers()
     }
 
-    fun fetchContactGroups() {
-        if (prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, false)) {
+    fun fetchContactGroups(syncSystemGroups: Boolean = false) {
+        val isNewContactsLogic = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, true)
+        if (isNewContactsLogic && !syncSystemGroups) {
             _contactGroups.value = prefs.getContactGroups()
             return
         }
@@ -348,7 +349,7 @@ class ContactsViewModel(
             _isLoading.value = false
             return
         }
-        val isNewContactsLogic = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, false)
+        val isNewContactsLogic = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, true)
         viewModelScope.launch(Dispatchers.IO) {
             val cached = runCatching { ContactsCache.read(ctx) }.getOrDefault(emptyList())
             if (cached.isNotEmpty() && !hasLoadedFromCache) {

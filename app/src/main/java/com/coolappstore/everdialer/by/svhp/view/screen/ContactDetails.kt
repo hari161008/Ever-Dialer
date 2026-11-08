@@ -2640,10 +2640,15 @@ fun ContactDetailsScreen(
                     // (Google account(s), SIM, phone storage, etc.), since a contact merged across
                     // multiple sources can be stored in more than one place at once.
                     "saved_in" -> {
-                        if (showSavedIn && contact != null && contact.sourceAccounts.isNotEmpty()) {
+                        val displaySourceAccounts = if (contact != null && contact.sourceAccounts.isNotEmpty()) {
+                            contact.sourceAccounts
+                        } else {
+                            contactAccounts.map { it.displayName }.distinct()
+                        }
+                        if (showSavedIn && contact != null && displaySourceAccounts.isNotEmpty()) {
                             item {
                                 RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage) {
-                                    contact.sourceAccounts.forEachIndexed { index, source ->
+                                    displaySourceAccounts.forEachIndexed { index, source ->
                                         val icon = when {
                                             source.startsWith("SIM", ignoreCase = true) -> Icons.Default.SimCard
                                             source.equals("Device Storage", ignoreCase = true) -> Icons.Default.PhoneAndroid
@@ -2651,7 +2656,7 @@ fun ContactDetailsScreen(
                                             else -> Icons.Default.AccountCircle
                                         }
                                         RivoListItem(headline = source, leadingIcon = icon, onClick = {})
-                                        if (index < contact.sourceAccounts.size - 1) {
+                                        if (index < displaySourceAccounts.size - 1) {
                                             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         }
                                     }

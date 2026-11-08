@@ -398,7 +398,9 @@ fun ContactContent(
             val settingsVersion by prefs.settingsChanged.collectAsState()
 
             LaunchedEffect(settingsVersion) {
-                contactsVM.fetchContacts()
+                if (contactsVM.allContacts.value.isEmpty()) {
+                    contactsVM.fetchContacts()
+                }
             }
 
             val contacts = contactsVM.displayedContacts.collectAsState().value
@@ -417,7 +419,7 @@ fun ContactContent(
                 listState.scrollToItem(0)
             }
 
-            val sortedContacts = remember(contacts, contactsSortBy, contactsSortAscending, allLogs) {
+            val sortedContacts = remember(contacts, contactsSortBy, contactsSortAscending, if (contactsSortBy != "name") allLogs else Unit) {
                 contacts.sortContacts(ContactSortOption.fromId(contactsSortBy), contactsSortAscending, allLogs)
             }
 

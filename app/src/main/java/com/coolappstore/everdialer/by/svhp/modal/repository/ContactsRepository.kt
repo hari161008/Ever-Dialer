@@ -86,18 +86,69 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
         emptyList()
     }
 
+    private class ContactBuilder(
+        val id: String,
+        val name: String,
+        val photoUri: String?,
+        val isStarred: Boolean,
+        val timesContacted: Int,
+        val lastTimeContacted: Long,
+        val dateAdded: Long
+    ) {
+        val phoneNumbers = ArrayList<String>(2)
+        val phones = ArrayList<ContactPhone>(2)
+        val emails = ArrayList<String>(1)
+        val addresses = ArrayList<String>(1)
+        val events = ArrayList<ContactEvent>(1)
+        val seenPhoneNumbers = HashSet<String>(2)
+        val seenEmails = HashSet<String>(1)
+        val seenAddresses = HashSet<String>(1)
+        val seenEvents = HashSet<String>(1)
+        var note: String? = null
+        private var noteParts: HashSet<String>? = null
+
+        fun addNote(part: String) {
+            val trimmed = part.trim()
+            if (trimmed.isEmpty()) return
+            var parts = noteParts
+            if (parts == null) {
+                parts = HashSet(2)
+                noteParts = parts
+            }
+            if (parts.add(trimmed)) {
+                note = if (note.isNullOrBlank()) trimmed else "$note\n$trimmed"
+            }
+        }
+
+        fun build(sourceAccounts: List<String> = emptyList()): Contact {
+            return Contact(
+                id = id,
+                name = name,
+                photoUri = photoUri,
+                phoneNumbers = phoneNumbers,
+                phones = phones,
+                emails = emails,
+                addresses = addresses,
+                events = events,
+                note = note,
+                isFavorite = isStarred,
+                sourceAccounts = sourceAccounts,
+                timesContacted = timesContacted,
+                lastTimeContacted = lastTimeContacted,
+                dateAdded = dateAdded
+            )
+        }
+    }
+
     private fun getContactsInternal(enabledAccountKeys: Set<String>): List<Contact> {
         // Build list of contact IDs allowed by the enabled account filter
         val allowedContactIds: Set<String>? = if (enabledAccountKeys.isNotEmpty()) {
-            buildAllowedContactIds(enabledAccountKeys)
+            val allowed = buildAllowedContactIds(enabledAccountKeys)
+            if (allowed.isEmpty()) return emptyList()
+            allowed
         } else null // null = no filter, show all
 
-        // Build contact_id -> distinct source-account labels (Google account(s), SIM, phone
-        // storage, etc.) once up front, so ContactDetails can show the user where a contact is
-        // actually stored/synced without a separate per-contact query.
-        val sourceAccountsByContactId = buildSourceAccountsByContactId()
-
-        val contactsMap = mutableMapOf<String, Contact>()
+        val buildersMap = LinkedHashMap<String, ContactBuilder>()
 
         val projection = arrayOf(
             ContactsContract.Data.CONTACT_ID,
@@ -114,11 +165,20 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
             ContactsContract.Data.CONTACT_LAST_UPDATED_TIMESTAMP
         )
 
+        val selection = "${ContactsContract.Data.MIMETYPE} IN (?, ?, ?, ?, ?)"
+        val selectionArgs = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE
+        )
+
         contentResolver.query(
             ContactsContract.Data.CONTENT_URI,
             projection,
-            null,
-            null,
+            selection,
+            selectionArgs,
             "${ContactsContract.Data.DISPLAY_NAME_PRIMARY} ASC"
         )?.use { cursor ->
             val idIdx = cursor.getColumnIndex(ContactsContract.Data.CONTACT_ID)
@@ -139,62 +199,64 @@ class ContactsRepository(private val contentResolver: ContentResolver, private v
                 // Apply account filter: skip contacts not from allowed contact IDs
                 if (allowedContactIds != null && id !in allowedContactIds) continue
 
-                val mimeType = cursor.getString(mimeIdx)
+                val mimeType = cursor.getString(mimeIdx) ?: continue
                 val data1 = cursor.getString(data1Idx) ?: continue
                 val isStarred = cursor.getInt(starredIdx) == 1
 
-                val contact = contactsMap.getOrPut(id) {
+                val builder = buildersMap.getOrPut(id) {
                     val rawLastUpdated = if (lastUpdatedIdx >= 0) cursor.getLong(lastUpdatedIdx) else 0L
                     val dateAddedVal = if (rawLastUpdated > 0L) rawLastUpdated else (id.toLongOrNull() ?: 0L)
-                    Contact(
+                    ContactBuilder(
                         id = id,
                         name = cursor.getString(nameIdx) ?: "Unknown",
                         photoUri = cursor.getString(photoIdx),
-                        isFavorite = isStarred,
-                        sourceAccounts = sourceAccountsByContactId[id]?.toList() ?: emptyList(),
+                        isStarred = isStarred,
                         timesContacted = if (timesContactedIdx >= 0) cursor.getInt(timesContactedIdx) else 0,
                         lastTimeContacted = if (lastContactedIdx >= 0) cursor.getLong(lastContactedIdx) else 0L,
                         dateAdded = dateAddedVal
                     )
                 }
 
-                when {
-                    mimeType == ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
-                        val type = cursor.getInt(data2Idx)
-                        val label = cursor.getString(data3Idx)
-                        val phone = ContactPhone(data1, type, label)
-                        contactsMap[id] = contact.copy(
-                            phoneNumbers = (contact.phoneNumbers + data1).distinct(),
-                            phones = (contact.phones + phone).distinctBy { it.number }
-                        )
-                    }
-                    mimeType == ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
-                        contactsMap[id] = contact.copy(emails = (contact.emails + data1).distinct())
-                    }
-                    mimeType == ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
-                        contactsMap[id] = contact.copy(addresses = (contact.addresses + data1).distinct())
-                    }
-                    mimeType == ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
-                        val type = cursor.getInt(data2Idx)
-                        val label = cursor.getString(data3Idx)
-                        val event = ContactEvent(type, label, data1)
-                        contactsMap[id] = contact.copy(events = (contact.events + event).distinct())
-                    }
-                    mimeType == ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
-                        if (data1.isNotBlank()) {
-                            val existingNote = contact.note
-                            val trimmed = data1.trim()
-                            val parts = existingNote?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-                            val updatedNote = if (parts.contains(trimmed)) existingNote else if (existingNote.isNullOrBlank()) trimmed else "$existingNote\n$trimmed"
-                            contactsMap[id] = contact.copy(note = updatedNote)
+                when (mimeType) {
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
+                        if (builder.seenPhoneNumbers.add(data1)) {
+                            val type = cursor.getInt(data2Idx)
+                            val label = cursor.getString(data3Idx)
+                            builder.phoneNumbers.add(data1)
+                            builder.phones.add(ContactPhone(data1, type, label))
                         }
+                    }
+                    ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
+                        if (builder.seenEmails.add(data1)) {
+                            builder.emails.add(data1)
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
+                        if (builder.seenAddresses.add(data1)) {
+                            builder.addresses.add(data1)
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
+                        if (builder.seenEvents.add(data1)) {
+                            val type = cursor.getInt(data2Idx)
+                            val label = cursor.getString(data3Idx)
+                            builder.events.add(ContactEvent(type, label, data1))
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
+                        builder.addNote(data1)
                     }
                 }
             }
         }
-        return contactsMap.values.toList()
-            .filter { it.phoneNumbers.isNotEmpty() }
-            .sortedBy { it.name }
+        val result = ArrayList<Contact>(buildersMap.size)
+        for (builder in buildersMap.values) {
+            if (builder.phoneNumbers.isNotEmpty()) {
+                result.add(builder.build())
+            }
+        }
+        result.sortBy { it.name }
+        return result
     }
 
     private fun matchesAccountFilter(key: String, accountType: String, accountName: String, enabledKeys: Set<String>): Boolean {

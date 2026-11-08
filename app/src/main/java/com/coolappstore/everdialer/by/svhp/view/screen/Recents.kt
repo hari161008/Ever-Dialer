@@ -243,7 +243,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         }
         if (permState.status == PermissionStatus.Granted) {
             val isNewCallLogs = prefs.getBoolean(PreferenceManager.KEY_NEW_CALL_LOGS_LOGIC, false)
-            val isNewContacts = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, false)
+            val isNewContacts = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, true)
             if (isNewCallLogs) {
                 callLogViewModel.refreshIfStale()
             } else {
@@ -265,7 +265,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 val isNewCallLogs = prefs.getBoolean(PreferenceManager.KEY_NEW_CALL_LOGS_LOGIC, false)
-                val isNewContacts = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, false)
+                val isNewContacts = prefs.getBoolean(PreferenceManager.KEY_NEW_CONTACTS_LOGIC, true)
                 if (isNewCallLogs) {
                     callLogViewModel.refreshIfStale()
                 } else {
@@ -908,15 +908,23 @@ fun CallLogFullContent(
             )
         }
 
-        // Bug fix: a new call (e.g. the first call of a new day, when the last entry in the list
-        // was from yesterday) gets correctly prepended to the top of `logs` the moment it's
-        // detected, but the LazyColumn's scroll position doesn't move on its own — if the user
-        // was sitting at/near the top already, the new "Today" section is inserted *above* the
-        // current viewport and never becomes visible until they manually scroll up, which reads
-        // as "the call log isn't updating". Detect exactly that case (the very top entry's
-        // identity changed) and, only when the user was already near the top of the list, scroll
-        // them to it automatically. If they've scrolled down into older history, leave their
-        // position alone rather than yanking them back up.
+        val currentCallSession by com.coolappstore.everdialer.by.svhp.controller.CallService.currentCallSession.collectAsState()
+        val incomingCallSession by com.coolappstore.everdialer.by.svhp.controller.CallService.incomingCallSession.collectAsState()
+        val inCall = currentCallSession != null || incomingCallSession != null
+        var wasInCall by remember { mutableStateOf(false) }
+
+        LaunchedEffect(inCall) {
+            if (inCall) {
+                wasInCall = true
+            } else if (wasInCall) {
+                wasInCall = false
+                // When a call ends / hangs up, scroll to top so the user immediately sees today's updated call list
+                listState.scrollToItem(0)
+            }
+        }
+
+        // When a new call appears at the top of the call log (e.g. after calling someone from yesterday or earlier history),
+        // automatically scroll to the top to show the new call entry without requiring manual scrolling.
         val topEntryKey = remember(groupedLogs) {
             groupedLogs.entries.firstOrNull()?.value?.firstOrNull()?.let { "${it.number}_${it.date}" }
         }
@@ -924,11 +932,7 @@ fun CallLogFullContent(
         LaunchedEffect(topEntryKey) {
             val previous = lastKnownTopEntryKey
             lastKnownTopEntryKey = topEntryKey
-            if (previous != null && topEntryKey != null && topEntryKey != previous &&
-                listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0 &&
-                !listState.isScrollInProgress
-            ) {
+            if (previous != null && topEntryKey != null && topEntryKey != previous) {
                 listState.animateScrollToItem(0)
             }
         }
