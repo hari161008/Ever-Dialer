@@ -76,7 +76,7 @@ android {
             dimension "distribution"
             applicationId "com.everlasting.projects.by.svhp.play"
             targetSdk = 36
-            versionCode = 18
+            versionCode = 19
         }
     }
 
