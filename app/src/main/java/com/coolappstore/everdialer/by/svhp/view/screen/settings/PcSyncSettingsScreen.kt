@@ -88,11 +88,6 @@ fun PcSyncSettingsScreen(navigator: DestinationsNavigator, highlightKey: String?
             )
         }
     }
-
-    val syncStatus by syncManager.status.collectAsState()
-    val connectedDevice by syncManager.connectedDeviceName.collectAsState()
-    val lastSyncTime by syncManager.lastSyncTimestamp.collectAsState()
-
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -195,104 +190,6 @@ fun PcSyncSettingsScreen(navigator: DestinationsNavigator, highlightKey: String?
                             modifier = Modifier.padding(top = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Status Banner
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    val (icon, tint, label) = when (syncStatus) {
-                                        PcSyncStatus.CONNECTED -> Triple(
-                                            Icons.Outlined.BluetoothConnected,
-                                            Color(0xFF4CAF50),
-                                            "Connected to ${connectedDevice ?: "Ever Dialer PC"}"
-                                        )
-                                        PcSyncStatus.SYNCING -> Triple(
-                                            Icons.Outlined.Sync,
-                                            Color(0xFFFF9800),
-                                            "Syncing data with PC..."
-                                        )
-                                        PcSyncStatus.CONNECTING -> Triple(
-                                            Icons.Outlined.BluetoothSearching,
-                                            Color(0xFF2196F3),
-                                            "Connecting to Ever Dialer PC..."
-                                        )
-                                        PcSyncStatus.ERROR -> Triple(
-                                            Icons.Outlined.ErrorOutline,
-                                            Color(0xFFE53935),
-                                            if (!hasPermission) "Missing Bluetooth permission" else "Bluetooth error"
-                                        )
-                                        else -> Triple(
-                                            Icons.Outlined.BluetoothSearching,
-                                            MaterialTheme.colorScheme.outline,
-                                            "Waiting for Ever Dialer PC..."
-                                        )
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(tint.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = null,
-                                            tint = tint,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = label,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        if (lastSyncTime != null) {
-                                            val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(lastSyncTime!!))
-                                            Text(
-                                                text = "Last synced at $timeStr",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Manual Sync Button
-                            FilledTonalButton(
-                                onClick = {
-                                    if (!hasPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                        permissionLauncher.launch(
-                                            arrayOf(
-                                                Manifest.permission.BLUETOOTH_CONNECT,
-                                                Manifest.permission.BLUETOOTH_SCAN
-                                            )
-                                        )
-                                    } else {
-                                        syncManager.triggerSyncNow()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Sync,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Sync Now")
-                            }
-
                             // Notification Container
                             RivoExpressiveCard {
                                 RivoSwitchListItem(

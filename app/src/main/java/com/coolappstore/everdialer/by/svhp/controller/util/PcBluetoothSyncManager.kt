@@ -91,6 +91,8 @@ class PcBluetoothSyncManager(
     private var activeSocket: BluetoothSocket? = null
     @Volatile
     private var activeWriter: BufferedWriter? = null
+    @Volatile
+    private var lastKnownContactSyncTimestamp: Long = 0L
 
     init {
         NoteManager.onNotesChanged = {
@@ -360,23 +362,50 @@ class PcBluetoothSyncManager(
         }
     }
 
-    private fun computeStateFingerprint(): String {
-        val sb = StringBuilder()
-        // 1. Call log
-        try {
+    private fun computeCallLogFingerprint(): String {
+        return try {
             context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
                 arrayOf(CallLog.Calls._ID, CallLog.Calls.DATE),
                 null, null,
                 "${CallLog.Calls.DATE} DESC LIMIT 1"
             )?.use { c ->
+                if (c.moveToFirst()) "${c.getLong(0)}-${c.getLong(1)}" else "empty"
+            } ?: "none"
+        } catch (_: Exception) { "error" }
+    }
+
+    private fun computeSmsFingerprint(): String {
+        val sb = StringBuilder()
+        try {
+            context.contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(Telephony.Sms._ID, Telephony.Sms.DATE, Telephony.Sms.READ),
+                null, null,
+                "${Telephony.Sms._ID} DESC LIMIT 1"
+            )?.use { c ->
                 if (c.moveToFirst()) {
-                    sb.append("calls:").append(c.getLong(0)).append("-").append(c.getLong(1)).append(";")
+                    sb.append(c.getLong(0)).append("-").append(c.getLong(1)).append("-").append(c.getInt(2)).append(";")
                 }
             }
         } catch (_: Exception) {}
+        try {
+            context.contentResolver.query(
+                Uri.parse("content://mms-sms/conversations"),
+                arrayOf("date", "snippet"),
+                null, null,
+                "date DESC LIMIT 1"
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    sb.append(c.getLong(0)).append("-").append(c.getString(1)?.hashCode() ?: 0)
+                }
+            }
+        } catch (_: Exception) {}
+        return sb.toString()
+    }
 
-        // 2. Contacts
+    private fun computeContactsFingerprint(): String {
+        val sb = StringBuilder()
         try {
             context.contentResolver.query(
                 ContactsContract.Contacts.CONTENT_URI,
@@ -399,8 +428,6 @@ class PcBluetoothSyncManager(
                 }
             }
         } catch (_: Exception) {}
-
-        // Total contacts count
         try {
             context.contentResolver.query(
                 ContactsContract.Contacts.CONTENT_URI,
@@ -410,8 +437,6 @@ class PcBluetoothSyncManager(
                 sb.append("cnt:").append(c.count).append(";")
             }
         } catch (_: Exception) {}
-
-        // Starred contacts count
         try {
             context.contentResolver.query(
                 ContactsContract.Contacts.CONTENT_URI,
@@ -419,59 +444,36 @@ class PcBluetoothSyncManager(
                 "${ContactsContract.Contacts.STARRED} = 1",
                 null, null
             )?.use { c ->
-                sb.append("fav:").append(c.count).append(";")
+                sb.append("fav:").append(c.count)
             }
         } catch (_: Exception) {}
+        return sb.toString()
+    }
 
-        // 3. SMS (query by highest _ID and DATE, and conversation snippet/date)
-        try {
-            context.contentResolver.query(
-                Telephony.Sms.CONTENT_URI,
-                arrayOf(Telephony.Sms._ID, Telephony.Sms.DATE, Telephony.Sms.READ),
-                null, null,
-                "${Telephony.Sms._ID} DESC LIMIT 1"
-            )?.use { c ->
-                if (c.moveToFirst()) {
-                    sb.append("sms:").append(c.getLong(0)).append("-").append(c.getLong(1)).append("-").append(c.getInt(2)).append(";")
-                }
-            }
-        } catch (_: Exception) {}
-
-        try {
-            context.contentResolver.query(
-                Uri.parse("content://mms-sms/conversations"),
-                arrayOf("date", "snippet"),
-                null, null,
-                "date DESC LIMIT 1"
-            )?.use { c ->
-                if (c.moveToFirst()) {
-                    val d = c.getLong(0)
-                    val s = c.getString(1)?.hashCode() ?: 0
-                    sb.append("mms_conv:").append(d).append("-").append(s).append(";")
-                }
-            }
-        } catch (_: Exception) {}
-
-        // 4. Notes
-        try {
+    private fun computeNotesFingerprint(): String {
+        return try {
             val notes = NoteManager.getNotesDir(context).listFiles() ?: emptyArray()
             val maxMod = notes.maxOfOrNull { it.lastModified() } ?: 0L
-            sb.append("notes:").append(notes.size).append("-").append(maxMod)
-        } catch (_: Exception) {}
+            "${notes.size}-$maxMod"
+        } catch (_: Exception) { "none" }
+    }
 
-        // 5. Settings that affect PC
-        sb.append(";confirm_call:").append(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
-        sb.append(";pin_msg:").append(prefs.getString(PreferenceManager.KEY_PINNED_SMS_MESSAGES, ""))
-        sb.append(";star_msg:").append(prefs.getString(PreferenceManager.KEY_STARRED_SMS_MESSAGES, ""))
-        sb.append(";pin_thr:").append(prefs.getString(PreferenceManager.KEY_PINNED_SMS_THREADS, ""))
-
+    private fun computeSettingsFingerprint(): String {
+        val sb = StringBuilder()
+        sb.append(prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false))
+        sb.append(";").append(prefs.getString(PreferenceManager.KEY_PINNED_SMS_MESSAGES, ""))
+        sb.append(";").append(prefs.getString(PreferenceManager.KEY_STARRED_SMS_MESSAGES, ""))
+        sb.append(";").append(prefs.getString(PreferenceManager.KEY_PINNED_SMS_THREADS, ""))
         try {
             val cg = prefs.getContactGroups()
             val hiddenCg = prefs.getHiddenContactGroupIds()
             sb.append(";cgroups:").append(cg.size).append("-").append(hiddenCg.size)
         } catch (_: Exception) {}
-
         return sb.toString()
+    }
+
+    private fun computeStateFingerprint(): String {
+        return "${computeCallLogFingerprint()}|${computeContactsFingerprint()}|${computeSmsFingerprint()}|${computeNotesFingerprint()}|${computeSettingsFingerprint()}"
     }
 
     private suspend fun handleConnection(socket: BluetoothSocket, deviceName: String) {
@@ -484,33 +486,48 @@ class PcBluetoothSyncManager(
 
         val reader = BufferedReader(InputStreamReader(socket.inputStream, Charsets.UTF_8))
 
-        var lastFingerprint = computeStateFingerprint()
+        var lastCallsFp = computeCallLogFingerprint()
+        var lastSmsFp = computeSmsFingerprint()
+        var lastContactsFp = computeContactsFingerprint()
+        var lastNotesFp = computeNotesFingerprint()
+        var lastSettingsFp = computeSettingsFingerprint()
+        lastKnownContactSyncTimestamp = System.currentTimeMillis()
 
-        // 1. Send full sync data immediately upon connection
-        sendSyncData(writer)
+        // 1. Send initial settings, calls, sms, notes immediately upon connection
+        sendSettings(writer)
+        sendCallLogs(writer)
+        sendSms(writer)
+        sendNotes(writer)
 
         // 2. Set up ContentObserver for real-time changes (calls, contacts, SMS)
         val contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             private var lastTrigger = 0L
-            override fun onChange(selfChange: Boolean) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
                 val now = System.currentTimeMillis()
                 if (now - lastTrigger > 50) {
                     lastTrigger = now
                     scope.launch(Dispatchers.IO) {
-                        var newFp = computeStateFingerprint()
-                        if (newFp == lastFingerprint) {
-                            delay(150)
-                            newFp = computeStateFingerprint()
+                        delay(100)
+                        val newCallsFp = computeCallLogFingerprint()
+                        if (newCallsFp != lastCallsFp) {
+                            lastCallsFp = newCallsFp
+                            Log.i(TAG, "ContentObserver: Call log change detected, syncing calls...")
+                            sendCallLogs(writer)
                         }
-                        if (newFp == lastFingerprint) {
-                            delay(350)
-                            newFp = computeStateFingerprint()
+
+                        val newSmsFp = computeSmsFingerprint()
+                        if (newSmsFp != lastSmsFp) {
+                            lastSmsFp = newSmsFp
+                            Log.i(TAG, "ContentObserver: SMS change detected, syncing sms...")
+                            sendSms(writer)
                         }
-                        if (newFp != lastFingerprint) {
-                            Log.i(TAG, "ContentObserver: data change detected on phone, syncing to PC...")
-                            lastFingerprint = newFp
-                            photoCache.clear()
-                            sendSyncData(writer)
+
+                        val newContactsFp = computeContactsFingerprint()
+                        if (newContactsFp != lastContactsFp) {
+                            lastContactsFp = newContactsFp
+                            Log.i(TAG, "ContentObserver: Contact change detected, syncing contacts delta...")
+                            sendContactsDelta(writer, lastKnownContactSyncTimestamp)
+                            lastKnownContactSyncTimestamp = System.currentTimeMillis()
                         }
                     }
                 }
@@ -529,8 +546,11 @@ class PcBluetoothSyncManager(
 
         val smsReceiver = object : BroadcastReceiver() {
             override fun onReceive(pContext: Context?, intent: Intent?) {
-                Log.i(TAG, "Dynamic SMS broadcast received (${intent?.action}), triggering sync...")
-                triggerImmediateSync()
+                Log.i(TAG, "Dynamic SMS broadcast received (${intent?.action}), syncing sms...")
+                scope.launch(Dispatchers.IO) {
+                    val w = activeWriter ?: return@launch
+                    sendSms(w)
+                }
             }
         }
         val statusReceiver = object : BroadcastReceiver() {
@@ -567,13 +587,21 @@ class PcBluetoothSyncManager(
             while (isActive && socket.isConnected) {
                 delay(800)
                 if (!socket.isConnected) break
-                val newFp = computeStateFingerprint()
-                if (newFp != lastFingerprint) {
-                    Log.i(TAG, "Periodic check detected data change on phone: syncing to PC...")
-                    lastFingerprint = newFp
-                    photoCache.clear()
-                    sendSyncData(writer)
+
+                val newNotesFp = computeNotesFingerprint()
+                if (newNotesFp != lastNotesFp) {
+                    lastNotesFp = newNotesFp
+                    Log.i(TAG, "Periodic check: Note change detected, syncing notes...")
+                    sendNotes(writer)
                 }
+
+                val newSettingsFp = computeSettingsFingerprint()
+                if (newSettingsFp != lastSettingsFp) {
+                    lastSettingsFp = newSettingsFp
+                    Log.i(TAG, "Periodic check: Settings change detected, syncing settings...")
+                    sendSettings(writer)
+                }
+
                 ticks++
                 if (ticks % 4 == 0) { // Every ~3.2 seconds check if telemetry (battery, wifi, signal) changed
                     val telem = getDeviceTelemetry()
@@ -599,9 +627,32 @@ class PcBluetoothSyncManager(
                     val cmd = cmdObj.optString("cmd")
                     when (cmd) {
                         "request_sync" -> {
-                            photoCache.clear()
-                            lastFingerprint = computeStateFingerprint()
-                            sendSyncData(writer)
+                            val since = cmdObj.optLong("since", 0L)
+                            sendSettings(writer)
+                            sendCallLogs(writer)
+                            sendSms(writer)
+                            sendNotes(writer)
+                            if (since > 0L) {
+                                sendContactsDelta(writer, since)
+                            } else {
+                                sendContactsFull(writer)
+                            }
+                            lastKnownContactSyncTimestamp = System.currentTimeMillis()
+                        }
+                        "request_contacts" -> {
+                            val since = cmdObj.optLong("since", 0L)
+                            if (since > 0L) {
+                                sendContactsDelta(writer, since)
+                            } else {
+                                sendContactsFull(writer)
+                            }
+                            lastKnownContactSyncTimestamp = System.currentTimeMillis()
+                        }
+                        "get_contact_photo" -> {
+                            val contactId = cmdObj.optString("contactId")
+                            if (contactId.isNotBlank()) {
+                                sendContactPhoto(writer, contactId)
+                            }
                         }
                         "request_telemetry" -> {
                             sendTelemetry(writer)
@@ -636,13 +687,28 @@ class PcBluetoothSyncManager(
                                 withContext(Dispatchers.Main) {
                                     val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
                                     val accounts = try { telecomManager?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
-                                    val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, 1)
-                                    val effectiveSim = if (requestedSimSlot in 1..2) requestedSimSlot else defaultSim
                                     val handle = if (accounts.isNotEmpty()) {
-                                        getPhoneAccountForSimSlot(context, accounts, if (effectiveSim == 2) 1 else 0)
+                                        if (requestedSimSlot in 1..2) {
+                                            getPhoneAccountForSimSlot(context, accounts, requestedSimSlot - 1)
+                                        } else {
+                                            val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
+                                            when (defaultSim) {
+                                                1 -> getPhoneAccountForSimSlot(context, accounts, 0)
+                                                2 -> getPhoneAccountForSimSlot(context, accounts, 1)
+                                                else -> getPhoneAccountForSimSlot(context, accounts, 0)
+                                            }
+                                        }
                                     } else null
                                     makeCall(context, number, accountHandle = handle, skipConfirm = true)
                                 }
+                            }
+                        }
+                        "set_contact_sim_choice" -> {
+                            val contactKey = cmdObj.optString("contactKey").ifBlank { cmdObj.optString("contactId") }.ifBlank { cmdObj.optString("number") }
+                            val choice = cmdObj.optString("choice")
+                            Log.i(TAG, "Executing set_contact_sim_choice for $contactKey -> $choice")
+                            if (contactKey.isNotBlank() && choice.isNotBlank()) {
+                                prefs.setContactSimChoice(contactKey, choice)
                             }
                         }
                         "send_sms" -> {
@@ -652,8 +718,8 @@ class PcBluetoothSyncManager(
                             if (phone.isNotBlank() && text.isNotBlank()) {
                                 val success = smsRepository.sendSms(phone, text)
                                 Log.i(TAG, "send_sms result: $success")
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "toggle_favorite" -> {
@@ -674,8 +740,9 @@ class PcBluetoothSyncManager(
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error toggling favorite for $contactId: ${e.message}")
                                 }
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastContactsFp = computeContactsFingerprint()
+                                sendContactsDelta(writer, lastKnownContactSyncTimestamp - 10000)
+                                lastKnownContactSyncTimestamp = System.currentTimeMillis()
                             }
                         }
                         "add_contact" -> {
@@ -709,8 +776,9 @@ class PcBluetoothSyncManager(
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error adding contact: ${e.message}")
                                 }
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastContactsFp = computeContactsFingerprint()
+                                sendContactsDelta(writer, lastKnownContactSyncTimestamp - 10000)
+                                lastKnownContactSyncTimestamp = System.currentTimeMillis()
                             }
                         }
                         "delete_call_log" -> {
@@ -734,8 +802,8 @@ class PcBluetoothSyncManager(
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error deleting call log: ${e.message}")
                             }
-                            lastFingerprint = computeStateFingerprint()
-                            sendSyncData(writer)
+                            lastCallsFp = computeCallLogFingerprint()
+                            sendCallLogs(writer)
                         }
                         "delete_sms_thread" -> {
                             val threadIdStr = cmdObj.optString("threadId")
@@ -743,8 +811,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing delete_sms_thread threadId=$threadId")
                             if (threadId != null && threadId > 0) {
                                 smsRepository.deleteThread(threadId)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "mark_sms_read" -> {
@@ -753,8 +821,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing mark_sms_read threadId=$threadId")
                             if (threadId != null && threadId > 0) {
                                 smsRepository.markThreadAsRead(threadId)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "pin_sms_thread" -> {
@@ -764,8 +832,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing pin_sms_thread threadId=$threadId pinned=$pinned")
                             if (threadId != null) {
                                 prefs.setSmsThreadPinned(threadId, pinned)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "pin_sms_message" -> {
@@ -775,8 +843,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing pin_sms_message messageId=$messageId pinned=$pinned")
                             if (messageId != null) {
                                 prefs.setSmsMessagePinned(messageId, pinned)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "star_sms_message" -> {
@@ -786,8 +854,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing star_sms_message messageId=$messageId starred=$starred")
                             if (messageId != null) {
                                 prefs.setSmsMessageStarred(messageId, starred)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "delete_sms_message" -> {
@@ -797,8 +865,8 @@ class PcBluetoothSyncManager(
                             Log.i(TAG, "Executing delete_sms_message messageId=$messageId isMms=$isMms")
                             if (messageId != null) {
                                 smsRepository.deleteMessage(messageId, isMms)
-                                lastFingerprint = computeStateFingerprint()
-                                sendSyncData(writer)
+                                lastSmsFp = computeSmsFingerprint()
+                                sendSms(writer)
                             }
                         }
                         "block_number" -> {
@@ -812,8 +880,8 @@ class PcBluetoothSyncManager(
                             val title = cmdObj.optString("title", "Untitled Note")
                             val content = cmdObj.optString("content", "")
                             NoteManager.writeNote(context, title, "", content)
-                            lastFingerprint = computeStateFingerprint()
-                            sendSyncData(writer)
+                            lastNotesFp = computeNotesFingerprint()
+                            sendNotes(writer)
                         }
                         "edit_note" -> {
                             val id = cmdObj.optString("id")
@@ -831,8 +899,8 @@ class PcBluetoothSyncManager(
                             } else {
                                 NoteManager.writeNote(context, title, "", content)
                             }
-                            lastFingerprint = computeStateFingerprint()
-                            sendSyncData(writer)
+                            lastNotesFp = computeNotesFingerprint()
+                            sendNotes(writer)
                         }
                         "delete_note" -> {
                             val id = cmdObj.optString("id", "")
@@ -843,8 +911,8 @@ class PcBluetoothSyncManager(
                                     NoteManager.deleteNoteFile(file)
                                 }
                             }
-                            lastFingerprint = computeStateFingerprint()
-                            sendSyncData(writer)
+                            lastNotesFp = computeNotesFingerprint()
+                            sendNotes(writer)
                         }
                     }
                 } catch (e: Exception) {
@@ -906,334 +974,523 @@ class PcBluetoothSyncManager(
         }
     }
 
+    private fun writePacket(writer: BufferedWriter, type: String, payload: Any) {
+        try {
+            synchronized(writer) {
+                val root = JSONObject().apply {
+                    put("type", type)
+                    put("payload", payload)
+                }
+                writer.write(root.toString())
+                writer.write("\n")
+                writer.flush()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error writing packet $type: ${e.message}")
+        }
+    }
+
+    private fun serializeContact(c: com.coolappstore.everdialer.by.svhp.modal.data.Contact, includePhoto: Boolean): JSONObject {
+        val phone = c.phones.firstOrNull()?.number ?: c.phoneNumbers.firstOrNull() ?: ""
+        val syncContactPfp = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, true)
+        val pfpBase64 = if (syncContactPfp && includePhoto) loadPhotoBase64(context, c.photoUri) else null
+
+        val phonesJson = JSONArray()
+        if (c.phones.isNotEmpty()) {
+            for (p in c.phones) {
+                phonesJson.put(JSONObject().apply {
+                    put("number", p.number)
+                    put("type", p.type)
+                    put("label", getPhoneTypeLabel(p.type, p.label))
+                })
+            }
+        } else {
+            for (num in c.phoneNumbers) {
+                phonesJson.put(JSONObject().apply {
+                    put("number", num)
+                    put("type", 2)
+                    put("label", "Mobile")
+                })
+            }
+        }
+
+        val emailsJson = JSONArray()
+        for (e in c.emails) emailsJson.put(e)
+
+        val addressesJson = JSONArray()
+        for (a in c.addresses) addressesJson.put(a)
+
+        val accountsJson = JSONArray()
+        for (acc in c.sourceAccounts) accountsJson.put(acc)
+
+        return JSONObject().apply {
+            put("id", c.id)
+            put("name", c.name.ifBlank { phone })
+            put("phone", phone)
+            put("isFavorite", c.isFavorite)
+            put("hasPhoto", !c.photoUri.isNullOrBlank())
+            put("account", c.sourceAccounts.firstOrNull() ?: "Phone")
+            put("simChoice", prefs.getContactSimChoice(c.id, phone))
+            if (pfpBase64 != null) {
+                put("photoBase64", pfpBase64)
+            }
+            put("phones", phonesJson)
+            put("emails", emailsJson)
+            put("addresses", addressesJson)
+            put("accounts", accountsJson)
+            if (!c.note.isNullOrBlank()) {
+                put("note", c.note)
+            }
+        }
+    }
+
+    private fun serializeContactGroups(): JSONArray {
+        val contactGroupsArray = JSONArray()
+        try {
+            val rawLocalGroups = prefs.getContactGroups()
+            val sysGroups = runCatching { contactsRepository.getSystemContactGroups() }.getOrDefault(emptyList())
+            val localGroupMap = rawLocalGroups.associateBy { it.id }.toMutableMap()
+            for (sg in sysGroups) {
+                val name = sg.name.trim()
+                if (name.isBlank() || name.startsWith("System Group:", ignoreCase = true) ||
+                    name.equals("Starred in Android", ignoreCase = true) || name.equals("My Contacts", ignoreCase = true)) {
+                    continue
+                }
+                val existing = localGroupMap[sg.id]
+                if (existing == null) {
+                    localGroupMap[sg.id] = sg
+                } else {
+                    localGroupMap[sg.id] = existing.copy(
+                        accountType = sg.accountType ?: existing.accountType,
+                        accountName = sg.accountName ?: existing.accountName,
+                        targetLabel = sg.targetLabel ?: existing.targetLabel,
+                        contactIds = if (existing.contactIds.isEmpty() && sg.contactIds.isNotEmpty()) sg.contactIds else existing.contactIds
+                    )
+                }
+            }
+            val allGroups = localGroupMap.values.filter { it.name.isNotBlank() }
+            val hiddenGroupIds = prefs.getHiddenContactGroupIds()
+            for (g in allGroups) {
+                if (g.id in hiddenGroupIds) continue
+                val gObj = JSONObject().apply {
+                    put("id", g.id)
+                    put("name", g.name)
+                    val ids = JSONArray()
+                    for (id in g.contactIds) ids.put(id)
+                    put("contactIds", ids)
+                    if (g.accountType != null) put("accountType", g.accountType)
+                    if (g.accountName != null) put("accountName", g.accountName)
+                }
+                contactGroupsArray.put(gObj)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error serializing contact groups: ${e.message}")
+        }
+        return contactGroupsArray
+    }
+
+    private fun serializeCallLogs(): JSONArray {
+        val callLogsArray = JSONArray()
+        val realLogs = try {
+            callLogRepository.getCallLogs(limit = 50).take(50)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching call logs: ${e.message}")
+            emptyList()
+        }
+
+        for (log in realLogs) {
+            val lObj = JSONObject().apply {
+                put("id", "${log.number}_${log.date}")
+                put("name", log.name ?: log.number)
+                put("number", log.number)
+                put("type", when (log.type) {
+                    android.provider.CallLog.Calls.OUTGOING_TYPE -> "outgoing"
+                    android.provider.CallLog.Calls.MISSED_TYPE -> "missed"
+                    else -> "incoming"
+                })
+                put("timestamp", log.date)
+                put("duration", log.duration)
+                put("simSlot", log.simSlot)
+                put("count", log.count)
+            }
+            callLogsArray.put(lObj)
+        }
+        return callLogsArray
+    }
+
+    private suspend fun serializeSms(): JSONObject {
+        val smsArray = JSONArray()
+        val convs = try {
+            smsRepository.getConversations().take(30)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching SMS conversations: ${e.message}")
+            emptyList()
+        }
+
+        for (conv in convs) {
+            val msgs = try {
+                smsRepository.getMessagesForThread(conv.threadId).takeLast(25)
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val msgsArray = JSONArray()
+            for (m in msgs) {
+                val mObj = JSONObject().apply {
+                    put("id", m.id.toString())
+                    put("body", m.body)
+                    put("timestamp", m.date)
+                    put("isOutgoing", m.isOutgoing)
+                    put("isPinned", prefs.isSmsMessagePinned(m.id))
+                    put("isStarred", prefs.isSmsMessageStarred(m.id))
+                }
+                msgsArray.put(mObj)
+            }
+
+            val tObj = JSONObject().apply {
+                put("id", conv.threadId.toString())
+                put("contactName", conv.contactName ?: conv.address)
+                put("phone", conv.address)
+                put("snippet", conv.snippet)
+                put("timestamp", conv.date)
+                put("unreadCount", conv.unreadCount)
+                put("isPinned", prefs.getPinnedSmsThreads().contains(conv.threadId))
+                put("messages", msgsArray)
+            }
+            smsArray.put(tObj)
+        }
+
+        val starredMsgIds = JSONArray(prefs.getStarredSmsMessages().map { it.toString() })
+        val pinnedMsgIds = JSONArray(prefs.getPinnedSmsMessages().map { it.toString() })
+        val pinnedThreadIds = JSONArray(prefs.getPinnedSmsThreads().map { it.toString() })
+
+        val categories = prefs.getAllSmsCategories()
+        val hiddenCategories = prefs.getHiddenSmsCategories()
+        val smsCategoriesArray = JSONArray()
+        for (c in categories) {
+            val obj = JSONObject().apply {
+                put("id", c.id)
+                put("name", c.name)
+                put("isCustom", c.isCustom)
+                put("isVisible", !hiddenCategories.contains(c.id))
+                val phones = JSONArray()
+                for (p in c.contactPhones) phones.put(p)
+                put("contactPhones", phones)
+            }
+            smsCategoriesArray.put(obj)
+        }
+
+        return JSONObject().apply {
+            put("smsThreads", smsArray)
+            put("starredSmsMessageIds", starredMsgIds)
+            put("pinnedSmsMessageIds", pinnedMsgIds)
+            put("pinnedSmsThreadIds", pinnedThreadIds)
+            put("smsCategories", smsCategoriesArray)
+        }
+    }
+
+    private fun serializeNotes(): JSONArray {
+        val notesArray = JSONArray()
+        val realNotes = try {
+            NoteManager.getAllNotes(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching notes: ${e.message}")
+            emptyList()
+        }
+
+        for (n in realNotes) {
+            val nObj = JSONObject().apply {
+                put("id", n.file.nameWithoutExtension)
+                put("title", if (n.contactName.isNotBlank() && n.contactName != "Unknown") n.contactName else "Note")
+                put("content", n.content)
+                put("timestamp", n.lastModified)
+            }
+            notesArray.put(nObj)
+        }
+        return notesArray
+    }
+
+    private fun serializeSettings(): JSONObject {
+        val syncFavorites = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_FAVOURITES, true)
+        val syncCallLogs = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CALL_LOGS, true)
+        val syncContacts = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACTS, true)
+        val syncSms = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_SMS, true)
+        val syncNotes = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_NOTES, true)
+        val syncContactPfp = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, true)
+        val syncDynamicColors = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_DYNAMIC_COLORS, true)
+        val confirmPlacingCall = prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false)
+        val activeThemeColor = com.coolappstore.everdialer.by.svhp.view.theme.getActiveThemeColor(context, prefs)
+        val themeColorHex = if (syncDynamicColors) String.format("#%06X", 0xFFFFFF and activeThemeColor) else null
+
+        val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault())
+        val useSimFromCallLog = prefs.getBoolean(PreferenceManager.KEY_USE_SIM_FROM_CALL_LOG, false) || defaultSim == 3
+        val lastUsedSimGlobal = prefs.getInt(PreferenceManager.KEY_LAST_USED_SIM_GLOBAL, 0)
+        val sim1ColorInt = prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)
+        val sim2ColorInt = prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)
+        val telecomMgr = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val phoneAccounts = try { telecomMgr?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
+        val activeSimCount = prefs.getActiveSimCount()
+        val simAccounts = try { getOrderedSimAccounts(context, phoneAccounts) } catch (_: Throwable) { emptyList<SimAccountInfo>() }
+        val simCount = maxOf(activeSimCount, simAccounts.size, phoneAccounts.size).coerceAtLeast(1)
+
+        val sim1Account = simAccounts.firstOrNull { it.slotIndex == 0 } ?: simAccounts.getOrNull(0)
+        val sim2Account = simAccounts.firstOrNull { it.slotIndex == 1 } ?: simAccounts.getOrNull(1)
+
+        val sim1Label = sim1Account?.let { it.carrierName ?: it.displayName } ?: "SIM 1"
+        val sim2Label = sim2Account?.let { it.carrierName ?: it.displayName } ?: "SIM 2"
+        val sim1Number = sim1Account?.number
+        val sim2Number = sim2Account?.number
+
+        val enabledFeatures = JSONObject().apply {
+            put("favourites", syncFavorites)
+            put("callLogs", syncCallLogs)
+            put("contacts", syncContacts)
+            put("sms", syncSms)
+            put("notes", syncNotes)
+            put("contactPfp", syncContactPfp)
+            put("dynamicColors", syncDynamicColors)
+            put("confirmPlacingCall", confirmPlacingCall)
+        }
+
+        val callCategories = prefs.getAllCallCategories()
+        val hiddenCallCategories = prefs.getHiddenCallCategories()
+        val callCategoriesArray = JSONArray()
+        for (c in callCategories) {
+            val obj = JSONObject().apply {
+                put("id", c.id)
+                put("name", c.name)
+                put("isCustom", c.isCustom)
+                put("isVisible", !hiddenCallCategories.contains(c.id))
+                val phones = JSONArray()
+                for (p in c.contactPhones) phones.put(p)
+                put("contactPhones", phones)
+            }
+            callCategoriesArray.put(obj)
+        }
+
+        return JSONObject().apply {
+            put("enabledFeatures", enabledFeatures)
+            put("callCategories", callCategoriesArray)
+            put("confirmPlacingCall", confirmPlacingCall)
+            put("themeColor", themeColorHex)
+            put("syncDynamicColors", syncDynamicColors)
+            put("favoritesInList", prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false))
+            put("defaultSim", defaultSim)
+            put("useSimFromCallLog", useSimFromCallLog)
+            put("lastUsedSimGlobal", lastUsedSimGlobal)
+            put("simCount", simCount)
+            put("sim1Color", String.format("#%06X", 0xFFFFFF and sim1ColorInt))
+            put("sim2Color", String.format("#%06X", 0xFFFFFF and sim2ColorInt))
+            put("sim1Label", sim1Label)
+            put("sim2Label", sim2Label)
+            if (!sim1Number.isNullOrBlank()) put("sim1Number", sim1Number)
+            if (!sim2Number.isNullOrBlank()) put("sim2Number", sim2Number)
+            put("deviceName", Build.MODEL)
+            put("telemetry", getDeviceTelemetry())
+            put("timestamp", System.currentTimeMillis())
+        }
+    }
+
+    private fun getUpdatedContactIds(sinceTimestamp: Long): Set<String> {
+        val ids = HashSet<String>()
+        try {
+            context.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                arrayOf(ContactsContract.Contacts._ID),
+                "${ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP} > ?",
+                arrayOf(sinceTimestamp.toString()),
+                null
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.Contacts._ID)
+                while (cursor.moveToNext()) {
+                    cursor.getString(idIdx)?.let { ids.add(it) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error querying updated contacts: ${e.message}")
+        }
+        return ids
+    }
+
+    private fun getDeletedContactIds(sinceTimestamp: Long): List<String> {
+        val deleted = ArrayList<String>()
+        try {
+            context.contentResolver.query(
+                ContactsContract.DeletedContacts.CONTENT_URI,
+                arrayOf(ContactsContract.DeletedContacts.CONTACT_ID),
+                "${ContactsContract.DeletedContacts.CONTACT_DELETED_TIMESTAMP} > ?",
+                arrayOf(sinceTimestamp.toString()),
+                null
+            )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.DeletedContacts.CONTACT_ID)
+                while (cursor.moveToNext()) {
+                    cursor.getString(idIdx)?.let { deleted.add(it) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "DeletedContacts note: ${e.message}")
+        }
+        return deleted
+    }
+
+    suspend fun sendCallLogs(writer: BufferedWriter) = withContext(Dispatchers.IO) {
+        try {
+            if (prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CALL_LOGS, true)) {
+                writePacket(writer, "sync_calls", serializeCallLogs())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendCallLogs: ${e.message}")
+        }
+    }
+
+    suspend fun sendSms(writer: BufferedWriter) = withContext(Dispatchers.IO) {
+        try {
+            if (prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_SMS, true)) {
+                writePacket(writer, "sync_sms", serializeSms())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendSms: ${e.message}")
+        }
+    }
+
+    suspend fun sendNotes(writer: BufferedWriter) = withContext(Dispatchers.IO) {
+        try {
+            if (prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_NOTES, true)) {
+                writePacket(writer, "sync_notes", serializeNotes())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendNotes: ${e.message}")
+        }
+    }
+
+    suspend fun sendSettings(writer: BufferedWriter) = withContext(Dispatchers.IO) {
+        try {
+            writePacket(writer, "sync_settings", serializeSettings())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendSettings: ${e.message}")
+        }
+    }
+
+    suspend fun sendContactPhoto(writer: BufferedWriter, contactId: String) = withContext(Dispatchers.IO) {
+        try {
+            val c = contactsRepository.getContactById(contactId)
+            val syncContactPfp = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, true)
+            val pfpBase64 = if (syncContactPfp && c != null) loadPhotoBase64(context, c.photoUri) else null
+
+            val obj = JSONObject().apply {
+                put("contactId", contactId)
+                if (pfpBase64 != null) {
+                    put("photoBase64", pfpBase64)
+                }
+            }
+            writePacket(writer, "contact_photo", obj)
+            Log.i(TAG, "Sent on-demand photo for contactId=$contactId (hasPhoto=${pfpBase64 != null})")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending contact photo for $contactId: ${e.message}")
+        }
+    }
+
+    suspend fun sendContactsFull(writer: BufferedWriter, chunkSize: Int = 200) = withContext(Dispatchers.IO) {
+        try {
+            val syncFavorites = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_FAVOURITES, true)
+            val syncContacts = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACTS, true)
+            if (!syncContacts && !syncFavorites) return@withContext
+
+            val realContacts = try {
+                contactsRepository.getContacts()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching contacts: ${e.message}")
+                emptyList()
+            }
+
+            val filtered = if (syncContacts) realContacts else realContacts.filter { it.isFavorite }
+            val syncTimestamp = System.currentTimeMillis()
+            val contactGroups = serializeContactGroups()
+
+            if (filtered.isEmpty()) {
+                val chunkObj = JSONObject().apply {
+                    put("chunkIndex", 0)
+                    put("totalChunks", 1)
+                    put("contacts", JSONArray())
+                    put("contactGroups", contactGroups)
+                    put("timestamp", syncTimestamp)
+                }
+                writePacket(writer, "sync_contacts_chunk", chunkObj)
+                return@withContext
+            }
+
+            val chunks = filtered.chunked(chunkSize)
+            for ((idx, chunk) in chunks.withIndex()) {
+                val contactsArr = JSONArray()
+                for (c in chunk) {
+                    contactsArr.put(serializeContact(c, includePhoto = c.isFavorite))
+                }
+                val chunkObj = JSONObject().apply {
+                    put("chunkIndex", idx)
+                    put("totalChunks", chunks.size)
+                    put("contacts", contactsArr)
+                    if (idx == 0) {
+                        put("contactGroups", contactGroups)
+                    }
+                    put("timestamp", syncTimestamp)
+                }
+                writePacket(writer, "sync_contacts_chunk", chunkObj)
+            }
+            Log.i(TAG, "Sent ${filtered.size} contacts across ${chunks.size} chunks")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendContactsFull: ${e.message}")
+        }
+    }
+
+    suspend fun sendContactsDelta(writer: BufferedWriter, sinceTimestamp: Long) = withContext(Dispatchers.IO) {
+        try {
+            val syncFavorites = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_FAVOURITES, true)
+            val syncContacts = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACTS, true)
+            if (!syncContacts && !syncFavorites) return@withContext
+
+            if (sinceTimestamp <= 0L) {
+                sendContactsFull(writer)
+                return@withContext
+            }
+
+            val updatedIds = getUpdatedContactIds(sinceTimestamp)
+            val deletedIds = getDeletedContactIds(sinceTimestamp)
+            val syncTimestamp = System.currentTimeMillis()
+            val contactGroups = serializeContactGroups()
+
+            val upsertedArray = JSONArray()
+            for (id in updatedIds) {
+                val c = contactsRepository.getContactById(id) ?: continue
+                if (!syncContacts && !c.isFavorite) continue
+                upsertedArray.put(serializeContact(c, includePhoto = c.isFavorite))
+            }
+
+            val deletedArray = JSONArray(deletedIds)
+            val deltaObj = JSONObject().apply {
+                put("timestamp", syncTimestamp)
+                put("upserted", upsertedArray)
+                put("deletedIds", deletedArray)
+                put("contactGroups", contactGroups)
+            }
+            writePacket(writer, "sync_contacts_delta", deltaObj)
+            Log.i(TAG, "Sent contacts delta: ${upsertedArray.length()} upserted, ${deletedArray.length()} deleted")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in sendContactsDelta: ${e.message}")
+        }
+    }
+
     private suspend fun sendSyncData(writer: BufferedWriter) = withContext(Dispatchers.IO) {
         try {
             _status.value = PcSyncStatus.SYNCING
-
-            val syncFavorites = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_FAVOURITES, true)
-            val syncCallLogs = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CALL_LOGS, true)
-            val syncContacts = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACTS, true)
-            val syncSms = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_SMS, true)
-            val syncNotes = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_NOTES, true)
-            val syncContactPfp = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_CONTACT_PFP, true)
-
-            // 1. Real Contacts (Only saved contacts from phone)
-            val contactsArray = JSONArray()
-            if (syncContacts || syncFavorites) {
-                val realContacts = try {
-                    contactsRepository.getContacts()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching contacts: ${e.message}")
-                    emptyList()
-                }
-
-                val filtered = if (syncContacts) {
-                    realContacts
-                } else {
-                    realContacts.filter { it.isFavorite }
-                }
-
-                for (c in filtered) {
-                    val phone = c.phones.firstOrNull()?.number ?: c.phoneNumbers.firstOrNull() ?: ""
-                    val pfpBase64 = if (syncContactPfp) loadPhotoBase64(context, c.photoUri) else null
-
-                    val phonesJson = JSONArray()
-                    if (c.phones.isNotEmpty()) {
-                        for (p in c.phones) {
-                            phonesJson.put(JSONObject().apply {
-                                put("number", p.number)
-                                put("type", p.type)
-                                put("label", getPhoneTypeLabel(p.type, p.label))
-                            })
-                        }
-                    } else {
-                        for (num in c.phoneNumbers) {
-                            phonesJson.put(JSONObject().apply {
-                                put("number", num)
-                                put("type", 2)
-                                put("label", "Mobile")
-                            })
-                        }
-                    }
-
-                    val emailsJson = JSONArray()
-                    for (e in c.emails) {
-                        emailsJson.put(e)
-                    }
-
-                    val addressesJson = JSONArray()
-                    for (a in c.addresses) {
-                        addressesJson.put(a)
-                    }
-
-                    val accountsJson = JSONArray()
-                    for (acc in c.sourceAccounts) {
-                        accountsJson.put(acc)
-                    }
-
-                    val cObj = JSONObject().apply {
-                        put("id", c.id)
-                        put("name", c.name.ifBlank { phone })
-                        put("phone", phone)
-                        put("isFavorite", c.isFavorite)
-                        put("account", c.sourceAccounts.firstOrNull() ?: "Phone")
-                        if (pfpBase64 != null) {
-                            put("photoBase64", pfpBase64)
-                        }
-                        put("phones", phonesJson)
-                        put("emails", emailsJson)
-                        put("addresses", addressesJson)
-                        put("accounts", accountsJson)
-                        if (!c.note.isNullOrBlank()) {
-                            put("note", c.note)
-                        }
-                    }
-                    contactsArray.put(cObj)
-                }
-            }
-
-            // 1b. Contact Groups
-            val contactGroupsArray = JSONArray()
-            if (syncContacts) {
-                try {
-                    val rawLocalGroups = prefs.getContactGroups()
-                    val sysGroups = runCatching { contactsRepository.getSystemContactGroups() }.getOrDefault(emptyList())
-                    val localGroupMap = rawLocalGroups.associateBy { it.id }.toMutableMap()
-                    for (sg in sysGroups) {
-                        val name = sg.name.trim()
-                        if (name.isBlank() || name.startsWith("System Group:", ignoreCase = true) ||
-                            name.equals("Starred in Android", ignoreCase = true) || name.equals("My Contacts", ignoreCase = true)) {
-                            continue
-                        }
-                        val existing = localGroupMap[sg.id]
-                        if (existing == null) {
-                            localGroupMap[sg.id] = sg
-                        } else {
-                            localGroupMap[sg.id] = existing.copy(
-                                accountType = sg.accountType ?: existing.accountType,
-                                accountName = sg.accountName ?: existing.accountName,
-                                targetLabel = sg.targetLabel ?: existing.targetLabel,
-                                contactIds = if (existing.contactIds.isEmpty() && sg.contactIds.isNotEmpty()) sg.contactIds else existing.contactIds
-                            )
-                        }
-                    }
-                    val allGroups = localGroupMap.values.filter { it.name.isNotBlank() }
-                    val hiddenGroupIds = prefs.getHiddenContactGroupIds()
-                    for (g in allGroups) {
-                        if (g.id in hiddenGroupIds) continue
-                        val gObj = JSONObject().apply {
-                            put("id", g.id)
-                            put("name", g.name)
-                            val ids = JSONArray()
-                            for (id in g.contactIds) {
-                                ids.put(id)
-                            }
-                            put("contactIds", ids)
-                            if (g.accountType != null) put("accountType", g.accountType)
-                            if (g.accountName != null) put("accountName", g.accountName)
-                        }
-                        contactGroupsArray.put(gObj)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error serializing contact groups: ${e.message}")
-                }
-            }
-
-            // 2. Real Call Logs (only latest 50)
-            val callLogsArray = JSONArray()
-            if (syncCallLogs) {
-                val realLogs = try {
-                    callLogRepository.getCallLogs(limit = 50).take(50)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching call logs: ${e.message}")
-                    emptyList()
-                }
-
-                for (log in realLogs) {
-                    val lObj = JSONObject().apply {
-                        put("id", "${log.number}_${log.date}")
-                        put("name", log.name ?: log.number)
-                        put("number", log.number)
-                        put("type", when (log.type) {
-                            android.provider.CallLog.Calls.OUTGOING_TYPE -> "outgoing"
-                            android.provider.CallLog.Calls.MISSED_TYPE -> "missed"
-                            else -> "incoming"
-                        })
-                        put("timestamp", log.date)
-                        put("duration", log.duration)
-                        put("simSlot", log.simSlot)
-                        put("count", log.count)
-                    }
-                    callLogsArray.put(lObj)
-                }
-            }
-
-            // 3. Real SMS Threads
-            val smsArray = JSONArray()
-            if (syncSms) {
-                val convs = try {
-                    smsRepository.getConversations().take(30)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching SMS conversations: ${e.message}")
-                    emptyList()
-                }
-
-                for (conv in convs) {
-                    val msgs = try {
-                        smsRepository.getMessagesForThread(conv.threadId).takeLast(25)
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-
-                    val msgsArray = JSONArray()
-                    for (m in msgs) {
-                        val mObj = JSONObject().apply {
-                            put("id", m.id.toString())
-                            put("body", m.body)
-                            put("timestamp", m.date)
-                            put("isOutgoing", m.isOutgoing)
-                            put("isPinned", prefs.isSmsMessagePinned(m.id))
-                            put("isStarred", prefs.isSmsMessageStarred(m.id))
-                        }
-                        msgsArray.put(mObj)
-                    }
-
-                    val tObj = JSONObject().apply {
-                        put("id", conv.threadId.toString())
-                        put("contactName", conv.contactName ?: conv.address)
-                        put("phone", conv.address)
-                        put("snippet", conv.snippet)
-                        put("timestamp", conv.date)
-                        put("unreadCount", conv.unreadCount)
-                        put("isPinned", prefs.getPinnedSmsThreads().contains(conv.threadId))
-                        put("messages", msgsArray)
-                    }
-                    smsArray.put(tObj)
-                }
-            }
-
-            // 4. Real Notes
-            val notesArray = JSONArray()
-            if (syncNotes) {
-                val realNotes = try {
-                    NoteManager.getAllNotes(context)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching notes: ${e.message}")
-                    emptyList()
-                }
-
-                for (n in realNotes) {
-                    val nObj = JSONObject().apply {
-                        put("id", n.file.nameWithoutExtension)
-                        put("title", if (n.contactName.isNotBlank() && n.contactName != "Unknown") n.contactName else "Note")
-                        put("content", n.content)
-                        put("timestamp", n.lastModified)
-                    }
-                    notesArray.put(nObj)
-                }
-            }
-
-            val confirmPlacingCall = prefs.getBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, false)
-            val syncDynamicColors = prefs.getBoolean(PreferenceManager.KEY_PC_SYNC_DYNAMIC_COLORS, true)
-            val activeThemeColor = com.coolappstore.everdialer.by.svhp.view.theme.getActiveThemeColor(context, prefs)
-            val themeColorHex = if (syncDynamicColors) String.format("#%06X", 0xFFFFFF and activeThemeColor) else null
-
-            val defaultSim = prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, 1)
-            val sim1ColorInt = prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)
-            val sim2ColorInt = prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)
-            val telecomMgr = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-            val phoneAccounts = try { telecomMgr?.callCapablePhoneAccounts ?: emptyList() } catch (_: Throwable) { emptyList() }
-            val simCount = phoneAccounts.size.coerceAtLeast(1)
-
-            val enabledFeatures = JSONObject().apply {
-                put("favourites", syncFavorites)
-                put("callLogs", syncCallLogs)
-                put("contacts", syncContacts)
-                put("sms", syncSms)
-                put("notes", syncNotes)
-                put("contactPfp", syncContactPfp)
-                put("dynamicColors", syncDynamicColors)
-                put("confirmPlacingCall", confirmPlacingCall)
-            }
-
-            val starredMsgIds = JSONArray(prefs.getStarredSmsMessages().map { it.toString() })
-            val pinnedMsgIds = JSONArray(prefs.getPinnedSmsMessages().map { it.toString() })
-            val pinnedThreadIds = JSONArray(prefs.getPinnedSmsThreads().map { it.toString() })
-
-            val categories = prefs.getAllSmsCategories()
-            val hiddenCategories = prefs.getHiddenSmsCategories()
-            val smsCategoriesArray = JSONArray()
-            for (c in categories) {
-                val obj = JSONObject()
-                obj.put("id", c.id)
-                obj.put("name", c.name)
-                obj.put("isCustom", c.isCustom)
-                obj.put("isVisible", !hiddenCategories.contains(c.id))
-                val phones = JSONArray()
-                for (p in c.contactPhones) {
-                    phones.put(p)
-                }
-                obj.put("contactPhones", phones)
-                smsCategoriesArray.put(obj)
-            }
-
-            val callCategories = prefs.getAllCallCategories()
-            val hiddenCallCategories = prefs.getHiddenCallCategories()
-            val callCategoriesArray = JSONArray()
-            for (c in callCategories) {
-                val obj = JSONObject()
-                obj.put("id", c.id)
-                obj.put("name", c.name)
-                obj.put("isCustom", c.isCustom)
-                obj.put("isVisible", !hiddenCallCategories.contains(c.id))
-                val phones = JSONArray()
-                for (p in c.contactPhones) {
-                    phones.put(p)
-                }
-                obj.put("contactPhones", phones)
-                callCategoriesArray.put(obj)
-            }
-
-            // Build wrapper payload
-            val payload = JSONObject().apply {
-                put("contacts", contactsArray)
-                put("contactGroups", contactGroupsArray)
-                put("callLogs", callLogsArray)
-                put("callCategories", callCategoriesArray)
-                put("smsThreads", smsArray)
-                put("smsCategories", smsCategoriesArray)
-                put("notes", notesArray)
-                put("starredSmsMessageIds", starredMsgIds)
-                put("pinnedSmsMessageIds", pinnedMsgIds)
-                put("pinnedSmsThreadIds", pinnedThreadIds)
-                put("enabledFeatures", enabledFeatures)
-                put("confirmPlacingCall", confirmPlacingCall)
-                put("themeColor", themeColorHex)
-                put("syncDynamicColors", syncDynamicColors)
-                put("favoritesInList", prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false))
-                put("defaultSim", defaultSim)
-                put("simCount", simCount)
-                put("sim1Color", String.format("#%06X", 0xFFFFFF and sim1ColorInt))
-                put("sim2Color", String.format("#%06X", 0xFFFFFF and sim2ColorInt))
-                put("deviceName", Build.MODEL)
-                put("telemetry", getDeviceTelemetry())
-                put("timestamp", System.currentTimeMillis())
-            }
-
-            val root = JSONObject().apply {
-                put("type", "sync_data")
-                put("payload", payload)
-            }
-
-            writer.write(root.toString())
-            writer.write("\n")
-            writer.flush()
-
+            sendSettings(writer)
+            sendCallLogs(writer)
+            sendSms(writer)
+            sendNotes(writer)
+            sendContactsFull(writer)
             _lastSyncTimestamp.value = System.currentTimeMillis()
             _status.value = PcSyncStatus.CONNECTED
-            Log.i(TAG, "Sync payload sent: ${contactsArray.length()} contacts, ${callLogsArray.length()} calls, ${smsArray.length()} threads, ${notesArray.length()} notes")
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending sync data: ${e.message}", e)
+            Log.e(TAG, "Error in sendSyncData: ${e.message}", e)
             _status.value = PcSyncStatus.ERROR
         }
     }
