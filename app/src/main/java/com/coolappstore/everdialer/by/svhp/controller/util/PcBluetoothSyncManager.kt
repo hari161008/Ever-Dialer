@@ -243,10 +243,10 @@ class PcBluetoothSyncManager(
                     }
 
                     var score = 0
-                    if (name.contains("fedora")) score += 50
+                    if (name.contains("fedora") || name.contains("hari")) score += 50
                     if (isConnected) score += 30
                     if (dev.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER) score += 20
-                    if (name.contains("pc") || name.contains("laptop") || name.contains("desktop") || name.contains("linux") || name.contains("ubuntu")) score += 15
+                    if (name.contains("pc") || name.contains("laptop") || name.contains("desktop") || name.contains("linux") || name.contains("ubuntu") || name.contains("windows")) score += 15
                     score
                 }
 
