@@ -12,6 +12,14 @@
         android:name="android.permission.RECORD_AUDIO"
         tools:node="remove" />
 
+    <!-- Google Play Policy: mark implied hardware features as optional to maximize device availability -->
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
+
     <application>
         <!-- Google Play Policy: remove GitHub update checker receiver in Play build -->
         <receiver

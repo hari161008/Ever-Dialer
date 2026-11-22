@@ -76,7 +76,7 @@ android {
             dimension "distribution"
             applicationId "com.everlasting.projects.by.svhp.play"
             targetSdk = 36
-            versionCode = 20
+            versionCode = 22
         }
     }
 
@@ -141,33 +141,54 @@ dependencies {
 }
 
 tasks.configureEach { task ->
-    if (task.name == "bundlePlayRelease") {
+    if (task.name.startsWith("bundle") && task.name.endsWith("Release")) {
         task.doLast {
-            def aabFile = file("${layout.buildDirectory.get()}/outputs/bundle/playRelease/app-play-release.aab")
-            if (aabFile.exists()) {
-                if (project.hasProperty('android.injected.output.dir')) {
-                    def destDir = file(project.property('android.injected.output.dir'))
-                    destDir.mkdirs()
-                    copy {
-                        from aabFile
-                        into destDir
-                    }
-                    def flavorDir = new File(destDir, "playRelease")
-                    flavorDir.mkdirs()
-                    copy {
-                        from aabFile
-                        into flavorDir
-                    }
-                }
-                def rootReleaseDir = file("${rootDir}/release")
-                rootReleaseDir.mkdirs()
-                copy {
-                    from aabFile
-                    into rootReleaseDir
-                }
-                // Move instead of copy: remove original from build cache
+            def variantName = task.name.substring("bundle".length())
+            def variantLower = variantName.uncapitalize()
+            def bundleDir = file("${layout.buildDirectory.get()}/outputs/bundle/${variantLower}")
+            if (!bundleDir.exists()) return
+
+            def aabFiles = bundleDir.listFiles({ dir, name -> name.endsWith(".aab") } as FilenameFilter)
+            if (aabFiles == null || aabFiles.length == 0) return
+
+            // Check all properties that Android Studio or CLI uses for user-selected destination folder
+            def targetDirPath = null
+            if (project.hasProperty('android.injected.apk.location')) {
+                targetDirPath = project.property('android.injected.apk.location')
+            } else if (project.hasProperty('android.injected.signing.destination.folder')) {
+                targetDirPath = project.property('android.injected.signing.destination.folder')
+            } else if (project.hasProperty('android.injected.output.dir')) {
+                targetDirPath = project.property('android.injected.output.dir')
+            } else if (project.hasProperty('android.injected.destination.dir')) {
+                targetDirPath = project.property('android.injected.destination.dir')
+            }
+
+            File targetDir = targetDirPath ? file(targetDirPath) : file("${rootDir}/release")
+            targetDir.mkdirs()
+
+            def relocatedFiles = []
+            aabFiles.each { aabFile ->
+                def targetFile = new File(targetDir, aabFile.name)
+                // Move file to target directory so only ONE copy exists (no duplicates)
+                java.nio.file.Files.copy(aabFile.toPath(), targetFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                 aabFile.delete()
-                file("${layout.buildDirectory.get()}/outputs/bundle/playRelease").deleteDir()
+
+                // If user selected a custom destination in Android Studio, clean up any duplicate in rootDir/release
+                if (targetDirPath) {
+                    def duplicateInRelease = file("${rootDir}/release/${aabFile.name}")
+                    if (duplicateInRelease.exists()) {
+                        duplicateInRelease.delete()
+                    }
+                }
+
+                relocatedFiles.add(targetFile)
+            }
+
+            // Update Android Studio's IDE listing file so clicking "locate" opens the selected destination folder directly
+            def metadataFile = file("${layout.buildDirectory.get()}/intermediates/bundle_ide_model/${variantLower}/produce${variantName}BundleIdeListingFile/output-metadata.json")
+            if (metadataFile.exists() && !relocatedFiles.isEmpty()) {
+                def targetPath = relocatedFiles[0].absolutePath.replace('\\', '/')
+                metadataFile.text = metadataFile.text.replaceAll(/"outputFile"\s*:\s*".*?"/, "\"outputFile\": \"${targetPath}\"")
             }
         }
     }
