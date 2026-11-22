@@ -86,6 +86,15 @@ android {
     }
 }
 
+androidComponents {
+    beforeVariants(selector().all()) { variant ->
+        if (variant.flavorName == "play" && variant.buildType == "release") {
+            variant.minifyEnabled = true
+            variant.shrinkResources = true
+        }
+    }
+}
+
 dependencies {
     githubImplementation project(':recorder')
     githubImplementation project(':networkswitch')
