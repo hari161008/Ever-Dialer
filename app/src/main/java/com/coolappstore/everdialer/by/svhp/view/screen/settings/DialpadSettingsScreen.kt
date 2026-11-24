@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lens
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -15,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.RivoAnimatedSection
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
+import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
@@ -23,6 +26,7 @@ import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.DialpadCustomisationScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -66,6 +70,28 @@ fun DialpadSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             RivoAnimatedSection(delayMs = 0L) {
+                Column {
+                    Text(
+                        "Customise",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = rivoHeadingColor(),
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                    )
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "Customise Dialpad",
+                            supporting = "Adjust numberpad height and set custom background",
+                            leadingIcon = Icons.Outlined.Tune,
+                            iconContainerColor = ColorPurple,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("dialpad_customise", highlightedKey) { highlightedKey = null },
+                            onClick = { navigator.navigate(DialpadCustomisationScreenDestination) }
+                        )
+                    }
+                }
+            }
+
+            RivoAnimatedSection(delayMs = 40L) {
                 Column {
                     Text(
                         "Dialpad Options",
@@ -122,7 +148,7 @@ fun DialpadSettingsScreen(
                 }
             }
 
-            RivoAnimatedSection(delayMs = 40L) {
+            RivoAnimatedSection(delayMs = 80L) {
                 Column {
                     Text(
                         "Buttons Style",

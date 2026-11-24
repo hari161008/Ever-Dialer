@@ -1334,6 +1334,17 @@ class PreferenceManager(context: Context) {
         const val ANSWER_STYLE_MODERN           = "google_modern"
         const val ANSWER_STYLE_CLASSIC          = "google_classic"
 
+        // Dialpad Customization (Height Scale & Custom Background)
+        const val KEY_DIALPAD_HEIGHT_SCALE        = "dialpad_height_scale"       // Float, default 1.0f (0.80f..1.30f)
+        const val KEY_DIALPAD_BG_TYPE             = "dialpad_bg_type"            // "none" | "wallpaper" | "picture" | "video"
+        const val KEY_DIALPAD_BG_PATH             = "dialpad_bg_path"
+        const val KEY_DIALPAD_BG_ZOOM             = "dialpad_bg_zoom"
+        const val KEY_DIALPAD_BG_PAN_X            = "dialpad_bg_pan_x"
+        const val KEY_DIALPAD_BG_PAN_Y            = "dialpad_bg_pan_y"
+        const val KEY_DIALPAD_BG_DIM              = "dialpad_bg_dim"
+        const val KEY_DIALPAD_BG_BLUR             = "dialpad_bg_blur"
+        const val KEY_DIALPAD_BG_VIDEO_SPEED      = "dialpad_bg_video_speed"
+
         const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"
         const val KEY_ONGOING_BG_ZOOM           = "ongoing_bg_zoom"

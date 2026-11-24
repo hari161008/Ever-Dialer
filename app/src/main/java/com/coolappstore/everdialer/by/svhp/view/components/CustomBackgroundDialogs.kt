@@ -75,7 +75,8 @@ import kotlin.math.roundToInt
 
 enum class CustomBackgroundTarget(val prefix: String, val title: String) {
     INCOMING("incoming", "Incoming Call"),
-    ONGOING("ongoing", "Ongoing Call")
+    ONGOING("ongoing", "Ongoing Call"),
+    DIALPAD("dialpad", "Dialpad")
 }
 
 @Composable
@@ -103,6 +104,61 @@ fun LoopingVideoPlayer(
         },
         modifier = modifier
     )
+}
+
+@Composable
+fun DialpadBackgroundLayer(
+    bgType: String,
+    bgFile: File?,
+    bgZoom: Float,
+    bgPanX: Float,
+    bgPanY: Float,
+    bgDim: Float,
+    bgBlur: Float,
+    bgVideoSpeed: Float,
+    modifier: Modifier = Modifier
+) {
+    if (bgFile == null || !bgFile.exists()) return
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (bgType == "video") {
+            LoopingVideoPlayer(
+                videoFile = bgFile,
+                videoSpeed = bgVideoSpeed,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = bgZoom
+                        scaleY = bgZoom
+                        translationX = bgPanX
+                        translationY = bgPanY
+                    }
+                    .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
+            )
+        } else {
+            AsyncImage(
+                model = bgFile,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = bgZoom
+                        scaleY = bgZoom
+                        translationX = bgPanX
+                        translationY = bgPanY
+                    }
+                    .then(if (bgBlur > 0f) Modifier.blur(bgBlur.dp) else Modifier)
+            )
+        }
+        if (bgDim > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = bgDim))
+            )
+        }
+    }
 }
 
 class SeamlessLoopingVideoView @JvmOverloads constructor(

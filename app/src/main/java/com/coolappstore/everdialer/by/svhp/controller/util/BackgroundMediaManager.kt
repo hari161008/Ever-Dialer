@@ -67,11 +67,14 @@ object BackgroundMediaManager {
             val allKeys = prefs.getAllKeys()
             val referencedPaths = mutableSetOf<String>()
 
-            // Default incoming & ongoing paths
+            // Default incoming, ongoing & dialpad paths
             prefs.getString(PreferenceManager.KEY_INCOMING_BG_PATH, "")?.let {
                 if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
             }
             prefs.getString(PreferenceManager.KEY_ONGOING_BG_PATH, "")?.let {
+                if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
+            }
+            prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "")?.let {
                 if (it.isNotBlank()) referencedPaths.add(File(it).canonicalPath)
             }
             prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_PATH, "")?.let {

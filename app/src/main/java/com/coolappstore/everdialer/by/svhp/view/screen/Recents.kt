@@ -602,6 +602,18 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 val pivotX = (fabCenter?.x ?: (screenWidthPx * 0.88f)) / screenWidthPx.coerceAtLeast(1f)
                 val pivotY = (fabCenter?.y ?: (screenHeightPx * 0.92f)) / screenHeightPx.coerceAtLeast(1f)
 
+                val settingsVersion by prefs.settingsChanged.collectAsState()
+                val dialpadBgType = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
+                val dialpadBgPath = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
+                val dialpadBgFile = remember(dialpadBgPath) { if (dialpadBgPath.isNotEmpty()) java.io.File(dialpadBgPath) else null }
+                val hasDialpadCustomBg = (dialpadBgType == "wallpaper" || dialpadBgType == "picture" || dialpadBgType == "video") && dialpadBgFile != null && dialpadBgFile.exists()
+                val dialpadBgZoom = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_ZOOM, 1f) }
+                val dialpadBgPanX = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_X, 0f) }
+                val dialpadBgPanY = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_Y, 0f) }
+                val dialpadBgDim = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
+                val dialpadBgBlur = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
+                val dialpadBgVideoSpeed = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
+
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
@@ -618,9 +630,23 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         bottomStart = if (p < 0.96f) 28.dp else 0.dp,
                         bottomEnd = if (p < 0.96f) 28.dp else 0.dp
                     ),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp
+                    color = if (hasDialpadCustomBg) Color.Transparent else MaterialTheme.colorScheme.surface,
+                    tonalElevation = if (hasDialpadCustomBg) 0.dp else 4.dp
                 ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (hasDialpadCustomBg && dialpadBgFile != null) {
+                            com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
+                                bgType = dialpadBgType,
+                                bgFile = dialpadBgFile,
+                                bgZoom = dialpadBgZoom,
+                                bgPanX = dialpadBgPanX,
+                                bgPanY = dialpadBgPanY,
+                                bgDim = dialpadBgDim,
+                                bgBlur = dialpadBgBlur,
+                                bgVideoSpeed = dialpadBgVideoSpeed,
+                                modifier = Modifier.matchParentSize()
+                            )
+                        }
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -642,7 +668,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(3.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                color = if (hasDialpadCustomBg) Color.White.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                                 modifier = Modifier.size(width = 36.dp, height = 4.dp)
                             ) {}
                         }
@@ -663,6 +689,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                                 }
                             )
                         }
+                    }
                     }
                 }
             }

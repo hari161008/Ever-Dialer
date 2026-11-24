@@ -20,6 +20,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -406,16 +407,43 @@ fun DialPadScreen(
         dragHandle = null
     ) {
         val prefs = koinInject<PreferenceManager>()
+        val settingsState by prefs.settingsChanged.collectAsState()
+        val bgType = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
+        val bgPath = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
+        val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
+        val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+        val bgZoom = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_ZOOM, 1f) }
+        val bgPanX = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_X, 0f) }
+        val bgPanY = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_Y, 0f) }
+        val bgDim = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
+        val bgBlur = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
+        val bgVideoSpeed = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
+
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(y = slideDistance * closeProgress.value),
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
+                color = if (hasCustomBg) Color.Transparent else MaterialTheme.colorScheme.surface,
+                tonalElevation = if (hasCustomBg) 0.dp else 4.dp
             ) {
-                val predictiveBackEnabled = remember(prefs.settingsChanged.collectAsState().value) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (hasCustomBg && bgFile != null) {
+                        com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
+                            bgType = bgType,
+                            bgFile = bgFile,
+                            bgZoom = bgZoom,
+                            bgPanX = bgPanX,
+                            bgPanY = bgPanY,
+                            bgDim = bgDim,
+                            bgBlur = bgBlur,
+                            bgVideoSpeed = bgVideoSpeed,
+                            modifier = Modifier.matchParentSize()
+                        )
+                    }
+
+                val predictiveBackEnabled = remember(settingsState) {
                     prefs.getBoolean(PreferenceManager.KEY_PREDICTIVE_BACK_GESTURE, true)
                 }
                 if (predictiveBackEnabled) {
@@ -457,7 +485,9 @@ fun DialPadScreen(
                     label = "handleHeight"
                 )
                 val handleColor by animateColorAsState(
-                    targetValue = if (isDraggingHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    targetValue = if (isDraggingHandle) MaterialTheme.colorScheme.primary
+                    else if (hasCustomBg) Color.White.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "handleColor"
                 )
@@ -539,6 +569,7 @@ fun DialPadScreen(
                         }
                     )
                 }
+                }
             }
         }
     }
@@ -587,6 +618,10 @@ fun DialPadContent(
     val contactsVM: ContactsViewModel = koinActivityViewModel()
     val prefs = koinInject<PreferenceManager>()
     val settingsState by prefs.settingsChanged.collectAsState()
+    val bgType = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
+    val bgPath = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
+    val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
+    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
     // Settings → App Settings → Call Settings → "Direct Call on Tap". When off, tapping a
     // search-result row (saved contact or non-contact) should open Contact Info instead of
     // placing a call directly — same behaviour Recents/Favorites already apply.
@@ -1730,39 +1765,39 @@ fun DialPadContent(
                     placeholder = {
                         Text(
                             text = "Search contacts...",
-                            color = dialpadSearchBarPlaceholder,
+                            color = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = dialpadSearchBarPlaceholder) },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = {
                                 searchQuery = ""
                                 focusManager.clearFocus()
                             }) {
-                                Icon(Icons.Default.Close, null, tint = dialpadSearchBarPlaceholder)
+                                Icon(Icons.Default.Close, null, tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder)
                             }
                         }
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(28.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = dialpadSearchBarFg,
-                        unfocusedTextColor = dialpadSearchBarFg,
-                        focusedContainerColor = dialpadSearchBarBg,
-                        unfocusedContainerColor = dialpadSearchBarBg,
-                        focusedBorderColor = if (isSaturatedBackground) dialpadSearchBarBorder else MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = dialpadSearchBarBorder,
-                        focusedLeadingIconColor = dialpadSearchBarPlaceholder,
-                        unfocusedLeadingIconColor = dialpadSearchBarPlaceholder,
-                        focusedTrailingIconColor = dialpadSearchBarPlaceholder,
-                        unfocusedTrailingIconColor = dialpadSearchBarPlaceholder,
-                        focusedPlaceholderColor = dialpadSearchBarPlaceholder,
-                        unfocusedPlaceholderColor = dialpadSearchBarPlaceholder,
-                        cursorColor = if (isSaturatedBackground) dialpadSearchBarFg else MaterialTheme.colorScheme.primary
+                        focusedTextColor = if (hasCustomBg) Color.White else dialpadSearchBarFg,
+                        unfocusedTextColor = if (hasCustomBg) Color.White else dialpadSearchBarFg,
+                        focusedContainerColor = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else dialpadSearchBarBg,
+                        unfocusedContainerColor = if (hasCustomBg) Color.Black.copy(alpha = 0.16f) else dialpadSearchBarBg,
+                        focusedBorderColor = if (hasCustomBg) Color.White.copy(alpha = 0.30f) else if (isSaturatedBackground) dialpadSearchBarBorder else MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = if (hasCustomBg) Color.White.copy(alpha = 0.15f) else dialpadSearchBarBorder,
+                        focusedLeadingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder,
+                        unfocusedLeadingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
+                        focusedTrailingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder,
+                        unfocusedTrailingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
+                        focusedPlaceholderColor = if (hasCustomBg) Color.White.copy(alpha = 0.65f) else dialpadSearchBarPlaceholder,
+                        unfocusedPlaceholderColor = if (hasCustomBg) Color.White.copy(alpha = 0.65f) else dialpadSearchBarPlaceholder,
+                        cursorColor = if (hasCustomBg) Color.White else if (isSaturatedBackground) dialpadSearchBarFg else MaterialTheme.colorScheme.primary
                     ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
@@ -1784,12 +1819,13 @@ fun DialPadContent(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                            .background(if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                            .then(if (hasCustomBg) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.15f), CircleShape) else Modifier)
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Close dialpad",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1881,7 +1917,8 @@ fun DialPadContent(
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)) else null,
                     modifier = Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                 ) {
                     AnimatedContent(
@@ -2130,36 +2167,44 @@ fun DialPadContent(
             val isCircleButtons = remember(settingsState) {
                 prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
             }
+            val heightScalePref = remember(settingsState) {
+                prefs.getFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, 1.0f).coerceIn(0.80f, 1.30f)
+            }
 
-            // Screen height in unscaled base dp:
+            // Dynamic, responsive dialpad key sizing:
+            // Ensures dialpad buttons scale gracefully across various phone sizes:
+            // compact screens (~700dp like Moto Z2 Play) get ~59dp height,
+            // larger/taller modern screens (~960dp like Motorola Edge 50 Pro) scale smoothly to ~66dp.
             val baseScreenHeight = configuration.screenHeightDp.toFloat()
-            val maxCardH = if (isCircleButtons) 545f else 515f
-            val cardHeightBudget = (baseScreenHeight - 118f).coerceIn(275f, maxCardH)
-            val calculatedKeyH = ((cardHeightBudget - 44f - 16f - 24f) / 5f).coerceIn(58f, 74f)
+            // On extremely compact heights (< 580dp), gently scale down so it never clips
+            val heightScale = if (baseScreenHeight < 580f) (baseScreenHeight / 580f).coerceIn(0.78f, 1.0f) else 1.0f
+
+            val screenProgress = ((baseScreenHeight - 700f) / 260f).coerceIn(0f, 1f)
+            val calculatedKeyH = (if (isCircleButtons) {
+                (62f + 6f * screenProgress) * heightScale
+            } else {
+                (59f + 7f * screenProgress) * heightScale
+            }) * heightScalePref
             val baseKeyHeight: Dp = calculatedKeyH.dp
 
-            // Scale factor relative to standard 50dp height
-            val scaleFactor = (calculatedKeyH / 50f).coerceIn(0.85f, 1.25f)
+            val scaleFactor = (calculatedKeyH / 59f).coerceIn(0.85f, 1.35f)
             val actionSize: Dp = baseKeyHeight
 
             // Spacing between keys dynamically adapts to row width
-            val standardKeySpacing: Dp = (6.dp * scaleFactor).coerceIn(5.dp, 8.dp)
+            val standardKeySpacing: Dp = ((6.dp * scaleFactor).coerceIn(5.dp, 8.dp) * heightScalePref)
 
             // Dynamic key width for 3 keys in a row
             val maxAllowedKeyW = ((availableRowWidth - standardKeySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
-            val standardKeyWidth: Dp = (maxAllowedKeyW * 0.91f).coerceIn(80.dp, 114.dp)
+            val standardKeyWidth: Dp = (maxAllowedKeyW * 0.90f).coerceIn(80.dp, 112.dp)
 
-            // For circle buttons: make circles noticeably larger, with balanced spacing and paddings
-            val circleSpacingV: Dp = (12.dp * scaleFactor).coerceIn(10.dp, 15.dp)
-            val availableHeightForKeys = cardHeightBudget - 44f - 16f - 24f
-            val maxCircleDiameterFromH = ((availableHeightForKeys - circleSpacingV.value * 4f) / 5f).coerceIn(72f, 85f)
-            val maxCircleDiameterFromW = ((availableRowWidth - 48f) / 3f).coerceIn(72f, 85f)
-            val circleDiameter: Dp = minOf(maxCircleDiameterFromH, maxCircleDiameterFromW).dp
+            // For circle buttons: balanced circular touch targets
+            val circleSpacingV: Dp = ((8.dp * scaleFactor).coerceIn(6.dp, 10.dp) * heightScalePref)
+            val maxCircleDiameterFromW = ((availableRowWidth - 48f) / 3f).coerceAtLeast(48f)
+            val circleDiameter: Dp = (minOf(62f + 6f * screenProgress, maxCircleDiameterFromW) * heightScale * heightScalePref).coerceIn(44f, 76f).dp
 
             val circleSpacingH: Dp = run {
-                val sideMarginTarget = (availableRowWidth * 0.07f).coerceIn(16f, 28f) * 2f
-                val remainingForGaps = (availableRowWidth - (circleDiameter.value * 3f) - sideMarginTarget).coerceAtLeast(24f)
-                (remainingForGaps / 2f).coerceIn(20f, 40f).dp
+                val remainingForGaps = (availableRowWidth - (circleDiameter.value * 3f) - 48f).coerceAtLeast(24f)
+                (remainingForGaps / 2f).coerceIn(16f, 32f).dp
             }
 
             val effectiveKeySpacingV: Dp = if (isCircleButtons) circleSpacingV else standardKeySpacing
@@ -2173,7 +2218,7 @@ fun DialPadContent(
 
             // SIM button width for 4 buttons in a row with 3 gaps
             val simBtnW: Dp = if (isCircleButtons) {
-                minOf(circleDiameter * 0.86f, ((digitRowWidth.value - 36f) / 4f).dp).coerceIn(56.dp, 70.dp)
+                minOf(circleDiameter * 0.88f, ((digitRowWidth.value - 24f) / 4f).dp).coerceIn(48.dp, 60.dp)
             } else {
                 minOf(
                     keyWidth,
@@ -2182,16 +2227,22 @@ fun DialPadContent(
             }
             val effectiveSimCallH: Dp = if (isCircleButtons) simBtnW else callH
             val simRowSpacingH: Dp = if (isCircleButtons) {
-                ((digitRowWidth.value - simBtnW.value * 4f) / 3f).coerceIn(10f, 28f).dp
+                ((digitRowWidth.value - simBtnW.value * 4f) / 3f).coerceIn(8f, 20f).dp
             } else effectiveKeySpacingH
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow
+            color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow,
+            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)) else null
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = (9 * scaleFactor).coerceIn(8f, 13f).dp),
+                modifier = Modifier.padding(
+                    start = 6.dp,
+                    end = 6.dp,
+                    top = ((8 * scaleFactor).coerceIn(6f, 10f) * heightScalePref).dp,
+                    bottom = ((16 * scaleFactor).coerceIn(12f, 20f) * heightScalePref).dp
+                ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
             ) {
@@ -2213,12 +2264,18 @@ fun DialPadContent(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .defaultMinSize(minHeight = (46 * scaleFactor).coerceIn(40f, 48f).dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .defaultMinSize(minHeight = ((46 * scaleFactor).coerceIn(40f, 48f) * (0.85f + 0.15f * heightScalePref)).dp)
+                                .clip(RoundedCornerShape(24.dp))
                                 .background(
                                     if (number.isNotEmpty())
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (hasCustomBg) 0.40f else 0.3f)
+                                    else if (hasCustomBg)
+                                        Color.Black.copy(alpha = 0.20f)
                                     else Color.Transparent
+                                )
+                                .then(
+                                    if (hasCustomBg) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+                                    else Modifier
                                 )
                                 .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                                 .combinedClickable(
@@ -2228,7 +2285,7 @@ fun DialPadContent(
                                         showOverflowMenu = true
                                     }
                                 )
-                                .padding(vertical = (5 * scaleFactor).coerceIn(4f, 6f).dp, horizontal = 12.dp),
+                                .padding(vertical = (5 * scaleFactor).coerceIn(4f, 6f).dp, horizontal = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             DialpadNumberDisplay(
@@ -2314,6 +2371,9 @@ fun DialPadContent(
                         )
                     }
                 }
+
+                // Uniform empty space between typing box and number buttons
+                Spacer(modifier = Modifier.height(((6 * scaleFactor).coerceIn(4f, 10f) * heightScalePref).dp))
 
 
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
