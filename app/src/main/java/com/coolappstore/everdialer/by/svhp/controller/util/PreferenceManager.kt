@@ -922,6 +922,9 @@ class PreferenceManager(context: Context) {
         }
 
         const val KEY_DEFAULT_SIM           = "default_sim"
+        // Contact Info → Video button — the app remembered from the video-call picker's
+        // "Always use this app" checkbox. Absent/blank means ask every time.
+        const val KEY_DEFAULT_VIDEO_APP     = "default_video_app"
         // Contact Info → "Choose Sim" — per-contact override of which SIM is used to call that
         // specific contact. Key is prefixed per contact (id for saved contacts, raw phone number
         // for unsaved ones) so every contact can remember its own choice independently.
