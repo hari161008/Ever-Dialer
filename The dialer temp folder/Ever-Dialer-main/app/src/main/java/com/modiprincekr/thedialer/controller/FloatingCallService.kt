@@ -1,0 +1,868 @@
+package com.modiprincekr.thedialer.controller
+
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.PixelFormat
+import android.os.IBinder
+import android.provider.Settings
+import android.telecom.Call
+import android.telecom.CallAudioState
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.font.FontWeight
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.background
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.path
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import coil.compose.AsyncImage
+import com.modiprincekr.thedialer.controller.util.ContactMediaManager
+import com.modiprincekr.thedialer.controller.util.ContactMediaBackground
+import com.modiprincekr.thedialer.controller.util.PreferenceManager
+import com.modiprincekr.thedialer.view.screen.CallActivity
+import com.modiprincekr.thedialer.view.theme.Rivo4Theme
+import kotlinx.coroutines.*
+
+private val ReturnToCallIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "ReturnToCall",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).path(fill = SolidColor(Color.White)) {
+        // Door / square bracket open on the left
+        moveTo(19f, 3f)
+        horizontalLineTo(5f)
+        curveTo(3.9f, 3f, 3f, 3.9f, 3f, 5f)
+        verticalLineTo(9f)
+        horizontalLineTo(5f)
+        verticalLineTo(5f)
+        horizontalLineTo(19f)
+        verticalLineTo(19f)
+        horizontalLineTo(5f)
+        verticalLineTo(15f)
+        horizontalLineTo(3f)
+        verticalLineTo(19f)
+        curveTo(3f, 20.1f, 3.9f, 21f, 5f, 21f)
+        horizontalLineTo(19f)
+        curveTo(20.1f, 21f, 21f, 20.1f, 21f, 19f)
+        verticalLineTo(5f)
+        curveTo(21f, 3.9f, 20.1f, 3f, 19f, 3f)
+        close()
+
+        // Arrow pointing LEFT exiting the bracket / door
+        moveTo(9.91f, 8.41f)
+        lineTo(8.5f, 7f)
+        lineTo(3.5f, 12f)
+        lineTo(8.5f, 17f)
+        lineTo(9.91f, 15.59f)
+        lineTo(7.33f, 13f)
+        horizontalLineTo(17f)
+        verticalLineTo(11f)
+        horizontalLineTo(7.33f)
+        close()
+    }.build()
+}
+
+class FloatingCallService : Service() {
+
+    private lateinit var wm: WindowManager
+    private var bubbleView: ComposeView? = null
+    private var menuView:   ComposeView? = null
+    private val lifecycleOwner = ServiceLifecycleOwner()
+    private val scope          = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private val contactNameState = mutableStateOf("?")
+    private val phoneNumberState  = mutableStateOf("")
+    private val photoUriState     = mutableStateOf<String?>(null)
+    private val menuVisibleState  = mutableStateOf(false)
+
+    private fun getSavedPosition(): Pair<Int, Int> {
+        val prefs = PreferenceManager(this)
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val displayMetrics = resources.displayMetrics
+        val screenW = displayMetrics.widthPixels
+        val screenH = displayMetrics.heightPixels
+
+        val defaultX = 24
+        val defaultY = if (isLandscape) 160 else 320
+
+        val (rawX, rawY) = if (isLandscape) {
+            Pair(
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_X, defaultX),
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_Y, defaultY)
+            )
+        } else {
+            Pair(
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_X, defaultX),
+                prefs.getInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_Y, defaultY)
+            )
+        }
+
+        val clampedX = rawX.coerceIn(0, (screenW - 120).coerceAtLeast(0))
+        val clampedY = rawY.coerceIn(0, (screenH - 120).coerceAtLeast(0))
+        return Pair(clampedX, clampedY)
+    }
+
+    private fun savePosition(x: Int, y: Int) {
+        val prefs = PreferenceManager(this)
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (isLandscape) {
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_X, x)
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_LANDSCAPE_Y, y)
+        } else {
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_X, x)
+            prefs.setInt(PreferenceManager.KEY_FLOATING_CALL_POS_PORTRAIT_Y, y)
+        }
+    }
+
+    private val configReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != Intent.ACTION_CONFIGURATION_CHANGED) return
+            scope.launch {
+                delay(80) // let window system settle after rotation
+                val (savedX, savedY) = getSavedPosition()
+                bubbleParams.x = savedX
+                bubbleParams.y = savedY
+                try { bubbleView?.let { wm.updateViewLayout(it, bubbleParams) } } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Bubble: small, draggable, non-focusable, extends to screen edges
+    private val bubbleParams = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.TOP or Gravity.START; x = 24; y = 320 }
+
+
+    // Menu: MATCH_PARENT so the Surface background fills all the way behind nav bar
+    private val menuParams = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.TOP or Gravity.START }
+
+    companion object {
+        const val EXTRA_CONTACT_NAME = "contact_name"
+        const val EXTRA_PHONE_NUMBER = "phone_number"
+        const val EXTRA_PHOTO_URI    = "photo_uri"
+
+        fun start(context: Context, name: String, number: String, photoUri: String? = null) {
+            context.startService(Intent(context, FloatingCallService::class.java).apply {
+                putExtra(EXTRA_CONTACT_NAME, name); putExtra(EXTRA_PHONE_NUMBER, number)
+                putExtra(EXTRA_PHOTO_URI, photoUri)
+            })
+        }
+        fun stop(context: Context) =
+            context.stopService(Intent(context, FloatingCallService::class.java))
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        lifecycleOwner.onCreate()
+        registerReceiver(configReceiver, IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED))
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
+        contactNameState.value = intent?.getStringExtra(EXTRA_CONTACT_NAME) ?: "?"
+        phoneNumberState.value  = intent?.getStringExtra(EXTRA_PHONE_NUMBER) ?: ""
+        photoUriState.value     = intent?.getStringExtra(EXTRA_PHOTO_URI)
+        if (bubbleView == null) { createBubble(); observeAll() }
+        return START_STICKY
+    }
+
+    // ── Bubble ────────────────────────────────────────────────────────────────
+
+    private fun createBubble() {
+        val (savedX, savedY) = getSavedPosition()
+        bubbleParams.x = savedX
+        bubbleParams.y = savedY
+        val cv = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            setContent { Rivo4Theme { BubbleUI(contactNameState.value, photoUriState.value) { if (menuView == null) showMenu() else dismissMenu() } } }
+        }
+        bubbleView = cv
+        try { wm.addView(cv, bubbleParams) } catch (_: Exception) { stopSelf() }
+    }
+
+    @Composable
+    private fun BubbleUI(name: String, photoUri: String?, onTap: () -> Unit) {
+        var entered by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { delay(50); entered = true }
+
+        val entryScale by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0.15f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+            label         = "bEntry"
+        )
+        val entryAlpha by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0f,
+            animationSpec = tween(480, easing = FastOutSlowInEasing),
+            label         = "bAlpha"
+        )
+
+        // Active-call pulsing dot
+        val pulseTrans = rememberInfiniteTransition(label = "pulse")
+        val pulseScale by pulseTrans.animateFloat(
+            initialValue  = 1f, targetValue = 1.4f,
+            animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label         = "dotPulse"
+        )
+
+        // Press spring
+        val pressSource  = remember { MutableInteractionSource() }
+        val isPressed    by pressSource.collectIsPressedAsState()
+        val pressScale   by animateFloatAsState(
+            targetValue   = if (isPressed) 0.87f else 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+            label         = "bPress"
+        )
+
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .graphicsLayer(
+                    scaleX = entryScale * pressScale,
+                    scaleY = entryScale * pressScale,
+                    alpha  = entryAlpha
+                )
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var dragged = false
+                        do {
+                            val event  = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val delta  = change.position - change.previousPosition
+                            if (!dragged && (change.position - down.position).getDistance() > viewConfiguration.touchSlop)
+                                dragged = true
+                            if (dragged) {
+                                change.consume()
+                                bubbleParams.x = (bubbleParams.x + delta.x.toInt()).coerceAtLeast(0)
+                                bubbleParams.y = (bubbleParams.y + delta.y.toInt()).coerceAtLeast(0)
+                                savePosition(bubbleParams.x, bubbleParams.y)
+                                try { wm.updateViewLayout(bubbleView, bubbleParams) } catch (_: Exception) {}
+                            }
+                            if (!change.pressed) {
+                                if (dragged) {
+                                    savePosition(bubbleParams.x, bubbleParams.y)
+                                } else {
+                                    onTap()
+                                }
+                                break
+                            }
+                        } while (true)
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+
+            Surface(
+                shape           = CircleShape,
+                color           = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation  = 0.dp,
+                shadowElevation = 0.dp,
+                modifier        = Modifier.size(58.dp)
+            ) {
+                if (!photoUri.isNullOrEmpty()) {
+                    com.modiprincekr.thedialer.view.components.RivoAvatar(
+                        name     = name,
+                        photoUri = photoUri,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text       = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 22.sp,
+                            color      = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Dynamic-color active-call dot
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = (-3).dp, y = (-3).dp)
+            ) {
+                Surface(
+                    shape           = CircleShape,
+                    color           = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    tonalElevation  = 0.dp,
+                    shadowElevation = 0.dp,
+                    modifier        = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(scaleX = pulseScale, scaleY = pulseScale)
+                ) {}
+                Surface(
+                    shape           = CircleShape,
+                    color           = MaterialTheme.colorScheme.primary,
+                    tonalElevation  = 0.dp,
+                    shadowElevation = 0.dp,
+                    modifier        = Modifier.size(11.dp).align(Alignment.Center)
+                ) {}
+            }
+        }
+    }
+
+    // ── Menu sheet ────────────────────────────────────────────────────────────
+
+    private fun showMenu() {
+        if (menuView != null) return
+        menuVisibleState.value = false
+        bubbleView?.visibility = View.GONE
+        val cv = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            setContent {
+                Rivo4Theme {
+                    CallMenuSheet(
+                        contactName = contactNameState.value,
+                        phoneNumber = phoneNumberState.value,
+                        visible     = menuVisibleState.value,
+                        onDismiss   = { dismissMenu() },
+                        onAction    = { performAction(it) }
+                    )
+                }
+            }
+        }
+        menuView = cv
+        try { wm.addView(cv, menuParams) } catch (_: Exception) { dismissMenu(); return }
+        scope.launch { delay(40); menuVisibleState.value = true }
+    }
+
+    private fun dismissMenu() {
+        menuVisibleState.value = false
+        // Hide the bubble the moment the close animation starts, then bring it back once the
+        // floating popup window has actually been torn down (unless the call screen itself is
+        // in the foreground, in which case observeAll() is already keeping it hidden).
+        bubbleView?.visibility = View.GONE
+        scope.launch {
+            delay(440)
+            try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
+            menuView = null
+            if (!CallActivity.isInForeground.value) {
+                bubbleView?.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun performAction(action: MenuAction) {
+        menuVisibleState.value = false
+        scope.launch {
+            delay(280)
+            when (action) {
+                is MenuAction.Speaker    -> CallService.setAudioRoute(action.route)
+                is MenuAction.Mute       -> CallService.setMuted(action.mute)
+                is MenuAction.Notes      -> FloatingNotesService.start(action.ctx, action.name, action.number)
+                is MenuAction.BackToCall -> action.ctx.startActivity(
+                    Intent(action.ctx, CallActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    }
+                )
+                is MenuAction.AnswerCall -> {
+                    CallService.answerCall()
+                }
+
+                MenuAction.Close -> { delay(150); removeBubble(); stopSelf() }
+                MenuAction.Hangup -> CallService.declineCall()
+            }
+            delay(200)
+            try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
+            menuView = null
+            if (action != MenuAction.Close && !CallActivity.isInForeground.value) {
+                bubbleView?.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    sealed class MenuAction {
+        data class Speaker(val route: Int)                              : MenuAction()
+        data class Mute(val mute: Boolean)                              : MenuAction()
+        data class Notes(val ctx: Context, val name: String, val number: String) : MenuAction()
+        data class BackToCall(val ctx: Context)                         : MenuAction()
+        data class AnswerCall(val ctx: Context)                         : MenuAction()
+        object Close   : MenuAction()
+        object Hangup  : MenuAction()
+    }
+
+    @Composable
+    private fun CallMenuSheet(
+        contactName: String,
+        phoneNumber: String,
+        visible: Boolean,
+        onDismiss: () -> Unit,
+        onAction: (MenuAction) -> Unit
+    ) {
+        val context       = LocalContext.current
+        val configuration = LocalConfiguration.current
+        val isLandscape   = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val audioState by CallService.audioState.collectAsState()
+        val isMuted    = audioState?.isMuted ?: false
+        val isSpeaker  = audioState?.route == CallAudioState.ROUTE_SPEAKER
+        val callSession by CallService.currentCallSession.collectAsState()
+        val isRinging  = callSession?.state == Call.STATE_RINGING
+
+        var isTriggered by remember { mutableStateOf(false) }
+        var totalDragY by remember { mutableFloatStateOf(0f) }
+        val coroutineScope = rememberCoroutineScope()
+
+        val cardScale by animateFloatAsState(
+            targetValue   = if (isTriggered) 1.05f else 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness    = Spring.StiffnessLow
+            ),
+            label         = "cardExpandScale"
+        )
+        val cardOffsetY by animateFloatAsState(
+            targetValue   = if (isTriggered) -40f else (totalDragY * 0.25f).coerceIn(-30f, 0f),
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness    = Spring.StiffnessLow
+            ),
+            label         = "cardExpandOffsetY"
+        )
+
+        // Full-screen Box – card is at BottomCenter so its background fills behind nav bar.
+        // Tapping anywhere in the empty area above the sheet (i.e. not on the sheet itself,
+        // since the sheet's own children consume their own taps first) dismisses the menu,
+        // which brings the floating bubble back once the window is torn down.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter   = slideInVertically(
+                    animationSpec  = tween(520, easing = EaseOutCubic),
+                    initialOffsetY = { it }
+                ) + fadeIn(tween(400, easing = FastOutSlowInEasing)),
+                exit    = slideOutVertically(
+                    animationSpec = tween(400, easing = EaseInCubic),
+                    targetOffsetY = { it }
+                ) + fadeOut(tween(300, easing = FastOutLinearInEasing))
+            ) {
+                val mediaUri = remember(phoneNumber) {
+                    ContactMediaManager.getContactMedia(context, null, phoneNumber)
+                }
+
+                Surface(
+                    modifier        = (if (isLandscape) {
+                        Modifier
+                            .widthIn(max = 500.dp)
+                            .fillMaxWidth(0.65f)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                    }).graphicsLayer {
+                        scaleX = cardScale
+                        scaleY = cardScale
+                        translationY = cardOffsetY
+                    },
+                    shape           = RoundedCornerShape(if (isLandscape) 24.dp else 32.dp),
+                    color           = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation  = 4.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (!mediaUri.isNullOrBlank()) {
+                            ContactMediaBackground(
+                                mediaPath = mediaUri,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f))
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = if (isLandscape) 16.dp else 24.dp)
+                                .padding(top = if (isLandscape) 10.dp else 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
+                        ) {
+                        // Drag handle with targeted vertical drag gesture
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .pointerInput(Unit) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = { totalDragY = 0f },
+                                        onDragEnd = { if (!isTriggered) totalDragY = 0f },
+                                        onDragCancel = { if (!isTriggered) totalDragY = 0f },
+                                        onVerticalDrag = { change, dragAmount ->
+                                            if (isTriggered) return@detectVerticalDragGestures
+                                            totalDragY += dragAmount
+                                            if (totalDragY <= -50f) {
+                                                change.consume()
+                                                isTriggered = true
+                                                coroutineScope.launch {
+                                                    delay(120)
+                                                    onAction(MenuAction.BackToCall(context))
+                                                }
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                modifier        = Modifier
+                                    .width(if (isLandscape) 32.dp else 40.dp)
+                                    .height(if (isLandscape) 3.dp else 4.dp),
+                                shape           = CircleShape,
+                                color           = if (isTriggered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f),
+                                tonalElevation  = 0.dp,
+                                shadowElevation = 0.dp
+                            ) {}
+                        }
+
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 14.dp))
+
+                        // Contact info row
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment     = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text       = contactName,
+                                    style      = if (isLandscape) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color      = MaterialTheme.colorScheme.onSurface,
+                                    maxLines   = 1,
+                                    overflow   = TextOverflow.Ellipsis
+                                )
+                                if (phoneNumber.isNotEmpty()) {
+                                    Text(
+                                        text     = phoneNumber,
+                                        style    = MaterialTheme.typography.bodySmall.copy(fontSize = if (isLandscape) 11.sp else 12.sp),
+                                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                            val dimSrc     = remember { MutableInteractionSource() }
+                            val dimPressed by dimSrc.collectIsPressedAsState()
+                            val dimScale   by animateFloatAsState(
+                                targetValue   = if (dimPressed) 0.85f else 1f,
+                                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
+                                label         = "dimScale"
+                            )
+                            FilledIconButton(
+                                onClick           = onDismiss,
+                                interactionSource = dimSrc,
+                                modifier          = Modifier
+                                    .size(if (isLandscape) 32.dp else 40.dp)
+                                    .graphicsLayer(scaleX = dimScale, scaleY = dimScale),
+                                colors            = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown, "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(if (isLandscape) 18.dp else 24.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(if (isLandscape) 6.dp else 10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 14.dp))
+
+                        // Row 1: Speaker · Mute · Notes
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment     = Alignment.Top
+                        ) {
+                            SheetAction(0,
+                                if (isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
+                                if (isSpeaker) "Earpiece" else "Speaker",
+                                if (isSpeaker) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                if (isSpeaker) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
+                            ) { onAction(MenuAction.Speaker(if (isSpeaker) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)) }
+
+                            SheetAction(1,
+                                if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                if (isMuted) "Unmute" else "Mute",
+                                if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                                if (isMuted) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
+                            ) { onAction(MenuAction.Mute(!isMuted)) }
+
+                            SheetAction(2,
+                                Icons.Default.Note, "Notes",
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                isLandscape = isLandscape
+                            ) { onAction(MenuAction.Notes(context, contactName, phoneNumber)) }
+                        }
+
+                        Spacer(Modifier.height(if (isLandscape) 6.dp else 12.dp))
+
+                        // Row 2: Back to call · Close Floating Circle · Hangup
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment     = Alignment.Top
+                        ) {
+                            if (isRinging) {
+                                SheetAction(3,
+                                    Icons.Default.Call, "Answer Call",
+                                    Color.White,
+                                    Color(0xFF2E7D32),
+                                    isLandscape = isLandscape
+                                ) { onAction(MenuAction.AnswerCall(context)) }
+                            } else {
+                                SheetAction(3,
+                                    ReturnToCallIcon, "Back to call",
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    isLandscape = isLandscape
+                                ) { onAction(MenuAction.BackToCall(context)) }
+                            }
+
+                            SheetAction(4,
+                                Icons.Default.Close, if (isLandscape) "Close" else "Close Floating Circle",
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                isLandscape = isLandscape
+                            ) { onAction(MenuAction.Close) }
+
+                            HangupSheetAction(5, isLandscape = isLandscape) { onAction(MenuAction.Hangup) }
+                        }
+
+                        Spacer(Modifier.height(if (isLandscape) 8.dp else 16.dp))
+                        // Fills exactly the navigation bar height so Surface bg extends behind it
+                        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+                    }
+                }
+            }
+        }
+    }
+}
+
+    // ── Sheet action button ───────────────────────────────────────────────────
+
+    @Composable
+    private fun SheetAction(
+        index: Int,
+        icon: ImageVector,
+        label: String,
+        tint: Color,
+        bgColor: Color,
+        isLandscape: Boolean = false,
+        onClick: () -> Unit
+    ) {
+        var entered by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { delay(100L + index * 55L); entered = true }
+        val eScale by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0.2f,
+            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+            label         = "eScale$index"
+        )
+        val eAlpha by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0f,
+            animationSpec = tween(320, easing = FastOutSlowInEasing),
+            label         = "eAlpha$index"
+        )
+        val pSrc      = remember { MutableInteractionSource() }
+        val pPressed  by pSrc.collectIsPressedAsState()
+        val pScale    by animateFloatAsState(
+            targetValue   = if (pPressed) 0.83f else 1f,
+            animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium),
+            label         = "pScale$index"
+        )
+
+        Column(
+            modifier = Modifier
+                .width(if (isLandscape) 64.dp else 80.dp)
+                .graphicsLayer(scaleX = eScale * pScale, scaleY = eScale * pScale, alpha = eAlpha),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 3.dp else 6.dp)
+        ) {
+            Surface(
+                shape           = CircleShape,
+                color           = bgColor,
+                tonalElevation  = 0.dp,
+                shadowElevation = 0.dp,
+                modifier        = Modifier
+                    .size(if (isLandscape) 42.dp else 54.dp)
+                    .clickable(interactionSource = pSrc, indication = null, onClick = onClick)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp))
+                }
+            }
+            Text(
+                text      = label,
+                style     = MaterialTheme.typography.labelSmall.copy(fontSize = if (isLandscape) 10.sp else 11.sp),
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines  = if (isLandscape) 1 else 2,
+                overflow  = TextOverflow.Ellipsis,
+                modifier  = Modifier.fillMaxWidth()
+            )
+        }
+    }
+
+    @Composable
+    private fun HangupSheetAction(index: Int, isLandscape: Boolean = false, onClick: () -> Unit) {
+        var entered by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { delay(100L + index * 55L); entered = true }
+        val eScale by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0.2f,
+            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+            label         = "heScale"
+        )
+        val eAlpha by animateFloatAsState(
+            targetValue   = if (entered) 1f else 0f,
+            animationSpec = tween(320, easing = FastOutSlowInEasing),
+            label         = "heAlpha"
+        )
+        val pSrc     = remember { MutableInteractionSource() }
+        val pPressed by pSrc.collectIsPressedAsState()
+        val pScale   by animateFloatAsState(
+            targetValue   = if (pPressed) 0.83f else 1f,
+            animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium),
+            label         = "hpScale"
+        )
+
+        Column(
+            modifier = Modifier
+                .width(if (isLandscape) 64.dp else 80.dp)
+                .graphicsLayer(scaleX = eScale * pScale, scaleY = eScale * pScale, alpha = eAlpha),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 3.dp else 6.dp)
+        ) {
+            Surface(
+                shape           = CircleShape,
+                color           = Color(0xFFB71C1C),
+                tonalElevation  = 0.dp,
+                shadowElevation = 0.dp,
+                modifier        = Modifier
+                    .size(if (isLandscape) 42.dp else 54.dp)
+                    .clickable(interactionSource = pSrc, indication = null, onClick = onClick)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.CallEnd, "Hangup", tint = Color.White, modifier = Modifier.size(if (isLandscape) 22.dp else 26.dp))
+                }
+            }
+            Text(
+                text      = "Hangup",
+                style     = MaterialTheme.typography.labelSmall.copy(fontSize = if (isLandscape) 10.sp else 11.sp),
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier  = Modifier.fillMaxWidth()
+            )
+        }
+    }
+
+    // ── Observers ─────────────────────────────────────────────────────────────
+
+    private fun observeAll() {
+        scope.launch {
+            CallService.currentCallSession.collect { if (it == null) { removeBubble(); stopSelf() } }
+        }
+        scope.launch {
+            CallActivity.isInForeground.collect { inForeground ->
+                bubbleView?.visibility = if (inForeground) View.GONE else View.VISIBLE
+                if (inForeground && menuView != null) {
+                    menuVisibleState.value = false
+                    delay(440)
+                    try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
+                    menuView = null
+                }
+            }
+        }
+    }
+
+    private fun removeBubble() {
+        menuVisibleState.value = false
+        try { menuView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
+        menuView = null
+        try { bubbleView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
+        bubbleView = null
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(configReceiver)
+        scope.cancel(); lifecycleOwner.onDestroy(); removeBubble(); super.onDestroy()
+    }
+}

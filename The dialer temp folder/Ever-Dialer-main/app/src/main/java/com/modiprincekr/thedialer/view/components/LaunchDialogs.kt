@@ -1,0 +1,417 @@
+package com.modiprincekr.thedialer.view.components
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.modiprincekr.thedialer.view.theme.ProvideScaledDensity
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.createBitmap
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+// painterResource() cannot load the launcher mipmap because on API 26+ it's an AdaptiveIconDrawable
+// (<adaptive-icon> XML), which is neither a VectorDrawable nor a rasterized PNG/WEBP — it throws
+// IllegalArgumentException and crashes. Rendering the resolved application icon Drawable onto a
+// Bitmap works for any icon type, adaptive or not.
+@Composable
+private fun rememberAppIconPainter(): BitmapPainter {
+    val context = LocalContext.current
+    return remember {
+        val drawable = context.packageManager.getApplicationIcon(context.packageName)
+        val width = drawable.intrinsicWidth.coerceAtLeast(1)
+        val height = drawable.intrinsicHeight.coerceAtLeast(1)
+        val bitmap = createBitmap(width, height)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        BitmapPainter(bitmap.asImageBitmap())
+    }
+}
+
+// ─── Shared pop-in wrapper ────────────────────────────────────────────────────
+
+@Composable
+private fun LaunchDialogSurface(
+    onDismissRequest: () -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.82f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "ldScale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "ldAlpha"
+    )
+
+    ProvideScaledDensity {
+        Dialog(
+            onDismissRequest = onDismissRequest,
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().scale(scale).alpha(alpha)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    content = content
+                )
+            }
+        }
+    }
+}
+
+// ─── Solid banner with app icon ───────────────────────────────────────────────
+
+@Composable
+private fun DialogBanner(
+    title: String,
+    subtitle: String,
+    headerContent: (@Composable BoxScope.() -> Unit)? = null
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(170.dp)
+            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        headerContent?.invoke(this)
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // App icon
+            Image(
+                painter = rememberAppIconPainter(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(18.dp))
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+            )
+        }
+    }
+}
+
+// ─── Android 14 Restricted Settings Dialog ───────────────────────────────────
+
+@Composable
+fun Android14WelcomeDialog(
+    onAppInfo: () -> Unit,
+    onContinue: () -> Unit
+) {
+    LaunchDialogSurface {
+        DialogBanner(
+            title = "Welcome to The Dialer",
+            subtitle = "One-time setup required"
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp).padding(top = 1.dp)
+                    )
+                    Text(
+                        "Android 14+ requires \"Allow restricted settings\" to set this as default dialer when installed outside Play Store.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            StepRow(number = "1", icon = Icons.Default.TouchApp,     text = "Long-press The Dialer icon → tap App info")
+            StepRow(number = "2", icon = Icons.Default.MoreVert,     text = "Tap the ⋮ menu (top-right corner)")
+            StepRow(number = "3", icon = Icons.Default.LockOpen,     text = "Tap \"Allow restricted settings\"")
+            StepRow(number = "4", icon = Icons.Default.Celebration,  text = "Return here and set as default dialer. Enjoy!")
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onAppInfo,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("App Info") }
+
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("Continue") }
+            }
+        }
+    }
+}
+
+@Composable
+fun FullScreenIntentDialog(
+    onEnable: () -> Unit,
+    onSkip: () -> Unit
+) {
+    LaunchDialogSurface {
+        DialogBanner(
+            title = "One More Step",
+            subtitle = "Enable full-screen incoming calls"
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp).padding(top = 1.dp)
+                    )
+                    Text(
+                        "Android disables full-screen notifications for new apps by default. Without it, the incoming call screen won't show when your phone is locked.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            StepRow(number = "1", icon = Icons.Default.TouchApp,    text = "Tap \"Enable\" below to open system settings")
+            StepRow(number = "2", icon = Icons.Default.ToggleOn,    text = "Turn on \"Allow full screen notifications\"")
+            StepRow(number = "3", icon = Icons.Default.Celebration, text = "Return here — incoming calls will now show full-screen")
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSkip,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("Later") }
+
+                Button(
+                    onClick = onEnable,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50)
+                ) { Text("Enable") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepRow(number: String, icon: ImageVector, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                number,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+            lineHeight = 17.sp
+        )
+    }
+}
+
+// ─── Telegram Join Dialog ─────────────────────────────────────────────────────
+
+@Composable
+fun TelegramJoinDialog(
+    onJoin: () -> Unit,
+    onSkip: () -> Unit
+) {
+    LaunchedEffect(Unit) { onSkip() }
+}
+
+
+// ─── Donate Dialog ────────────────────────────────────────────────────────────
+
+@Composable
+fun DonateDialog(
+    onDonate: () -> Unit,
+    onLater: () -> Unit
+) {
+    LaunchedEffect(Unit) { onLater() }
+}
+
+@Composable
+fun DonateOptionDialog(
+    title: String = "Donate",
+    description: String = "Choose how you'd like to open the donation page:",
+    icon: ImageVector = Icons.Default.Favorite,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    onDismiss: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onOpenInApp: () -> Unit
+) {
+    ProvideScaledDensity {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            icon = {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            RivoListItem(
+                                headline = "Open in Phone Browser",
+                                supporting = "Use Chrome, Firefox or default browser",
+                                leadingIcon = Icons.Outlined.OpenInBrowser,
+                                iconContainerColor = Color(0xFF2196F3),
+                                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                                onClick = onOpenBrowser
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                            )
+                            RivoListItem(
+                                headline = "Open in App",
+                                supporting = "In-app web view with floating controls",
+                                leadingIcon = Icons.Outlined.PhoneAndroid,
+                                iconContainerColor = Color(0xFF673AB7),
+                                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                                onClick = onOpenInApp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
+}
+
+

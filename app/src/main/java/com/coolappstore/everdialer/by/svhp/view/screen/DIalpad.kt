@@ -419,6 +419,13 @@ fun DialPadScreen(
         val bgBlur = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
         val bgVideoSpeed = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
 
+        val bgLuminance = remember(settingsState, bgPath, bgDim) {
+            if (hasCustomBg && bgFile != null && bgFile.exists()) {
+                com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, bgFile, bgType == "video", bgDim)
+            } else 0.2f
+        }
+        val isBrightBg = hasCustomBg && bgLuminance > 0.48f
+
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
             Surface(
                 modifier = Modifier
@@ -486,7 +493,7 @@ fun DialPadScreen(
                 )
                 val handleColor by animateColorAsState(
                     targetValue = if (isDraggingHandle) MaterialTheme.colorScheme.primary
-                    else if (hasCustomBg) Color.White.copy(alpha = 0.6f)
+                    else if (hasCustomBg) (if (isBrightBg) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.6f))
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "handleColor"
@@ -622,6 +629,13 @@ fun DialPadContent(
     val bgPath = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+    val bgDim = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
+    val bgLuminance = remember(settingsState, bgPath, bgDim) {
+        if (hasCustomBg && bgFile != null && bgFile.exists()) {
+            com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, bgFile, bgType == "video", bgDim)
+        } else 0.2f
+    }
+    val isBrightBg = hasCustomBg && bgLuminance > 0.48f
     // Settings → App Settings → Call Settings → "Direct Call on Tap". When off, tapping a
     // search-result row (saved contact or non-contact) should open Contact Info instead of
     // placing a call directly — same behaviour Recents/Favorites already apply.
@@ -1310,7 +1324,9 @@ fun DialPadContent(
                         number = number,
                         fontSize = 28,
                         cursorPosition = cursorPosition,
-                        onCursorPositionChange = { cursorPosition = it }
+                        onCursorPositionChange = { cursorPosition = it },
+                        hasCustomBg = hasCustomBg,
+                        isBrightBg = isBrightBg
                     )
                 }
 
@@ -1602,7 +1618,9 @@ fun DialPadContent(
                                         compact = true,
                                         overrideWidth = keyWidth,
                                         overrideHeight = keyHeight,
-                                        scaleFactor = scaleFactor
+                                        scaleFactor = scaleFactor,
+                                        hasCustomBg = hasCustomBg,
+                                        isBrightBg = isBrightBg
                                     )
                                 }
                             }
@@ -1765,39 +1783,39 @@ fun DialPadContent(
                     placeholder = {
                         Text(
                             text = "Search contacts...",
-                            color = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
+                            color = if (hasCustomBg) (if (isBrightBg) Color.Black.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.70f)) else dialpadSearchBarPlaceholder,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder) },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = {
                                 searchQuery = ""
                                 focusManager.clearFocus()
                             }) {
-                                Icon(Icons.Default.Close, null, tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder)
+                                Icon(Icons.Default.Close, null, tint = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder)
                             }
                         }
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(28.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = if (hasCustomBg) Color.White else dialpadSearchBarFg,
-                        unfocusedTextColor = if (hasCustomBg) Color.White else dialpadSearchBarFg,
-                        focusedContainerColor = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else dialpadSearchBarBg,
-                        unfocusedContainerColor = if (hasCustomBg) Color.Black.copy(alpha = 0.16f) else dialpadSearchBarBg,
-                        focusedBorderColor = if (hasCustomBg) Color.White.copy(alpha = 0.30f) else if (isSaturatedBackground) dialpadSearchBarBorder else MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = if (hasCustomBg) Color.White.copy(alpha = 0.15f) else dialpadSearchBarBorder,
-                        focusedLeadingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder,
-                        unfocusedLeadingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
-                        focusedTrailingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else dialpadSearchBarPlaceholder,
-                        unfocusedTrailingIconColor = if (hasCustomBg) Color.White.copy(alpha = 0.70f) else dialpadSearchBarPlaceholder,
-                        focusedPlaceholderColor = if (hasCustomBg) Color.White.copy(alpha = 0.65f) else dialpadSearchBarPlaceholder,
-                        unfocusedPlaceholderColor = if (hasCustomBg) Color.White.copy(alpha = 0.65f) else dialpadSearchBarPlaceholder,
-                        cursorColor = if (hasCustomBg) Color.White else if (isSaturatedBackground) dialpadSearchBarFg else MaterialTheme.colorScheme.primary
+                        focusedTextColor = if (hasCustomBg) (if (isDark) Color.White else MaterialTheme.colorScheme.onSurface) else dialpadSearchBarFg,
+                        unfocusedTextColor = if (hasCustomBg) (if (isDark) Color.White else MaterialTheme.colorScheme.onSurface) else dialpadSearchBarFg,
+                        focusedContainerColor = if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.65f)) else dialpadSearchBarBg,
+                        unfocusedContainerColor = if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.50f)) else dialpadSearchBarBg,
+                        focusedBorderColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f)) else if (isSaturatedBackground) dialpadSearchBarBorder else MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)) else dialpadSearchBarBorder,
+                        focusedLeadingIconColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder,
+                        unfocusedLeadingIconColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.70f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder,
+                        focusedTrailingIconColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder,
+                        unfocusedTrailingIconColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.70f) else MaterialTheme.colorScheme.onSurfaceVariant) else dialpadSearchBarPlaceholder,
+                        focusedPlaceholderColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.65f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)) else dialpadSearchBarPlaceholder,
+                        unfocusedPlaceholderColor = if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.65f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)) else dialpadSearchBarPlaceholder,
+                        cursorColor = if (hasCustomBg) (if (isDark) Color.White else MaterialTheme.colorScheme.primary) else if (isSaturatedBackground) dialpadSearchBarFg else MaterialTheme.colorScheme.primary
                     ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
@@ -1819,13 +1837,13 @@ fun DialPadContent(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
-                            .then(if (hasCustomBg) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.15f), CircleShape) else Modifier)
+                            .background(if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.65f)) else MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                            .then(if (hasCustomBg) Modifier.border(0.5.dp, if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f), CircleShape) else Modifier)
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Close dialpad",
-                            tint = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (hasCustomBg) (if (isDark) Color.White else MaterialTheme.colorScheme.onSurfaceVariant) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1917,8 +1935,8 @@ fun DialPadContent(
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
-                    color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)) else null,
+                    color = if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.65f)) else MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(0.5.dp, if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)) else null,
                     modifier = Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                 ) {
                     AnimatedContent(
@@ -2233,8 +2251,14 @@ fun DialPadContent(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(32.dp),
-            color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow,
-            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)) else null
+            color = if (hasCustomBg) {
+                if (isDark) Color.Black.copy(alpha = if (isBrightBg) 0.50f else 0.35f)
+                else Color.White.copy(alpha = if (isBrightBg) 0.60f else 0.45f)
+            } else MaterialTheme.colorScheme.surfaceContainerLow,
+            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
+                0.5.dp,
+                if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)
+            ) else null
         ) {
             Column(
                 modifier = Modifier.padding(
@@ -2268,14 +2292,15 @@ fun DialPadContent(
                                 .clip(RoundedCornerShape(24.dp))
                                 .background(
                                     if (number.isNotEmpty())
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (hasCustomBg) 0.40f else 0.3f)
-                                    else if (hasCustomBg)
-                                        Color.Black.copy(alpha = 0.20f)
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (hasCustomBg) 0.50f else 0.30f)
                                     else Color.Transparent
                                 )
                                 .then(
-                                    if (hasCustomBg) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                                    else Modifier
+                                    if (hasCustomBg && number.isNotEmpty()) Modifier.border(
+                                        0.5.dp,
+                                        if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f),
+                                        RoundedCornerShape(24.dp)
+                                    ) else Modifier
                                 )
                                 .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                                 .combinedClickable(
@@ -2296,7 +2321,9 @@ fun DialPadContent(
                                 onLongPress = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     showOverflowMenu = true
-                                }
+                                },
+                                hasCustomBg = hasCustomBg,
+                                isBrightBg = isBrightBg
                             )
                         }
                         RivoDropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
@@ -2418,7 +2445,9 @@ fun DialPadContent(
                                     onLongClick = if (key == "0") ({ insertAtCursor("+") }) else null,
                                     overrideWidth = keyWidth,
                                     overrideHeight = keyHeight,
-                                    scaleFactor = scaleFactor
+                                    scaleFactor = scaleFactor,
+                                    hasCustomBg = hasCustomBg,
+                                    isBrightBg = isBrightBg
                                 )
                             }
                         }
@@ -2819,7 +2848,9 @@ fun DialPadKey(
     compact: Boolean = false,
     overrideWidth: Dp? = null,
     overrideHeight: Dp? = null,
-    scaleFactor: Float = 1f
+    scaleFactor: Float = 1f,
+    hasCustomBg: Boolean = false,
+    isBrightBg: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -2865,30 +2896,53 @@ fun DialPadKey(
         label = "DialKeyScale"
     )
 
-    val restingBgColor = if (isSaturatedActive && isSaturatedContainer) {
+    val baseContainer = if (isSaturatedActive && isSaturatedContainer) {
         androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.35f)
     } else {
         MaterialTheme.colorScheme.primaryContainer
     }
 
+    val restingBgColor = if (hasCustomBg) {
+        if (isBrightBg) {
+            // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
+            androidx.compose.ui.graphics.lerp(baseContainer, Color.Black, 0.16f).copy(alpha = 0.88f)
+        } else {
+            // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseContainer already pops out
+            if (isDark) {
+                androidx.compose.ui.graphics.lerp(baseContainer, Color.White, 0.18f).copy(alpha = 0.88f)
+            } else {
+                baseContainer.copy(alpha = 0.88f)
+            }
+        }
+    } else {
+        baseContainer
+    }
+
     val targetBgColor = if (isVisuallyPressed) MaterialTheme.colorScheme.primary else restingBgColor
     val bgColor by animateColorAsState(targetBgColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyColor")
+
+    val buttonBgLuminance = remember(restingBgColor) {
+        androidx.core.graphics.ColorUtils.calculateLuminance(restingBgColor.toArgb())
+    }
 
     val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.primary.toArgb()) > 0.45
     val pressedTextColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
 
-    val restingMainTextColor = if (isSaturatedActive) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val restingMainTextColor = remember(restingBgColor, onPrimaryContainer) {
+        if (buttonBgLuminance > 0.45) {
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(onPrimaryContainer.toArgb()) < 0.45) onPrimaryContainer
+            else Color(0xFF1C1B1F)
+        } else {
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(onPrimaryContainer.toArgb()) >= 0.45) onPrimaryContainer
+            else Color.White
+        }
     }
     val targetMainTextColor = if (isVisuallyPressed) pressedTextColor else restingMainTextColor
     val mainTextColor by animateColorAsState(targetMainTextColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyTextColor")
 
-    val restingSubTextColor = if (isSaturatedActive) {
-        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.80f)
-    } else {
-        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+    val restingSubTextColor = remember(restingMainTextColor) {
+        restingMainTextColor.copy(alpha = 0.75f)
     }
     val targetSubTextColor = if (isVisuallyPressed) pressedTextColor.copy(alpha = 0.85f) else restingSubTextColor
     val subTextColor by animateColorAsState(targetSubTextColor, spring(stiffness = Spring.StiffnessMedium), "DialKeySubTextColor")
@@ -2976,7 +3030,11 @@ fun DialPadKey(
                     }) else null
                 ),
             shape = buttonShape,
-            color = bgColor
+            color = bgColor,
+            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
+                0.5.dp,
+                if (buttonBgLuminance > 0.45) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.15f)
+            ) else null
         ) {
             Column(
                 verticalArrangement = Arrangement.Center,
@@ -3049,14 +3107,20 @@ private fun DialpadNumberDisplay(
     fontSize: Int,
     cursorPosition: Int = number.length,
     onCursorPositionChange: (Int) -> Unit = {},
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    hasCustomBg: Boolean = false,
+    isBrightBg: Boolean = false
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         val prefs = koinInject<PreferenceManager>()
         val settingsState by prefs.settingsChanged.collectAsState()
         val fontScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_CUSTOM_FONT_SIZE, 1.0f) }
         val easeOutExpo = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
-        val textColor   = MaterialTheme.colorScheme.onSurface
+        val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+
+        val textColor = if (hasCustomBg) {
+            if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+        } else MaterialTheme.colorScheme.onSurface
 
         // Progressively scale down after 6 digits so 13+ digits comfortably fit
         val baseFontSize = fontSize.toFloat()

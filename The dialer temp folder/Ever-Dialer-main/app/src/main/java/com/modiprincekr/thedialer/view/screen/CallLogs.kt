@@ -1,0 +1,319 @@
+package com.modiprincekr.thedialer.view.screen
+
+import android.content.Context
+import android.provider.CallLog
+import android.telecom.TelecomManager
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.modiprincekr.thedialer.controller.CallLogViewModel
+import com.modiprincekr.thedialer.controller.util.formatDateHeader
+import com.modiprincekr.thedialer.controller.util.makeCall
+import com.modiprincekr.thedialer.controller.util.placeCallWithSimPreference
+import com.modiprincekr.thedialer.controller.util.PreferenceManager
+import com.modiprincekr.thedialer.modal.data.CallLogFilter
+import com.modiprincekr.thedialer.view.components.*
+import com.ramcosta.composedestinations.annotation.Destination
+import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinActivityViewModel
+import org.koin.compose.koinInject
+import com.modiprincekr.thedialer.view.theme.ExpandingScreenContainer
+import com.modiprincekr.thedialer.view.theme.SettingsTransitionStyle
+import java.util.Locale
+import com.modiprincekr.thedialer.controller.ContactsViewModel
+import com.modiprincekr.thedialer.controller.util.numbersLikelyMatch
+import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
+import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
+
+@Destination<RootGraph>(route = "call_log_detail_screen", style = SettingsTransitionStyle::class)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CallLogFullScreen(
+    navigator: DestinationsNavigator,
+    contactId: String? = null,
+    phoneNumber: String? = null
+) {
+    val viewModel: CallLogViewModel = koinActivityViewModel()
+    val contactsViewModel: ContactsViewModel = koinActivityViewModel()
+    val allLogs by viewModel.allCallLogs.collectAsState()
+    val contacts by contactsViewModel.allContacts.collectAsState()
+    val allRecordings by AppFeatures.rememberRecordings()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val showButton by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 2 }
+    }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager }
+    val prefs = koinInject<PreferenceManager>()
+    val simPref = remember { prefs.getInt(PreferenceManager.KEY_DEFAULT_SIM, prefs.getDefaultSimIndexDefault()) }
+
+    var showSimPicker by remember { mutableStateOf(false) }
+    var pendingNumber by remember { mutableStateOf<String?>(null) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshLogs()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+
+    val matchedContact = remember(contactId, phoneNumber, contacts) {
+        if (contactId != null && contactId != "null") contacts.find { it.id == contactId }
+        else if (phoneNumber != null && phoneNumber != "null") {
+            contacts.find { c -> c.phoneNumbers.any { n -> numbersLikelyMatch(phoneNumber, n) } }
+        } else null
+    }
+
+    val filteredLogsByContact = remember(allLogs, matchedContact, contactId, phoneNumber) {
+        if (contactId == null && phoneNumber == null) allLogs
+        else {
+            val allTargetNumbers = mutableSetOf<String>()
+            matchedContact?.phoneNumbers?.forEach { if (it.isNotBlank()) allTargetNumbers.add(it) }
+            if (!phoneNumber.isNullOrBlank() && phoneNumber != "null") allTargetNumbers.add(phoneNumber)
+
+            allLogs.filter { log ->
+                (matchedContact != null && log.contactId == matchedContact.id) ||
+                (contactId != null && contactId != "null" && log.contactId == contactId) ||
+                allTargetNumbers.any { target -> numbersLikelyMatch(log.number, target) }
+            }
+        }
+    }
+
+    val contactName = remember(matchedContact, filteredLogsByContact, phoneNumber) {
+        matchedContact?.name
+            ?: filteredLogsByContact.firstOrNull { it.name != null && it.name != it.number }?.name
+            ?: phoneNumber?.takeIf { it != "null" }
+    }
+
+    if (showSimPicker && pendingNumber != null) {
+        SimPickerDialog(
+            onDismissRequest = { showSimPicker = false },
+            number = pendingNumber,
+            contactName = contactName,
+            onSimSelected = { handle ->
+                makeCall(context, pendingNumber!!, handle)
+                showSimPicker = false
+            }
+        )
+    }
+
+    ExpandingScreenContainer(onClose = { navigator.navigateUp() }) { closeWithAnimation ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            if (contactName != null) "History with $contactName" else "Call History",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { closeWithAnimation() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                val settingsVersion by prefs.settingsChanged.collectAsState()
+                val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+                val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+                val isDynamic = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_DYNAMIC_COLORS, true) }
+                val usePrimary = isSaturatedActive || !isDynamic
+                val activeChipBg = if (usePrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+                val activeChipFg = if (usePrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+
+                val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
+                val allCategories = remember(settingsVersion) { prefs.getAllCallCategories() }
+                val hiddenCategories = remember(settingsVersion) { prefs.getHiddenCallCategories() }
+                val visibleCategories = remember(allCategories, hiddenCategories) {
+                    allCategories.filterNot { hiddenCategories.contains(it.id) }
+                }
+                val customCategories = remember(settingsVersion) { prefs.getCustomCallCategories() }
+
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(visibleCategories, key = { it.id }) { cat ->
+                        FilterChip(
+                            selected = selectedCategoryId == cat.id,
+                            onClick = { viewModel.setCategoryId(cat.id) },
+                            label = { Text(com.modiprincekr.thedialer.controller.util.tr(cat.name)) },
+                            shape = RoundedCornerShape(50.dp),
+                            border = null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = activeChipBg,
+                                selectedLabelColor = activeChipFg
+                            )
+                        )
+                    }
+                }
+
+                if (filteredLogsByContact.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(com.modiprincekr.thedialer.controller.util.tr("No call history found"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    val finalLogs = remember(filteredLogsByContact, selectedCategoryId, customCategories) {
+                        val custom = customCategories.firstOrNull { it.id == selectedCategoryId }
+                        if (custom != null) {
+                            filteredLogsByContact.filter { entry ->
+                                custom.contactPhones.any { numbersLikelyMatch(entry.number, it) }
+                            }
+                        } else {
+                            when (selectedCategoryId) {
+                                "all" -> filteredLogsByContact
+                                "contacts" -> filteredLogsByContact.filter { it.name != null && it.name != it.number && !it.isCallerIdName }
+                                "favourites" -> {
+                                    val favoriteContactIds = contacts.filter { it.isFavorite }.map { it.id }.toSet()
+                                    val favoritePhoneNumbers = contacts.filter { it.isFavorite }.flatMap { it.phoneNumbers }.toSet()
+                                    filteredLogsByContact.filter { log ->
+                                        (log.contactId != null && log.contactId in favoriteContactIds) ||
+                                        log.number in favoritePhoneNumbers
+                                    }
+                                }
+                                "unknown" -> filteredLogsByContact.filter { it.contactId.isNullOrBlank() || it.name.isNullOrEmpty() || it.name == it.number || it.isCallerIdName }
+                                "missed" -> filteredLogsByContact.filter { it.type == CallLog.Calls.MISSED_TYPE || it.type == 5 /* REJECTED */ || it.types.any { t -> t == CallLog.Calls.MISSED_TYPE || t == 5 } }
+                                "incoming" -> filteredLogsByContact.filter { it.type == CallLog.Calls.INCOMING_TYPE || it.type == 7 /* ANSWERED_EXTERNALLY */ || it.types.any { t -> t == CallLog.Calls.INCOMING_TYPE || t == 7 } }
+                                "outgoing" -> filteredLogsByContact.filter { it.type == CallLog.Calls.OUTGOING_TYPE || it.types.any { t -> t == CallLog.Calls.OUTGOING_TYPE } }
+                                else -> filteredLogsByContact
+                            }
+                        }
+                    }
+
+                    val groupedLogs = remember(finalLogs) { finalLogs.groupBy { formatDateHeader(it.date) } }
+                    val use24HourTime = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
+                    val avatarConfig = com.modiprincekr.thedialer.view.components.rememberAvatarDisplayConfig(prefs, settingsVersion)
+
+                    ScrollHapticsEffect(listState = listState)
+                    CompositionLocalProvider(com.modiprincekr.thedialer.view.components.LocalAvatarDisplayConfig provides avatarConfig) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        groupedLogs.forEach { (header, logsInGroup) ->
+                            if (header.isNotBlank()) {
+                                item(key = "header_$header", contentType = "sectionHeader") {
+                                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                        RivoSectionHeader(title = header)
+                                    }
+                                }
+                            }
+                            itemsIndexed(
+                                items = logsInGroup,
+                                key = { _, lg -> lg.callIds.firstOrNull()?.toString() ?: "${lg.number}_${lg.date}" },
+                                contentType = { _, _ -> "callLogEntry" }
+                            ) { index, lg ->
+                                val isFirst = index == 0
+                                val isLast = index == logsInGroup.size - 1
+                                val cornerRadius = 24.dp
+                                val topStart = if (isFirst) cornerRadius else 0.dp
+                                val topEnd = if (isFirst) cornerRadius else 0.dp
+                                val bottomStart = if (isLast) cornerRadius else 0.dp
+                                val bottomEnd = if (isLast) cornerRadius else 0.dp
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(
+                                            topStart = topStart,
+                                            topEnd = topEnd,
+                                            bottomStart = bottomStart,
+                                            bottomEnd = bottomEnd
+                                        ),
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            if (!isFirst) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                                    thickness = 0.5.dp
+                                                )
+                                            }
+                                            val matchingRecording = remember(lg, allRecordings, matchedContact) {
+                                                findMatchingRecording(lg, allRecordings, matchedContact?.phoneNumbers ?: emptyList())
+                                            }
+                                            CallLogTileSimple(
+                                                lg,
+                                                use24HourTime = use24HourTime,
+                                                matchingRecording = matchingRecording,
+                                                onRecordingClick = { rec ->
+                                                    NavBarVisibilityState.hideForSettingsEntry = true
+                                                    navigator.navigate(
+                                                        RecordingsScreenDestination(
+                                                            openedFromSettings = true,
+                                                            openedRecordingUri = rec.uri.toString()
+                                                        )
+                                                    )
+                                                },
+                                                onCallClick = { entry ->
+                                                    val targetNumber = entry.number
+                                                    if (targetNumber.isNotBlank()) {
+                                                        placeCallWithSimPreference(context, targetNumber, simPref) {
+                                                            pendingNumber = targetNumber
+                                                            showSimPicker = true
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                if (isLast) Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                    }
+                    }
+                }
+            }
+
+            ScrollToTopButton(
+                visible = showButton,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } }
+            )
+        }
+    }
+    }
+}

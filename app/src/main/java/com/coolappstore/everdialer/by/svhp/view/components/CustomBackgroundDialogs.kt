@@ -29,7 +29,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -260,7 +262,13 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                 surface0?.release()
                 surface0 = Surface(st)
-                initPlayersIfReady(w, h)
+                if (player0 == null) {
+                    val curW = if (w > 0) w else (if (width > 0) width else measuredWidth)
+                    val curH = if (h > 0) h else (if (height > 0) height else measuredHeight)
+                    initPlayersIfReady(curW, curH)
+                } else {
+                    try { player0?.setSurface(surface0) } catch (_: Exception) {}
+                }
             }
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
                 getActivePlayer()?.let { p -> applyCenterCrop(texture0, p, w, h) }
@@ -278,7 +286,13 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                 surface1?.release()
                 surface1 = Surface(st)
-                initPlayersIfReady(w, h)
+                if (player1 == null && isPrepared0) {
+                    val curW = if (w > 0) w else (if (width > 0) width else measuredWidth)
+                    val curH = if (h > 0) h else (if (height > 0) height else measuredHeight)
+                    player1 = createPlayerInstance(surface1!!, 1, curW, curH)
+                } else if (player1 != null) {
+                    try { player1?.setSurface(surface1) } catch (_: Exception) {}
+                }
             }
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
                 getActivePlayer()?.let { p -> applyCenterCrop(texture1, p, w, h) }
@@ -297,15 +311,20 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         if (!file.exists()) return
         val isSameFile = videoFile?.absolutePath == file.absolutePath
         videoFile = file
-        if (isSameFile && getActivePlayer() != null) {
-            try {
-                val p = getActivePlayer()
-                if ((isPrepared0 || isPrepared1) && p?.isPlaying == false) {
-                    p.start()
-                    startProgressLoop()
-                }
-            } catch (_: Exception) {}
-            return
+        if (isSameFile) {
+            ensureSurfaces()
+            val p = getActivePlayer()
+            if (p != null) {
+                try {
+                    if ((isPrepared0 || isPrepared1) && !p.isPlaying) {
+                        p.start()
+                        startProgressLoop()
+                    }
+                } catch (_: Exception) {}
+                return
+            }
+        } else {
+            releaseAllPlayers()
         }
 
         ensureSurfaces()
@@ -395,22 +414,24 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
                 }
 
                 setOnPreparedListener { p ->
+                    val curW = if (width > 0) width else measuredWidth
+                    val curH = if (height > 0) height else measuredHeight
                     if (index == 0) {
                         isPrepared0 = true
                         videoDurationMs = p.duration
-                        applyCenterCrop(texture0, p, w, h)
-                        applyCenterCrop(texture1, p, w, h)
+                        applyCenterCrop(texture0, p, curW, curH)
+                        applyCenterCrop(texture1, p, curW, curH)
                         applyPlaybackSpeed(p, videoSpeed)
                         if (activeIndex == 0) {
                             try { p.start() } catch (_: Exception) {}
                             startProgressLoop()
                         }
                         if (surface1?.isValid == true && player1 == null) {
-                            player1 = createPlayerInstance(surface1!!, 1, w, h)
+                            player1 = createPlayerInstance(surface1!!, 1, curW, curH)
                         }
                     } else {
                         isPrepared1 = true
-                        applyCenterCrop(texture1, p, w, h)
+                        applyCenterCrop(texture1, p, curW, curH)
                         applyPlaybackSpeed(p, videoSpeed)
                         if (activeIndex == 1) {
                             try { p.start() } catch (_: Exception) {}
@@ -450,13 +471,11 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
         texture1.alpha = 0f
 
         val surf0 = surface0
-        if (surf0 != null && surf0.isValid) {
-            releasePlayer(0)
+        if (surf0 != null && surf0.isValid && player0 == null) {
             player0 = createPlayerInstance(surf0, 0, w, h)
         }
         val surf1 = surface1
-        if (surf1 != null && surf1.isValid) {
-            releasePlayer(1)
+        if (surf1 != null && surf1.isValid && player1 == null && isPrepared0) {
             player1 = createPlayerInstance(surf1, 1, w, h)
         }
     }
@@ -564,8 +583,14 @@ class SeamlessLoopingVideoView @JvmOverloads constructor(
 
     private fun handlePlayerCompletion(index: Int) {
         if (index == activeIndex) {
-            if (!isCrossfading) {
+            if (!isCrossfading && player1 != null && isPrepared1) {
                 startLoopCrossfade(500L)
+            } else {
+                try {
+                    val p = getActivePlayer()
+                    p?.seekTo(0)
+                    p?.start()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -1068,6 +1093,10 @@ fun CustomBackgroundEditorDialog(
                     if (isVideo) {
                         prefs.setFloat("${p}_bg_video_speed", videoSpeed)
                     }
+                    if (p == "dialpad") {
+                        val lum = BackgroundMediaManager.calculateMediaLuminance(destFile, isVideo, dimValue)
+                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, lum)
+                    }
                 }
 
                 // Prune any unreferenced backgrounds
@@ -1544,7 +1573,7 @@ fun CustomBackgroundEditorDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // M3 Expressive Back Button
                     Surface(
@@ -1553,30 +1582,33 @@ fun CustomBackgroundEditorDialog(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         shadowElevation = 6.dp,
-                        modifier = Modifier.size(52.dp)
+                        modifier = Modifier.size(46.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
                                 tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
-                    // M3 Expressive Floating Action Bar (Dim, Blur, Speed, Save)
+                    // M3 Expressive Floating Action Bar (Dim, Blur, Speed)
                     Surface(
-                        shape = RoundedCornerShape(28.dp),
+                        shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         shadowElevation = 8.dp,
                         modifier = Modifier.weight(1f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             // Dim Button - toggles Dim Slider
                             val isDimActive = activeSlider == "dim"
@@ -1584,7 +1616,7 @@ fun CustomBackgroundEditorDialog(
                                 onClick = {
                                     activeSlider = if (isDimActive) null else "dim"
                                 },
-                                shape = RoundedCornerShape(20.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 color = if (isDimActive) MaterialTheme.colorScheme.primaryContainer
                                         else if (dimValue > 0f) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                                         else MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1592,10 +1624,10 @@ fun CustomBackgroundEditorDialog(
                                     if (isDimActive) 1.5.dp else 1.dp,
                                     if (isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 ),
-                                modifier = Modifier.weight(1f).height(44.dp)
+                                modifier = Modifier.defaultMinSize(minWidth = 56.dp).height(40.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
@@ -1603,14 +1635,16 @@ fun CustomBackgroundEditorDialog(
                                         Icons.Outlined.Brightness4,
                                         contentDescription = "Dim",
                                         tint = if (dimValue > 0f || isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(Modifier.width(4.dp))
+                                    Spacer(Modifier.width(2.dp))
                                     Text(
-                                        if (dimValue > 0f) "${(dimValue * 100).toInt()}%" else "Dim",
+                                        text = if (dimValue > 0f) "${(dimValue * 100).toInt()}%" else "Dim",
                                         color = if (dimValue > 0f || isDimActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1621,7 +1655,7 @@ fun CustomBackgroundEditorDialog(
                                 onClick = {
                                     activeSlider = if (isBlurActive) null else "blur"
                                 },
-                                shape = RoundedCornerShape(20.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 color = if (isBlurActive) MaterialTheme.colorScheme.tertiaryContainer
                                         else if (blurValue > 0f) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
                                         else MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1629,10 +1663,10 @@ fun CustomBackgroundEditorDialog(
                                     if (isBlurActive) 1.5.dp else 1.dp,
                                     if (isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 ),
-                                modifier = Modifier.weight(1f).height(44.dp)
+                                modifier = Modifier.defaultMinSize(minWidth = 56.dp).height(40.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
@@ -1640,14 +1674,16 @@ fun CustomBackgroundEditorDialog(
                                         Icons.Outlined.BlurOn,
                                         contentDescription = "Blur",
                                         tint = if (blurValue > 0f || isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(Modifier.width(4.dp))
+                                    Spacer(Modifier.width(2.dp))
                                     Text(
-                                        if (blurValue > 0f) "${blurValue.toInt()}dp" else "Blur",
+                                        text = if (blurValue > 0f) "${blurValue.toInt()}dp" else "Blur",
                                         color = if (blurValue > 0f || isBlurActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1659,7 +1695,7 @@ fun CustomBackgroundEditorDialog(
                                     onClick = {
                                         activeSlider = if (isSpeedActive) null else "speed"
                                     },
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     color = if (isSpeedActive) MaterialTheme.colorScheme.secondaryContainer
                                             else if (videoSpeed != 1.0f) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
                                             else MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1667,10 +1703,10 @@ fun CustomBackgroundEditorDialog(
                                         if (isSpeedActive) 1.5.dp else 1.dp,
                                         if (isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                     ),
-                                    modifier = Modifier.weight(1f).height(44.dp)
+                                    modifier = Modifier.defaultMinSize(minWidth = 56.dp).height(40.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        modifier = Modifier.padding(horizontal = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
@@ -1678,51 +1714,55 @@ fun CustomBackgroundEditorDialog(
                                             Icons.Outlined.Speed,
                                             contentDescription = "Speed",
                                             tint = if (videoSpeed != 1.0f || isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(Modifier.width(4.dp))
+                                        Spacer(Modifier.width(2.dp))
                                         Text(
-                                            if (videoSpeed != 1.0f) "${String.format(java.util.Locale.US, "%.1f", videoSpeed)}x" else "Speed",
+                                            text = if (videoSpeed != 1.0f) "${String.format(java.util.Locale.US, "%.1f", videoSpeed)}x" else "Speed",
                                             color = if (videoSpeed != 1.0f || isSpeedActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
                             }
-
-                            // Save Button - M3 Primary Filled
-                            Button(
-                                onClick = { saveBackground() },
-                                shape = RoundedCornerShape(20.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                modifier = Modifier.height(44.dp)
-                            ) {
-                                if (isSaving) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = "Save",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Save",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
+                    }
+
+                    // Save Button - M3 Primary Filled
+                    Button(
+                        onClick = { saveBackground() },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        modifier = Modifier.height(44.dp)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Save",
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Save",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }

@@ -120,4 +120,76 @@ object BackgroundMediaManager {
             pruneOrphanedBackgrounds(context, prefs)
         }
     }
+
+    private val luminanceCache = java.util.concurrent.ConcurrentHashMap<String, Float>()
+
+    /**
+     * Samples media luminance (taking dim into account) to determine if background is bright (> 0.48f) or dark.
+     * Results are cached in-memory by file path, timestamp, video flag, and dim value.
+     */
+    fun calculateMediaLuminance(file: File?, isVideo: Boolean, dim: Float): Float {
+        if (file == null || !file.exists()) return 0.2f
+        val cacheKey = "${file.absolutePath}_${file.lastModified()}_${isVideo}_$dim"
+        luminanceCache[cacheKey]?.let { return it }
+
+        val lum = try {
+            val bitmap = if (isVideo) {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(file.absolutePath)
+                val frame = retriever.getFrameAtTime(0)
+                retriever.release()
+                frame
+            } else {
+                val options = android.graphics.BitmapFactory.Options().apply {
+                    inSampleSize = 16
+                }
+                android.graphics.BitmapFactory.decodeFile(file.absolutePath, options)
+            }
+            if (bitmap != null) {
+                var totalLum = 0.0
+                var count = 0
+                val stepX = maxOf(1, bitmap.width / 12)
+                val stepY = maxOf(1, bitmap.height / 12)
+                for (x in 0 until bitmap.width step stepX) {
+                    for (y in 0 until bitmap.height step stepY) {
+                        val pixel = bitmap.getPixel(x, y)
+                        totalLum += androidx.core.graphics.ColorUtils.calculateLuminance(pixel)
+                        count++
+                    }
+                }
+                bitmap.recycle()
+                if (count > 0) {
+                    val rawLum = (totalLum / count).toFloat()
+                    rawLum * (1f - dim.coerceIn(0f, 1f))
+                } else 0.2f
+            } else 0.2f
+        } catch (_: Exception) {
+            0.2f
+        }
+        luminanceCache[cacheKey] = lum
+        return lum
+    }
+
+    /**
+     * Returns precalculated dialpad background luminance without blocking the main UI thread.
+     * Reads from in-memory cache or PreferenceManager. If not yet computed, kicks off background calculation.
+     */
+    fun getOrCalculateDialpadLuminance(prefs: PreferenceManager, file: File?, isVideo: Boolean, dim: Float): Float {
+        if (file == null || !file.exists()) return 0.2f
+        val cacheKey = "${file.absolutePath}_${file.lastModified()}_${isVideo}_$dim"
+        luminanceCache[cacheKey]?.let { return it }
+
+        val savedLum = prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, -1f)
+        if (savedLum >= 0f) {
+            luminanceCache[cacheKey] = savedLum
+            return savedLum
+        }
+
+        // Return sensible default immediately, calculate on IO thread in background
+        CoroutineScope(Dispatchers.IO).launch {
+            val computed = calculateMediaLuminance(file, isVideo, dim)
+            prefs.setFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, computed)
+        }
+        return 0.2f
+    }
 }

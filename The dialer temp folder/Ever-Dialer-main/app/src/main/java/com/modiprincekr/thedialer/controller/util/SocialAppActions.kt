@@ -1,0 +1,775 @@
+package com.modiprincekr.thedialer.controller.util
+
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.ContentResolver
+import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.ContactsContract
+import android.telephony.PhoneNumberUtils
+import android.telephony.TelephonyManager
+import android.widget.Toast
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.content.ContextCompat
+
+// ── WhatsApp / Telegram / Google Meet "contact through" quick actions ──────
+// Shared between the Contact Info "Social" card and the Dialpad's long-press menu, so both
+// surfaces use the exact same install-detection, icon-loading, and launch behavior.
+
+const val WHATSAPP_PACKAGE = "com.whatsapp"
+const val WHATSAPP_BUSINESS_PACKAGE = "com.whatsapp.w4b"
+val WHATSAPP_PACKAGES = setOf(WHATSAPP_PACKAGE, WHATSAPP_BUSINESS_PACKAGE)
+const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
+val PREFERRED_TELEGRAM_PACKAGES = listOf(
+    "org.telegram.messenger",
+    "org.telegram.messenger.web",
+    "com.radolyn.ayugram",
+    "tw.nekomimi.nekogram",
+    "org.thunderdog.challegram",
+    "org.telegram.BETA",
+    "org.telegram.plus"
+)
+
+/** Resolves the genuine Telegram client package, prioritizing official and popular forks (like AyuGram)
+ *  and filtering out third-party media players (e.g., TMPlayer). */
+fun getTelegramClientPackage(context: Context): String? {
+    for (pkg in PREFERRED_TELEGRAM_PACKAGES) {
+        if (isPackageInstalled(context, pkg)) return pkg
+    }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
+    val packageManager = context.packageManager
+    val handlers = try {
+        packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    } catch (_: Exception) { emptyList() }
+        .mapNotNull { it.activityInfo?.packageName }
+        .filterNot { pkg ->
+            pkg == "android" || pkg.startsWith("com.android.internal") || pkg == context.packageName ||
+            pkg.contains("tmplayer", ignoreCase = true) || pkg.contains("player", ignoreCase = true)
+        }
+        .filter { isPackageInstalled(context, it) }
+        .distinct()
+
+    return handlers.firstOrNull()
+}
+
+/** Returns the display name of the detected Telegram client (e.g. "AyuGram", "Nekogram", "Telegram"). */
+fun getTelegramLabel(context: Context): String {
+    val pkg = getTelegramClientPackage(context)
+    return when {
+        pkg == "com.radolyn.ayugram" -> "AyuGram"
+        pkg == "tw.nekomimi.nekogram" -> "Nekogram"
+        pkg == "org.thunderdog.challegram" -> "Telegram X"
+        else -> "Telegram"
+    }
+}
+const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
+const val TRUECALLER_PACKAGE = "com.truecaller"
+
+fun isPackageInstalled(context: Context, pkg: String): Boolean =
+    try {
+        val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
+        appInfo.enabled
+    } catch (_: Exception) { false }
+
+fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
+    packages.any { pkg -> isPackageInstalled(context, pkg) }
+
+fun isWhatsAppInstalled(context: Context): Boolean = isPackageInstalled(context, WHATSAPP_PACKAGE)
+fun isWhatsAppBusinessInstalled(context: Context): Boolean = isPackageInstalled(context, WHATSAPP_BUSINESS_PACKAGE)
+
+fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): ImageBitmap {
+    val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+    val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap.asImageBitmap()
+}
+
+/** Loads the real launcher icon of WhatsApp if installed. */
+fun getWhatsAppIcon(context: Context): ImageBitmap? {
+    if (!isWhatsAppInstalled(context)) return null
+    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_PACKAGE)) } catch (_: Exception) { null }
+}
+
+/** Loads the real launcher icon of WhatsApp Business if installed. */
+fun getWhatsAppBusinessIcon(context: Context): ImageBitmap? {
+    if (!isWhatsAppBusinessInstalled(context)) return null
+    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_BUSINESS_PACKAGE)) } catch (_: Exception) { null }
+}
+
+/** Loads the real launcher icon of the detected Telegram client (official or genuine fork like AyuGram). */
+fun getTelegramIcon(context: Context): ImageBitmap? {
+    val chosenPackage = getTelegramClientPackage(context) ?: return null
+    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(chosenPackage)) } catch (_: Exception) { null }
+}
+
+/** True if at least one genuine Telegram-capable app (official app or verified fork like AyuGram) is installed. */
+fun isTelegramInstalled(context: Context): Boolean = getTelegramClientPackage(context) != null
+
+/** True if Google Meet is installed on the device. */
+fun isGoogleMeetInstalled(context: Context): Boolean = isPackageInstalled(context, GOOGLE_MEET_PACKAGE)
+
+/** Loads Google Meet's real launcher icon if it's installed. */
+fun getGoogleMeetIcon(context: Context): ImageBitmap? {
+    if (!isGoogleMeetInstalled(context)) return null
+    return try {
+        drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
+    } catch (_: Exception) { null }
+}
+
+/** True if Truecaller is installed on the device. */
+fun isTruecallerInstalled(context: Context): Boolean = isPackageInstalled(context, TRUECALLER_PACKAGE)
+
+/** Loads Truecaller's real launcher icon if it's installed. */
+fun getTruecallerIcon(context: Context): ImageBitmap? {
+    if (!isTruecallerInstalled(context)) return null
+    return try {
+        drawableToImageBitmap(context.packageManager.getApplicationIcon(TRUECALLER_PACKAGE))
+    } catch (_: Exception) { null }
+}
+
+/** Best-effort device region (e.g. "IN", "US"), preferring the live network over the SIM's home
+ *  country and finally the locale, so numbers typed without a country code can still be resolved
+ *  to a full international number. */
+private fun getDeviceCountryIso(context: Context): String? {
+    return try {
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+        tm?.networkCountryIso?.takeIf { it.isNotBlank() }
+            ?: tm?.simCountryIso?.takeIf { it.isNotBlank() }
+            ?: context.resources.configuration.locales[0]?.country?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }?.uppercase()
+}
+
+/** Turns a locally-typed number (no leading "+") into a full E.164 international number using
+ *  the device's region, e.g. "9807654321" -> "+919807654321" for a device in India. This must
+ *  run through Android's own formatter rather than any manual digit-stripping: naive "drop a
+ *  leading 0" heuristics corrupt numbers where a 0 legitimately appears elsewhere (e.g.
+ *  "9807654321"), and WhatsApp's own web-link handler rejects/mangles numbers that aren't
+ *  already in full international form. Falls back to the plain digits (old behavior) if E.164
+ *  conversion isn't possible, so a number is still passed through rather than blocked entirely. */
+private fun toInternationalNumber(context: Context, phoneNumber: String): String {
+    val trimmed = phoneNumber.trim()
+    if (trimmed.startsWith("+")) return trimmed.filter { it.isDigit() || it == '+' }
+
+    val digitsOnly = trimmed.filter { it.isDigit() }
+    if (digitsOnly.isEmpty()) return digitsOnly
+
+    val countryIso = getDeviceCountryIso(context)
+    if (countryIso != null) {
+        val e164 = try { PhoneNumberUtils.formatNumberToE164(digitsOnly, countryIso) } catch (_: Exception) { null }
+        if (!e164.isNullOrBlank()) return e164
+    }
+    return digitsOnly
+}
+
+/** Opens a WhatsApp chat with [phoneNumber]. If [message] is provided, pre-fills the message. Targets standard WhatsApp specifically. */
+fun openWhatsAppChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    val clean = toInternationalNumber(context, phoneNumber)
+    if (clean.isEmpty()) return false
+    val uriStr = if (!message.isNullOrBlank()) {
+        "https://wa.me/$clean?text=${Uri.encode(message)}"
+    } else {
+        "https://wa.me/$clean"
+    }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+        if (isWhatsAppInstalled(context)) {
+            setPackage(WHATSAPP_PACKAGE)
+        }
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
+}
+
+/** Opens a WhatsApp Business chat with [phoneNumber]. If [message] is provided, pre-fills the message. Targets WhatsApp Business specifically. */
+fun openWhatsAppBusinessChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val clean = toInternationalNumber(context, phoneNumber)
+    if (clean.isEmpty()) return false
+    val uriStr = if (!message.isNullOrBlank()) {
+        "https://wa.me/$clean?text=${Uri.encode(message)}"
+    } else {
+        "https://wa.me/$clean"
+    }
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+        setPackage(WHATSAPP_BUSINESS_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
+}
+
+/** Opens a Telegram chat with [phoneNumber]. If [message] is provided, pre-fills the message. Targets the detected genuine Telegram package (e.g. AyuGram) directly without TMPlayer hijacking. Returns false if no Telegram-capable app is installed. */
+fun openTelegramChat(context: Context, phoneNumber: String, message: String? = null): Boolean {
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    val uriStr = if (!message.isNullOrBlank()) {
+        "tg://msg?text=${Uri.encode(message)}"
+    } else {
+        "tg://resolve?phone=$clean"
+    }
+    val clientPkg = getTelegramClientPackage(context) ?: return false
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+        setPackage(clientPkg)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) {
+        val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
+            setPackage(clientPkg)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(fallbackIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+}
+
+/** Opens the Google Meet app without targeting any particular contact. Returns false if it isn't installed. */
+fun openGoogleMeetApp(context: Context): Boolean {
+    val launchIntent = try { context.packageManager.getLaunchIntentForPackage(GOOGLE_MEET_PACKAGE) } catch (_: Exception) { null }
+        ?: return false
+    return try {
+        context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Exception) { false }
+}
+
+// The custom action + explicit-component pair the stock Contacts app fires at Meet's own
+// "Voice call" / "Video call" quick-action rows (visible as the ContactsAudioActionActivity /
+// ContactsVideoActionActivity activity-aliases in `adb shell dumpsys package` or Settings → App
+// info → Meet → "Set as default" style activity listings). Standard ACTION_CALL/ACTION_VIEW on a
+// tel: Uri does NOT resolve to Meet — Meet doesn't register for those — which is why calls need to
+// target this action and these exact components directly instead.
+private const val TACHYON_CALL_ACTION = "com.google.android.apps.tachyon.action.CALL"
+private const val TACHYON_VIDEO_ACTION_ACTIVITY = "com.google.android.apps.tachyon.ContactsVideoActionActivity"
+private const val TACHYON_AUDIO_ACTION_ACTIVITY = "com.google.android.apps.tachyon.ContactsAudioActionActivity"
+
+private fun hasCallPhonePermission(context: Context) =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+
+/**
+ * Fires the exact intent (custom action + explicit component) that the stock Contacts app fires
+ * at Meet's own call-through-Meet activity aliases, for an arbitrary [phoneNumber] — this works
+ * regardless of whether the number belongs to a Google-synced contact, unlike the ContactsContract
+ * data-row lookup below. Requires CALL_PHONE, which these aliases are permission-protected by.
+ */
+private fun startTachyonCallActivity(context: Context, phoneNumber: String, activityClass: String): Boolean {
+    if (!hasCallPhonePermission(context)) return false
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    if (clean.isEmpty()) return false
+    return try {
+        val intent = Intent(TACHYON_CALL_ACTION, Uri.parse("tel:$clean")).apply {
+            setClassName(GOOGLE_MEET_PACKAGE, activityClass)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) { false }
+}
+
+/**
+ * Actually places a Google Meet video call to [phoneNumber] (Meet, formerly Duo, natively
+ * supports calling a phone number the same way a regular VoIP call app does). Falls back to just
+ * opening the Meet app if the CALL_PHONE permission hasn't been granted or the direct-call intent
+ * can't be resolved, so the user still lands somewhere useful instead of nothing happening.
+ * Returns false only if Google Meet isn't installed at all.
+ */
+fun startGoogleMeetCall(context: Context, phoneNumber: String): Boolean {
+    if (!isPackageInstalled(context, GOOGLE_MEET_PACKAGE)) return false
+    if (startTachyonCallActivity(context, phoneNumber, TACHYON_VIDEO_ACTION_ACTIVITY)) return true
+    return openGoogleMeetApp(context)
+}
+
+private const val MIME_MEET_VIDEO_CALL = "vnd.android.cursor.item/com.google.android.apps.tachyon.phone"
+private const val MIME_MEET_AUDIO_CALL = "vnd.android.cursor.item/com.google.android.apps.tachyon.phone.audio"
+
+/**
+ * Looks up the ContactsContract.Data row Google Meet itself registers for a synced contact —
+ * the same mechanism the stock Contacts app uses to show "Voice call" / "Video call" through Meet
+ * as native quick actions, so firing ACTION_VIEW on it starts a real Meet call directly instead of
+ * only opening the app. Mirrors [findWhatsAppCallDataUri]. Only used as a secondary attempt now,
+ * since it only finds a row for contacts Meet has actually synced — [startTachyonCallActivity]
+ * above works for any number and is tried first.
+ */
+private fun findGoogleMeetCallDataUri(context: Context, phoneNumber: String, mimeType: String): Uri? {
+    if (!isGoogleMeetInstalled(context)) return null
+    if (!hasReadContactsPermission(context)) return null
+    val digits = phoneNumber.filter { it.isDigit() }
+    if (digits.isEmpty()) return null
+    return try {
+        val cr = context.contentResolver
+        cr.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data._ID, ContactsContract.Data.CONTACT_ID),
+            "${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(mimeType),
+            null
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val dataId = cursor.getLong(0)
+                val contactId = cursor.getLong(1)
+                if (contactHasMatchingNumber(cr, contactId, digits)) {
+                    return ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, dataId)
+                }
+            }
+            null
+        }
+    } catch (_: Exception) { null }
+}
+
+/** Starts a real Google Meet voice call to [phoneNumber]. Tries the same custom action + explicit
+ *  component the stock Contacts app fires for its "Voice call" quick action first (works for any
+ *  number); if that can't be resolved (e.g. CALL_PHONE not granted), falls back to a Meet-synced
+ *  contact's registered call shortcut, then to just opening the Meet app. Returns false only if
+ *  Google Meet isn't installed at all. */
+fun startGoogleMeetVoiceCall(context: Context, phoneNumber: String): Boolean {
+    if (!isGoogleMeetInstalled(context)) return false
+    if (startTachyonCallActivity(context, phoneNumber, TACHYON_AUDIO_ACTION_ACTIVITY)) return true
+    val uri = findGoogleMeetCallDataUri(context, phoneNumber, MIME_MEET_AUDIO_CALL)
+    if (uri != null) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return true
+        } catch (_: Exception) { /* fall through */ }
+    }
+    return openGoogleMeetApp(context)
+}
+
+/** Starts a real Google Meet video call to [phoneNumber]. Tries the same custom action + explicit
+ *  component the stock Contacts app fires for its "Video call" quick action first (works for any
+ *  number); if that can't be resolved, falls back to a Meet-synced contact's registered call
+ *  shortcut, then to just opening the Meet app. Returns false only if Google Meet isn't installed
+ *  at all. */
+fun startGoogleMeetVideoCall(context: Context, phoneNumber: String): Boolean {
+    if (!isGoogleMeetInstalled(context)) return false
+    if (startTachyonCallActivity(context, phoneNumber, TACHYON_VIDEO_ACTION_ACTIVITY)) return true
+    val uri = findGoogleMeetCallDataUri(context, phoneNumber, MIME_MEET_VIDEO_CALL)
+    if (uri != null) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return true
+        } catch (_: Exception) { /* fall through */ }
+    }
+    return openGoogleMeetApp(context)
+}
+
+private fun hasReadContactsPermission(context: Context) =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+/** Returns true if the raw contact behind Android Contacts row [contactId] has a saved phone
+ *  number matching [digits] (via the same lenient suffix-matching rule used elsewhere in the app). */
+private fun contactHasMatchingNumber(cr: ContentResolver, contactId: Long, digits: String): Boolean {
+    return try {
+        cr.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+            arrayOf(contactId.toString()),
+            null
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val num = c.getString(0) ?: continue
+                if (numbersLikelyMatch(num, digits)) return true
+            }
+            false
+        } ?: false
+    } catch (_: Exception) { false }
+}
+
+/**
+ * Looks up the ContactsContract.Data row WhatsApp itself registers for a synced contact — this is
+ * the same mechanism the stock Android Contacts/Dialer apps use to show "WhatsApp Voice call" /
+ * "WhatsApp Video call" as native quick actions, so firing ACTION_VIEW on it starts a real
+ * WhatsApp call directly instead of only opening the chat.
+ */
+private fun findWhatsAppCallDataUri(context: Context, phoneNumber: String, mimeType: String): Uri? {
+    if (!isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return null
+    if (!hasReadContactsPermission(context)) return null
+    val digits = phoneNumber.filter { it.isDigit() }
+    if (digits.isEmpty()) return null
+    return try {
+        val cr = context.contentResolver
+        cr.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data._ID, ContactsContract.Data.CONTACT_ID),
+            "${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(mimeType),
+            null
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val dataId = cursor.getLong(0)
+                val contactId = cursor.getLong(1)
+                if (contactHasMatchingNumber(cr, contactId, digits)) {
+                    return ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, dataId)
+                }
+            }
+            null
+        }
+    } catch (_: Exception) { null }
+}
+
+private const val MIME_WHATSAPP_VOICE_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
+private const val MIME_WHATSAPP_VIDEO_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
+private const val MIME_WHATSAPP_BUSINESS_VOICE_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.voip.call"
+private const val MIME_WHATSAPP_BUSINESS_VIDEO_CALL = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.video.call"
+
+/** Starts a real WhatsApp voice call to [phoneNumber] if this contact is WhatsApp-synced on the
+ *  device. Falls back to opening the WhatsApp chat when direct-call shortcut isn't available. */
+fun startWhatsAppVoiceCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VOICE_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                if (isWhatsAppInstalled(context)) setPackage(WHATSAPP_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppChat(context, phoneNumber) }
+    }
+    return openWhatsAppChat(context, phoneNumber)
+}
+
+/** Starts a real WhatsApp video call to [phoneNumber] if this contact is WhatsApp-synced on the
+ *  device. Falls back to opening the WhatsApp chat when direct-call shortcut isn't available. */
+fun startWhatsAppVideoCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VIDEO_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                if (isWhatsAppInstalled(context)) setPackage(WHATSAPP_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppChat(context, phoneNumber) }
+    }
+    return openWhatsAppChat(context, phoneNumber)
+}
+
+/** Starts a real WhatsApp Business voice call to [phoneNumber] if synced on the device. */
+fun startWhatsAppBusinessVoiceCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_BUSINESS_VOICE_CALL)
+        ?: findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VOICE_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage(WHATSAPP_BUSINESS_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppBusinessChat(context, phoneNumber) }
+    }
+    return openWhatsAppBusinessChat(context, phoneNumber)
+}
+
+/** Starts a real WhatsApp Business video call to [phoneNumber] if synced on the device. */
+fun startWhatsAppBusinessVideoCall(context: Context, phoneNumber: String): Boolean {
+    if (!isWhatsAppBusinessInstalled(context)) return false
+    val uri = findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_BUSINESS_VIDEO_CALL)
+        ?: findWhatsAppCallDataUri(context, phoneNumber, MIME_WHATSAPP_VIDEO_CALL)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage(WHATSAPP_BUSINESS_PACKAGE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openWhatsAppBusinessChat(context, phoneNumber) }
+    }
+    return openWhatsAppBusinessChat(context, phoneNumber)
+}
+
+private fun showToast(context: Context, message: String) {
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    } else {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+/**
+ * Directly launches a WhatsApp Video call to [phoneNumber].
+ * Queries ContactsContract.Data for "vnd.android.cursor.item/vnd.com.whatsapp.video.call" matching [phoneNumber].
+ * If matching _ID is found, dispatches ACTION_VIEW with the Data Uri and MIME type.
+ * If not found, falls back to "https://api.whatsapp.com/send?phone=$formattedNumber" with a Toast.
+ * If WhatsApp is not installed, catches ActivityNotFoundException and shows a Toast.
+ */
+fun launchDirectWhatsAppVideoCall(context: Context, phoneNumber: String) {
+    if (!isWhatsAppInstalled(context) && !isAnyPackageInstalled(context, WHATSAPP_PACKAGES)) {
+        showToast(context, "WhatsApp is not installed.")
+        return
+    }
+
+    val cleanDigits = phoneNumber.filter { it.isDigit() }
+    val formattedNumber = toInternationalNumber(context, phoneNumber).filter { it.isDigit() }.ifEmpty { cleanDigits }
+
+    var videoCallDataId: Long? = null
+    var resolvedMimeType = MIME_WHATSAPP_VIDEO_CALL
+
+    if (hasReadContactsPermission(context) && cleanDigits.isNotEmpty()) {
+        try {
+            val cr = context.contentResolver
+            val mimeTypes = listOf(
+                MIME_WHATSAPP_VIDEO_CALL,
+                MIME_WHATSAPP_BUSINESS_VIDEO_CALL
+            )
+            for (mime in mimeTypes) {
+                cr.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data._ID, ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DATA1),
+                    "${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(mime),
+                    null
+                )?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(0)
+                        val contactId = cursor.getLong(1)
+                        val data1 = cursor.getString(2)
+                        if ((data1 != null && numbersLikelyMatch(data1, cleanDigits)) ||
+                            contactHasMatchingNumber(cr, contactId, cleanDigits)
+                        ) {
+                            videoCallDataId = id
+                            resolvedMimeType = mime
+                            break
+                        }
+                    }
+                }
+                if (videoCallDataId != null) break
+            }
+        } catch (_: Exception) {
+            videoCallDataId = null
+        }
+    }
+
+    if (videoCallDataId != null) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(
+                    Uri.withAppendedPath(ContactsContract.Data.CONTENT_URI, videoCallDataId.toString()),
+                    resolvedMimeType
+                )
+                if (resolvedMimeType == MIME_WHATSAPP_VIDEO_CALL && isWhatsAppInstalled(context)) {
+                    setPackage(WHATSAPP_PACKAGE)
+                } else if (resolvedMimeType == MIME_WHATSAPP_BUSINESS_VIDEO_CALL && isWhatsAppBusinessInstalled(context)) {
+                    setPackage(WHATSAPP_BUSINESS_PACKAGE)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            return
+        } catch (e: ActivityNotFoundException) {
+            showToast(context, "WhatsApp is not installed.")
+            return
+        } catch (_: Exception) {
+            // Fall through to fallback
+        }
+    }
+
+    // FALLBACK: If direct video call MIME type is not found (e.g., number not saved in contacts)
+    try {
+        val targetPhone = formattedNumber.ifEmpty { cleanDigits }
+        val fallbackUri = Uri.parse("https://api.whatsapp.com/send?phone=$targetPhone")
+        val fallbackIntent = Intent(Intent.ACTION_VIEW, fallbackUri).apply {
+            if (isWhatsAppInstalled(context)) {
+                setPackage(WHATSAPP_PACKAGE)
+            } else if (isWhatsAppBusinessInstalled(context)) {
+                setPackage(WHATSAPP_BUSINESS_PACKAGE)
+            }
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        showToast(context, "Direct video unavailable, opening WhatsApp")
+        context.startActivity(fallbackIntent)
+    } catch (e: ActivityNotFoundException) {
+        showToast(context, "WhatsApp is not installed.")
+    } catch (_: Exception) {
+        try {
+            val targetPhone = formattedNumber.ifEmpty { cleanDigits }
+            val fallbackUri = Uri.parse("https://api.whatsapp.com/send?phone=$targetPhone")
+            val fallbackIntent = Intent(Intent.ACTION_VIEW, fallbackUri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallbackIntent)
+        } catch (e: ActivityNotFoundException) {
+            showToast(context, "WhatsApp is not installed.")
+        } catch (_: Exception) {
+            showToast(context, "WhatsApp is not installed.")
+        }
+    }
+}
+
+
+/**
+ * Looks up a ContactsContract.Data row that a Telegram-capable app has registered for a synced
+ * contact as a direct call action — the same mechanism findWhatsAppCallDataUri (above) uses for
+ * WhatsApp. Unlike WhatsApp, Telegram (and its forks) don't share one single fixed MIME type
+ * across versions/builds, so instead of an exact-string match this scans for any Data row whose
+ * MIMETYPE merely mentions both "telegram" and "call" — still specific enough to avoid false
+ * positives, but resilient to the exact suffix varying. [wantVideo] prefers a row whose MIMETYPE
+ * also mentions "video" when one exists, falling back to whatever call-shaped row is found.
+ */
+private fun findTelegramCallDataUri(context: Context, phoneNumber: String, wantVideo: Boolean): Uri? {
+    if (!isTelegramInstalled(context)) return null
+    if (!hasReadContactsPermission(context)) return null
+    val digits = phoneNumber.filter { it.isDigit() }
+    if (digits.isEmpty()) return null
+    return try {
+        val cr = context.contentResolver
+        cr.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data._ID, ContactsContract.Data.CONTACT_ID, ContactsContract.Data.MIMETYPE),
+            null, null, null
+        )?.use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow(ContactsContract.Data._ID)
+            val contactIdIdx = cursor.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val mimeIdx = cursor.getColumnIndexOrThrow(ContactsContract.Data.MIMETYPE)
+            var fallbackUri: Uri? = null
+            while (cursor.moveToNext()) {
+                val mime = cursor.getString(mimeIdx)?.lowercase() ?: continue
+                if (!mime.contains("telegram") || !mime.contains("call")) continue
+                val contactId = cursor.getLong(contactIdIdx)
+                if (!contactHasMatchingNumber(cr, contactId, digits)) continue
+                val uri = ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, cursor.getLong(idIdx))
+                if (mime.contains("video") == wantVideo) return uri
+                if (fallbackUri == null) fallbackUri = uri
+            }
+            fallbackUri
+        }
+    } catch (_: Exception) { null }
+}
+
+/** Starts a real Telegram voice call to [phoneNumber] when this contact is Telegram-synced on the
+ *  device with a registered call action (see findTelegramCallDataUri). Falls back to opening the
+ *  Telegram chat (so the user can tap Call themselves) when no direct-call action is available —
+ *  this is the common case, since most Telegram installs don't register one. Returns false only
+ *  if no Telegram-capable app is installed. */
+fun startTelegramVoiceCall(context: Context, phoneNumber: String): Boolean {
+    if (!isTelegramInstalled(context)) return false
+    val uri = findTelegramCallDataUri(context, phoneNumber, wantVideo = false)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                val clientPkg = getTelegramClientPackage(context)
+                if (clientPkg != null) setPackage(clientPkg)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openTelegramChat(context, phoneNumber) }
+    }
+    return openTelegramChat(context, phoneNumber)
+}
+
+/** Starts a real Telegram video call to [phoneNumber] when this contact is Telegram-synced on the
+ *  device with a registered call action (see findTelegramCallDataUri). Falls back to opening the
+ *  Telegram chat (so the user can tap Video Call themselves) when no direct-call action is
+ *  available. Returns false only if no Telegram-capable app is installed. */
+fun startTelegramVideoCall(context: Context, phoneNumber: String): Boolean {
+    if (!isTelegramInstalled(context)) return false
+    val uri = findTelegramCallDataUri(context, phoneNumber, wantVideo = true)
+    if (uri != null) {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                val clientPkg = getTelegramClientPackage(context)
+                if (clientPkg != null) setPackage(clientPkg)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { openTelegramChat(context, phoneNumber) }
+    }
+    return openTelegramChat(context, phoneNumber)
+}
+
+/**
+ * Opens Truecaller targeted at [phoneNumber] (so Truecaller searches/identifies or prepares to call
+ * the number). Falls back to opening the Truecaller app if the specific number intent cannot be handled.
+ * Returns false only if Truecaller is not installed.
+ */
+fun openTruecaller(context: Context, phoneNumber: String): Boolean {
+    if (!isTruecallerInstalled(context)) return false
+    val clean = phoneNumber.filter { it.isDigit() || it == '+' }
+    if (clean.isEmpty()) return false
+
+    // Attempt 1: ACTION_VIEW with tel: URI directed to Truecaller package
+    val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tel:$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (viewIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(viewIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 2: ACTION_DIAL directed to Truecaller package
+    val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (dialIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(dialIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 3: Truecaller URI scheme search
+    val customUriIntent = Intent(Intent.ACTION_VIEW, Uri.parse("truecaller://search?q=$clean")).apply {
+        setPackage(TRUECALLER_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (customUriIntent.resolveActivity(context.packageManager) != null) {
+        return try {
+            context.startActivity(customUriIntent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // Attempt 4: Launch Truecaller directly
+    val launchIntent = try { context.packageManager.getLaunchIntentForPackage(TRUECALLER_PACKAGE) } catch (_: Exception) { null }
+    if (launchIntent != null) {
+        return try {
+            context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (_: Exception) { false }
+    }
+
+    return false
+}

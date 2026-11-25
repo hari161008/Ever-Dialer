@@ -1,0 +1,86 @@
+package com.modiprincekr.thedialer.view.screen.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Launch
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.modiprincekr.thedialer.controller.util.openLink
+import com.modiprincekr.thedialer.view.components.RivoExpressiveCard
+import com.modiprincekr.thedialer.view.components.RivoListItem
+import com.modiprincekr.thedialer.view.theme.SettingsTransitionStyle
+import com.modiprincekr.thedialer.view.theme.settingsMotionBlur
+import com.ramcosta.composedestinations.annotation.Destination
+import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+
+data class Contributor(
+    val name: String,
+    val role: String,
+    val githubUrl: String? = null
+)
+
+val appContributors = listOf(
+    Contributor("hama", "Lead Developer", "https://github.com/MoHamed-B-M"),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Destination<RootGraph>(style = SettingsTransitionStyle::class)
+@Composable
+fun ContributorsScreen(
+    navigator: DestinationsNavigator
+) {
+    val context = LocalContext.current
+    Scaffold(
+        modifier = Modifier.settingsMotionBlur(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            com.modiprincekr.thedialer.view.components.SettingsPillTopAppBar(
+                title = "Contributors",
+                onBackClick = { navigator.navigateUp() }
+            )
+        }
+    ) { padding ->
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = padding.calculateTopPadding()),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+
+            item {
+                RivoExpressiveCard {
+                    appContributors.forEachIndexed { index, contributor ->
+                        RivoListItem(
+                            headline = contributor.name,
+                            supporting = contributor.role,
+                            trailingIcon = if (contributor.githubUrl != null) Icons.Outlined.Launch else null,
+                            onClick = {
+                                contributor.githubUrl?.let { openLink(context, it) }
+                            }
+                        )
+                        if (index < appContributors.size - 1) {
+                            HorizontalDivider(
+                                Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
+    }
+}

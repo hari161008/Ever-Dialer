@@ -1344,6 +1344,7 @@ class PreferenceManager(context: Context) {
         const val KEY_DIALPAD_BG_DIM              = "dialpad_bg_dim"
         const val KEY_DIALPAD_BG_BLUR             = "dialpad_bg_blur"
         const val KEY_DIALPAD_BG_VIDEO_SPEED      = "dialpad_bg_video_speed"
+        const val KEY_DIALPAD_BG_LUMINANCE        = "dialpad_bg_luminance"
 
         const val KEY_ONGOING_BG_TYPE           = "ongoing_bg_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_BG_PATH           = "ongoing_bg_path"

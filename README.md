@@ -1,6 +1,8 @@
 # Ever Dialer And Ever SMS
 <br>
 
+> **License & Upstream Notice**: Ever Dialer is an open-source Android dialer and SMS client derived from [RivoPhone / Revo Dialer](https://github.com/user-grinch/RivoPhone) (© 2025–2026 user-grinch) and [P Dialer](https://github.com/MoHamed-B-M/Pdialer) (by MoHamed-B-M), distributed under the [GNU General Public License v3.0](LICENSE).
+
 <img src="https://raw.githubusercontent.com/hari161008/Website-For-Everlasting-Android-Tweak/main/Ever%20Dialer/Assets/Banner%20and%20Icon/Ever%20Dialer%20Banner.png" width="100%" />
 Ever Dialer is the best replacement of <a href="https://play.google.com/store/apps/details?id=com.google.android.dialer">Google Dialer</a> and <a href="https://play.google.com/store/apps/details?id=com.hb.dialer.free">True Phone</a> which has 300+ FEATURES !! it can RECORD CALLS without announcements and without root, it has Material You design with dynamic colours, aesthetic, smooth and fluid animations, open source, heavily and much more customizable like <a href="https://play.google.com/store/apps/details?id=com.hb.dialer.free">True Phone</a>, NO ADS, some more extra features like taking notes of each contact or taking a quick note from a window when you are on a call, It has a dedicated SMS feature which shows in the app drawer list too and finally IT's 100% FREEEE !!!!
 <br><br>
@@ -536,6 +538,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 
 # Used App As The Base And Their Licenses Available In Their Respective Repository
 
+┈➤ [RivoPhone / Revo Dialer](https://github.com/user-grinch/RivoPhone)<br><br>
 ┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer)<br><br>
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
 ┈➤ [Liquid Glass](https://github.com/Kyant0/AndroidLiquidGlass)<br><br>

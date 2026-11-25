@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FF000000</color>
+    <color name="ic_launcher_phone_background">#FF6C7C4F</color>
+    <color name="ic_launcher_custom_phone_background_color">#FF5FE866</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <!-- SMS Launcher Icon Backgrounds -->
+    <color name="ic_launcher_sms_bubble_blue">#FF007AFF</color>
+    <color name="ic_launcher_sms_purple_bg">#FF7C4DFF</color>
+    <color name="ic_launcher_sms_amoled_bg">#FF121212</color>
+    <color name="ic_launcher_sms_coral_bg">#FFFF5252</color>
+    <color name="ic_launcher_sms_neon_green_bg">#FF00E676</color>
+    <color name="ic_launcher_sms_yellow_bg">#FFFFD600</color>
+    <!-- Splash background matches Material3 surface (light) -->
+    <color name="splash_bg">#FFFBFE</color>
+</resources>

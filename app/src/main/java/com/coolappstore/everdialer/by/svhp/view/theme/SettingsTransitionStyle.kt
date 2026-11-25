@@ -286,6 +286,7 @@ val settingsRoutes = setOf(
     "sms_app_icon_screen",
     "custom_font_screen",
     "dialpad_settings_screen",
+    "dialpad_customisation_screen",
     "default_message_app_screen",
     "navigation_settings_screen",
     "pc_connect_screen",
@@ -321,7 +322,7 @@ fun isSettingsRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
     if (route.contains("recordings_screen", ignoreCase = true) && route.contains("openedFromSettings=true", ignoreCase = true)) return true
-    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true)
+    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("customis", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true)
 }
 
 fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {

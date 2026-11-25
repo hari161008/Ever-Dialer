@@ -1,7 +1,23 @@
 Ever Dialer
-Copyright (c) 2024-2026 Ever Dialer Contributors
+Copyright (C) 2025-2026 RivoPhone Project / user-grinch (https://github.com/user-grinch/RivoPhone)
+Copyright (C) 2025-2026 Pdialer contributors / MoHamed-B-M (https://github.com/MoHamed-B-M/Pdialer)
+Copyright (C) 2026 Hari Prabhu and contributors (https://github.com/hari161008/Ever-Dialer)
 
-This project is licensed under the GNU General Public License v3.0 (see LICENSE).
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This project incorporates and builds upon code from the following upstream projects:
+- RivoPhoneApp / Revo Dialer (https://github.com/user-grinch/RivoPhone), licensed under GNU GPLv3.
+- Pdialer (https://github.com/MoHamed-B-M/Pdialer), licensed under GNU GPLv3.
+- Quik SMS (https://github.com/quik-sms/quik), licensed under GNU GPLv3.
+- ShizuCallRecorder (https://github.com/kitsumed/ShizuCallRecorder), licensed under GNU GPLv3.
+- AndroidLiquidGlass (https://github.com/Kyant0/AndroidLiquidGlass), licensed under Apache 2.0.
+- NetworkSwitch (https://github.com/aunchagaonkar/NetworkSwitch), licensed under Apache 2.0.
+- RaiseToAnswer (https://github.com/TheLastProject/RaiseToAnswer), licensed under GNU GPLv3.
+- WallpaperExport (https://github.com/cvzi/WallpaperExport), licensed under GNU GPLv3.
+- LineageOS Dialer and Messaging (https://github.com/LineageOS), licensed under Apache 2.0.
 
 --------------------------------------------------------------------------------
 Third-Party Fonts and Licenses

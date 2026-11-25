@@ -295,7 +295,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoExpressiveCard {
                         RivoListItem(
                             headline = "Made By Hari :)",
-                            supporting = "Lead Developer · Contact on Telegram",
+                            supporting = "Project Lead & Maintainer · Derived from RivoPhone & Open Source",
                             leadingIcon = Icons.Outlined.Person,
                             iconContainerColor = ColorBlue,
                             modifier = Modifier.settingsSearchHighlight("made_by_hari", highlightedKey) { highlightedKey = null },
@@ -401,6 +401,141 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
                             modifier = Modifier.settingsSearchHighlight("other_app_link", highlightedKey) { highlightedKey = null },
                             onClick = { openLink(context, EVERLASTING_TWEAK_URL) }
+                        )
+                    }
+                }
+            }
+
+            // ── Apps That Are Being Used As Base ───────────────────────
+            RivoAnimatedSection(delayMs = 240L) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RivoSectionHeader(title = "Apps that are being used as base")
+                    RivoExpressiveCard {
+                        // 1. RivoPhone / Revo Dialer
+                        RivoListItem(
+                            headline = "RivoPhone / Revo Dialer",
+                            supporting = "Core Dialer & UI Components · By user-grinch (GPL-3.0)",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF673AB7),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/user-grinch/RivoPhone") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 2. P Dialer
+                        RivoListItem(
+                            headline = "P Dialer",
+                            supporting = "Dialer base fork · By MoHamed-B-M (GPL-3.0)",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF2196F3),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/MoHamed-B-M/Pdialer") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 3. ShizuCallRecorder
+                        RivoListItem(
+                            headline = "ShizuCallRecorder",
+                            supporting = "Non-root call recording engine · By kitsumed",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFFE91E63),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/kitsumed/ShizuCallRecorder") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 4. Liquid Glass
+                        RivoListItem(
+                            headline = "Liquid Glass",
+                            supporting = "Dynamic liquid glass blur effects · By Kyant0",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF00BCD4),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/Kyant0/AndroidLiquidGlass") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 5. Quik SMS
+                        RivoListItem(
+                            headline = "Quik SMS",
+                            supporting = "SMS & MMS messaging client · By quik-sms",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFFFF9800),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/quik-sms/quik") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 6. Network Switch
+                        RivoListItem(
+                            headline = "Network Switch",
+                            supporting = "Network mode & SIM switching · By aunchagaonkar",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF4CAF50),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/aunchagaonkar/NetworkSwitch") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 7. Raise To Answer
+                        RivoListItem(
+                            headline = "Raise To Answer",
+                            supporting = "Sensor-based call gestures · By TheLastProject",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF009688),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/TheLastProject/RaiseToAnswer") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 8. Wallpaper Export
+                        RivoListItem(
+                            headline = "Wallpaper Export",
+                            supporting = "Device wallpaper export helper · By cvzi",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF607D8B),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/cvzi/WallpaperExport") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 9. LineageOS Dialer
+                        RivoListItem(
+                            headline = "LineageOS Dialer",
+                            supporting = "Dialer & Telecom utilities · By LineageOS",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF3F51B5),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/Lineageos/android_packages_apps_Dialer") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 10. LineageOS Messaging
+                        RivoListItem(
+                            headline = "LineageOS Messaging",
+                            supporting = "Messaging utilities · By LineageOS",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF795548),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/LineageOS/android_packages_apps_Messaging") }
                         )
                     }
                 }

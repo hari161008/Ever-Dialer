@@ -1,0 +1,56 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Release APK
+      run: ./gradlew :app:assembleRelease
+
+    - name: Sign Release APK
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        APKSIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort | tail -1)
+        APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "Decoding persistent release keystore from secrets..."
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          KS_PASS="${KEYSTORE_PASSWORD:-android}"
+          K_ALIAS="${KEY_ALIAS:-android}"
+          K_PASS="${KEY_PASSWORD:-$KS_PASS}"
+          $APKSIGNER sign --ks release.jks --ks-pass "pass:$KS_PASS" --ks-key-alias "$K_ALIAS" --key-pass "pass:$K_PASS" "$APK_PATH"
+        else
+          echo "No KEYSTORE_BASE64 secret found, generating fallback temporary keystore..."
+          keytool -genkey -v -keystore temp.keystore -alias tempkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=TheDialer"
+          $APKSIGNER sign --ks temp.keystore --ks-pass pass:android --key-pass pass:android "$APK_PATH"
+        fi
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Ever-Dialer-Fast-Release
+        path: app/build/outputs/apk/**/*.apk
+        

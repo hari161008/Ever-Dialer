@@ -20,8 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -84,12 +86,88 @@ fun DialpadCustomisationScreen(
         mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f))
     }
 
-    val isCircleButtons = remember(settingsVersion) {
-        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    var isCircleButtons by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false))
     }
 
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+
+    val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
+    val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
+    val isSaturatedContainer = remember(settingsVersion) { prefs.getSaturatedTarget() == PreferenceManager.SATURATED_TARGET_CONTAINER }
+
+    val bgLuminance = remember(settingsVersion, bgPath, bgDim) {
+        if (hasCustomBg && bgFile != null && bgFile.exists()) {
+            BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, bgFile, bgType == "video", bgDim)
+        } else 0.2f
+    }
+    val isBrightBg = hasCustomBg && bgLuminance > 0.48f
+
+    val baseKeyContainer = if (isSaturatedActive && isSaturatedContainer) {
+        androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.35f)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+
+    val previewKeyBg = if (hasCustomBg) {
+        if (isBrightBg) {
+            // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
+            androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.Black, 0.16f).copy(alpha = 0.88f)
+        } else {
+            // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseKeyContainer already pops out
+            if (isDark) {
+                androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.White, 0.18f).copy(alpha = 0.88f)
+            } else {
+                baseKeyContainer.copy(alpha = 0.88f)
+            }
+        }
+    } else {
+        baseKeyContainer
+    }
+
+    val previewKeyBgLuminance = remember(previewKeyBg) {
+        androidx.core.graphics.ColorUtils.calculateLuminance(previewKeyBg.toArgb())
+    }
+
+    val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val previewKeyText = remember(previewKeyBg, onPrimaryContainer) {
+        if (previewKeyBgLuminance > 0.45) {
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(onPrimaryContainer.toArgb()) < 0.45) onPrimaryContainer
+            else Color(0xFF1C1B1F)
+        } else {
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(onPrimaryContainer.toArgb()) >= 0.45) onPrimaryContainer
+            else Color.White
+        }
+    }
+
+    val previewKeySubText = remember(previewKeyText) {
+        previewKeyText.copy(alpha = 0.75f)
+    }
+
+    val previewContainerBg = if (hasCustomBg) {
+        if (isDark) Color.Black.copy(alpha = if (isBrightBg) 0.50f else 0.35f)
+        else Color.White.copy(alpha = if (isBrightBg) 0.60f else 0.45f)
+    } else MaterialTheme.colorScheme.surfaceContainerLow
+
+    val previewBorder = BorderStroke(
+        0.5.dp,
+        if (hasCustomBg) {
+            if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)
+        } else Color.Transparent
+    )
+
+    val previewTextPrimary = if (hasCustomBg) {
+        if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    } else MaterialTheme.colorScheme.onSurface
+
+    val previewTextSecondary = if (hasCustomBg) {
+        if (isDark) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
+    } else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val previewIconTint = if (hasCustomBg) {
+        if (isDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+    } else MaterialTheme.colorScheme.onSurfaceVariant
 
     var showOptionsPopup by remember { mutableStateOf(false) }
     var editorMediaState by remember { mutableStateOf<Triple<File, Boolean, String>?>(null) }
@@ -130,15 +208,15 @@ fun DialpadCustomisationScreen(
                             .padding(start = 12.dp, bottom = 8.dp)
                     )
 
-                    // Phone frame mockup container
+                    // Phone frame mockup container (real phone proportions ~9:19)
                     Card(
                         modifier = Modifier
-                            .width(220.dp)
-                            .height(440.dp)
-                            .shadow(12.dp, RoundedCornerShape(26.dp)),
-                        shape = RoundedCornerShape(26.dp),
+                            .width(225.dp)
+                            .height(465.dp)
+                            .shadow(14.dp, RoundedCornerShape(28.dp)),
+                        shape = RoundedCornerShape(28.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             // Custom Background Layer
@@ -200,199 +278,315 @@ fun DialpadCustomisationScreen(
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(percent = 50),
-                                        color = if (hasCustomBg) Color.White.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(width = 28.dp, height = 3.dp)
+                                        color = if (hasCustomBg) (if (isBrightBg) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.6f)) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(width = 32.dp, height = 3.5.dp)
                                     ) {}
                                 }
 
-                                // Search Bar Mockup
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(28.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    border = BorderStroke(0.5.dp, if (hasCustomBg) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                // Search Bar Row (Search field + Dismiss circular X button)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
+                                    Surface(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .weight(1f)
+                                            .height(30.dp),
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = previewContainerBg,
+                                        border = previewBorder
                                     ) {
-                                        Icon(
-                                            Icons.Default.Search,
-                                            contentDescription = null,
-                                            tint = if (hasCustomBg) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            "Search contacts...",
-                                            fontSize = 9.sp,
-                                            color = if (hasCustomBg) Color.White.copy(alpha = 0.65f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Search,
+                                                contentDescription = null,
+                                                tint = previewIconTint.copy(alpha = 0.75f),
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                "Search contacts...",
+                                                fontSize = 9.5.sp,
+                                                color = previewTextSecondary,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    // Circular Close Button (as on actual screen)
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = previewContainerBg,
+                                        border = previewBorder,
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = null,
+                                                tint = previewIconTint,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
                                     }
                                 }
 
-                                // Sample Contact Result Mockup
+                                // Sample Recent Contacts Card (as shown in edge50_dialpad.png)
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 4.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (hasCustomBg) Color.Black.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerLow,
-                                    border = BorderStroke(0.5.dp, if (hasCustomBg) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = previewContainerBg,
+                                    border = previewBorder
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primaryContainer),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                "A",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
+                                        // Item 1
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFFE91E63)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    "A",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    "Account Info",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = previewTextPrimary,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    "*199#",
+                                                    fontSize = 7.5.sp,
+                                                    color = previewTextSecondary,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                "Alex Morgan",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1
-                                            )
-                                            Text(
-                                                "+1 234 567 8900",
-                                                fontSize = 7.5.sp,
-                                                color = if (hasCustomBg) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1
-                                            )
+                                        // Item 2
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFFFF5722)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    "S",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    "Sim Rupees",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = previewTextPrimary,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    "*111#",
+                                                    fontSize = 7.5.sp,
+                                                    color = previewTextSecondary,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.weight(1f))
 
-                                // Numberpad Container Card (scales with heightScale)
+                                // Real Dialpad Card Mockup (faithfully replicating actual Dialpad screen)
                                 Surface(
-                                    shape = RoundedCornerShape(18.dp),
-                                    color = if (hasCustomBg) Color.Black.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow,
-                                    border = BorderStroke(0.5.dp, if (hasCustomBg) Color.White.copy(alpha = 0.15f) else Color.Transparent),
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = previewContainerBg,
+                                    border = previewBorder,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(
-                                                start = 5.dp,
-                                                end = 5.dp,
-                                                top = (4 * heightScale).dp,
-                                                bottom = (8 * heightScale).dp
+                                                start = 6.dp,
+                                                end = 6.dp,
+                                                top = (5 * heightScale).dp,
+                                                bottom = (10 * heightScale).dp
                                             ),
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy((3 * heightScale).dp)
+                                        verticalArrangement = Arrangement.spacedBy((4 * heightScale).dp)
                                     ) {
-                                        // Typing Box
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height((22 * heightScale).coerceIn(18f, 28f).dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(
-                                                    if (hasCustomBg) Color.Black.copy(alpha = 0.20f)
-                                                    else MaterialTheme.colorScheme.surfaceContainer
-                                                ),
-                                            contentAlignment = Alignment.Center
+                                        // Typing Box with Backspace Button (matching real dialpad)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                "987 654 3210",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (hasCustomBg) Color.White else MaterialTheme.colorScheme.primary
-                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height((28 * heightScale).coerceIn(24f, 36f).dp)
+                                                    .clip(RoundedCornerShape(16.dp))
+                                                    .background(
+                                                        if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.65f))
+                                                        else MaterialTheme.colorScheme.surfaceContainer
+                                                    )
+                                                    .border(0.5.dp, if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.15f)) else Color.Transparent, RoundedCornerShape(16.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        "1#",
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = previewTextPrimary
+                                                    )
+                                                    Text(
+                                                        "|",
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Normal,
+                                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(6.dp))
+
+                                            // Backspace Button
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.70f)) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                border = previewBorder,
+                                                modifier = Modifier.size((28 * heightScale).coerceIn(24f, 36f).dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        Icons.Outlined.Backspace,
+                                                        contentDescription = null,
+                                                        tint = previewIconTint,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                }
+                                            }
                                         }
 
-                                        // Keypad Rows (1-2-3, 4-5-6, 7-8-9, *-0-#)
-                                        val rows = listOf(
-                                            listOf("1", "2", "3"),
-                                            listOf("4", "5", "6"),
-                                            listOf("7", "8", "9"),
-                                            listOf("*", "0", "#")
-                                        )
-                                        val keyH = (19 * heightScale).coerceIn(15f, 25f).dp
-                                        val keyCorner = if (isCircleButtons) 50 else 30
+                                        Spacer(modifier = Modifier.height((2 * heightScale).dp))
 
-                                        for (row in rows) {
+                                        // 4 Keypad Rows with actual Digits AND Sub-letters
+                                        val keyData = listOf(
+                                            listOf("1" to "", "2" to "ABC", "3" to "DEF"),
+                                            listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
+                                            listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
+                                            listOf("*" to "", "0" to "+", "#" to "")
+                                        )
+                                        val keyH = (26 * heightScale).coerceIn(20f, 36f).dp
+                                        val keyW = if (isCircleButtons) keyH else 58.dp
+                                        val keyShape = if (isCircleButtons) CircleShape else RoundedCornerShape(13.dp)
+
+                                        for (row in keyData) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceEvenly
+                                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                for (digit in row) {
+                                                for ((digit, sub) in row) {
                                                     Surface(
-                                                        shape = RoundedCornerShape(percent = keyCorner),
-                                                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (hasCustomBg) 0.82f else 1f),
+                                                        shape = keyShape,
+                                                        color = previewKeyBg,
+                                                        border = previewBorder,
                                                         modifier = Modifier
-                                                            .width(if (isCircleButtons) keyH else 56.dp)
+                                                            .width(keyW)
                                                             .height(keyH)
                                                     ) {
-                                                        Box(
+                                                        Column(
                                                             modifier = Modifier.fillMaxSize(),
-                                                            contentAlignment = Alignment.Center
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            verticalArrangement = Arrangement.Center
                                                         ) {
                                                             Text(
                                                                 text = digit,
-                                                                fontSize = 9.sp,
+                                                                fontSize = 11.5.sp,
                                                                 fontWeight = FontWeight.Bold,
-                                                                color = MaterialTheme.colorScheme.onSurface
+                                                                color = previewKeyText,
+                                                                lineHeight = 12.sp
                                                             )
+                                                            if (sub.isNotBlank()) {
+                                                                Text(
+                                                                    text = sub,
+                                                                    fontSize = 5.5.sp,
+                                                                    fontWeight = FontWeight.SemiBold,
+                                                                    letterSpacing = 0.4.sp,
+                                                                    color = previewKeySubText,
+                                                                    lineHeight = 6.sp
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
 
-                                        // Action Row (Add Contact, Call, Backspace)
+                                        Spacer(modifier = Modifier.height((2 * heightScale).dp))
+
+                                        // Action Row (Add Contact pill, Green Call Pill, empty balance space)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceEvenly,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            // Add Contact Mockup
+                                            // Add Contact Button
                                             Surface(
-                                                shape = RoundedCornerShape(percent = keyCorner),
-                                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (hasCustomBg) 0.82f else 1f),
+                                                shape = keyShape,
+                                                color = previewKeyBg,
+                                                border = previewBorder,
                                                 modifier = Modifier
-                                                    .width(if (isCircleButtons) keyH else 56.dp)
+                                                    .width(keyW)
                                                     .height(keyH)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
                                                     Icon(
                                                         Icons.Outlined.PersonAdd,
                                                         contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(11.dp)
+                                                        tint = previewIconTint,
+                                                        modifier = Modifier.size(13.dp)
                                                     )
                                                 }
                                             }
 
-                                            // Call Button
+                                            // Green Call Button (realistic call pill)
                                             Surface(
-                                                shape = RoundedCornerShape(percent = keyCorner),
+                                                shape = if (isCircleButtons) CircleShape else RoundedCornerShape(percent = 50),
                                                 color = Color(0xFF2E7D32),
+                                                shadowElevation = 2.dp,
                                                 modifier = Modifier
-                                                    .width(if (isCircleButtons) keyH else 56.dp)
+                                                    .width(if (isCircleButtons) keyH else 82.dp)
                                                     .height(keyH)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
@@ -400,28 +594,17 @@ fun DialpadCustomisationScreen(
                                                         Icons.Filled.Call,
                                                         contentDescription = null,
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(11.dp)
+                                                        modifier = Modifier.size(14.dp)
                                                     )
                                                 }
                                             }
 
-                                            // Backspace Mockup
-                                            Surface(
-                                                shape = RoundedCornerShape(percent = keyCorner),
-                                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (hasCustomBg) 0.82f else 1f),
+                                            // Spacer to balance Add Contact button
+                                            Box(
                                                 modifier = Modifier
-                                                    .width(if (isCircleButtons) keyH else 56.dp)
+                                                    .width(keyW)
                                                     .height(keyH)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        Icons.Outlined.Backspace,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(11.dp)
-                                                    )
-                                                }
-                                            }
+                                            )
                                         }
                                     }
                                 }
@@ -447,7 +630,10 @@ fun DialpadCustomisationScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Box(
                                         modifier = Modifier
                                             .size(38.dp)
@@ -476,66 +662,116 @@ fun DialpadCustomisationScreen(
                                         )
                                     }
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Reset button on top right corner of the container with icon only
+                                IconButton(
+                                    onClick = {
+                                        heightScale = 1.0f
+                                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, 1.0f)
+                                    },
+                                    enabled = heightScale != 1.0f,
+                                    modifier = Modifier.size(36.dp)
                                 ) {
-                                    Text(
-                                        text = "${(heightScale * 100).roundToInt()}%",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    Icon(
+                                        Icons.Outlined.RestartAlt,
+                                        contentDescription = "Reset height to 100%",
+                                        tint = if (heightScale != 1.0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            Slider(
-                                value = heightScale,
-                                onValueChange = {
-                                    val rounded = (it * 100f).roundToInt() / 100f
-                                    heightScale = rounded
-                                    prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, rounded)
-                                },
-                                valueRange = 0.80f..1.30f,
-                                steps = 9,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "80% (Compact)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                TextButton(
+                                IconButton(
                                     onClick = {
-                                        heightScale = 1.0f
-                                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, 1.0f)
+                                        val newScale = (((heightScale * 100f).roundToInt() - 1) / 100f).coerceIn(0.80f, 1.30f)
+                                        heightScale = newScale
+                                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, newScale)
                                     },
-                                    enabled = heightScale != 1.0f
+                                    enabled = heightScale > 0.80f,
+                                    modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Outlined.RestartAlt,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Reset (100%)", style = MaterialTheme.typography.labelMedium)
+                                    Icon(Icons.Default.Remove, contentDescription = "Decrease height by 1%", modifier = Modifier.size(16.dp))
                                 }
-                                Text(
-                                    "130% (Tall)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                                Slider(
+                                    value = heightScale,
+                                    onValueChange = {
+                                        val rounded = (it * 100f).roundToInt() / 100f
+                                        heightScale = rounded
+                                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, rounded)
+                                    },
+                                    valueRange = 0.80f..1.30f,
+                                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                                 )
+
+                                IconButton(
+                                    onClick = {
+                                        val newScale = (((heightScale * 100f).roundToInt() + 1) / 100f).coerceIn(0.80f, 1.30f)
+                                        heightScale = newScale
+                                        prefs.setFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, newScale)
+                                    },
+                                    enabled = heightScale < 1.30f,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "Increase height by 1%", modifier = Modifier.size(16.dp))
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.defaultMinSize(minWidth = 48.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${(heightScale * 100).roundToInt()}%",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
                             }
                         }
+                    }
+                }
+            }
+
+            // ── BUTTONS STYLE CONTAINER ─────────────────────────────────────
+            RivoAnimatedSection(delayMs = 60L) {
+                Column {
+                    Text(
+                        "Buttons Style",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = rivoHeadingColor(),
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                    )
+                    RivoExpressiveCard {
+                        RivoSwitchListItem(
+                            headline = "Circle buttons",
+                            supporting = "Use circular buttons on the dialpad",
+                            leadingIcon = Icons.Outlined.Lens,
+                            iconContainerColor = Color(0xFF9C27B0),
+                            checked = isCircleButtons,
+                            onCheckedChange = {
+                                isCircleButtons = it
+                                prefs.setBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, it)
+                            }
+                        )
                     }
                 }
             }
@@ -638,6 +874,7 @@ fun DialpadCustomisationScreen(
                 bgType = "none"
                 prefs.setString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none")
                 prefs.setString(PreferenceManager.KEY_DIALPAD_BG_PATH, "")
+                prefs.setFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, -1f)
                 BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
                 Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
                 showOptionsPopup = false
