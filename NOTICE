@@ -10,6 +10,7 @@ the Free Software Foundation, either version 3 of the License, or
 
 This project incorporates and builds upon code from the following upstream projects:
 - RivoPhoneApp / Revo Dialer (https://github.com/user-grinch/RivoPhone), licensed under GNU GPLv3.
+- The Dialer (https://github.com/modiprincekr-07/Ever-Dialer), licensed under GNU GPLv3.
 - Pdialer (https://github.com/MoHamed-B-M/Pdialer), licensed under GNU GPLv3.
 - Quik SMS (https://github.com/quik-sms/quik), licensed under GNU GPLv3.
 - ShizuCallRecorder (https://github.com/kitsumed/ShizuCallRecorder), licensed under GNU GPLv3.

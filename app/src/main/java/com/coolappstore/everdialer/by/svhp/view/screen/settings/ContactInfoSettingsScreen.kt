@@ -12,10 +12,21 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CropSquare
 import androidx.compose.material.icons.outlined.FilterNone
+import androidx.compose.material.icons.outlined.Panorama
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager
+import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundOptionsPopup
+import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEditorDialog
+import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -75,7 +86,22 @@ fun ContactInfoSettingsScreen(
     highlightKey: String? = null
 ) {
     val prefs = koinInject<PreferenceManager>()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsVer by prefs.settingsChanged.collectAsState()
     var highlightedKey by remember { mutableStateOf(highlightKey) }
+
+    var headerBgType by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACT_HEADER_BG_TYPE, "none") ?: "none")
+    }
+    var showHeaderOptionsPopup by remember { mutableStateOf(false) }
+    var headerEditorMediaState by remember { mutableStateOf<Triple<File, Boolean, String>?>(null) }
+
+    var infoBgType by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACT_INFO_BG_TYPE, "none") ?: "none")
+    }
+    var showInfoBgOptionsPopup by remember { mutableStateOf(false) }
+    var infoEditorMediaState by remember { mutableStateOf<Triple<File, Boolean, String>?>(null) }
 
     var hideDuplicateNumbersInContact by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_HIDE_DUPLICATE_NUMBERS_IN_CONTACT, true))
@@ -484,6 +510,42 @@ fun ContactInfoSettingsScreen(
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { showPfpShapeDialog = true }
                         )
+
+                        CardDivider()
+
+                        // Custom Header
+                        val headerBgLabel = when (headerBgType) {
+                            "wallpaper" -> "Device Wallpaper"
+                            "picture" -> "Custom Photo"
+                            "video" -> "Custom Video"
+                            else -> "None (Blurred Photo)"
+                        }
+                        RivoListItem(
+                            headline = "Custom Header",
+                            supporting = "Header banner behind PFP: $headerBgLabel",
+                            leadingIcon = Icons.Outlined.Panorama,
+                            iconContainerColor = Color(0xFF009688),
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { showHeaderOptionsPopup = true }
+                        )
+
+                        CardDivider()
+
+                        // Custom Background
+                        val fullBgLabel = when (infoBgType) {
+                            "wallpaper" -> "Device Wallpaper"
+                            "picture" -> "Custom Photo"
+                            "video" -> "Custom Video"
+                            else -> "None (Default Theme)"
+                        }
+                        RivoListItem(
+                            headline = "Custom Background",
+                            supporting = "Entire Contact Info page: $fullBgLabel",
+                            leadingIcon = Icons.Outlined.Wallpaper,
+                            iconContainerColor = Color(0xFFE91E63),
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { showInfoBgOptionsPopup = true }
+                        )
                     }
                 }
             }
@@ -492,5 +554,141 @@ fun ContactInfoSettingsScreen(
                 SwipeActionConfigSection(sectionKey = "contacts")
             }
         }
+    }
+
+    // ── Custom Header Options Popup ──
+    if (showHeaderOptionsPopup) {
+        CustomBackgroundOptionsPopup(
+            target = CustomBackgroundTarget.CONTACT_HEADER,
+            currentType = headerBgType,
+            dialogTitle = "Choose Custom Header",
+            dialogSubtitle = "Personalise the contact header banner behind the PFP",
+            noneSubtitle = "Default blurred contact photo",
+            onDismiss = { showHeaderOptionsPopup = false },
+            onSelectNone = {
+                headerBgType = "none"
+                prefs.setString(PreferenceManager.KEY_CONTACT_HEADER_BG_TYPE, "none")
+                prefs.setString(PreferenceManager.KEY_CONTACT_HEADER_BG_PATH, "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Default header restored", Toast.LENGTH_SHORT).show()
+                showHeaderOptionsPopup = false
+            },
+            onSelectWallpaper = {
+                headerBgType = "wallpaper"
+                prefs.setString(PreferenceManager.KEY_CONTACT_HEADER_BG_TYPE, "wallpaper")
+                prefs.setString(PreferenceManager.KEY_CONTACT_HEADER_BG_PATH, "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Current device wallpaper applied", Toast.LENGTH_SHORT).show()
+                showHeaderOptionsPopup = false
+            },
+            onOpenEditor = { file, isVideo, type ->
+                headerEditorMediaState = Triple(file, isVideo, type)
+                showHeaderOptionsPopup = false
+            }
+        )
+    }
+
+    // ── Custom Header Editor Dialog ──
+    headerEditorMediaState?.let { (file, isVideo, type) ->
+        val headerZoom = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_ZOOM, 1f)
+        val headerPanX = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_PAN_X, 0f)
+        val headerPanY = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_PAN_Y, 0f)
+        val headerDim = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_DIM, 0f)
+        val headerBlur = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_BLUR, 0f)
+        val headerVideoSpeed = prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_VIDEO_SPEED, 1.0f)
+
+        CustomBackgroundEditorDialog(
+            target = CustomBackgroundTarget.CONTACT_HEADER,
+            mediaFile = file,
+            isVideo = isVideo,
+            bgType = type,
+            prefixOverride = "contact_header",
+            initialZoom = headerZoom,
+            initialPanX = headerPanX,
+            initialPanY = headerPanY,
+            initialDim = headerDim,
+            initialBlur = headerBlur,
+            initialVideoSpeed = headerVideoSpeed,
+            onDismiss = {
+                scope.launch(Dispatchers.IO) {
+                    BackgroundMediaManager.cleanupFileIfInCache(context, file)
+                }
+                headerEditorMediaState = null
+            },
+            onSaveSuccess = {
+                headerBgType = type
+                headerEditorMediaState = null
+                BackgroundMediaManager.autoCleanInBackground(context, prefs)
+                Toast.makeText(context, "Custom header saved", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // ── Custom Page Background Options Popup ──
+    if (showInfoBgOptionsPopup) {
+        CustomBackgroundOptionsPopup(
+            target = CustomBackgroundTarget.CONTACT_INFO,
+            currentType = infoBgType,
+            dialogTitle = "Choose Contact Info Background",
+            dialogSubtitle = "Personalise the entire Contact Info screen",
+            noneSubtitle = "Default solid theme",
+            onDismiss = { showInfoBgOptionsPopup = false },
+            onSelectNone = {
+                infoBgType = "none"
+                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_BG_TYPE, "none")
+                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_BG_PATH, "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Default background restored", Toast.LENGTH_SHORT).show()
+                showInfoBgOptionsPopup = false
+            },
+            onSelectWallpaper = {
+                infoBgType = "wallpaper"
+                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_BG_TYPE, "wallpaper")
+                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_BG_PATH, "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Current device wallpaper applied", Toast.LENGTH_SHORT).show()
+                showInfoBgOptionsPopup = false
+            },
+            onOpenEditor = { file, isVideo, type ->
+                infoEditorMediaState = Triple(file, isVideo, type)
+                showInfoBgOptionsPopup = false
+            }
+        )
+    }
+
+    // ── Custom Page Background Editor Dialog ──
+    infoEditorMediaState?.let { (file, isVideo, type) ->
+        val infoZoom = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_ZOOM, 1f)
+        val infoPanX = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_PAN_X, 0f)
+        val infoPanY = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_PAN_Y, 0f)
+        val infoDim = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_DIM, 0f)
+        val infoBlur = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_BLUR, 0f)
+        val infoVideoSpeed = prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_VIDEO_SPEED, 1.0f)
+
+        CustomBackgroundEditorDialog(
+            target = CustomBackgroundTarget.CONTACT_INFO,
+            mediaFile = file,
+            isVideo = isVideo,
+            bgType = type,
+            prefixOverride = "contact_info",
+            initialZoom = infoZoom,
+            initialPanX = infoPanX,
+            initialPanY = infoPanY,
+            initialDim = infoDim,
+            initialBlur = infoBlur,
+            initialVideoSpeed = infoVideoSpeed,
+            onDismiss = {
+                scope.launch(Dispatchers.IO) {
+                    BackgroundMediaManager.cleanupFileIfInCache(context, file)
+                }
+                infoEditorMediaState = null
+            },
+            onSaveSuccess = {
+                infoBgType = type
+                infoEditorMediaState = null
+                BackgroundMediaManager.autoCleanInBackground(context, prefs)
+                Toast.makeText(context, "Contact Info background saved", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 }

@@ -424,7 +424,20 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 2. P Dialer
+                        // 2. The Dialer
+                        RivoListItem(
+                            headline = "The Dialer",
+                            supporting = "Speed dial & UI enhancements · By modiprincekr-07 (GPL-3.0)",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF009688),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/modiprincekr-07/Ever-Dialer") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 3. P Dialer
                         RivoListItem(
                             headline = "P Dialer",
                             supporting = "Dialer base fork · By MoHamed-B-M (GPL-3.0)",

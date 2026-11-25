@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.coolappstore.everdialer.by.svhp.liquidglass.highlight.Highlight
 import com.coolappstore.everdialer.by.svhp.liquidglass.effects.*
 import com.coolappstore.everdialer.by.svhp.liquidglass.backdrops.layerBackdrop
@@ -70,8 +71,8 @@ private val LG_ELEMENTS = listOf(
     ),
     EffectElement(
         key = PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON,
-        headline = "Dialpad Call Button",
-        supporting = "Apply liquid glass to the call button on the dialpad",
+        headline = "Dialpad Number Button",
+        supporting = "Apply liquid glass to the number buttons on the dialpad",
         icon = Icons.Outlined.Dialpad,
         iconColor = Color(0xFF4CAF50)
     ),
@@ -108,8 +109,8 @@ private val BLUR_ELEMENTS = listOf(
     ),
     EffectElement(
         key = PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON,
-        headline = "Dialpad Call Button",
-        supporting = "Apply blur to the call button on the dialpad",
+        headline = "Dialpad Number Button",
+        supporting = "Apply blur to the number buttons on the dialpad",
         icon = Icons.Outlined.Dialpad,
         iconColor = Color(0xFF4CAF50)
     ),
@@ -406,19 +407,25 @@ private fun EffectElementPreview(
     val previewBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current.density
     val isAndroidS = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val prefs: PreferenceManager = koinInject()
+    val isCircleButtons = remember {
+        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    }
 
-    val previewShape = remember(element.key) {
+    val previewShape = remember(element.key, isCircleButtons) {
         when {
+            element.key.contains("call_button") -> if (isCircleButtons) CircleShape else RoundedCornerShape(20.dp)
             element.key.contains("fab") || element.key.contains("dialpad_button") -> CircleShape
-            element.key.contains("nav") || element.key.contains("action") || element.key.contains("call_button") -> RoundedCornerShape(22.dp)
+            element.key.contains("nav") || element.key.contains("action") -> RoundedCornerShape(22.dp)
             else -> RoundedCornerShape(16.dp)
         }
     }
 
-    val previewSizeModifier = remember(element.key) {
+    val previewSizeModifier = remember(element.key, isCircleButtons) {
         when {
+            element.key.contains("call_button") -> if (isCircleButtons) Modifier.size(60.dp) else Modifier.size(width = 72.dp, height = 56.dp)
             element.key.contains("fab") || element.key.contains("dialpad_button") -> Modifier.size(56.dp)
-            element.key.contains("nav") || element.key.contains("action") || element.key.contains("call_button") -> Modifier.height(44.dp).fillMaxWidth(0.72f)
+            element.key.contains("nav") || element.key.contains("action") -> Modifier.height(44.dp).fillMaxWidth(0.72f)
             else -> Modifier.height(48.dp).fillMaxWidth(0.82f)
         }
     }
@@ -519,27 +526,49 @@ private fun EffectElementPreview(
                     .then(previewSizeModifier)
                     .then(effectModifier)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        element.icon,
-                        contentDescription = null,
-                        tint = element.iconColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    if (!element.key.contains("fab") && !element.key.contains("dialpad_button")) {
-                        Spacer(Modifier.width(8.dp))
+                if (element.key.contains("call_button")) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                         Text(
-                            text = element.headline,
-                            style = MaterialTheme.typography.labelMedium,
+                            text = "5",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Text(
+                            text = "JKL",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            fontSize = 9.sp
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            element.icon,
+                            contentDescription = null,
+                            tint = element.iconColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        if (!element.key.contains("fab") && !element.key.contains("dialpad_button")) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = element.headline,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

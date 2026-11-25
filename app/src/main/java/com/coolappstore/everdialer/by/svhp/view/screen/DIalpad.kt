@@ -10,6 +10,7 @@ import android.media.SoundPool
 import android.os.Build
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -411,7 +412,7 @@ fun DialPadScreen(
         val bgType = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
         val bgPath = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
         val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
-        val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+        val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
         val bgZoom = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_ZOOM, 1f) }
         val bgPanX = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_X, 0f) }
         val bgPanY = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_Y, 0f) }
@@ -419,12 +420,27 @@ fun DialPadScreen(
         val bgBlur = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
         val bgVideoSpeed = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
 
-        val bgLuminance = remember(settingsState, bgPath, bgDim) {
-            if (hasCustomBg && bgFile != null && bgFile.exists()) {
+        val bgLuminance = remember(settingsState, bgType, bgPath, bgDim) {
+            if (bgType == "wallpaper") {
+                com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getWallpaperLuminance(view.context, bgDim)
+            } else if (hasCustomBg && bgFile != null && bgFile.exists()) {
                 com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, bgFile, bgType == "video", bgDim)
             } else 0.2f
         }
         val isBrightBg = hasCustomBg && bgLuminance > 0.48f
+
+        val isWallpaper = bgType == "wallpaper"
+        DisposableEffect(isWallpaper) {
+            val window = (view.context as? android.app.Activity)?.window
+            if (isWallpaper && window != null) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+            }
+            onDispose {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            }
+        }
 
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
             Surface(
@@ -436,18 +452,28 @@ fun DialPadScreen(
                 tonalElevation = if (hasCustomBg) 0.dp else 4.dp
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    if (hasCustomBg && bgFile != null) {
-                        com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
-                            bgType = bgType,
-                            bgFile = bgFile,
-                            bgZoom = bgZoom,
-                            bgPanX = bgPanX,
-                            bgPanY = bgPanY,
-                            bgDim = bgDim,
-                            bgBlur = bgBlur,
-                            bgVideoSpeed = bgVideoSpeed,
-                            modifier = Modifier.matchParentSize()
-                        )
+                    if (hasCustomBg) {
+                        if (bgType == "wallpaper") {
+                            if (bgDim > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .background(Color.Black.copy(alpha = bgDim))
+                                )
+                            }
+                        } else if (bgFile != null) {
+                            com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
+                                bgType = bgType,
+                                bgFile = bgFile,
+                                bgZoom = bgZoom,
+                                bgPanX = bgPanX,
+                                bgPanY = bgPanY,
+                                bgDim = bgDim,
+                                bgBlur = bgBlur,
+                                bgVideoSpeed = bgVideoSpeed,
+                                modifier = Modifier.matchParentSize()
+                            )
+                        }
                     }
 
                 val predictiveBackEnabled = remember(settingsState) {
@@ -628,10 +654,12 @@ fun DialPadContent(
     val bgType = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
     val bgPath = remember(settingsState) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) java.io.File(bgPath) else null }
-    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+    val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
     val bgDim = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
-    val bgLuminance = remember(settingsState, bgPath, bgDim) {
-        if (hasCustomBg && bgFile != null && bgFile.exists()) {
+    val bgLuminance = remember(settingsState, bgType, bgPath, bgDim) {
+        if (bgType == "wallpaper") {
+            com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getWallpaperLuminance(view.context, bgDim)
+        } else if (hasCustomBg && bgFile != null && bgFile.exists()) {
             com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, bgFile, bgType == "video", bgDim)
         } else 0.2f
     }
@@ -655,6 +683,10 @@ fun DialPadContent(
     }
     var showAddContactChoiceDialog by remember { mutableStateOf(false) }
     var showSelectExistingContactDialog by remember { mutableStateOf(false) }
+    var speedDialKeyForDialog by remember { mutableStateOf<String?>(null) }
+    var showNoSpeedDialDialog by remember { mutableStateOf(false) }
+    var showSpeedDialAssignDialog by remember { mutableStateOf(false) }
+    var pendingSpeedDialContactForNumberChoice by remember { mutableStateOf<Contact?>(null) }
     // Where new digits get inserted / backspace deletes from. Defaults to the end of the number
     // (normal typing behaviour), but the user can tap anywhere in the number to move it, so they
     // can fill in a missing digit in the middle without having to delete and retype everything.
@@ -1079,6 +1111,28 @@ fun DialPadContent(
         }
     }
 
+    fun handleSpeedDial(digit: String) {
+        if (digit == "1") {
+            val vmNum = prefs.getVoicemailNumber(context)
+            if (!vmNum.isNullOrBlank()) {
+                initiateCall(vmNum)
+            } else {
+                Toast.makeText(context, "No voicemail set", Toast.LENGTH_SHORT).show()
+                speedDialKeyForDialog = "1"
+                showNoSpeedDialDialog = true
+            }
+            return
+        }
+        val speedDialNum = prefs.getSpeedDialNumber(digit)
+        if (!speedDialNum.isNullOrBlank()) {
+            initiateCall(speedDialNum)
+        } else {
+            Toast.makeText(context, "No speed dial set", Toast.LENGTH_SHORT).show()
+            speedDialKeyForDialog = digit
+            showNoSpeedDialDialog = true
+        }
+    }
+
     fun initiateCallWithSim(num: String, simSlotIndex: Int) {
         val cleanNum = num.trim()
         if (cleanNum.isEmpty() || cleanNum == "Unknown") return
@@ -1174,6 +1228,115 @@ fun DialPadContent(
                 )
             },
             onDismiss = { showSelectExistingContactDialog = false }
+        )
+    }
+
+    if (showNoSpeedDialDialog && speedDialKeyForDialog != null) {
+        val digit = speedDialKeyForDialog!!
+        val isVoicemail = digit == "1"
+        AlertDialog(
+            onDismissRequest = {
+                showNoSpeedDialDialog = false
+                speedDialKeyForDialog = null
+            },
+            title = { Text(if (isVoicemail) "Voicemail" else "Speed Dial") },
+            text = { Text(if (isVoicemail) "No voicemail number configured for key 1." else "No speed dial set for key $digit.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNoSpeedDialDialog = false
+                        showSpeedDialAssignDialog = true
+                    }
+                ) {
+                    Text(if (isVoicemail) "Assign Number" else "Assign Contact")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showNoSpeedDialDialog = false
+                        speedDialKeyForDialog = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showSpeedDialAssignDialog && speedDialKeyForDialog != null) {
+        val allContacts by contactsVM.allContacts.collectAsState()
+        val assignDigit = speedDialKeyForDialog!!
+        SelectExistingContactDialog(
+            contacts = allContacts,
+            onSelectContact = { contact ->
+                showSpeedDialAssignDialog = false
+                if (contact.phoneNumbers.size > 1) {
+                    pendingSpeedDialContactForNumberChoice = contact
+                } else {
+                    val primaryNum = prefs.getContactDefaultNumber(contact.id)?.takeIf { it in contact.phoneNumbers }
+                    val phoneToAssign = primaryNum ?: contact.phoneNumbers.firstOrNull { it.isNotBlank() }
+                    if (!phoneToAssign.isNullOrBlank()) {
+                        prefs.setSpeedDial(assignDigit, phoneToAssign, contact.name)
+                        Toast.makeText(context, "Speed dial for key $assignDigit set to ${contact.name}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Selected contact has no phone number", Toast.LENGTH_SHORT).show()
+                    }
+                    speedDialKeyForDialog = null
+                }
+            },
+            onDismiss = {
+                showSpeedDialAssignDialog = false
+                speedDialKeyForDialog = null
+            }
+        )
+    }
+
+    if (pendingSpeedDialContactForNumberChoice != null && speedDialKeyForDialog != null) {
+        val contact = pendingSpeedDialContactForNumberChoice!!
+        val assignDigit = speedDialKeyForDialog!!
+        AlertDialog(
+            onDismissRequest = {
+                pendingSpeedDialContactForNumberChoice = null
+                speedDialKeyForDialog = null
+            },
+            title = { Text("Choose Number for ${contact.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    contact.phoneNumbers.forEach { numOption ->
+                        Surface(
+                            onClick = {
+                                pendingSpeedDialContactForNumberChoice = null
+                                prefs.setSpeedDial(assignDigit, numOption, contact.name)
+                                Toast.makeText(context, "Speed dial for key $assignDigit set to ${contact.name}", Toast.LENGTH_SHORT).show()
+                                speedDialKeyForDialog = null
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = numOption,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(14.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingSpeedDialContactForNumberChoice = null
+                        speedDialKeyForDialog = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
@@ -1614,7 +1777,11 @@ fun DialPadContent(
                                         onClick = { digit ->
                                             insertAtCursor(digit)
                                         },
-                                        onLongClick = if (key == "0") ({ insertAtCursor("+") }) else null,
+                                        onLongClick = when (key) {
+                                            "0" -> ({ insertAtCursor("+") })
+                                            "1", "2", "3", "4", "5", "6", "7", "8", "9" -> ({ handleSpeedDial(key) })
+                                            else -> null
+                                        },
                                         compact = true,
                                         overrideWidth = keyWidth,
                                         overrideHeight = keyHeight,
@@ -2414,6 +2581,8 @@ fun DialPadContent(
                     prefs.getBoolean(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON, true) &&
                     !lgDialpadEnabled
                 }
+                val lgDialpadConfig = remember(settingsState) { prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON) }
+                val blurDialpadConfig = remember(settingsState) { prefs.getBlurConfig(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON) }
 
                 val needDialpadBackdrop = (lgDialpadEnabled || blurDialpadEnabled) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
@@ -2421,34 +2590,51 @@ fun DialPadContent(
                 val keys = listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("*","0","#"))
                 val subKeys = mapOf("1" to "   ","2" to "ABC","3" to "DEF","4" to "GHI","5" to "JKL","6" to "MNO","7" to "PQRS","8" to "TUV","9" to "WXYZ","0" to "+")
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (needDialpadBackdrop) Modifier.layerBackdrop(dialpadBackdrop) else Modifier),
-                    verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
-                ) {
-                    keys.forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            row.forEach { key ->
-                                DialPadKey(
-                                    number = key,
-                                    letters = subKeys[key] ?: "",
-                                    soundPool = soundPool,
-                                    context = context,
-                                    onClick = { digit ->
-                                        insertAtCursor(digit)
-                                    },
-                                    onLongClick = if (key == "0") ({ insertAtCursor("+") }) else null,
-                                    overrideWidth = keyWidth,
-                                    overrideHeight = keyHeight,
-                                    scaleFactor = scaleFactor,
-                                    hasCustomBg = hasCustomBg,
-                                    isBrightBg = isBrightBg
-                                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (needDialpadBackdrop) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .layerBackdrop(dialpadBackdrop)
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
+                    ) {
+                        keys.forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                row.forEach { key ->
+                                    DialPadKey(
+                                        number = key,
+                                        letters = subKeys[key] ?: "",
+                                        soundPool = soundPool,
+                                        context = context,
+                                        onClick = { digit ->
+                                            insertAtCursor(digit)
+                                        },
+                                        onLongClick = when (key) {
+                                            "0" -> ({ insertAtCursor("+") })
+                                            "1", "2", "3", "4", "5", "6", "7", "8", "9" -> ({ handleSpeedDial(key) })
+                                            else -> null
+                                        },
+                                        overrideWidth = keyWidth,
+                                        overrideHeight = keyHeight,
+                                        scaleFactor = scaleFactor,
+                                        hasCustomBg = hasCustomBg,
+                                        isBrightBg = isBrightBg,
+                                        liquidGlassBackdrop = if (needDialpadBackdrop) dialpadBackdrop else null,
+                                        liquidGlassEnabled = lgDialpadEnabled,
+                                        blurEnabled = blurDialpadEnabled,
+                                        lgConfig = lgDialpadConfig,
+                                        blurConfig = blurDialpadConfig
+                                    )
+                                }
                             }
                         }
                     }
@@ -2850,7 +3036,12 @@ fun DialPadKey(
     overrideHeight: Dp? = null,
     scaleFactor: Float = 1f,
     hasCustomBg: Boolean = false,
-    isBrightBg: Boolean = false
+    isBrightBg: Boolean = false,
+    liquidGlassBackdrop: com.coolappstore.everdialer.by.svhp.liquidglass.Backdrop? = null,
+    liquidGlassEnabled: Boolean = false,
+    blurEnabled: Boolean = false,
+    lgConfig: com.coolappstore.everdialer.by.svhp.controller.util.LiquidGlassElementConfig? = null,
+    blurConfig: com.coolappstore.everdialer.by.svhp.controller.util.BlurElementConfig? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -2905,13 +3096,13 @@ fun DialPadKey(
     val restingBgColor = if (hasCustomBg) {
         if (isBrightBg) {
             // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
-            androidx.compose.ui.graphics.lerp(baseContainer, Color.Black, 0.16f).copy(alpha = 0.88f)
+            androidx.compose.ui.graphics.lerp(baseContainer, Color.Black, 0.16f)
         } else {
             // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseContainer already pops out
             if (isDark) {
-                androidx.compose.ui.graphics.lerp(baseContainer, Color.White, 0.18f).copy(alpha = 0.88f)
+                androidx.compose.ui.graphics.lerp(baseContainer, Color.White, 0.18f)
             } else {
-                baseContainer.copy(alpha = 0.88f)
+                baseContainer
             }
         }
     } else {
@@ -3003,6 +3194,74 @@ fun DialPadKey(
         }
     }
 
+    val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
+    val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
+    val btnBorder = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
+        0.5.dp,
+        if (buttonBgLuminance > 0.45) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.15f)
+    ) else null
+
+    val wrappedOnClick = {
+        triggerTapPulse()
+        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
+        onClick(number)
+    }
+    val wrappedOnLongClick: (() -> Unit)? = if (onLongClick != null) ({
+        triggerTapPulse()
+        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongClick()
+    }) else null
+
+    val keyContent = @Composable {
+        Column(
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = number,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = finalMainFontSize.sp,
+                    lineHeight = finalMainFontSize.sp,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both
+                    ),
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
+                color = mainTextColor,
+                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false
+            )
+            if (hasLetters) {
+                if (gapHeight > 0f) {
+                    Spacer(modifier = Modifier.height(gapHeight.dp))
+                }
+                Text(
+                    text = letters,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = finalSubFontSize.sp,
+                        lineHeight = finalSubFontSize.sp,
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.Both
+                        ),
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
+                    color = subTextColor,
+                    letterSpacing = if (isPlusSubKey) 0.sp else 0.4.sp,
+                    fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+
     Box(
         modifier = Modifier.size(
             width = if (isCircleButtons) buttonWidth else keyWidth,
@@ -3010,77 +3269,92 @@ fun DialPadKey(
         ),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            modifier = Modifier
-                .size(width = buttonWidth, height = buttonHeight)
-                .scale(scale)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = {
-                        triggerTapPulse()
-                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (prefs.getBoolean(PreferenceManager.KEY_DTMF_TONE, false)) playDtmf(context, number, soundPool, prefs)
-                        onClick(number)
-                    },
-                    onLongClick = if (onLongClick != null) ({
-                        triggerTapPulse()
-                        if (prefs.getBoolean(PreferenceManager.KEY_APP_HAPTICS, true)) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onLongClick()
-                    }) else null
-                ),
-            shape = buttonShape,
-            color = bgColor,
-            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
-                0.5.dp,
-                if (buttonBgLuminance > 0.45) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.15f)
-            ) else null
-        ) {
-            Column(
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
+        if (useLiquidGlass && liquidGlassBackdrop != null) {
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = number,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = finalMainFontSize.sp,
-                        lineHeight = finalMainFontSize.sp,
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        ),
-                        platformStyle = PlatformTextStyle(includeFontPadding = false)
-                    ),
-                    color = mainTextColor,
-                    fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    softWrap = false
-                )
-                if (hasLetters) {
-                    if (gapHeight > 0f) {
-                        Spacer(modifier = Modifier.height(gapHeight.dp))
-                    }
-                    Text(
-                        text = letters,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = finalSubFontSize.sp,
-                            lineHeight = finalSubFontSize.sp,
-                            lineHeightStyle = LineHeightStyle(
-                                alignment = LineHeightStyle.Alignment.Center,
-                                trim = LineHeightStyle.Trim.Both
-                            ),
-                            platformStyle = PlatformTextStyle(includeFontPadding = false)
-                        ),
-                        color = subTextColor,
-                        letterSpacing = if (isPlusSubKey) 0.sp else 0.4.sp,
-                        fontWeight = if (isPlusSubKey) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                        softWrap = false
+                    .size(width = buttonWidth, height = buttonHeight)
+                    .scale(scale)
+                    .drawBackdrop(
+                        backdrop = liquidGlassBackdrop,
+                        shape = { buttonShape },
+                        effects = {
+                            val d = density.density
+                            val cfg = lgConfig ?: prefs.getLiquidGlassConfig(PreferenceManager.KEY_LG_DIALPAD_CALL_BUTTON)
+                            colorControls(brightness = cfg.brightness, saturation = cfg.saturation)
+                            if (cfg.blurRadiusDp > 0f) blur(cfg.blurRadiusDp * d)
+                            lens(
+                                refractionHeight = cfg.refractionHeightDp * d,
+                                refractionAmount = cfg.refractionAmountDp * d,
+                                chromaticAberration = cfg.chromaticAberration,
+                                depthEffect = cfg.depthEffect
+                            )
+                        },
+                        highlight = { Highlight.Default }
                     )
+                    .combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = wrappedOnClick,
+                        onLongClick = wrappedOnLongClick
+                    )
+            ) {
+                Surface(
+                    shape = buttonShape,
+                    color = bgColor.copy(alpha = 0.45f),
+                    border = btnBorder,
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    keyContent()
                 }
+            }
+        } else if (useBackdropBlur && liquidGlassBackdrop != null) {
+            Box(
+                modifier = Modifier
+                    .size(width = buttonWidth, height = buttonHeight)
+                    .scale(scale)
+                    .drawBackdrop(
+                        backdrop = liquidGlassBackdrop,
+                        shape = { buttonShape },
+                        effects = {
+                            val d = density.density
+                            val cfg = blurConfig ?: prefs.getBlurConfig(PreferenceManager.KEY_BLUR_DIALPAD_CALL_BUTTON)
+                            colorControls(saturation = cfg.saturation)
+                            if (cfg.blurRadiusDp > 0f) blur(cfg.blurRadiusDp * d)
+                        },
+                        highlight = { Highlight.Default }
+                    )
+                    .combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = wrappedOnClick,
+                        onLongClick = wrappedOnLongClick
+                    )
+            ) {
+                Surface(
+                    shape = buttonShape,
+                    color = bgColor.copy(alpha = 0.45f),
+                    border = btnBorder,
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    keyContent()
+                }
+            }
+        } else {
+            Surface(
+                modifier = Modifier
+                    .size(width = buttonWidth, height = buttonHeight)
+                    .scale(scale)
+                    .combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = wrappedOnClick,
+                        onLongClick = wrappedOnLongClick
+                    ),
+                shape = buttonShape,
+                color = bgColor,
+                border = btnBorder
+            ) {
+                keyContent()
             }
         }
     }

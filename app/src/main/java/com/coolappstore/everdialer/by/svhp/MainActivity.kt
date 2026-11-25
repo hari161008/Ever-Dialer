@@ -851,9 +851,28 @@ class MainActivity : FragmentActivity() {
                                     )
                                 }
                             }
+                            val dialpadBgType = remember(settingsVer) {
+                                prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none"
+                            }
+                            val isDialpadActive = com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForDialpad
+                            val isDialpadWallpaper = isDialpadActive && dialpadBgType == "wallpaper"
+
+                            DisposableEffect(isDialpadWallpaper) {
+                                if (isDialpadWallpaper) {
+                                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                                    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                                    window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+                                } else {
+                                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                                }
+                                onDispose {
+                                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                                }
+                            }
+
                             // ── Main content fills the rest, edge-to-edge ──────────────────────
                             Surface(
-                                color = MaterialTheme.colorScheme.surface,
+                                color = if (isDialpadWallpaper) Color.Transparent else MaterialTheme.colorScheme.surface,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
@@ -864,11 +883,30 @@ class MainActivity : FragmentActivity() {
                         }
                         } // end CompositionLocalProvider landscape
                     } else {
+                        val dialpadBgType = remember(settingsVer) {
+                            prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none"
+                        }
+                        val isDialpadActive = com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForDialpad
+                        val isDialpadWallpaper = isDialpadActive && dialpadBgType == "wallpaper"
+
+                        DisposableEffect(isDialpadWallpaper) {
+                            if (isDialpadWallpaper) {
+                                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                                window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+                            } else {
+                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                            }
+                            onDispose {
+                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                            }
+                        }
+
                         val liquidGlassBackdrop = rememberLayerBackdrop()
                         CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdrop) {
                             Scaffold(
                                 bottomBar = { BottomBar(navController) },
-                                containerColor = MaterialTheme.colorScheme.surface,
+                                containerColor = if (isDialpadWallpaper) Color.Transparent else MaterialTheme.colorScheme.surface,
                                 contentWindowInsets = WindowInsets(0)
                             ) { scaffoldPadding ->
                                 Box(

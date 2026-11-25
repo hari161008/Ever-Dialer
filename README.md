@@ -537,6 +537,7 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
 # Used App As The Base And Their Licenses Available In Their Respective Repository
 
 ┈➤ [RivoPhone / Revo Dialer](https://github.com/user-grinch/RivoPhone)<br><br>
+┈➤ [The Dialer](https://github.com/modiprincekr-07/Ever-Dialer)<br><br>
 ┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer)<br><br>
 ┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
 ┈➤ [Liquid Glass](https://github.com/Kyant0/AndroidLiquidGlass)<br><br>

@@ -59,6 +59,12 @@ import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundP
 import com.ramcosta.composedestinations.generated.destinations.RecordingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SmsChatScreenDestination
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.app.Activity
+import android.graphics.drawable.ColorDrawable
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalView
+import com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer
+import java.io.File
 import com.coolappstore.everdialer.by.svhp.feature.AppFeatures
 import com.coolappstore.everdialer.by.svhp.view.components.findMatchingRecording
 import com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState
@@ -239,6 +245,42 @@ fun ContactDetailsScreen(
             try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
         }
     }
+    val headerBgType = remember(settingsVer) { prefs.getString(PreferenceManager.KEY_CONTACT_HEADER_BG_TYPE, "none") ?: "none" }
+    val headerBgPath = remember(settingsVer) { prefs.getString(PreferenceManager.KEY_CONTACT_HEADER_BG_PATH, "") ?: "" }
+    val headerBgFile = remember(headerBgPath) { if (headerBgPath.isNotEmpty()) File(headerBgPath) else null }
+    val hasCustomHeader = (headerBgType == "wallpaper") || ((headerBgType == "picture" || headerBgType == "video") && headerBgFile != null && headerBgFile.exists())
+    val headerBgZoom = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_ZOOM, 1f) }
+    val headerBgPanX = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_PAN_X, 0f) }
+    val headerBgPanY = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_PAN_Y, 0f) }
+    val headerBgDim = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_DIM, 0f) }
+    val headerBgBlur = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_BLUR, 0f) }
+    val headerBgVideoSpeed = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_HEADER_BG_VIDEO_SPEED, 1.0f) }
+
+    val infoBgType = remember(settingsVer) { prefs.getString(PreferenceManager.KEY_CONTACT_INFO_BG_TYPE, "none") ?: "none" }
+    val infoBgPath = remember(settingsVer) { prefs.getString(PreferenceManager.KEY_CONTACT_INFO_BG_PATH, "") ?: "" }
+    val infoBgFile = remember(infoBgPath) { if (infoBgPath.isNotEmpty()) File(infoBgPath) else null }
+    val hasCustomPageBg = (infoBgType == "wallpaper") || ((infoBgType == "picture" || infoBgType == "video") && infoBgFile != null && infoBgFile.exists())
+    val infoBgZoom = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_ZOOM, 1f) }
+    val infoBgPanX = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_PAN_X, 0f) }
+    val infoBgPanY = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_PAN_Y, 0f) }
+    val infoBgDim = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_DIM, 0f) }
+    val infoBgBlur = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_BLUR, 0f) }
+    val infoBgVideoSpeed = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_VIDEO_SPEED, 1.0f) }
+
+    val view = LocalView.current
+    val isPageWallpaper = hasCustomPageBg && infoBgType == "wallpaper"
+    DisposableEffect(isPageWallpaper) {
+        val window = (view.context as? Activity)?.window
+        if (isPageWallpaper && window != null) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+            window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        }
+    }
+
     var showCallLongPressMenu by remember { mutableStateOf(false) }
     var showTextLongPressMenu by remember { mutableStateOf(false) }
     var pendingTextAction by remember { mutableStateOf<String?>(null) }
@@ -1026,12 +1068,76 @@ fun ContactDetailsScreen(
     }
 
     com.coolappstore.everdialer.by.svhp.view.theme.ExpandingScreenContainer(onClose = { navigator.navigateUp() }) { closeWithAnimation ->
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (hasCustomPageBg) Color.Transparent else MaterialTheme.colorScheme.surface)
+        ) {
+            if (hasCustomPageBg) {
+                if (infoBgType == "wallpaper") {
+                    if (infoBgDim > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = infoBgDim))
+                        )
+                    }
+                } else if (infoBgFile != null && infoBgFile.exists()) {
+                    DialpadBackgroundLayer(
+                        bgType = infoBgType,
+                        bgFile = infoBgFile,
+                        bgZoom = infoBgZoom,
+                        bgPanX = infoBgPanX,
+                        bgPanY = infoBgPanY,
+                        bgDim = infoBgDim,
+                        bgBlur = infoBgBlur,
+                        bgVideoSpeed = infoBgVideoSpeed,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
             // Background image layer sits behind the whole column so it shows through
             // the transparent header instead of a solid banner.
             Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
-                AsyncImage(model = contact?.photoUri, contentDescription = null, modifier = Modifier.fillMaxSize().blur(50.dp), contentScale = ContentScale.Crop)
-                Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))
+                if (hasCustomHeader) {
+                    if (headerBgType == "wallpaper") {
+                        if (headerBgDim > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = headerBgDim))
+                            )
+                        }
+                    } else if (headerBgFile != null && headerBgFile.exists()) {
+                        DialpadBackgroundLayer(
+                            bgType = headerBgType,
+                            bgFile = headerBgFile,
+                            bgZoom = headerBgZoom,
+                            bgPanX = headerBgPanX,
+                            bgPanY = headerBgPanY,
+                            bgDim = headerBgDim,
+                            bgBlur = headerBgBlur,
+                            bgVideoSpeed = headerBgVideoSpeed,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = contact?.photoUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(50.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                val bottomFadeColor = if (hasCustomPageBg) Color.Transparent else MaterialTheme.colorScheme.surface
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(colors = listOf(Color.Transparent, bottomFadeColor)))
+                )
             }
 
             LazyColumn(

@@ -171,6 +171,43 @@ class PreferenceManager(context: Context) {
     fun isSmsMessagePinned(messageId: Long): Boolean =
         getPinnedSmsMessages().contains(messageId)
 
+    fun getSpeedDialNumber(digit: String): String? =
+        getString(KEY_SPEED_DIAL_PREFIX + digit, null)?.ifBlank { null }
+
+    fun getSpeedDialName(digit: String): String? =
+        getString(KEY_SPEED_DIAL_NAME_PREFIX + digit, null)?.ifBlank { null }
+
+    fun setSpeedDial(digit: String, number: String?, name: String? = null) {
+        setString(KEY_SPEED_DIAL_PREFIX + digit, number?.trim()?.ifBlank { null })
+        setString(KEY_SPEED_DIAL_NAME_PREFIX + digit, name?.trim()?.ifBlank { null })
+    }
+
+    fun removeSpeedDial(digit: String) {
+        remove(KEY_SPEED_DIAL_PREFIX + digit)
+        remove(KEY_SPEED_DIAL_NAME_PREFIX + digit)
+    }
+
+    fun clearAllSpeedDials() {
+        (1..9).forEach { digit ->
+            removeSpeedDial(digit.toString())
+        }
+    }
+
+    fun getVoicemailNumber(context: Context? = null): String? {
+        val custom = getSpeedDialNumber("1")
+        if (!custom.isNullOrBlank()) return custom
+        if (context != null) {
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+            val carrierVm = try { telephonyManager?.voiceMailNumber } catch (_: Throwable) { null }
+            if (!carrierVm.isNullOrBlank()) return carrierVm
+        }
+        return null
+    }
+
+    fun setVoicemailNumber(number: String?) {
+        setSpeedDial("1", number, "Voicemail")
+    }
+
     fun setSmsMessagePinned(messageId: Long, pinned: Boolean) {
         val current = getPinnedSmsMessages().toMutableSet()
         if (pinned) current.add(messageId) else current.remove(messageId)
@@ -1461,6 +1498,30 @@ class PreferenceManager(context: Context) {
         const val KEY_CALL_CUSTOM_CATEGORIES       = "call_custom_categories"
         const val KEY_DEFAULT_CALL_CATEGORY        = "default_call_category"
         val DEFAULT_CALL_CATEGORY_ORDER            = listOf("all", "favourites", "contacts", "unknown", "missed", "incoming", "outgoing")
+
+        // Speed Dial (Keys 1-9)
+        const val KEY_SPEED_DIAL_PREFIX            = "speed_dial_"
+        const val KEY_SPEED_DIAL_NAME_PREFIX       = "speed_dial_name_"
+
+        // Contact Header Background
+        const val KEY_CONTACT_HEADER_BG_TYPE       = "contact_header_bg_type"
+        const val KEY_CONTACT_HEADER_BG_PATH       = "contact_header_bg_path"
+        const val KEY_CONTACT_HEADER_BG_ZOOM       = "contact_header_bg_zoom"
+        const val KEY_CONTACT_HEADER_BG_PAN_X      = "contact_header_bg_pan_x"
+        const val KEY_CONTACT_HEADER_BG_PAN_Y      = "contact_header_bg_pan_y"
+        const val KEY_CONTACT_HEADER_BG_DIM        = "contact_header_bg_dim"
+        const val KEY_CONTACT_HEADER_BG_BLUR       = "contact_header_bg_blur"
+        const val KEY_CONTACT_HEADER_BG_VIDEO_SPEED = "contact_header_bg_video_speed"
+
+        // Contact Info Page Background
+        const val KEY_CONTACT_INFO_BG_TYPE         = "contact_info_bg_type"
+        const val KEY_CONTACT_INFO_BG_PATH         = "contact_info_bg_path"
+        const val KEY_CONTACT_INFO_BG_ZOOM         = "contact_info_bg_zoom"
+        const val KEY_CONTACT_INFO_BG_PAN_X        = "contact_info_bg_pan_x"
+        const val KEY_CONTACT_INFO_BG_PAN_Y        = "contact_info_bg_pan_y"
+        const val KEY_CONTACT_INFO_BG_DIM          = "contact_info_bg_dim"
+        const val KEY_CONTACT_INFO_BG_BLUR         = "contact_info_bg_blur"
+        const val KEY_CONTACT_INFO_BG_VIDEO_SPEED  = "contact_info_bg_video_speed"
     }
 }
 

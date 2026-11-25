@@ -504,7 +504,7 @@ fun CustomBackgroundPickerScreen(
     }
 
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
-    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+    val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
 
     val systemDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     val appThemePref = prefs.getString(PreferenceManager.KEY_THEME_MODE, "auto") ?: "auto"
@@ -711,7 +711,7 @@ fun CustomBackgroundPickerScreen(
                                 .clip(RoundedCornerShape(32.dp))
                                 .clickable {
                                     if (selectedTab == 0) {
-                                        if (hasCustomBg && bgFile != null) {
+                                        if (hasCustomBg && bgType != "wallpaper" && bgFile != null) {
                                             isEditingPfp = false
                                             editorMediaState = Triple(bgFile, bgType == "video", bgType)
                                         } else {
@@ -729,9 +729,66 @@ fun CustomBackgroundPickerScreen(
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 // Background Layer
-                                if (hasCustomBg && bgFile != null) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        if (bgType == "video") {
+                                if (hasCustomBg) {
+                                    if (bgType == "wallpaper") {
+                                        val wallpaperDrawable = remember {
+                                            try {
+                                                android.app.WallpaperManager.getInstance(context).drawable
+                                            } catch (_: Throwable) { null }
+                                        }
+                                        if (wallpaperDrawable != null) {
+                                            AsyncImage(
+                                                model = wallpaperDrawable,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(
+                                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                            colors = listOf(
+                                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.38f),
+                                                                MaterialTheme.colorScheme.surface
+                                                            )
+                                                        )
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center,
+                                                    modifier = Modifier.padding(16.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.PhoneAndroid,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(36.dp),
+                                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = "Current Device Wallpaper",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                    Text(
+                                                        text = "(Rendered live by Android behind dialpad)",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    } else if (bgFile != null) {
+                                        Box(modifier = Modifier.fillMaxSize()) {
+                                            if (bgType == "video") {
                                             LoopingVideoPlayer(
                                                 videoFile = bgFile,
                                                 videoSpeed = bgVideoSpeed,
@@ -769,6 +826,7 @@ fun CustomBackgroundPickerScreen(
                                                     .background(Color.Black.copy(alpha = bgDim))
                                             )
                                         }
+                                    }
                                     }
                                 } else {
                                     Box(
@@ -1388,7 +1446,7 @@ fun CustomBackgroundPickerScreen(
                         }
 
                         // Customize / Adjust button if custom media active for selected tab
-                        val canAdjust = (selectedTab == 0 && hasCustomBg && bgFile != null) || (selectedTab == 1 && hasCustomPfp && pfpFile != null)
+                        val canAdjust = (selectedTab == 0 && hasCustomBg && bgType != "wallpaper" && bgFile != null) || (selectedTab == 1 && hasCustomPfp && pfpFile != null)
                         if (canAdjust) {
                             Spacer(Modifier.height(10.dp))
                             FilledTonalButton(
@@ -1676,18 +1734,11 @@ fun CustomBackgroundPickerScreen(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    val next = !autoRefreshWallpaper
-                                                    autoRefreshWallpaper = next
-                                                    prefs.setBoolean(autoRefreshKey, next)
-                                                }
                                                 .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                                             ) {
@@ -1698,34 +1749,26 @@ fun CustomBackgroundPickerScreen(
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
                                                         Icon(
-                                                            Icons.Outlined.Sync,
+                                                            Icons.Outlined.PhoneAndroid,
                                                             contentDescription = null,
                                                             tint = MaterialTheme.colorScheme.primary,
                                                             modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                 }
-                                                Column {
+                                                Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        "Auto refresh wallpaper every app start",
+                                                        "Live System Wallpaper Active",
                                                         style = MaterialTheme.typography.bodyMedium,
                                                         fontWeight = FontWeight.SemiBold
                                                     )
                                                     Text(
-                                                        "Automatically refreshes the system wallpaper whenever you open the app",
+                                                        "Ever Dialer uses native Android window wallpaper rendering so your active device wallpaper (including live/dynamic wallpapers) is displayed in real-time.",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                             }
-                                            Spacer(Modifier.width(8.dp))
-                                            Switch(
-                                                checked = autoRefreshWallpaper,
-                                                onCheckedChange = {
-                                                    autoRefreshWallpaper = it
-                                                    prefs.setBoolean(autoRefreshKey, it)
-                                                }
-                                            )
                                         }
                                     }
                                 }
@@ -2165,6 +2208,13 @@ fun CustomBackgroundPickerScreen(
                 prefs.setString("${prefix}_bg_path", "")
                 BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
                 Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
+            },
+            onSelectWallpaper = {
+                bgType = "wallpaper"
+                prefs.setString("${prefix}_bg_type", "wallpaper")
+                prefs.setString("${prefix}_bg_path", "")
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Current device wallpaper applied", Toast.LENGTH_SHORT).show()
             },
             onOpenEditor = { file, isVideo, type ->
                 isEditingPfp = false

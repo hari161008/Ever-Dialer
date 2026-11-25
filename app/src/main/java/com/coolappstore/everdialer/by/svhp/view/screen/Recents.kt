@@ -1,6 +1,10 @@
 package com.coolappstore.everdialer.by.svhp.view.screen
 
 import android.Manifest
+import android.app.Activity
+import android.content.ContextWrapper
+import android.view.WindowManager
+import android.graphics.drawable.ColorDrawable
 import android.content.res.Configuration
 import com.coolappstore.everdialer.by.svhp.view.theme.TabTransitionStyle
 import android.content.Context
@@ -304,10 +308,35 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val recentsBackdrop = rememberLayerBackdrop()
 
+    val settingsVersion by prefs.settingsChanged.collectAsState()
+    val dialpadBgType = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
+    val dialpadBgPath = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
+    val dialpadBgFile = remember(dialpadBgPath) { if (dialpadBgPath.isNotEmpty()) java.io.File(dialpadBgPath) else null }
+    val hasDialpadCustomBg = (dialpadBgType == "wallpaper") || ((dialpadBgType == "picture" || dialpadBgType == "video") && dialpadBgFile != null && dialpadBgFile.exists())
+    val dialpadBgZoom = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_ZOOM, 1f) }
+    val dialpadBgPanX = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_X, 0f) }
+    val dialpadBgPanY = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_Y, 0f) }
+    val dialpadBgDim = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
+    val dialpadBgBlur = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
+    val dialpadBgVideoSpeed = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
+
+    val activity = remember(context) {
+        var c: Context? = context
+        while (c is ContextWrapper) {
+            if (c is Activity) break
+            c = c.baseContext
+        }
+        c as? Activity
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer {
+                val p = dialpadProgress.value
+                alpha = if (dialpadBgType == "wallpaper" && p > 0.05f) (1f - p * 1.5f).coerceIn(0f, 1f) else 1f
+            }
             .nestedScroll(nestedScrollConnection)
             .pointerInput(isRtl) {
                 // Use PointerEventPass.Final so children (LazyColumn) get events first.
@@ -577,18 +606,44 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         }
 
         val p = dialpadProgress.value
+        val isWallpaperActive = p > 0.05f && dialpadBgType == "wallpaper"
+        DisposableEffect(isWallpaperActive) {
+            if (isWallpaperActive && activity != null) {
+                activity.window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                activity.window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+            }
+            onDispose {
+                if (activity != null) {
+                    activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                }
+            }
+        }
+
         if (p > 0.001f || showDialpad) {
             // Scrim
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(20f)
-                    .background(Color.Black.copy(alpha = 0.45f * p))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { closeDialpad(null) }
-            )
+            if (dialpadBgType != "wallpaper") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                        .background(Color.Black.copy(alpha = 0.45f * p))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { closeDialpad(null) }
+                )
+            } else if (dialpadBgDim > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                        .background(Color.Black.copy(alpha = dialpadBgDim * p))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { closeDialpad(null) }
+                )
+            }
 
             // Expanding Dialpad Container originating at the FAB
             Box(
@@ -601,18 +656,6 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                 val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
                 val pivotX = (fabCenter?.x ?: (screenWidthPx * 0.88f)) / screenWidthPx.coerceAtLeast(1f)
                 val pivotY = (fabCenter?.y ?: (screenHeightPx * 0.92f)) / screenHeightPx.coerceAtLeast(1f)
-
-                val settingsVersion by prefs.settingsChanged.collectAsState()
-                val dialpadBgType = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none" }
-                val dialpadBgPath = remember(settingsVersion) { prefs.getString(PreferenceManager.KEY_DIALPAD_BG_PATH, "") ?: "" }
-                val dialpadBgFile = remember(dialpadBgPath) { if (dialpadBgPath.isNotEmpty()) java.io.File(dialpadBgPath) else null }
-                val hasDialpadCustomBg = (dialpadBgType == "wallpaper" || dialpadBgType == "picture" || dialpadBgType == "video") && dialpadBgFile != null && dialpadBgFile.exists()
-                val dialpadBgZoom = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_ZOOM, 1f) }
-                val dialpadBgPanX = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_X, 0f) }
-                val dialpadBgPanY = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_PAN_Y, 0f) }
-                val dialpadBgDim = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_DIM, 0f) }
-                val dialpadBgBlur = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_BLUR, 0f) }
-                val dialpadBgVideoSpeed = remember(settingsVersion) { prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f) }
 
                 Surface(
                     modifier = Modifier
@@ -634,18 +677,28 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
                     tonalElevation = if (hasDialpadCustomBg) 0.dp else 4.dp
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        if (hasDialpadCustomBg && dialpadBgFile != null) {
-                            com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
-                                bgType = dialpadBgType,
-                                bgFile = dialpadBgFile,
-                                bgZoom = dialpadBgZoom,
-                                bgPanX = dialpadBgPanX,
-                                bgPanY = dialpadBgPanY,
-                                bgDim = dialpadBgDim,
-                                bgBlur = dialpadBgBlur,
-                                bgVideoSpeed = dialpadBgVideoSpeed,
-                                modifier = Modifier.matchParentSize()
-                            )
+                        if (hasDialpadCustomBg) {
+                            if (dialpadBgType == "wallpaper") {
+                                if (dialpadBgDim > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = dialpadBgDim))
+                                    )
+                                }
+                            } else if (dialpadBgFile != null) {
+                                com.coolappstore.everdialer.by.svhp.view.components.DialpadBackgroundLayer(
+                                    bgType = dialpadBgType,
+                                    bgFile = dialpadBgFile,
+                                    bgZoom = dialpadBgZoom,
+                                    bgPanX = dialpadBgPanX,
+                                    bgPanY = dialpadBgPanY,
+                                    bgDim = dialpadBgDim,
+                                    bgBlur = dialpadBgBlur,
+                                    bgVideoSpeed = dialpadBgVideoSpeed,
+                                    modifier = Modifier.matchParentSize()
+                                )
+                            }
                         }
                     Column(
                         modifier = Modifier

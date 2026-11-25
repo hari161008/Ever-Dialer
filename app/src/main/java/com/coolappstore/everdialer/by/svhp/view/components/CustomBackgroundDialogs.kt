@@ -78,7 +78,9 @@ import kotlin.math.roundToInt
 enum class CustomBackgroundTarget(val prefix: String, val title: String) {
     INCOMING("incoming", "Incoming Call"),
     ONGOING("ongoing", "Ongoing Call"),
-    DIALPAD("dialpad", "Dialpad")
+    DIALPAD("dialpad", "Dialpad"),
+    CONTACT_HEADER("contact_header", "Contact Header"),
+    CONTACT_INFO("contact_info", "Contact Info")
 }
 
 @Composable
@@ -673,6 +675,7 @@ fun CustomBackgroundOptionsPopup(
     noneSubtitle: String? = null,
     onDismiss: () -> Unit,
     onSelectNone: () -> Unit,
+    onSelectWallpaper: (() -> Unit)? = null,
     onOpenEditor: (file: File, isVideo: Boolean, bgType: String) -> Unit
 ) {
     val context = LocalContext.current
@@ -842,10 +845,13 @@ fun CustomBackgroundOptionsPopup(
                         iconTint = MaterialTheme.colorScheme.primary,
                         iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         title = "Wallpaper",
-                        subtitle = if (isLoadingWallpaper) "Extracting wallpaper..." else "Current device system wallpaper",
+                        subtitle = if (onSelectWallpaper != null) "Current device live / system wallpaper" else (if (isLoadingWallpaper) "Extracting wallpaper..." else "Current device system wallpaper"),
                         isSelected = currentType == "wallpaper",
                         onClick = {
-                            if (!isLoadingWallpaper) {
+                            if (onSelectWallpaper != null) {
+                                onSelectWallpaper()
+                                onDismiss()
+                            } else if (!isLoadingWallpaper) {
                                 isLoadingWallpaper = true
                                 scope.launch(Dispatchers.IO) {
                                     val wallpaperFile = WallpaperExportHelper.extractWallpaperToFile(context)

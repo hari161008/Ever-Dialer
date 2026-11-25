@@ -91,7 +91,7 @@ fun DialpadCustomisationScreen(
     }
 
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
-    val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+    val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
 
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
@@ -113,13 +113,13 @@ fun DialpadCustomisationScreen(
     val previewKeyBg = if (hasCustomBg) {
         if (isBrightBg) {
             // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
-            androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.Black, 0.16f).copy(alpha = 0.88f)
+            androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.Black, 0.16f)
         } else {
             // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseKeyContainer already pops out
             if (isDark) {
-                androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.White, 0.18f).copy(alpha = 0.88f)
+                androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.White, 0.18f)
             } else {
-                baseKeyContainer.copy(alpha = 0.88f)
+                baseKeyContainer
             }
         }
     } else {
@@ -220,37 +220,53 @@ fun DialpadCustomisationScreen(
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             // Custom Background Layer
-                            if (hasCustomBg && bgFile != null) {
+                            if (hasCustomBg) {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    if (bgType == "video") {
-                                        LoopingVideoPlayer(
-                                            videoFile = bgFile,
-                                            videoSpeed = bgVideoSpeed,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .graphicsLayer {
-                                                    scaleX = bgZoom
-                                                    scaleY = bgZoom
-                                                    translationX = bgPanX * 0.28f
-                                                    translationY = bgPanY * 0.28f
-                                                }
-                                                .then(if (bgBlur > 0f) Modifier.blur((bgBlur * 0.5f).dp) else Modifier)
-                                        )
-                                    } else {
-                                        AsyncImage(
-                                            model = bgFile,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .graphicsLayer {
-                                                    scaleX = bgZoom
-                                                    scaleY = bgZoom
-                                                    translationX = bgPanX * 0.28f
-                                                    translationY = bgPanY * 0.28f
-                                                }
-                                                .then(if (bgBlur > 0f) Modifier.blur((bgBlur * 0.5f).dp) else Modifier)
-                                        )
+                                    if (bgType == "wallpaper") {
+                                        val wallpaperDrawable = remember {
+                                            try {
+                                                android.app.WallpaperManager.getInstance(context).drawable
+                                            } catch (_: Throwable) { null }
+                                        }
+                                        if (wallpaperDrawable != null) {
+                                            AsyncImage(
+                                                model = wallpaperDrawable,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    } else if (bgFile != null) {
+                                        if (bgType == "video") {
+                                            LoopingVideoPlayer(
+                                                videoFile = bgFile,
+                                                videoSpeed = bgVideoSpeed,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .graphicsLayer {
+                                                        scaleX = bgZoom
+                                                        scaleY = bgZoom
+                                                        translationX = bgPanX * 0.28f
+                                                        translationY = bgPanY * 0.28f
+                                                    }
+                                                    .then(if (bgBlur > 0f) Modifier.blur((bgBlur * 0.5f).dp) else Modifier)
+                                            )
+                                        } else {
+                                            AsyncImage(
+                                                model = bgFile,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .graphicsLayer {
+                                                        scaleX = bgZoom
+                                                        scaleY = bgZoom
+                                                        translationX = bgPanX * 0.28f
+                                                        translationY = bgPanY * 0.28f
+                                                    }
+                                                    .then(if (bgBlur > 0f) Modifier.blur((bgBlur * 0.5f).dp) else Modifier)
+                                            )
+                                        }
                                     }
                                     if (bgDim > 0f) {
                                         Box(
@@ -813,22 +829,24 @@ fun DialpadCustomisationScreen(
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        bgFile?.let { file ->
-                                            editorMediaState = Triple(file, bgType == "video", bgType)
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Tune,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Edit / Adjust")
+                                if (bgType != "wallpaper") {
+                                    OutlinedButton(
+                                        onClick = {
+                                            bgFile?.let { file ->
+                                                editorMediaState = Triple(file, bgType == "video", bgType)
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Tune,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Edit / Adjust")
+                                    }
                                 }
 
                                 Button(
@@ -877,6 +895,16 @@ fun DialpadCustomisationScreen(
                 prefs.setFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, -1f)
                 BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
                 Toast.makeText(context, "Default background applied", Toast.LENGTH_SHORT).show()
+                showOptionsPopup = false
+            },
+            onSelectWallpaper = {
+                bgType = "wallpaper"
+                bgPath = ""
+                prefs.setString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "wallpaper")
+                prefs.setString(PreferenceManager.KEY_DIALPAD_BG_PATH, "")
+                prefs.setFloat(PreferenceManager.KEY_DIALPAD_BG_LUMINANCE, -1f)
+                BackgroundMediaManager.pruneOrphanedBackgrounds(context, prefs)
+                Toast.makeText(context, "Current device wallpaper applied", Toast.LENGTH_SHORT).show()
                 showOptionsPopup = false
             },
             onOpenEditor = { file, isVideo, type ->

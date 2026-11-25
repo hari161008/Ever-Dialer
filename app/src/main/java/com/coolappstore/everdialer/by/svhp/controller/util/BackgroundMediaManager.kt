@@ -192,4 +192,25 @@ object BackgroundMediaManager {
         }
         return 0.2f
     }
+
+    /**
+     * Determines current device wallpaper luminance taking dim into account using WallpaperColors.
+     * Does not require external storage permissions and works with system / live wallpapers.
+     */
+    fun getWallpaperLuminance(context: Context, dim: Float): Float {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                val wm = android.app.WallpaperManager.getInstance(context)
+                val colors = wm.getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
+                if (colors != null) {
+                    val primaryColor = colors.primaryColor.toArgb()
+                    val rawLum = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor).toFloat()
+                    return rawLum * (1f - dim.coerceIn(0f, 1f))
+                }
+            }
+            0.2f
+        } catch (_: Throwable) {
+            0.2f
+        }
+    }
 }

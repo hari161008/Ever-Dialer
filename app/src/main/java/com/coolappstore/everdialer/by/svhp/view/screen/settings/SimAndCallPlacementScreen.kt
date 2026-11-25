@@ -33,6 +33,7 @@ import com.coolappstore.everdialer.by.svhp.modal.data.ContactGroup
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.ramcosta.composedestinations.generated.destinations.SpeedDialScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -240,6 +241,19 @@ fun SimAndCallPlacementScreen(
                                 prefs.setBoolean(PreferenceManager.KEY_CONFIRM_PLACING_CALL, it)
                                 try { syncManager.triggerSyncNow() } catch (_: Exception) {}
                             }
+                        )
+                        HorizontalDivider(
+                            Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoListItem(
+                            headline = "Speed Dial",
+                            supporting = "Configure 3x3 speed dial grid (Keys 1–9) and voicemail",
+                            leadingIcon = Icons.Outlined.Speed,
+                            iconContainerColor = ColorTeal,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("speed_dial", highlightedKey) { highlightedKey = null },
+                            onClick = { navigator.navigate(SpeedDialScreenDestination) }
                         )
                         if (hasTwoSims) {
                             HorizontalDivider(

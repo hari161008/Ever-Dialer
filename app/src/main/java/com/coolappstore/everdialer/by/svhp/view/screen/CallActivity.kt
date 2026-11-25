@@ -3,6 +3,7 @@ package com.coolappstore.everdialer.by.svhp.view.screen
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import android.os.*
@@ -295,6 +296,13 @@ class CallActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val incomingWallpaper = prefs.getString(PreferenceManager.KEY_INCOMING_BG_TYPE, "none") == "wallpaper"
+        val ongoingWallpaper = prefs.getString(PreferenceManager.KEY_ONGOING_BG_TYPE, "none") == "wallpaper"
+        if (incomingWallpaper || ongoingWallpaper) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+        }
         super.onCreate(savedInstanceState)
         showWhenLockedAndTurnScreenOn()
         // Prevent notification shade from being pulled down during a call
@@ -1140,45 +1148,56 @@ private fun CallBackgroundLayer(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        if (config.hasCustomBg && config.bgFile != null) {
+        if (config.hasCustomBg) {
             Box(modifier = Modifier.fillMaxSize()) {
-                if (config.bgType == "video") {
-                    com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
-                        videoFile = config.bgFile,
-                        videoSpeed = config.bgVideoSpeed,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = config.bgZoom
-                                scaleY = config.bgZoom
-                                translationX = config.bgPanX
-                                translationY = config.bgPanY
-                            }
-                            .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
-                    )
-                } else {
-                    AsyncImage(
-                        model = config.bgFile,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = config.bgZoom
-                                scaleY = config.bgZoom
-                                translationX = config.bgPanX
-                                translationY = config.bgPanY
-                            }
-                            .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
-                    )
-                }
+                if (config.bgType == "wallpaper") {
+                    // Wallpaper is displayed natively behind window via FLAG_SHOW_WALLPAPER
+                    if (config.bgDim > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = config.bgDim))
+                        )
+                    }
+                } else if (config.bgFile != null) {
+                    if (config.bgType == "video") {
+                        com.coolappstore.everdialer.by.svhp.view.components.LoopingVideoPlayer(
+                            videoFile = config.bgFile,
+                            videoSpeed = config.bgVideoSpeed,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = config.bgZoom
+                                    scaleY = config.bgZoom
+                                    translationX = config.bgPanX
+                                    translationY = config.bgPanY
+                                }
+                                .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
+                        )
+                    } else {
+                        AsyncImage(
+                            model = config.bgFile,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = config.bgZoom
+                                    scaleY = config.bgZoom
+                                    translationX = config.bgPanX
+                                    translationY = config.bgPanY
+                                }
+                                .then(if (config.bgBlur > 0f) Modifier.blur(config.bgBlur.dp) else Modifier)
+                        )
+                    }
 
-                if (config.bgDim > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = config.bgDim))
-                    )
+                    if (config.bgDim > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = config.bgDim))
+                        )
+                    }
                 }
             }
         } else {
@@ -1930,7 +1949,7 @@ fun ExpressiveCallScreen(
         val pfpShape = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_shape") == true) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")
 
         val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
-        val hasCustomBg = (bgType == "wallpaper" || bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists()
+        val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
 
         val pfpFile = if (pfpPath.isNotEmpty()) java.io.File(pfpPath) else null
         val hasCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && pfpFile != null && pfpFile.exists()
@@ -2023,7 +2042,29 @@ fun ExpressiveCallScreen(
         offset = androidx.compose.ui.geometry.Offset(0f, 2f)
     ) else null
 
-    val bgColor = colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primary, 0.035f)
+    val isWallpaperMode = hasCustomBg && currentBgConfig.bgType == "wallpaper"
+    val callActivity = remember(context) {
+        var c: Context? = context
+        while (c is ContextWrapper) {
+            if (c is Activity) break
+            c = c.baseContext
+        }
+        c as? Activity
+    }
+    DisposableEffect(isWallpaperMode) {
+        val win = callActivity?.window
+        if (isWallpaperMode && win != null) {
+            win.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            win.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        } else if (win != null) {
+            win.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        }
+        onDispose {
+            win?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        }
+    }
+
+    val bgColor = if (isWallpaperMode) Color.Transparent else colorLerp(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primary, 0.035f)
     val onBgColor = effectiveOnBgColor
     val subtleColor = effectiveSubtleColor
     val overlayColor = if (hasCustomBg) Color.Black.copy(0.35f) else (if (isDark) Color.White.copy(0.08f) else Color.Black.copy(0.06f))

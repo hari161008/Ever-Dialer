@@ -10,6 +10,7 @@
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowShowWallpaper">true</item>
     </style>
     <style name="Theme.EverDialer" parent="Theme.RivoPhone" />
     <style name="Theme.BiometricCallFloat" parent="Theme.RivoPhone">
