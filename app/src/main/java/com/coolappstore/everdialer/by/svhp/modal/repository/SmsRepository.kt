@@ -596,13 +596,25 @@ class SmsRepository(
     override suspend fun deleteThread(threadId: Long): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
             var count = 0
-            // 1. Delete conversation via native conversation URI
+            // 1. Delete conversation via standard Android MmsSms Threads URI
+            try {
+                val threadUri = ContentUris.withAppendedId(Telephony.Threads.CONTENT_URI, threadId)
+                count += contentResolver.delete(threadUri, null, null)
+            } catch (_: Throwable) {}
+
+            // 2. Also try content://mms-sms/conversations/$threadId
+            try {
+                val mmsSmsConvUri = ContentUris.withAppendedId(Uri.parse("content://mms-sms/conversations"), threadId)
+                count += contentResolver.delete(mmsSmsConvUri, null, null)
+            } catch (_: Throwable) {}
+
+            // 3. Delete via content://sms/conversations/$threadId
             try {
                 val convUri = ContentUris.withAppendedId(Uri.parse("content://sms/conversations"), threadId)
                 count += contentResolver.delete(convUri, null, null)
             } catch (_: Throwable) {}
 
-            // 2. Clean up any remaining SMS rows for thread
+            // 4. Clean up any remaining SMS rows for thread
             try {
                 count += contentResolver.delete(
                     Telephony.Sms.CONTENT_URI,
@@ -611,7 +623,7 @@ class SmsRepository(
                 )
             } catch (_: Throwable) {}
 
-            // 3. Clean up any MMS rows for thread
+            // 5. Clean up any MMS rows for thread
             try {
                 count += contentResolver.delete(
                     Telephony.Mms.CONTENT_URI,
@@ -626,18 +638,52 @@ class SmsRepository(
         }
     }
 
+    override suspend fun deleteMultipleThreads(threadIds: List<Long>): Boolean = withContext(Dispatchers.IO) {
+        var anySuccess = false
+        for (id in threadIds) {
+            if (deleteThread(id)) {
+                anySuccess = true
+            }
+        }
+        anySuccess
+    }
+
     override suspend fun deleteMessage(messageId: Long, isMms: Boolean): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
-            val uri = if (isMms) {
-                ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, messageId)
+            var count = 0
+            if (isMms) {
+                try {
+                    val uri = ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, messageId)
+                    count += contentResolver.delete(uri, null, null)
+                } catch (_: Throwable) {}
+                try {
+                    val uri = ContentUris.withAppendedId(Uri.parse("content://mms"), messageId)
+                    count += contentResolver.delete(uri, null, null)
+                } catch (_: Throwable) {}
             } else {
-                ContentUris.withAppendedId(Telephony.Sms.CONTENT_URI, messageId)
+                try {
+                    val uri = ContentUris.withAppendedId(Telephony.Sms.CONTENT_URI, messageId)
+                    count += contentResolver.delete(uri, null, null)
+                } catch (_: Throwable) {}
+                try {
+                    val uri = ContentUris.withAppendedId(Uri.parse("content://sms"), messageId)
+                    count += contentResolver.delete(uri, null, null)
+                } catch (_: Throwable) {}
             }
-            val count = contentResolver.delete(uri, null, null)
             count > 0
         } catch (_: Throwable) {
             false
         }
+    }
+
+    override suspend fun deleteMultipleMessages(messagesToDelete: List<Pair<Long, Boolean>>): Boolean = withContext(Dispatchers.IO) {
+        var anySuccess = false
+        for ((id, isMms) in messagesToDelete) {
+            if (deleteMessage(id, isMms)) {
+                anySuccess = true
+            }
+        }
+        anySuccess
     }
 
     override suspend fun markThreadAsRead(threadId: Long): Unit = withContext(Dispatchers.IO) {

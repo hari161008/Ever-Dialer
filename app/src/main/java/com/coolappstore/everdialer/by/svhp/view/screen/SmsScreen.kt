@@ -284,6 +284,7 @@ fun SmsScreen(
     }
     var threadToDelete by remember { mutableStateOf<SmsConversation?>(null) }
     var showDeleteMultipleDialog by remember { mutableStateOf(false) }
+    var showDefaultSmsRequiredDialog by remember { mutableStateOf(false) }
     var showBlockMultipleDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(cleanSharedText) {
@@ -1660,8 +1661,13 @@ fun SmsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        smsVM.deleteThread(conv.threadId)
+                        val tid = conv.threadId
                         threadToDelete = null
+                        if (!DefaultSmsManager.isDefaultSms(context)) {
+                            showDefaultSmsRequiredDialog = true
+                        } else {
+                            smsVM.deleteThread(tid)
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -1686,11 +1692,14 @@ fun SmsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        selectedThreadIds.forEach { tid ->
-                            smsVM.deleteThread(tid)
-                        }
+                        val toDelete = selectedThreadIds.toList()
                         selectedThreadIds.clear()
                         showDeleteMultipleDialog = false
+                        if (!DefaultSmsManager.isDefaultSms(context)) {
+                            showDefaultSmsRequiredDialog = true
+                        } else {
+                            smsVM.deleteMultipleThreads(toDelete)
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -1699,6 +1708,31 @@ fun SmsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteMultipleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Default SMS App Required Dialog
+    if (showDefaultSmsRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showDefaultSmsRequiredDialog = false },
+            icon = { Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Default SMS app required") },
+            text = { Text("Android requires Ever Dialer to be set as the default SMS app to delete messages or conversations from your device.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDefaultSmsRequiredDialog = false
+                        DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context)
+                    }
+                ) {
+                    Text("Set as default")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDefaultSmsRequiredDialog = false }) {
                     Text("Cancel")
                 }
             }

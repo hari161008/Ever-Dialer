@@ -2,7 +2,8 @@
 <resources>
     <!-- Light theme: surface is white/near-white -->
     <style name="Theme.RivoPhone" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <!-- Edge-to-edge via theme to avoid Adreno RenderThread SIGSEGV on first draw -->

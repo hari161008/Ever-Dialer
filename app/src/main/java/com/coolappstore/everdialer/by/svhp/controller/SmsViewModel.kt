@@ -293,7 +293,11 @@ class SmsViewModel(
         _conversations.value = updated
         SmsCache.write(getApplication(), updated)
         viewModelScope.launch(Dispatchers.IO) {
-            val success = smsRepository.deleteThread(threadId)
+            val success = try {
+                smsRepository.deleteThread(threadId)
+            } catch (_: Exception) {
+                false
+            }
             if (success) {
                 if (activeThreadId == threadId) {
                     clearActiveThread()
@@ -304,19 +308,71 @@ class SmsViewModel(
                 // If deletion failed, re-fetch to restore state
                 fetchConversations()
             }
-            onResult?.invoke(success)
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(success)
+            }
         }
     }
 
-    fun deleteMessage(messageId: Long, threadId: Long, isMms: Boolean = false) {
+    fun deleteMultipleThreads(threadIds: List<Long>, onResult: ((Boolean) -> Unit)? = null) {
+        val threadIdSet = threadIds.toSet()
+        threadIds.forEach { tid ->
+            SmsCache.removeThreadMessages(tid)
+            if (activeThreadId == tid) {
+                _currentThreadMessages.value = emptyList()
+                activeThreadId = null
+            }
+        }
+        val updated = _conversations.value.filter { it.threadId !in threadIdSet }
+        _conversations.value = updated
+        SmsCache.write(getApplication(), updated)
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = try {
+                smsRepository.deleteMultipleThreads(threadIds)
+            } catch (_: Exception) {
+                false
+            }
+            debounceJob?.cancel()
+            fetchConversations()
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(success)
+            }
+        }
+    }
+
+    fun deleteMessage(messageId: Long, threadId: Long, isMms: Boolean = false, onResult: ((Boolean) -> Unit)? = null) {
         val current = _currentThreadMessages.value.filter { it.id != messageId }
         _currentThreadMessages.value = current
         SmsCache.setThreadMessages(threadId, current)
         viewModelScope.launch(Dispatchers.IO) {
-            val success = smsRepository.deleteMessage(messageId, isMms)
-            if (success) {
-                loadThreadMessages(threadId)
-                fetchConversations()
+            val success = try {
+                smsRepository.deleteMessage(messageId, isMms)
+            } catch (_: Exception) {
+                false
+            }
+            loadThreadMessages(threadId)
+            fetchConversations()
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(success)
+            }
+        }
+    }
+
+    fun deleteMultipleMessages(messagesToDelete: List<Pair<Long, Boolean>>, threadId: Long, onResult: ((Boolean) -> Unit)? = null) {
+        val idSet = messagesToDelete.map { it.first }.toSet()
+        val current = _currentThreadMessages.value.filter { it.id !in idSet }
+        _currentThreadMessages.value = current
+        SmsCache.setThreadMessages(threadId, current)
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = try {
+                smsRepository.deleteMultipleMessages(messagesToDelete)
+            } catch (_: Exception) {
+                false
+            }
+            loadThreadMessages(threadId)
+            fetchConversations()
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(success)
             }
         }
     }

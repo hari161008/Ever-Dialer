@@ -27,8 +27,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.coolappstore.everdialer.by.svhp.controller.FloatingSmsService
 import com.coolappstore.everdialer.by.svhp.controller.util.BlockedNumbersManager
+import com.coolappstore.everdialer.by.svhp.controller.util.DefaultSmsManager
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -208,6 +211,14 @@ fun SmsChatScreen(
     var messageToSelect by remember { mutableStateOf<SmsMessage?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showDeleteMultipleMessagesDialog by remember { mutableStateOf(false) }
+    var showDefaultSmsRequiredDialog by remember { mutableStateOf(false) }
+    var isDefaultSms by remember { mutableStateOf(DefaultSmsManager.isDefaultSms(context)) }
+
+    val defaultSmsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isDefaultSms = DefaultSmsManager.isDefaultSms(context)
+    }
 
     // Multi-select state
     val selectedMessageIds = remember { mutableStateListOf<Long>() }
@@ -1369,8 +1380,12 @@ fun SmsChatScreen(
                 TextButton(
                     onClick = {
                         showDeleteConfirmDialog = false
-                        smsVM.deleteThread(effectiveThreadId) {
-                            navigator.navigateUp()
+                        if (!DefaultSmsManager.isDefaultSms(context)) {
+                            showDefaultSmsRequiredDialog = true
+                        } else {
+                            smsVM.deleteThread(effectiveThreadId) {
+                                navigator.navigateUp()
+                            }
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -1430,12 +1445,17 @@ fun SmsChatScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showDeleteMultipleMessagesDialog = false
-                        selectedMessageIds.forEach { msgId ->
+                        val toDelete = selectedMessageIds.map { msgId ->
                             val msg = messages.firstOrNull { it.id == msgId }
-                            smsVM.deleteMessage(msgId, effectiveThreadId, msg?.isMms ?: false)
+                            msgId to (msg?.isMms ?: false)
                         }
                         selectedMessageIds.clear()
+                        showDeleteMultipleMessagesDialog = false
+                        if (!DefaultSmsManager.isDefaultSms(context)) {
+                            showDefaultSmsRequiredDialog = true
+                        } else {
+                            smsVM.deleteMultipleMessages(toDelete, effectiveThreadId)
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -1459,8 +1479,14 @@ fun SmsChatScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        smsVM.deleteMessage(msg.id, effectiveThreadId, msg.isMms)
+                        val mId = msg.id
+                        val isMms = msg.isMms
                         messageToDelete = null
+                        if (!DefaultSmsManager.isDefaultSms(context)) {
+                            showDefaultSmsRequiredDialog = true
+                        } else {
+                            smsVM.deleteMessage(mId, effectiveThreadId, isMms)
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -1469,6 +1495,31 @@ fun SmsChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { messageToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Default SMS App Required Dialog
+    if (showDefaultSmsRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showDefaultSmsRequiredDialog = false },
+            icon = { Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Default SMS app required") },
+            text = { Text("Android requires Ever Dialer to be set as the default SMS app to delete messages or conversations from your device.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDefaultSmsRequiredDialog = false
+                        DefaultSmsManager.requestDefaultSms(defaultSmsLauncher, context)
+                    }
+                ) {
+                    Text("Set as default")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDefaultSmsRequiredDialog = false }) {
                     Text("Cancel")
                 }
             }

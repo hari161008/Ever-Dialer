@@ -268,16 +268,21 @@ fun ContactDetailsScreen(
     val infoBgVideoSpeed = remember(settingsVer) { prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_BG_VIDEO_SPEED, 1.0f) }
 
     val view = LocalView.current
-    val isPageWallpaper = hasCustomPageBg && infoBgType == "wallpaper"
+    val isPageWallpaper = (hasCustomPageBg && infoBgType == "wallpaper") || (hasCustomHeader && headerBgType == "wallpaper")
+    android.util.Log.d("WALLPAPER_TEST", "ContactDetails: hasCustomPageBg=$hasCustomPageBg, infoBgType='$infoBgType', headerBgType='$headerBgType', isPageWallpaper=$isPageWallpaper")
     DisposableEffect(isPageWallpaper) {
-        val window = (view.context as? Activity)?.window
-        if (isPageWallpaper && window != null) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-            window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
-            window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
-        }
+        val activity = view.context as? Activity
+        com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+            activity,
+            "ContactDetails",
+            isPageWallpaper
+        )
         onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                activity,
+                "ContactDetails",
+                false
+            )
         }
     }
 
@@ -392,13 +397,18 @@ fun ContactDetailsScreen(
     var editingAddressValue by remember { mutableStateOf<String?>(null) }
     var originalAddressValue by remember { mutableStateOf<String?>(null) }
 
-    // Contact Info → "Ringtone" — per-contact custom ringtone, read straight from Contacts
-    // provider so it always reflects reality (including changes made from the system Contacts
-    // app), re-queried whenever ringtoneVersion is bumped after the picker returns.
-    val contactRingtoneUri = remember(contact?.id, ringtoneVersion) {
-        contact?.id?.let { ContactRingtoneUtils.getCustomRingtoneUri(context, it) }
+    // Contact Info → "Ringtone" — per-contact custom ringtone, read asynchronously from Contacts
+    // provider in IO dispatcher so it never hitches or lags the UI during screen entry.
+    val contactRingtoneUri by produceState<Uri?>(initialValue = null, contact?.id, ringtoneVersion) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            contact?.id?.let { ContactRingtoneUtils.getCustomRingtoneUri(context, it) }
+        }
     }
-    val contactRingtoneLabel = remember(contactRingtoneUri) { ContactRingtoneUtils.ringtoneLabel(context, contactRingtoneUri) }
+    val contactRingtoneLabel by produceState(initialValue = "Default (System Ringtone)", contactRingtoneUri) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            ContactRingtoneUtils.ringtoneLabel(context, contactRingtoneUri)
+        }
+    }
     val ringtonePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -1068,11 +1078,20 @@ fun ContactDetailsScreen(
     }
 
     com.coolappstore.everdialer.by.svhp.view.theme.ExpandingScreenContainer(onClose = { navigator.navigateUp() }) { closeWithAnimation ->
+        val isHeaderWallpaperOnly = hasCustomHeader && headerBgType == "wallpaper" && !hasCustomPageBg
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(if (hasCustomPageBg) Color.Transparent else MaterialTheme.colorScheme.surface)
+                .background(if (hasCustomPageBg || isHeaderWallpaperOnly) Color.Transparent else MaterialTheme.colorScheme.surface)
         ) {
+            if (isHeaderWallpaperOnly) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 340.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                )
+            }
             if (hasCustomPageBg) {
                 if (infoBgType == "wallpaper") {
                     if (infoBgDim > 0f) {
@@ -1097,48 +1116,51 @@ fun ContactDetailsScreen(
                 }
             }
 
-            // Background image layer sits behind the whole column so it shows through
-            // the transparent header instead of a solid banner.
-            Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
-                if (hasCustomHeader) {
-                    if (headerBgType == "wallpaper") {
-                        if (headerBgDim > 0f) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = headerBgDim))
+            // Header banner layer: only shown when custom page background is NOT active
+            if (!hasCustomPageBg) {
+                Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
+                    if (hasCustomHeader) {
+                        if (headerBgType == "wallpaper") {
+                            if (headerBgDim > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = headerBgDim))
+                                )
+                            }
+                        } else if (headerBgFile != null && headerBgFile.exists()) {
+                            DialpadBackgroundLayer(
+                                bgType = headerBgType,
+                                bgFile = headerBgFile,
+                                bgZoom = headerBgZoom,
+                                bgPanX = headerBgPanX,
+                                bgPanY = headerBgPanY,
+                                bgDim = headerBgDim,
+                                bgBlur = headerBgBlur,
+                                bgVideoSpeed = headerBgVideoSpeed,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
-                    } else if (headerBgFile != null && headerBgFile.exists()) {
-                        DialpadBackgroundLayer(
-                            bgType = headerBgType,
-                            bgFile = headerBgFile,
-                            bgZoom = headerBgZoom,
-                            bgPanX = headerBgPanX,
-                            bgPanY = headerBgPanY,
-                            bgDim = headerBgDim,
-                            bgBlur = headerBgBlur,
-                            bgVideoSpeed = headerBgVideoSpeed,
-                            modifier = Modifier.fillMaxSize()
+                    } else if (contact?.photoUri != null) {
+                        AsyncImage(
+                            model = contact.photoUri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(30.dp),
+                            contentScale = ContentScale.Crop
                         )
                     }
-                } else {
-                    AsyncImage(
-                        model = contact?.photoUri,
-                        contentDescription = null,
+                    val bottomFadeColor = MaterialTheme.colorScheme.surface
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .blur(50.dp),
-                        contentScale = ContentScale.Crop
+                            .background(Brush.verticalGradient(colors = listOf(Color.Transparent, bottomFadeColor)))
                     )
                 }
-                val bottomFadeColor = if (hasCustomPageBg) Color.Transparent else MaterialTheme.colorScheme.surface
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Brush.verticalGradient(colors = listOf(Color.Transparent, bottomFadeColor)))
-                )
             }
+
+            val cardBg = if (hasCustomPageBg) (if (isDark) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.70f)) else null
 
             LazyColumn(
                 state = listState,
@@ -1223,7 +1245,19 @@ fun ContactDetailsScreen(
                         }
                         Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(modifier = Modifier.size(400.dp), contentAlignment = Alignment.Center) {
-                                Box(modifier = Modifier.size((pfpSizeDp * 1.35f).coerceAtMost(420.dp)).background(brush = Brush.radialGradient(colors = listOf(avatarGlowColor.copy(alpha = 0.45f), Color.Transparent))).blur(60.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size((pfpSizeDp * 1.35f).coerceAtMost(420.dp))
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    avatarGlowColor.copy(alpha = 0.35f),
+                                                    avatarGlowColor.copy(alpha = 0.12f),
+                                                    Color.Transparent
+                                                )
+                                            )
+                                        )
+                                )
                                 RivoAvatar(
                                     name = displayName,
                                     photoUri = contact?.photoUri,
@@ -1474,7 +1508,7 @@ fun ContactDetailsScreen(
                     "contact_info" -> {
                         if (showContactInfo) {
                             item {
-                                RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info) {
+                                RivoExpressiveCard(title = "Contact Info", icon = Icons.Default.Info, containerColor = cardBg) {
                                     if (contact != null) {
                                         contactPhoneNumbers.forEachIndexed { index, number ->
                                             val isPrimary = contactDefaultNumber == number
@@ -2110,7 +2144,7 @@ fun ContactDetailsScreen(
                     "social" -> {
                         if (showSocial && hasAnySocialApp) {
                             item {
-                                RivoExpressiveCard(title = "Social", icon = Icons.Default.Share) {
+                                RivoExpressiveCard(title = "Social", icon = Icons.Default.Share, containerColor = cardBg) {
                                     val socialScrollState = rememberScrollState()
                                     val isScrollable = socialScrollState.maxValue > 0
                                     Box(modifier = Modifier.fillMaxWidth()) {
@@ -2242,6 +2276,7 @@ fun ContactDetailsScreen(
                                 RivoExpressiveCard(
                                     title = "Description (Synced Notes)",
                                     icon = Icons.Default.Description,
+                                    containerColor = cardBg,
                                     trailingContent = {
                                         if (contact != null) {
                                             Box {
@@ -2487,7 +2522,7 @@ fun ContactDetailsScreen(
                                     mutableStateOf(currentNote.lines().size > 5)
                                 }
 
-                                RivoExpressiveCard(title = "Note (Phone Only)", icon = Icons.Default.Note) {
+                                RivoExpressiveCard(title = "Note (Phone Only)", icon = Icons.Default.Note, containerColor = cardBg) {
                                     if (currentNote.isNotBlank()) {
                                         // Inline preview with selectable text and clickable links
                                         val annotated = buildClickableAnnotatedString(currentNote)
@@ -2564,7 +2599,7 @@ fun ContactDetailsScreen(
                     "events" -> {
                         if (showEvents && contact != null && (contact.events.isNotEmpty() || contact.addresses.isNotEmpty())) {
                             item {
-                                RivoExpressiveCard(title = "Events & More", icon = Icons.Default.Event) {
+                                RivoExpressiveCard(title = "Events & More", icon = Icons.Default.Event, containerColor = cardBg) {
                                     contact.events.forEachIndexed { index, event ->
                                         val isBirthday = event.type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY
                                         RivoListItem(headline = event.date, supporting = event.label ?: if (isBirthday) "Birthday" else "Event", leadingIcon = if (isBirthday) Icons.Outlined.Cake else Icons.Outlined.Event, onClick = {})
@@ -2592,6 +2627,7 @@ fun ContactDetailsScreen(
                                 RivoExpressiveCard(
                                     title = "Recent Activity",
                                     icon = Icons.Default.History,
+                                    containerColor = cardBg,
                                     trailingContent = {
                                         val targetNum = contactLogs.firstOrNull()?.number ?: displayPhone
                                         if (targetNum.isNotBlank() && targetNum != "Unknown") {
@@ -2658,7 +2694,7 @@ fun ContactDetailsScreen(
                     "choose_sim" -> {
                         if (showChooseSim) {
                             item {
-                                RivoExpressiveCard(title = "Choose Sim", icon = Icons.Default.SimCard) {
+                                RivoExpressiveCard(title = "Choose Sim", icon = Icons.Default.SimCard, containerColor = cardBg) {
                                     RivoListItem(
                                         headline = simChoiceLabel(contactSimChoice),
                                         supporting = "Sim used to call this contact",
@@ -2693,7 +2729,7 @@ fun ContactDetailsScreen(
                                     (ongoingContactPfpType != null && ongoingContactPfpType != "none" && ongoingContactPfpType != "default")
                                 val customSupporting = if (isCustomized) "Custom background & PFP configured" else "According to Settings (Default)"
 
-                                RivoExpressiveCard(title = "Background And Contact PFP Customisation", icon = Icons.Default.Wallpaper) {
+                                RivoExpressiveCard(title = "Background And Contact PFP Customisation", icon = Icons.Default.Wallpaper, containerColor = cardBg) {
                                     RivoListItem(
                                         headline = "Background And Contact PFP Customisation",
                                         supporting = customSupporting,
@@ -2711,7 +2747,7 @@ fun ContactDetailsScreen(
                     "ringtone" -> {
                         if (showRingtone && contact != null) {
                             item {
-                                RivoExpressiveCard(title = "Ringtone", icon = Icons.Default.MusicNote) {
+                                RivoExpressiveCard(title = "Ringtone", icon = Icons.Default.MusicNote, containerColor = cardBg) {
                                     RivoListItem(
                                         headline = contactRingtoneLabel,
                                         supporting = "Ringtone for calls from this contact",
@@ -2729,7 +2765,7 @@ fun ContactDetailsScreen(
                     "choose_default_number" -> {
                         if (showChooseDefaultNumber && contact != null && contactPhoneNumbers.size > 1) {
                             item {
-                                RivoExpressiveCard(title = "Choose Default Number", icon = Icons.Default.Numbers) {
+                                RivoExpressiveCard(title = "Choose Default Number", icon = Icons.Default.Numbers, containerColor = cardBg) {
                                     RivoListItem(
                                         headline = contactDefaultNumber ?: "Ask Every Time",
                                         supporting = "Number used when calling this contact",
@@ -2753,7 +2789,7 @@ fun ContactDetailsScreen(
                         }
                         if (showSavedIn && contact != null && displaySourceAccounts.isNotEmpty()) {
                             item {
-                                RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage) {
+                                RivoExpressiveCard(title = "Saved In", icon = Icons.Default.Storage, containerColor = cardBg) {
                                     displaySourceAccounts.forEachIndexed { index, source ->
                                         val icon = when {
                                             source.startsWith("SIM", ignoreCase = true) -> Icons.Default.SimCard
@@ -2775,7 +2811,7 @@ fun ContactDetailsScreen(
                     "contact_info_settings" -> {
                         if (showContactInfoSettings) {
                             item {
-                                RivoExpressiveCard {
+                                RivoExpressiveCard(containerColor = cardBg) {
                                     RivoListItem(
                                         headline = "Contact Info Settings",
                                         supporting = "Customize contact display, profile picture size, shape, and element order",

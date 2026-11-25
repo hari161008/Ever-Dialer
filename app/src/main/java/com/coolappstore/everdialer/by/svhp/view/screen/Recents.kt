@@ -608,14 +608,17 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
         val p = dialpadProgress.value
         val isWallpaperActive = p > 0.05f && dialpadBgType == "wallpaper"
         DisposableEffect(isWallpaperActive) {
-            if (isWallpaperActive && activity != null) {
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                activity.window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
-            }
+            com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                activity,
+                "RecentsDialpad",
+                isWallpaperActive
+            )
             onDispose {
-                if (activity != null) {
-                    activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                }
+                com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                    activity,
+                    "RecentsDialpad",
+                    false
+                )
             }
         }
 

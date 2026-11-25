@@ -633,6 +633,43 @@ class MainActivity : FragmentActivity() {
                         com.coolappstore.everdialer.by.svhp.view.components.TabNavigationHelper.navigateToTab(navController, route)
                     }
 
+                    val currentRoute = currentDest?.route ?: ""
+                    val dialpadBgType = remember(settingsVer) {
+                        prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none"
+                    }
+                    val contactInfoBgType = remember(settingsVer) {
+                        prefs.getString(PreferenceManager.KEY_CONTACT_INFO_BG_TYPE, "none") ?: "none"
+                    }
+                    val contactHeaderBgType = remember(settingsVer) {
+                        prefs.getString(PreferenceManager.KEY_CONTACT_HEADER_BG_TYPE, "none") ?: "none"
+                    }
+
+                    val isDialpadActive = currentRoute.contains("dial_pad_screen", ignoreCase = true) ||
+                            com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForDialpad
+                    val isContactDetailsActive = currentRoute.contains("contact_details_screen", ignoreCase = true)
+                    val isDialpadCustomiseActive = currentRoute.contains("dialpad_customisation_screen", ignoreCase = true)
+
+                    val isWallpaperActive = (isDialpadActive && dialpadBgType == "wallpaper") ||
+                            (isContactDetailsActive && (contactInfoBgType == "wallpaper" || contactHeaderBgType == "wallpaper")) ||
+                            (isDialpadCustomiseActive && dialpadBgType == "wallpaper")
+
+                    android.util.Log.d("WALLPAPER_TEST", "MainActivity: route='$currentRoute', isContactDetailsActive=$isContactDetailsActive, contactInfoBgType='$contactInfoBgType', isWallpaperActive=$isWallpaperActive")
+
+                    DisposableEffect(isWallpaperActive) {
+                        com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                            this@MainActivity,
+                            "MainActivity",
+                            isWallpaperActive
+                        )
+                        onDispose {
+                            com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                                this@MainActivity,
+                                "MainActivity",
+                                false
+                            )
+                        }
+                    }
+
                     if (isLandscape) {
                         // The rail's own windowInsetsPadding(displayCutout) below already keeps
                         // the whole column clear of the camera cutout — no need for any per-item
@@ -851,28 +888,9 @@ class MainActivity : FragmentActivity() {
                                     )
                                 }
                             }
-                            val dialpadBgType = remember(settingsVer) {
-                                prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none"
-                            }
-                            val isDialpadActive = com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForDialpad
-                            val isDialpadWallpaper = isDialpadActive && dialpadBgType == "wallpaper"
-
-                            DisposableEffect(isDialpadWallpaper) {
-                                if (isDialpadWallpaper) {
-                                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                                    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                                    window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
-                                } else {
-                                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                                }
-                                onDispose {
-                                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                                }
-                            }
-
                             // ── Main content fills the rest, edge-to-edge ──────────────────────
                             Surface(
-                                color = if (isDialpadWallpaper) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                color = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
@@ -883,30 +901,11 @@ class MainActivity : FragmentActivity() {
                         }
                         } // end CompositionLocalProvider landscape
                     } else {
-                        val dialpadBgType = remember(settingsVer) {
-                            prefs.getString(PreferenceManager.KEY_DIALPAD_BG_TYPE, "none") ?: "none"
-                        }
-                        val isDialpadActive = com.coolappstore.everdialer.by.svhp.view.components.NavBarVisibilityState.hideForDialpad
-                        val isDialpadWallpaper = isDialpadActive && dialpadBgType == "wallpaper"
-
-                        DisposableEffect(isDialpadWallpaper) {
-                            if (isDialpadWallpaper) {
-                                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                                window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
-                            } else {
-                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                            }
-                            onDispose {
-                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                            }
-                        }
-
                         val liquidGlassBackdrop = rememberLayerBackdrop()
                         CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdrop) {
                             Scaffold(
                                 bottomBar = { BottomBar(navController) },
-                                containerColor = if (isDialpadWallpaper) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                containerColor = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
                                 contentWindowInsets = WindowInsets(0)
                             ) { scaffoldPadding ->
                                 Box(

@@ -431,27 +431,47 @@ fun DialPadScreen(
 
         val isWallpaper = bgType == "wallpaper"
         DisposableEffect(isWallpaper) {
-            val window = (view.context as? android.app.Activity)?.window
-            if (isWallpaper && window != null) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                window.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+            val activityWindow = (view.context as? android.app.Activity)?.window
+            var parent: android.view.ViewParent? = view.parent
+            var dialogWindow: android.view.Window? = null
+            while (parent != null) {
+                if (parent is androidx.compose.ui.window.DialogWindowProvider) {
+                    dialogWindow = parent.window
+                    break
+                }
+                parent = parent.parent
+            }
+            val windows = listOfNotNull(dialogWindow, activityWindow)
+            if (isWallpaper) {
+                for (w in windows) {
+                    com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                        w,
+                        if (w == dialogWindow) "DialpadDialog" else "DialpadActivity",
+                        true
+                    )
+                }
             }
             onDispose {
-                window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                for (w in windows) {
+                    com.coolappstore.everdialer.by.svhp.controller.util.WallpaperWindowManager.setWallpaperActive(
+                        w,
+                        if (w == dialogWindow) "DialpadDialog" else "DialpadActivity",
+                        false
+                    )
+                }
             }
         }
 
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .offset(y = slideDistance * closeProgress.value),
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = if (hasCustomBg) Color.Transparent else MaterialTheme.colorScheme.surface,
                 tonalElevation = if (hasCustomBg) 0.dp else 4.dp
             ) {
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     if (hasCustomBg) {
                         if (bgType == "wallpaper") {
                             if (bgDim > 0f) {

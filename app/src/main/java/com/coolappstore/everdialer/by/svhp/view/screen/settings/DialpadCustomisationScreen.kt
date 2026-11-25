@@ -235,6 +235,47 @@ fun DialpadCustomisationScreen(
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxSize()
                                             )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(
+                                                        Brush.verticalGradient(
+                                                            colors = listOf(
+                                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.38f),
+                                                                MaterialTheme.colorScheme.surface
+                                                            )
+                                                        )
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center,
+                                                    modifier = Modifier.padding(16.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Wallpaper,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(36.dp),
+                                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = "Device Wallpaper",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (bgDim > 0f) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color.Black.copy(alpha = bgDim))
+                                            )
                                         }
                                     } else if (bgFile != null) {
                                         if (bgType == "video") {

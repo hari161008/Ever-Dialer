@@ -25,11 +25,46 @@ const val OFFICIAL_TELEGRAM_PACKAGE = "org.telegram.messenger"
 const val GOOGLE_MEET_PACKAGE = "com.google.android.apps.tachyon"
 const val TRUECALLER_PACKAGE = "com.truecaller"
 
+object SocialAppCache {
+    private val installMap = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    private val iconMap = java.util.concurrent.ConcurrentHashMap<String, ImageBitmap>()
+
+    fun isInstalled(context: Context, pkg: String): Boolean =
+        installMap.getOrPut(pkg) {
+            try {
+                val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
+                appInfo.enabled
+            } catch (_: Exception) { false }
+        }
+
+    fun isTelegramInstalled(context: Context): Boolean =
+        installMap.getOrPut("telegram_client") {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
+                val handlers = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                    .mapNotNull { it.activityInfo?.packageName }
+                    .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
+                    .filter { isInstalled(context, it) }
+                handlers.isNotEmpty()
+            } catch (_: Exception) { false }
+        }
+
+    fun getCachedIcon(key: String, loader: () -> ImageBitmap?): ImageBitmap? {
+        val cached = iconMap[key]
+        if (cached != null) return cached
+        val loaded = try { loader() } catch (_: Exception) { null }
+        if (loaded != null) iconMap[key] = loaded
+        return loaded
+    }
+
+    fun clear() {
+        installMap.clear()
+        iconMap.clear()
+    }
+}
+
 fun isPackageInstalled(context: Context, pkg: String): Boolean =
-    try {
-        val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
-        appInfo.enabled
-    } catch (_: Exception) { false }
+    SocialAppCache.isInstalled(context, pkg)
 
 fun isAnyPackageInstalled(context: Context, packages: Set<String>): Boolean =
     packages.any { pkg -> isPackageInstalled(context, pkg) }
@@ -50,13 +85,17 @@ fun drawableToImageBitmap(drawable: android.graphics.drawable.Drawable): ImageBi
 /** Loads the real launcher icon of WhatsApp if installed. */
 fun getWhatsAppIcon(context: Context): ImageBitmap? {
     if (!isWhatsAppInstalled(context)) return null
-    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_PACKAGE)) } catch (_: Exception) { null }
+    return SocialAppCache.getCachedIcon(WHATSAPP_PACKAGE) {
+        try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_PACKAGE)) } catch (_: Exception) { null }
+    }
 }
 
 /** Loads the real launcher icon of WhatsApp Business if installed. */
 fun getWhatsAppBusinessIcon(context: Context): ImageBitmap? {
     if (!isWhatsAppBusinessInstalled(context)) return null
-    return try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_BUSINESS_PACKAGE)) } catch (_: Exception) { null }
+    return SocialAppCache.getCachedIcon(WHATSAPP_BUSINESS_PACKAGE) {
+        try { drawableToImageBitmap(context.packageManager.getApplicationIcon(WHATSAPP_BUSINESS_PACKAGE)) } catch (_: Exception) { null }
+    }
 }
 
 /** Telegram has many third-party clients/forks. Rather than guessing a package name, this
@@ -66,32 +105,26 @@ fun getWhatsAppBusinessIcon(context: Context): ImageBitmap? {
  *  is used; otherwise the first genuine handler is used. Android's own "Open with…" chooser
  *  (which has its own generic share icon and isn't a real Telegram client) is always excluded. */
 fun getTelegramIcon(context: Context): ImageBitmap? {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
-    val packageManager = context.packageManager
-    val handlers = try {
-        packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-    } catch (_: Exception) { emptyList() }
-        .mapNotNull { it.activityInfo?.packageName }
-        .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
-        .filter { isPackageInstalled(context, it) }
-        .distinct()
+    return SocialAppCache.getCachedIcon("telegram_icon") {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
+        val packageManager = context.packageManager
+        val handlers = try {
+            packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        } catch (_: Exception) { emptyList() }
+            .mapNotNull { it.activityInfo?.packageName }
+            .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
+            .filter { isPackageInstalled(context, it) }
+            .distinct()
 
-    val chosenPackage = handlers.firstOrNull { it == OFFICIAL_TELEGRAM_PACKAGE } ?: handlers.firstOrNull() ?: return null
-    return try { drawableToImageBitmap(packageManager.getApplicationIcon(chosenPackage)) } catch (_: Exception) { null }
+        val chosenPackage = handlers.firstOrNull { it == OFFICIAL_TELEGRAM_PACKAGE } ?: handlers.firstOrNull() ?: return@getCachedIcon null
+        try { drawableToImageBitmap(packageManager.getApplicationIcon(chosenPackage)) } catch (_: Exception) { null }
+    }
 }
 
 /** True if at least one Telegram-capable app (official app or a fork) is installed, using the
  *  same tg:// resolution Telegram chat/call actions rely on. */
-fun isTelegramInstalled(context: Context): Boolean {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=0"))
-    val handlers = try {
-        context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-    } catch (_: Exception) { emptyList() }
-        .mapNotNull { it.activityInfo?.packageName }
-        .filterNot { it == "android" || it.startsWith("com.android.internal") || it == context.packageName }
-        .filter { isPackageInstalled(context, it) }
-    return handlers.isNotEmpty()
-}
+fun isTelegramInstalled(context: Context): Boolean =
+    SocialAppCache.isTelegramInstalled(context)
 
 /** True if Google Meet is installed on the device. */
 fun isGoogleMeetInstalled(context: Context): Boolean = isPackageInstalled(context, GOOGLE_MEET_PACKAGE)
@@ -99,9 +132,11 @@ fun isGoogleMeetInstalled(context: Context): Boolean = isPackageInstalled(contex
 /** Loads Google Meet's real launcher icon if it's installed. */
 fun getGoogleMeetIcon(context: Context): ImageBitmap? {
     if (!isGoogleMeetInstalled(context)) return null
-    return try {
-        drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
-    } catch (_: Exception) { null }
+    return SocialAppCache.getCachedIcon(GOOGLE_MEET_PACKAGE) {
+        try {
+            drawableToImageBitmap(context.packageManager.getApplicationIcon(GOOGLE_MEET_PACKAGE))
+        } catch (_: Exception) { null }
+    }
 }
 
 /** True if Truecaller is installed on the device. */
@@ -110,9 +145,11 @@ fun isTruecallerInstalled(context: Context): Boolean = isPackageInstalled(contex
 /** Loads Truecaller's real launcher icon if it's installed. */
 fun getTruecallerIcon(context: Context): ImageBitmap? {
     if (!isTruecallerInstalled(context)) return null
-    return try {
-        drawableToImageBitmap(context.packageManager.getApplicationIcon(TRUECALLER_PACKAGE))
-    } catch (_: Exception) { null }
+    return SocialAppCache.getCachedIcon(TRUECALLER_PACKAGE) {
+        try {
+            drawableToImageBitmap(context.packageManager.getApplicationIcon(TRUECALLER_PACKAGE))
+        } catch (_: Exception) { null }
+    }
 }
 
 /** Best-effort device region (e.g. "IN", "US"), preferring the live network over the SIM's home

@@ -29,6 +29,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEdito
 import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -514,19 +515,26 @@ fun ContactInfoSettingsScreen(
                         CardDivider()
 
                         // Custom Header
-                        val headerBgLabel = when (headerBgType) {
-                            "wallpaper" -> "Device Wallpaper"
-                            "picture" -> "Custom Photo"
-                            "video" -> "Custom Video"
+                        val isCustomBgOn = infoBgType != "none"
+                        val headerBgLabel = when {
+                            isCustomBgOn -> "Disabled while Custom Background is active"
+                            headerBgType == "wallpaper" -> "Device Wallpaper"
+                            headerBgType == "picture" -> "Custom Photo"
+                            headerBgType == "video" -> "Custom Video"
                             else -> "None (Blurred Photo)"
                         }
                         RivoListItem(
                             headline = "Custom Header",
-                            supporting = "Header banner behind PFP: $headerBgLabel",
+                            supporting = if (isCustomBgOn) "Disabled (entire page uses Custom Background)" else "Header banner behind PFP: $headerBgLabel",
                             leadingIcon = Icons.Outlined.Panorama,
-                            iconContainerColor = Color(0xFF009688),
-                            trailingIcon = Icons.Default.ChevronRight,
-                            onClick = { showHeaderOptionsPopup = true }
+                            iconContainerColor = if (isCustomBgOn) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.20f) else Color(0xFF009688),
+                            trailingIcon = if (isCustomBgOn) null else Icons.Default.ChevronRight,
+                            modifier = if (isCustomBgOn) Modifier.alpha(0.38f) else Modifier,
+                            onClick = {
+                                if (!isCustomBgOn) {
+                                    showHeaderOptionsPopup = true
+                                }
+                            }
                         )
 
                         CardDivider()
