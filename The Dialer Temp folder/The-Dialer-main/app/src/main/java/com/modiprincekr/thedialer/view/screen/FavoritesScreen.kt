@@ -1,0 +1,1134 @@
+package com.modiprincekr.thedialer.view.screen
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.telecom.TelecomManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.*
+import com.modiprincekr.thedialer.view.theme.TabTransitionStyle
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.modiprincekr.thedialer.controller.ContactsViewModel
+import com.modiprincekr.thedialer.controller.CallLogViewModel
+import com.modiprincekr.thedialer.controller.util.FakeCallManager
+import com.modiprincekr.thedialer.controller.util.PreferenceManager
+import com.modiprincekr.thedialer.controller.util.makeCall
+import com.modiprincekr.thedialer.controller.util.getPhoneAccountForSimSlot
+import com.modiprincekr.thedialer.controller.util.placeCallHonoringContactSim
+import com.modiprincekr.thedialer.modal.data.Contact
+import com.modiprincekr.thedialer.view.components.ContactSortButton
+import com.modiprincekr.thedialer.view.components.ContactSortOption
+import com.modiprincekr.thedialer.view.components.SimSlotBadge
+import com.modiprincekr.thedialer.view.components.sortContacts
+import com.modiprincekr.thedialer.view.components.ExpressiveAvatar
+import com.modiprincekr.thedialer.view.components.RivoAvatar
+import com.modiprincekr.thedialer.view.components.RivoDropdownMenu
+import com.modiprincekr.thedialer.view.components.RivoDropdownMenuItem
+import com.modiprincekr.thedialer.view.components.RivoScrollAnimatedItem
+import com.modiprincekr.thedialer.view.components.ScrollHapticsGridEffect
+import com.modiprincekr.thedialer.view.components.SimPickerDialog
+import com.modiprincekr.thedialer.view.components.TopBar
+import com.modiprincekr.thedialer.view.screen.settings.AddMode
+import com.modiprincekr.thedialer.view.screen.settings.FakeCallAddSheet
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.modiprincekr.thedialer.view.theme.SettingsClickTracker
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.outlined.PhoneCallback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.ramcosta.composedestinations.annotation.Destination
+import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.ContactDetailsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactEditScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.RecentScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.modiprincekr.thedialer.view.components.SwipeableItemContainer
+import com.modiprincekr.thedialer.controller.util.SwipeActionHelper
+import com.modiprincekr.thedialer.controller.util.BlockedNumbersManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import com.modiprincekr.thedialer.view.components.TabNavigationHelper
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinActivityViewModel
+import kotlin.math.abs
+import com.modiprincekr.thedialer.view.components.enterNotesTab
+
+@Destination<RootGraph>(style = TabTransitionStyle::class)
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigator) {
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val contactsVM: ContactsViewModel = koinActivityViewModel()
+    val allContacts by contactsVM.allContacts.collectAsState()
+    val callLogVM: CallLogViewModel = koinActivityViewModel()
+    val allLogs by callLogVM.allCallLogs.collectAsState()
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    var favsSortBy by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_FAVORITES_SORT_BY, "name") ?: "name")
+    }
+    var favsSortAscending by remember(settingsVer) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FAVORITES_SORT_ASCENDING, true))
+    }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(favsSortBy, favsSortAscending) {
+        gridState.scrollToItem(0)
+    }
+    val hiddenIds by remember(prefs) {
+        derivedStateOf {
+            val raw = prefs.getString(PreferenceManager.KEY_CONTACTS_HIDER_IDS, "") ?: ""
+            if (raw.isBlank()) emptySet() else raw.split(",").filter { it.isNotBlank() }.toSet()
+        }
+    }
+    val favorites = remember(allContacts, hiddenIds) { allContacts.filter { it.isFavorite && it.id !in hiddenIds } }
+    val scope = rememberCoroutineScope()
+
+    // Drag-to-reorder state — declared first so LaunchedEffect can reference draggedContactId
+    var draggedContactId       by remember { mutableStateOf<String?>(null) }
+    var dragOffset             by remember { mutableStateOf(Offset.Zero) }
+    val itemBoundsMap          = remember { mutableStateMapOf<String, Rect>() }
+    var lastSwapTargetId       by remember { mutableStateOf<String?>(null) }
+    var fingerAbsPos           by remember { mutableStateOf(Offset.Zero) }
+    var expectedDraggedCenter  by remember { mutableStateOf(Offset.Zero) }
+
+    // Ordered favorites — persists custom drag-to-reorder order
+    val orderedFavorites = remember { mutableStateListOf<Contact>() }
+
+    fun applyFavoritesSort(sortBy: String, ascending: Boolean) {
+        val sorted = orderedFavorites.toList().sortContacts(ContactSortOption.fromId(sortBy), ascending, allLogs)
+        orderedFavorites.clear()
+        orderedFavorites.addAll(sorted)
+        prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
+    }
+
+    LaunchedEffect(favorites, allLogs) {
+        // Don't touch the list while the user is actively dragging
+        if (draggedContactId != null) return@LaunchedEffect
+        val savedIds = prefs.getString(PreferenceManager.KEY_FAVORITES_ORDER, null)
+            ?.split(",")?.filter { it.isNotEmpty() } ?: emptyList()
+        val favMap   = favorites.associateBy { it.id }
+        val ordered  = savedIds.mapNotNull { favMap[it] }
+        val rawList  = ordered + favorites.filter { it.id !in savedIds.toSet() }
+        val isDynamicSort = favsSortBy == ContactSortOption.RECENTLY_CALLED.id || favsSortBy == ContactSortOption.FREQUENTLY.id
+        val newList  = if (savedIds.isEmpty() || isDynamicSort) {
+            rawList.sortContacts(ContactSortOption.fromId(favsSortBy), favsSortAscending, allLogs)
+        } else {
+            rawList
+        }
+        val toRemove = orderedFavorites.filter { o -> newList.none { it.id == o.id } }
+        toRemove.forEach { orderedFavorites.remove(it) }
+        newList.filter { n -> orderedFavorites.none { it.id == n.id } }
+               .forEach { orderedFavorites.add(it) }
+    }
+
+    val dragNestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (draggedContactId != null) available else Offset.Zero
+        }
+    }
+
+    fun saveFavoritesOrder() {
+        prefs.setString(PreferenceManager.KEY_FAVORITES_ORDER, orderedFavorites.joinToString(",") { it.id })
+    }
+    val notesEnabled = prefs.getBoolean(PreferenceManager.KEY_NOTES_ENABLED, true)
+    val context = LocalContext.current
+
+    var showSimPicker by remember { mutableStateOf(false) }
+    var pendingCallNumber by remember { mutableStateOf<String?>(null) }
+    var pendingCallContactKey by remember { mutableStateOf<String?>(null) }
+
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedFavorites by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showFavSelectionMenu by remember { mutableStateOf(false) }
+    var showFavDeleteConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedFavorites = emptySet()
+    }
+
+    if (showFavDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showFavDeleteConfirm = false },
+            title = { Text("Remove ${selectedFavorites.size} from Favourites?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showFavDeleteConfirm = false
+                        allContacts.filter { selectedFavorites.contains(it.id) }.forEach { contactsVM.toggleFavorite(it) }
+                        selectedFavorites = emptySet(); selectionMode = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { showFavDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
+
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.CALL_PHONE] == true) {
+            pendingCallNumber?.let { num ->
+                placeCallHonoringContactSim(context, prefs, pendingCallContactKey ?: num, num) {
+                    showSimPicker = true
+                }
+            }
+        }
+    }
+
+    if (showSimPicker && pendingCallNumber != null) {
+        SimPickerDialog(
+            onDismissRequest = { showSimPicker = false },
+            number = pendingCallNumber,
+            onSimSelected = { handle ->
+                makeCall(context, pendingCallNumber!!, handle)
+                showSimPicker = false
+            }
+        )
+    }
+
+    val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isRtl) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull() ?: continue
+                        if (!down.pressed) continue
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
+                        var triggered = false
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val change = event.changes.firstOrNull() ?: break
+                            // Never swipe tabs while a drag-to-reorder is in progress
+                            if (draggedContactId != null) { if (!change.pressed) break; continue }
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+                            val elapsed = System.currentTimeMillis() - startTime
+                            if (!triggered && elapsed >= 150L && !change.isConsumed &&
+                                abs(dx) > 700f &&
+                                abs(dx) > abs(dy) * 5.5f
+                            ) {
+                                triggered = true
+                                scope.launch {
+                                    TabNavigationHelper.navigateAdjacentTab(
+                                        navController = navController,
+                                        currentRoute = FavoritesScreenDestination.route,
+                                        goForward = dx < 0,
+                                        prefs = prefs,
+                                        isRtl = isRtl
+                                    )
+                                }
+                            }
+                            if (!change.pressed) break
+                        }
+                    }
+                }
+            },
+        topBar = { TopBar(navController, navigator) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0)
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (favorites.isEmpty()) {
+                if (isLandscape) {
+                    com.modiprincekr.thedialer.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Icon(Icons.Default.Favorite, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(com.modiprincekr.thedialer.controller.util.tr("No Favorites Yet"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(com.modiprincekr.thedialer.controller.util.tr("Star a contact to add them here"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
+                }
+            } else {
+                val favoritesInList = remember(settingsVer) {
+                    prefs.getBoolean(PreferenceManager.KEY_FAVORITES_IN_LIST, false)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ContactSortButton(
+                        sortBy = favsSortBy,
+                        ascending = favsSortAscending,
+                        onSortChanged = { newSortBy, newAscending ->
+                            favsSortBy = newSortBy
+                            favsSortAscending = newAscending
+                            prefs.setString(PreferenceManager.KEY_FAVORITES_SORT_BY, newSortBy)
+                            prefs.setBoolean(PreferenceManager.KEY_FAVORITES_SORT_ASCENDING, newAscending)
+                            applyFavoritesSort(newSortBy, newAscending)
+                        }
+                    )
+                }
+
+                ScrollHapticsGridEffect(gridState = gridState)
+                val gridColumns = if (favoritesInList) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 100.dp)
+                val contentPadding = if (favoritesInList) PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp) else PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 100.dp)
+                val verticalSpacing = if (favoritesInList) 8.dp else 12.dp
+                val horizontalSpacing = if (favoritesInList) 0.dp else 12.dp
+
+                LazyVerticalGrid(
+                    columns = gridColumns,
+                    state = gridState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(dragNestedScroll),
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+                    horizontalArrangement = Arrangement.spacedBy(horizontalSpacing)
+                ) {
+                    if (isLandscape) {
+                        item(
+                            key = "search_bar_pill",
+                            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
+                        ) {
+                            com.modiprincekr.thedialer.view.components.SearchBarPill(
+                                navigator = navigator,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                            )
+                        }
+                    }
+                    items(orderedFavorites, key = { it.id }) { contact ->
+                        RivoScrollAnimatedItem {
+                            FavoriteContactCard(
+                                contact = contact,
+                                contactsVM = contactsVM,
+                                navigator = navigator,
+                                context = context,
+                                isListView = favoritesInList,
+                                isSelected = selectedFavorites.contains(contact.id),
+                                selectionMode = selectionMode,
+                                isDragging = draggedContactId == contact.id,
+                                dragOffset = if (draggedContactId == contact.id) dragOffset else null,
+                                onBoundsChanged = { bounds -> itemBoundsMap[contact.id] = bounds },
+                                onDragStart = { _ ->
+                                    draggedContactId = contact.id
+                                    dragOffset = Offset.Zero
+                                    val center = itemBoundsMap[contact.id]?.center ?: Offset.Zero
+                                    fingerAbsPos = center
+                                    expectedDraggedCenter = center
+                                    lastSwapTargetId = null
+                                },
+                                onDrag = { amt ->
+                                    if (draggedContactId == contact.id) {
+                                        fingerAbsPos += amt
+                                        // dragOffset = finger position minus expected card center
+                                        // expectedDraggedCenter is updated synchronously on swap,
+                                        // eliminating the 1-frame position jump that causes flicker
+                                        dragOffset = fingerAbsPos - expectedDraggedCenter
+
+                                        val targetId = itemBoundsMap.entries
+                                            .filter { it.key != draggedContactId }
+                                            .firstOrNull { (_, b) -> b.contains(fingerAbsPos) }
+                                            ?.key
+
+                                        if (targetId != null && targetId != lastSwapTargetId) {
+                                            // Update expectedDraggedCenter to target's current bounds BEFORE swap
+                                            // so dragOffset compensates immediately in this same frame
+                                            val targetCenter = itemBoundsMap[targetId]?.center
+                                            if (targetCenter != null) {
+                                                expectedDraggedCenter = targetCenter
+                                                dragOffset = fingerAbsPos - expectedDraggedCenter
+                                            }
+                                            lastSwapTargetId = targetId
+                                            val fromIdx = orderedFavorites.indexOfFirst { it.id == draggedContactId }
+                                            val toIdx   = orderedFavorites.indexOfFirst { it.id == targetId }
+                                            if (fromIdx != -1 && toIdx != -1) {
+                                                orderedFavorites.add(toIdx, orderedFavorites.removeAt(fromIdx))
+                                            }
+                                        }
+                                    }
+                                },
+                                onDragEnd = {
+                                    draggedContactId = null
+                                    dragOffset = Offset.Zero
+                                    fingerAbsPos = Offset.Zero
+                                    expectedDraggedCenter = Offset.Zero
+                                    lastSwapTargetId = null
+                                    saveFavoritesOrder()
+                                },
+                                onDragCancel = {
+                                    draggedContactId = null
+                                    dragOffset = Offset.Zero
+                                    fingerAbsPos = Offset.Zero
+                                    expectedDraggedCenter = Offset.Zero
+                                    lastSwapTargetId = null
+                                },
+                                onSelectToggle = {
+                                    val id = contact.id
+                                    selectedFavorites = if (selectedFavorites.contains(id)) selectedFavorites - id else selectedFavorites + id
+                                },
+                                onSelectMode = {
+                                    selectionMode = true
+                                    selectedFavorites = setOf(contact.id)
+                                },
+                                onClick = {
+                                    val directCall = prefs.getBoolean(PreferenceManager.KEY_DIRECT_CALL_ON_TAP, true)
+                                    val phoneNumber = contact.phoneNumbers.firstOrNull()
+                                    if (directCall && phoneNumber != null) {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                                            placeCallHonoringContactSim(context, prefs, contact.id, phoneNumber) {
+                                                pendingCallNumber = phoneNumber
+                                                pendingCallContactKey = contact.id
+                                                showSimPicker = true
+                                            }
+                                        } else {
+                                            pendingCallNumber = phoneNumber
+                                            pendingCallContactKey = contact.id
+                                            callPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE))
+                                        }
+                                    } else {
+                                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+                } // end Column
+            } // end inner Box
+        }
+    // Selection bar at screen root level (outside Scaffold)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopStart)
+            .zIndex(10f)
+    ) {
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+                    exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(animationSpec = tween(380, easing = FastOutLinearInEasing))
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { selectionMode = false; selectedFavorites = emptySet() }) {
+                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text(
+                                "${selectedFavorites.size} selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { showFavSelectionMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                DropdownMenu(expanded = showFavSelectionMenu, onDismissRequest = { showFavSelectionMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Remove from Favourites") },
+                                        leadingIcon = { Icon(Icons.Default.Favorite, null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { showFavSelectionMenu = false; if (selectedFavorites.isNotEmpty()) showFavDeleteConfirm = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Select All") },
+                                        leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                        onClick = { showFavSelectionMenu = false; selectedFavorites = favorites.map { it.id }.toSet() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FavoriteContactCard(
+    contact: Contact,
+    contactsVM: ContactsViewModel,
+    navigator: DestinationsNavigator,
+    context: android.content.Context,
+    isListView: Boolean = false,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    isDragging: Boolean = false,
+    dragOffset: Offset? = null,
+    onBoundsChanged: ((Rect) -> Unit)? = null,
+    onDragStart: ((Offset) -> Unit)? = null,
+    onDrag: ((Offset) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
+    onDragCancel: (() -> Unit)? = null,
+    onSelectToggle: (() -> Unit)? = null,
+    onSelectMode: (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(300), label = "cardAlpha")
+    LaunchedEffect(Unit) { visible = true }
+
+    var isPressed by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var isDraggingLocally by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val fakeCallInContextMenu = remember(settingsVer) {
+        prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
+    }
+    var showFakeCallSheet by remember { mutableStateOf(false) }
+    var showCallChatViaPicker by remember { mutableStateOf(false) }
+
+    val phoneNumber = contact.phoneNumbers.firstOrNull()
+
+    var avatarCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val recordAvatarClick: () -> Unit = {
+        avatarCoords?.let { coords ->
+            val center = coords.boundsInRoot().center
+            val rootSize = coords.findRootCoordinates().size
+            SettingsClickTracker.recordTap(
+                center.x, center.y, rootSize.width.toFloat(), rootSize.height.toFloat()
+            )
+        } ?: cardCoords?.let { coords ->
+            val bounds = coords.boundsInRoot()
+            val rootSize = coords.findRootCoordinates().size
+            SettingsClickTracker.recordTap(
+                if (isListView) bounds.left + 38f else bounds.center.x,
+                if (isListView) bounds.center.y else bounds.top + bounds.width / 2f,
+                rootSize.width.toFloat(),
+                rootSize.height.toFloat()
+            )
+        } ?: SettingsClickTracker.recordNormalized(0.5f, 0.5f)
+    }
+
+    val leftSwipeKey = remember(settingsVer) { prefs.getSwipeAction("favourites", "left") }
+    val rightSwipeKey = remember(settingsVer) { prefs.getSwipeAction("favourites", "right") }
+    val colorScheme = MaterialTheme.colorScheme
+    val leftSwipeAction = remember(leftSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(leftSwipeKey, colorScheme) }
+    val rightSwipeAction = remember(rightSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(rightSwipeKey, colorScheme) }
+
+    val handleSwipeAction: (String) -> Unit = { actionKey ->
+        val numToCall = phoneNumber.orEmpty()
+        when (actionKey) {
+            "call", "call_back" -> {
+                if (numToCall.isNotBlank()) makeCall(context, numToCall)
+            }
+            "send_text" -> {
+                if (numToCall.isNotBlank()) {
+                    try {
+                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$numToCall"))
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                }
+            }
+            "delete", "delete_contact" -> {
+                contactsVM.toggleFavorite(contact)
+            }
+            "select" -> onSelectMode?.invoke()
+            "view_contact" -> {
+                recordAvatarClick()
+                navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+            }
+            "edit_contact" -> {
+                navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+            }
+            "copy_number" -> {
+                if (numToCall.isNotBlank()) {
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("phone_number", numToCall))
+                    Toast.makeText(context, "Number copied", Toast.LENGTH_SHORT).show()
+                }
+            }
+            "share", "share_contact" -> {
+                val shareText = if (numToCall.isNotBlank()) "${contact.name}: $numToCall" else contact.name
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, shareText)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share contact"))
+            }
+            "toggle_favorite" -> contactsVM.toggleFavorite(contact)
+            "block_contact" -> {
+                val num = contact.phoneNumbers.firstOrNull()
+                if (!num.isNullOrBlank()) {
+                    val isBlocked = BlockedNumbersManager.isBlocked(context, prefs, num)
+                    BlockedNumbersManager.toggle(context, prefs, num)
+                    Toast.makeText(
+                        context,
+                        if (isBlocked) "Contact unblocked" else "Contact blocked",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            "call_chat_via" -> showCallChatViaPicker = true
+            "search_truecaller" -> {
+                if (numToCall.isNotBlank()) {
+                    val isLaunched = com.modiprincekr.thedialer.controller.util.openTruecaller(context, numToCall)
+                    if (!isLaunched) {
+                        Toast.makeText(context, "Truecaller is not installed", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            "fake_call" -> showFakeCallSheet = true
+        }
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = when {
+            isDragging -> if (isListView) 1.03f else 1.08f
+            isPressed || showMenu -> 0.96f
+            else -> 1f
+        },
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "cardScale"
+    )
+    // Selection highlight
+    val cardBgColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = tween(200),
+        label = "cardBg"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(if (isListView) 16.dp else 20.dp),
+        color = cardBgColor,
+        tonalElevation = if (isDragging) 8.dp else 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(alpha)
+            .scale(scale)
+            .zIndex(if (isDragging) 10f else 0f)
+            .graphicsLayer {
+                if (isDragging && dragOffset != null) {
+                    translationX = dragOffset.x
+                    translationY = dragOffset.y
+                    scaleX = if (isListView) 1.03f else 1.08f
+                    scaleY = if (isListView) 1.03f else 1.08f
+                    shadowElevation = 24f
+                }
+            }
+            .onGloballyPositioned { coords ->
+                cardCoords = coords
+                val bounds = coords.boundsInWindow()
+                onBoundsChanged?.invoke(bounds)
+            }
+            .pointerInput(selectionMode, contact.id) {
+                val pis = this
+                coroutineScope {
+                    val cs = this
+                    pis.awaitPointerEventScope {
+                        while (true) {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            isPressed = true
+                            if (currentEvent.buttons.isSecondaryPressed) {
+                                isPressed = false
+                                if (selectionMode) onSelectToggle?.invoke() else showMenu = true
+                                continue
+                            }
+                            val startPos = down.position
+                            val touchSlop = viewConfiguration.touchSlop
+                            var longPressTriggered = false
+                            var dragStarted = false
+
+                            val longPressJob = cs.launch {
+                                delay(viewConfiguration.longPressTimeoutMillis)
+                                longPressTriggered = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isPressed = false
+                                if (selectionMode) onSelectToggle?.invoke() else showMenu = true
+                            }
+
+                            loop@ while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+
+                                if (change == null || !change.pressed) {
+                                    longPressJob.cancel()
+                                    isPressed = false
+                                    when {
+                                        dragStarted -> { isDraggingLocally = false; onDragEnd?.invoke() }
+                                        !longPressTriggered -> {
+                                            if (selectionMode) {
+                                                onSelectToggle?.invoke()
+                                            } else {
+                                                recordAvatarClick()
+                                                onClick()
+                                            }
+                                        }
+                                        // long press without drag: menu already shown in job
+                                    }
+                                    break@loop
+                                }
+
+                                val totalDist = (change.position - startPos).getDistance()
+                                val delta = change.position - change.previousPosition
+
+                                if (!dragStarted && totalDist > touchSlop) {
+                                    if (longPressTriggered && !selectionMode) {
+                                        showMenu = false
+                                        dragStarted = true
+                                        isDraggingLocally = true
+                                        isPressed = false
+                                        longPressJob.cancel()
+                                        onDragStart?.invoke(startPos)
+                                    } else if (!longPressTriggered) {
+                                        longPressJob.cancel()
+                                        isPressed = false
+                                        break@loop
+                                    }
+                                }
+
+                                if (dragStarted) {
+                                    change.consume()
+                                    onDrag?.invoke(delta)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    ) {
+        if (isListView) {
+            SwipeableItemContainer(
+                leftAction = leftSwipeAction,
+                rightAction = rightSwipeAction,
+                onSwipeLeft = { handleSwipeAction(leftSwipeKey) },
+                onSwipeRight = { handleSwipeAction(rightSwipeKey) },
+                enabled = !selectionMode && !isDragging,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnimatedVisibility(
+                        visible = selectionMode,
+                        enter = fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                expandHorizontally(
+                                    animationSpec = spring(
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        dampingRatio = Spring.DampingRatioNoBouncy
+                                    ),
+                                    expandFrom = Alignment.Start,
+                                    clip = false
+                                ),
+                        exit = fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
+                               shrinkHorizontally(
+                                   animationSpec = tween(220, easing = FastOutLinearInEasing),
+                                   shrinkTowards = Alignment.Start,
+                                   clip = false
+                               )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .onGloballyPositioned { avatarCoords = it }
+                    ) {
+                        ExpressiveAvatar(
+                            name = contact.name,
+                            photoUri = contact.photoUri,
+                            size = 48.dp,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = contact.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (!phoneNumber.isNullOrBlank()) {
+                            Text(
+                                text = phoneNumber,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Call",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            Box {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .onGloballyPositioned { avatarCoords = it }
+                    ) {
+                        RivoAvatar(
+                            name = contact.name,
+                            photoUri = contact.photoUri,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
+                                .clip(CircleShape)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Call,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        text = contact.name,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                // Checkbox overlay — animated entry/exit
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.6f),
+                    exit  = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.6f),
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = null,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Respect Settings → Appearance → "Context Menu Elements" customization (show/hide + order)
+    val favContextMenuKeys = remember(settingsVer, phoneNumber, fakeCallInContextMenu) {
+        com.modiprincekr.thedialer.controller.util.ContextMenuPrefs.resolvedKeys(
+            prefs,
+            com.modiprincekr.thedialer.controller.util.ContextMenuPrefs.SECTION_FAVORITES,
+            listOf("select", "call", "send_sms", "call_chat_via", "view_details", "fake_call", "remove_favorite")
+        ).filter { key ->
+            when (key) {
+                "send_sms" -> !phoneNumber.isNullOrEmpty()
+                "fake_call" -> fakeCallInContextMenu
+                "call_chat_via" -> !phoneNumber.isNullOrEmpty()
+                else -> true
+            }
+        }
+    }
+
+    RivoDropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false }
+    ) {
+        favContextMenuKeys.forEachIndexed { index, key ->
+            // A divider separates the destructive "Remove from Favourites" action from
+            // everything above it.
+            if (key == "remove_favorite" && index > 0) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
+            when (key) {
+                "select" -> RivoDropdownMenuItem(
+                    text = "Select",
+                    icon = Icons.Default.CheckBox,
+                    iconTint = Color(0xFF9C27B0),
+                    onClick = {
+                        showMenu = false
+                        onSelectMode?.invoke()
+                    }
+                )
+                "call" -> {
+                    val hasTwoSims = remember(settingsVer) {
+                        prefs.getActiveSimCount() >= 2 || run {
+                            val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? TelecomManager
+                            try { (tm?.callCapablePhoneAccounts?.size ?: 0) >= 2 } catch (_: Throwable) { false }
+                        }
+                    }
+                    val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
+                    val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
+                    val tm = remember(context) { context.getSystemService(android.content.Context.TELECOM_SERVICE) as? TelecomManager }
+                    val accounts = try { tm?.callCapablePhoneAccounts } catch (_: Throwable) { null } ?: emptyList()
+                    val account1 = getPhoneAccountForSimSlot(context, accounts, 0)
+                    val account2 = getPhoneAccountForSimSlot(context, accounts, 1)
+
+                    RivoDropdownMenuItem(
+                        text = "Call",
+                        icon = Icons.Default.Call,
+                        iconTint = Color(0xFF4CAF50),
+                        onClick = {
+                            showMenu = false
+                            onClick()
+                        },
+                        trailingContent = if (hasTwoSims && !phoneNumber.isNullOrEmpty()) {
+                            {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        onClick = {
+                                            showMenu = false
+                                            makeCall(context, phoneNumber, account1)
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            SimSlotBadge(slot = 0)
+                                        }
+                                    }
+                                    Surface(
+                                        onClick = {
+                                            showMenu = false
+                                            makeCall(context, phoneNumber, account2)
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        modifier = Modifier.size(width = 36.dp, height = 32.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            SimSlotBadge(slot = 1)
+                                        }
+                                    }
+                                }
+                            }
+                        } else null
+                    )
+                }
+                "send_sms" -> RivoDropdownMenuItem(
+                    text = "Send SMS",
+                    icon = Icons.Default.Message,
+                    iconTint = Color(0xFF009688),
+                    onClick = {
+                        showMenu = false
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            data = android.net.Uri.parse("sms:$phoneNumber")
+                        }
+                        context.startActivity(intent)
+                    }
+                )
+                "call_chat_via" -> RivoDropdownMenuItem(
+                    text = "Call/Chat Via",
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    iconTint = Color(0xFF00BFA5),
+                    onClick = {
+                        showMenu = false
+                        showCallChatViaPicker = true
+                    }
+                )
+                "view_details" -> RivoDropdownMenuItem(
+                    text = "View Details",
+                    icon = Icons.Default.Info,
+                    iconTint = Color(0xFF2196F3),
+                    onClick = {
+                        showMenu = false
+                        recordAvatarClick()
+                        navigator.navigate(ContactDetailsScreenDestination(contactId = contact.id))
+                    }
+                )
+                "fake_call" -> RivoDropdownMenuItem(
+                    text = "Fake Call",
+                    icon = Icons.Outlined.PhoneCallback,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        showMenu = false
+                        showFakeCallSheet = true
+                    }
+                )
+                "remove_favorite" -> RivoDropdownMenuItem(
+                    text = "Remove from Favourites",
+                    icon = Icons.Default.Favorite,
+                    iconTint = Color(0xFFF44336),
+                    isDestructive = true,
+                    onClick = {
+                        showMenu = false
+                        contactsVM.toggleFavorite(contact)
+                    }
+                )
+            }
+            if (key == "select" && index < favContextMenuKeys.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+
+    if (showFakeCallSheet) {
+        FakeCallAddSheet(
+            mode = AddMode.Number,
+            initialNumber = contact.phoneNumbers.firstOrNull() ?: "",
+            initialDisplayName = contact.name,
+            onDismiss = { showFakeCallSheet = false },
+            onSave = { entry, exactTriggerOverride ->
+                FakeCallManager.addEntry(context, prefs, entry, exactTriggerOverride)
+                showFakeCallSheet = false
+            }
+        )
+    }
+
+    com.modiprincekr.thedialer.view.components.CallChatViaOverlay(
+        phoneNumber = phoneNumber?.takeIf { it.isNotBlank() },
+        phoneNumbers = contact.phoneNumbers.filter { it.isNotBlank() },
+        showPicker = showCallChatViaPicker,
+        onPickerDismiss = { showCallChatViaPicker = false },
+        showGoogleMeet = true
+    )
+}

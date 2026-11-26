@@ -362,6 +362,25 @@ fun ContactDetailsScreen(
 
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
+
+    val hasCustomBg = hasCustomPageBg || hasCustomHeader
+    val customBgLuminance = remember(settingsVer, hasCustomPageBg, hasCustomHeader, infoBgType, headerBgType, infoBgFile, headerBgFile, infoBgDim, headerBgDim, isDark) {
+        if (hasCustomBg) {
+            val effectiveDim = if (hasCustomPageBg) infoBgDim else headerBgDim
+            val effectiveType = if (hasCustomPageBg) infoBgType else headerBgType
+            val effectiveFile = if (hasCustomPageBg) infoBgFile else headerBgFile
+            if (effectiveType == "wallpaper") {
+                com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getWallpaperLuminance(context, effectiveDim)
+            } else if (effectiveFile != null && effectiveFile.exists()) {
+                com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getOrCalculateDialpadLuminance(prefs, effectiveFile, effectiveType == "video", effectiveDim)
+            } else {
+                if (isDark) 0.15f else 0.85f
+            }
+        } else {
+            if (isDark) 0.15f else 0.85f
+        }
+    }
+    val isCustomBgBright = hasCustomBg && customBgLuminance > 0.48f
     val contactInfoActionKeys = remember(settingsVer) {
         com.coolappstore.everdialer.by.svhp.controller.util.ContextMenuPrefs.resolvedKeys(
             prefs,
@@ -1178,6 +1197,23 @@ fun ContactDetailsScreen(
             ) {
                 item {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        val topFloatingBg = if (hasCustomBg) {
+                            if (isCustomBgBright) Color.White.copy(alpha = 0.85f)
+                            else Color.Black.copy(alpha = 0.50f)
+                        } else if (isSaturatedActive) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+
+                        val topFloatingContentColor = if (hasCustomBg) {
+                            if (isCustomBgBright) Color(0xFF1C1B1F) else Color.White
+                        } else if (isSaturatedActive) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1189,14 +1225,14 @@ fun ContactDetailsScreen(
                                 modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (isSaturatedActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(topFloatingBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(onClick = { closeWithAnimation() }) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = if (isSaturatedActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                        tint = topFloatingContentColor
                                     )
                                 }
                             }
@@ -1204,45 +1240,47 @@ fun ContactDetailsScreen(
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(50))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                    .background(topFloatingBg),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                IconButton(onClick = {
-                                    if (shortcutNumbers.isEmpty()) {
-                                        android.widget.Toast.makeText(context, "No phone number to add", android.widget.Toast.LENGTH_SHORT).show()
-                                    } else if (shortcutNumbers.size > 1) {
-                                        showShortcutNumberPicker = true
-                                    } else {
-                                        pendingShortcutNumber = shortcutNumbers.first()
-                                        showShortcutActionPicker = true
-                                    }
-                                }) { Icon(Icons.Default.AddToHomeScreen, "Add to Home Screen") }
-                                IconButton(onClick = { showQrDialog = true }) { Icon(Icons.Outlined.QrCode2, "QR Code") }
-                                if (contact != null) {
-                                    IconButton(onClick = { contactsViewModel.toggleFavorite(contact) }) {
-                                        Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = if (isFavorite) Color.Red else LocalContentColor.current)
-                                    }
-                                    IconButton(onClick = { showBlockConfirm = true }) {
-                                        Icon(
-                                            if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
-                                            contentDescription = if (isContactBlocked) "Unblock" else "Block",
-                                            tint = if (isContactBlocked) MaterialTheme.colorScheme.error else LocalContentColor.current
-                                        )
-                                    }
+                                CompositionLocalProvider(LocalContentColor provides topFloatingContentColor) {
                                     IconButton(onClick = {
-                                        navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
-                                    }) { Icon(Icons.Default.Edit, "Edit") }
-                                } else if (phoneNumber != null && phoneNumber != "Unknown") {
-                                    IconButton(onClick = { showBlockConfirm = true }) {
-                                        Icon(
-                                            if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
-                                            contentDescription = if (isContactBlocked) "Unblock" else "Block",
-                                            tint = if (isContactBlocked) MaterialTheme.colorScheme.error else LocalContentColor.current
-                                        )
+                                        if (shortcutNumbers.isEmpty()) {
+                                            android.widget.Toast.makeText(context, "No phone number to add", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else if (shortcutNumbers.size > 1) {
+                                            showShortcutNumberPicker = true
+                                        } else {
+                                            pendingShortcutNumber = shortcutNumbers.first()
+                                            showShortcutActionPicker = true
+                                        }
+                                    }) { Icon(Icons.Default.AddToHomeScreen, "Add to Home Screen", tint = topFloatingContentColor) }
+                                    IconButton(onClick = { showQrDialog = true }) { Icon(Icons.Outlined.QrCode2, "QR Code", tint = topFloatingContentColor) }
+                                    if (contact != null) {
+                                        IconButton(onClick = { contactsViewModel.toggleFavorite(contact) }) {
+                                            Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = if (isFavorite) Color.Red else topFloatingContentColor)
+                                        }
+                                        IconButton(onClick = { showBlockConfirm = true }) {
+                                            Icon(
+                                                if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
+                                                contentDescription = if (isContactBlocked) "Unblock" else "Block",
+                                                tint = if (isContactBlocked) MaterialTheme.colorScheme.error else topFloatingContentColor
+                                            )
+                                        }
+                                        IconButton(onClick = {
+                                            navigator.navigate(ContactEditScreenDestination(contactId = contact.id))
+                                        }) { Icon(Icons.Default.Edit, "Edit", tint = topFloatingContentColor) }
+                                    } else if (phoneNumber != null && phoneNumber != "Unknown") {
+                                        IconButton(onClick = { showBlockConfirm = true }) {
+                                            Icon(
+                                                if (isContactBlocked) Icons.Default.Block else Icons.Outlined.Block,
+                                                contentDescription = if (isContactBlocked) "Unblock" else "Block",
+                                                tint = if (isContactBlocked) MaterialTheme.colorScheme.error else topFloatingContentColor
+                                            )
+                                        }
+                                        IconButton(onClick = {
+                                            showAddContactChoiceDialog = true
+                                        }) { Icon(Icons.Default.PersonAdd, "Add Contact", tint = topFloatingContentColor) }
                                     }
-                                    IconButton(onClick = {
-                                        showAddContactChoiceDialog = true
-                                    }) { Icon(Icons.Default.PersonAdd, "Add Contact") }
                                 }
                             }
                         }
@@ -1288,7 +1326,17 @@ fun ContactDetailsScreen(
                                     shape = pfpShape
                                 )
                             }
-                            Text(text = displayName, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                            val contactNameColor = if (hasCustomBg) {
+                                if (isCustomBgBright) Color(0xFF1C1B1F) else Color.White
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                            Text(
+                                text = displayName,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = contactNameColor
+                            )
                         }
                     }
                 }

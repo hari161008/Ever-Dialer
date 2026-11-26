@@ -5,6 +5,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -86,9 +88,12 @@ fun DialpadCustomisationScreen(
         mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f))
     }
 
-    var isCircleButtons by remember(settingsVersion) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false))
+    var buttonStyle by remember(settingsVersion) {
+        mutableStateOf(prefs.getDialpadButtonStyle())
     }
+    val isCircleButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE
+    val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
+    var showButtonStyleDialog by remember { mutableStateOf(false) }
 
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
@@ -147,12 +152,7 @@ fun DialpadCustomisationScreen(
         else Color.White.copy(alpha = if (isBrightBg) 0.60f else 0.45f)
     } else MaterialTheme.colorScheme.surfaceContainerLow
 
-    val previewBorder = BorderStroke(
-        0.5.dp,
-        if (hasCustomBg) {
-            if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)
-        } else Color.Transparent
-    )
+    val previewBorder: BorderStroke? = null
 
     val previewTextPrimary = if (hasCustomBg) {
         if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
@@ -481,8 +481,8 @@ fun DialpadCustomisationScreen(
 
                                 // Real Dialpad Card Mockup (faithfully replicating actual Dialpad screen)
                                 Surface(
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = previewContainerBg,
+                                    shape = if (isGridButtons) RectangleShape else RoundedCornerShape(24.dp),
+                                    color = if (isGridButtons && hasCustomBg) Color.Transparent else previewContainerBg,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
@@ -562,42 +562,82 @@ fun DialpadCustomisationScreen(
                                         val keyW = if (isCircleButtons) keyH else 58.dp
                                         val keyShape = if (isCircleButtons) CircleShape else RoundedCornerShape(13.dp)
 
-                                        for (row in keyData) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                                verticalAlignment = Alignment.CenterVertically
+                                        if (isGridButtons) {
+                                            val gridDividerColor = if (!isDark) Color(0xFFE2E5EA) else Color.White.copy(alpha = 0.20f)
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                                             ) {
-                                                for ((digit, sub) in row) {
-                                                    Surface(
-                                                        shape = keyShape,
-                                                        color = previewKeyBg,
-                                                        border = previewBorder,
-                                                        modifier = Modifier
-                                                            .width(keyW)
-                                                            .height(keyH)
+                                                HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                                                for (row in keyData) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().height(keyH),
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Column(
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            verticalArrangement = Arrangement.Center
-                                                        ) {
-                                                            Text(
-                                                                text = digit,
-                                                                fontSize = 11.5.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = previewKeyText,
-                                                                lineHeight = 12.sp
-                                                            )
-                                                            if (sub.isNotBlank()) {
-                                                                Text(
-                                                                    text = sub,
-                                                                    fontSize = 5.5.sp,
-                                                                    fontWeight = FontWeight.SemiBold,
-                                                                    letterSpacing = 0.4.sp,
-                                                                    color = previewKeySubText,
-                                                                    lineHeight = 6.sp
+                                                        row.forEachIndexed { colIndex, (digit, _) ->
+                                                            if (colIndex > 0) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .width(0.5.dp)
+                                                                        .fillMaxHeight()
+                                                                        .background(gridDividerColor)
                                                                 )
+                                                            }
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .fillMaxHeight(),
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Text(
+                                                                    text = digit,
+                                                                    fontSize = 13.sp,
+                                                                    fontWeight = FontWeight.Normal,
+                                                                    color = previewKeyText
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                                                }
+                                            }
+                                        } else {
+                                            for (row in keyData) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    for ((digit, sub) in row) {
+                                                        Surface(
+                                                            shape = keyShape,
+                                                            color = previewKeyBg,
+                                                            border = previewBorder,
+                                                            modifier = Modifier
+                                                                .width(keyW)
+                                                                .height(keyH)
+                                                        ) {
+                                                            Column(
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                                verticalArrangement = Arrangement.Center
+                                                            ) {
+                                                                Text(
+                                                                    text = digit,
+                                                                    fontSize = 11.5.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = previewKeyText,
+                                                                    lineHeight = 12.sp
+                                                                )
+                                                                if (sub.isNotBlank()) {
+                                                                    Text(
+                                                                        text = sub,
+                                                                        fontSize = 5.5.sp,
+                                                                        fontWeight = FontWeight.SemiBold,
+                                                                        letterSpacing = 0.4.sp,
+                                                                        color = previewKeySubText,
+                                                                        lineHeight = 6.sp
+                                                                    )
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -607,38 +647,52 @@ fun DialpadCustomisationScreen(
 
                                         Spacer(modifier = Modifier.height((2 * heightScale).dp))
 
-                                        // Action Row (Add Contact pill, Green Call Pill, empty balance space)
+                                        // Action Row (Add Contact, Call Button, Options/Spacer)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceEvenly,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             // Add Contact Button
-                                            Surface(
-                                                shape = keyShape,
-                                                color = previewKeyBg,
-                                                border = previewBorder,
-                                                modifier = Modifier
-                                                    .width(keyW)
-                                                    .height(keyH)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
+                                            if (isGridButtons) {
+                                                Box(
+                                                    modifier = Modifier.size(keyH),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
                                                     Icon(
                                                         Icons.Outlined.PersonAdd,
                                                         contentDescription = null,
                                                         tint = previewIconTint,
-                                                        modifier = Modifier.size(13.dp)
+                                                        modifier = Modifier.size(15.dp)
                                                     )
+                                                }
+                                            } else {
+                                                Surface(
+                                                    shape = keyShape,
+                                                    color = previewKeyBg,
+                                                    border = previewBorder,
+                                                    modifier = Modifier
+                                                        .width(keyW)
+                                                        .height(keyH)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            Icons.Outlined.PersonAdd,
+                                                            contentDescription = null,
+                                                            tint = previewIconTint,
+                                                            modifier = Modifier.size(13.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
 
                                             // Green Call Button (realistic call pill)
                                             Surface(
-                                                shape = if (isCircleButtons) CircleShape else RoundedCornerShape(percent = 50),
-                                                color = Color(0xFF2E7D32),
-                                                shadowElevation = 2.dp,
+                                                shape = if (isCircleButtons || isGridButtons) CircleShape else RoundedCornerShape(percent = 50),
+                                                color = if (isGridButtons) Color.White.copy(alpha = 0.35f) else Color(0xFF2E7D32),
+                                                shadowElevation = if (isGridButtons) 0.dp else 2.dp,
                                                 modifier = Modifier
-                                                    .width(if (isCircleButtons) keyH else 82.dp)
+                                                    .width(if (isCircleButtons || isGridButtons) keyH else 82.dp)
                                                     .height(keyH)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
@@ -651,12 +705,26 @@ fun DialpadCustomisationScreen(
                                                 }
                                             }
 
-                                            // Spacer to balance Add Contact button
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(keyW)
-                                                    .height(keyH)
-                                            )
+                                            // Right item: More options icon for Grid, or Spacer
+                                            if (isGridButtons) {
+                                                Box(
+                                                    modifier = Modifier.size(keyH),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.MoreVert,
+                                                        contentDescription = null,
+                                                        tint = previewIconTint,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(keyW)
+                                                        .height(keyH)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -813,16 +881,17 @@ fun DialpadCustomisationScreen(
                         modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                     )
                     RivoExpressiveCard {
-                        RivoSwitchListItem(
-                            headline = "Circle buttons",
-                            supporting = "Use circular buttons on the dialpad",
-                            leadingIcon = Icons.Outlined.Lens,
+                        RivoListItem(
+                            headline = "Button Style",
+                            supporting = when (buttonStyle) {
+                                PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE -> "Circular buttons"
+                                PreferenceManager.DIALPAD_BUTTON_STYLE_GRID -> "Grid"
+                                else -> "Default"
+                            },
+                            leadingIcon = Icons.Outlined.GridView,
                             iconContainerColor = Color(0xFF9C27B0),
-                            checked = isCircleButtons,
-                            onCheckedChange = {
-                                isCircleButtons = it
-                                prefs.setBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, it)
-                            }
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { showButtonStyleDialog = true }
                         )
                     }
                 }
@@ -981,6 +1050,67 @@ fun DialpadCustomisationScreen(
                 bgVideoSpeed = prefs.getFloat(PreferenceManager.KEY_DIALPAD_BG_VIDEO_SPEED, 1.0f)
                 editorMediaState = null
                 BackgroundMediaManager.autoCleanInBackground(context, prefs)
+            }
+        )
+    }
+
+    if (showButtonStyleDialog) {
+        AlertDialog(
+            onDismissRequest = { showButtonStyleDialog = false },
+            icon = { Icon(Icons.Outlined.GridView, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Button Style") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(
+                        Triple(PreferenceManager.DIALPAD_BUTTON_STYLE_SQUIRCLE, "Default", "Standard rounded buttons"),
+                        Triple(PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE, "Circular buttons", "Circle buttons on dialpad"),
+                        Triple(PreferenceManager.DIALPAD_BUTTON_STYLE_GRID, "Grid", "Divider grid dialpad layout")
+                    ).forEach { (key, label, desc) ->
+                        val isSelected = buttonStyle == key
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                buttonStyle = key
+                                prefs.setDialpadButtonStyle(key)
+                                showButtonStyleDialog = false
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        desc,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        buttonStyle = key
+                                        prefs.setDialpadButtonStyle(key)
+                                        showButtonStyleDialog = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showButtonStyleDialog = false }) { Text("Done") }
             }
         )
     }

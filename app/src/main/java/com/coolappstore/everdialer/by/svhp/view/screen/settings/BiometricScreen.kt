@@ -1,72 +1,64 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
 import android.content.Context
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.widget.Toast
 import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
-import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import androidx.compose.ui.window.Dialog
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.window.DialogProperties
+import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
+import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
+import com.coolappstore.everdialer.by.svhp.modal.data.Contact
+import androidx.compose.material.icons.filled.PhonePaused
+import androidx.compose.material.icons.filled.Pin
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Pattern
+import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.RivoExpressiveCard
 import com.coolappstore.everdialer.by.svhp.view.components.RivoListItem
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
-import com.coolappstore.everdialer.by.svhp.view.components.RivoAvatar
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
-import com.coolappstore.everdialer.by.svhp.modal.`interface`.IContactsRepository
-import com.coolappstore.everdialer.by.svhp.modal.data.Contact
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.window.DialogProperties
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
+/**
+ * Refactored "Passwords & Security" settings screen.
+ *
+ * Flattens the previous nested bottom sheet hierarchy by directly exposing:
+ * - System Biometrics
+ * - PIN
+ * - Password
+ * - Pattern (with inline expandable "Visible Pattern" toggle)
+ *
+ * Keeps "Lock App on Open" and "Lock Call Actions" toggles at the bottom,
+ * enabled only when a lock method is configured.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(style = SettingsTransitionStyle::class)
 @Composable
@@ -74,20 +66,26 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     val prefs: PreferenceManager = koinInject()
     val contactsRepo: IContactsRepository = koinInject()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     var biometricsType by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "") }
+    var patternVisible by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_PATTERN_VISIBLE, true)) }
+    var pinPadScramble by remember { mutableStateOf(prefs.isPinPadScramble()) }
     var appLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)) }
     var callLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)) }
     var callLockMode by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "all") ?: "all") }
     var callLockNumbers by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_NUMBERS, "") ?: "") }
+    var backupType by remember { mutableStateOf(prefs.getBiometricsBackupType()) }
+
     var showContactPicker by remember { mutableStateOf(false) }
     var allContacts by remember { mutableStateOf(emptyList<Contact>()) }
 
+    // Active credential setup sheet type: "pin" | "password" | "pattern" | null
+    var activeSetupType by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
-        allContacts = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        allContacts = withContext(Dispatchers.IO) {
             contactsRepo.getContacts()
         }
     }
@@ -98,11 +96,14 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     }
 
     val selectedContactCount = remember(selectedNumbers, allContacts) {
-        allContacts.count { c -> c.phoneNumbers.any { n -> selectedNumbers.any { s -> n.filter(Char::isDigit).takeLast(10) == s.filter(Char::isDigit).takeLast(10) } } }
+        allContacts.count { c ->
+            c.phoneNumbers.any { n ->
+                selectedNumbers.any { s ->
+                    n.filter(Char::isDigit).takeLast(10) == s.filter(Char::isDigit).takeLast(10)
+                }
+            }
+        }
     }
-
-    var showPinSetup by remember { mutableStateOf(false) }
-    var showPasswordSetup by remember { mutableStateOf(false) }
 
     val systemBiometricsAvailable = remember {
         val bm = BiometricManager.from(context)
@@ -115,7 +116,7 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar(
-                title = "Authentication",
+                title = "Passwords & Security",
                 onBackClick = { navigator.navigateUp() }
             )
         },
@@ -127,102 +128,288 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp + navBarBottom),
+                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
             com.coolappstore.everdialer.by.svhp.view.components.SettingsSearchEntryPoint(navigator = navigator)
 
-            // ── Authentication Methods ─────────────────────────────────────
-            SectionLabel("Authentication Method")
+            // ── DIRECT UNLOCK METHODS LIST (Flattened hierarchy) ──────────────
+            Text(
+                text = "Unlock Methods",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+            )
             RivoExpressiveCard {
-                // None
+                // 1. System Biometrics Option
                 RivoListItem(
-                    headline = "None",
-                    supporting = "No authentication lock",
-                    leadingIcon = Icons.Default.LockOpen,
-                    iconContainerColor = if (biometricsType.isEmpty()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                    trailingIcon = if (biometricsType.isEmpty()) Icons.Default.Check else null,
-                    trailingIconTint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.settingsSearchHighlight("auth_method_none", highlightedKey) { highlightedKey = null },
+                    headline = "System Biometrics",
+                    supporting = if (systemBiometricsAvailable) {
+                        "Fingerprint or device credentials"
+                    } else {
+                        "Not available on this device"
+                    },
+                    leadingIcon = Icons.Default.Fingerprint,
+                    iconContainerColor = Color(0xFF6750A4),
+                    trailingIcon = if (biometricsType == "system") Icons.Default.CheckCircle else null,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_system", highlightedKey) { highlightedKey = null },
                     onClick = {
-                        if (biometricsType.isNotEmpty()) {
+                        if (systemBiometricsAvailable) {
+                            val hasPin = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()
+                            val hasPattern = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()
+                            val hasPassword = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()
+                            if (!hasPin && !hasPattern && !hasPassword) {
+                                Toast.makeText(context, "Please set a PIN, Password, or Pattern first.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                biometricsType = "system"
+                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "system")
+                                if (!appLockEnabled) {
+                                    appLockEnabled = true
+                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                                }
+                            }
+                        }
+                    }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                // 2. PIN Option
+                Column(modifier = Modifier.animateContentSize()) {
+                    RivoListItem(
+                        headline = "PIN",
+                        supporting = if (biometricsType == "pin") "Active unlock PIN" else "Set a numeric PIN",
+                        leadingIcon = Icons.Default.Pin,
+                        iconContainerColor = Color(0xFF2196F3),
+                        trailingIcon = if (biometricsType == "pin") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                        modifier = Modifier.settingsSearchHighlight("auth_method_pin", highlightedKey) { highlightedKey = null },
+                        onClick = {
+                            val hasPin = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()
+                            if (hasPin && biometricsType != "pin") {
+                                biometricsType = "pin"
+                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
+                                if (!appLockEnabled) {
+                                    appLockEnabled = true
+                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                                }
+                            } else {
+                                activeSetupType = "pin"
+                            }
+                        }
+                    )
+
+                    // ── Inline Expandable Section for PIN (Scramble & Change) ──
+                    AnimatedVisibility(
+                        visible = biometricsType == "pin" || (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty(),
+                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
+                        Column {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "PIN pad scramble",
+                                supporting = "Randomize digit positions on the PIN unlock screen",
+                                leadingIcon = Icons.Default.Shuffle,
+                                iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.7f),
+                                checked = pinPadScramble,
+                                onCheckedChange = { isChecked ->
+                                    pinPadScramble = isChecked
+                                    prefs.setPinPadScramble(isChecked)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoListItem(
+                                headline = "Change PIN",
+                                supporting = "Set a new unlock PIN",
+                                leadingIcon = Icons.Default.Edit,
+                                iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.5f),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    activeSetupType = "pin"
+                                }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                // 3. Password Option
+                Column(modifier = Modifier.animateContentSize()) {
+                    RivoListItem(
+                        headline = "Password",
+                        supporting = if (biometricsType == "password") "Active unlock password" else "Set an alphanumeric password",
+                        leadingIcon = Icons.Default.Key,
+                        iconContainerColor = Color(0xFF4CAF50),
+                        trailingIcon = if (biometricsType == "password") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                        modifier = Modifier.settingsSearchHighlight("auth_method_password", highlightedKey) { highlightedKey = null },
+                        onClick = {
+                            val hasPass = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()
+                            if (hasPass && biometricsType != "password") {
+                                biometricsType = "password"
+                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
+                                if (!appLockEnabled) {
+                                    appLockEnabled = true
+                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                                }
+                            } else {
+                                activeSetupType = "password"
+                            }
+                        }
+                    )
+
+                    // ── Inline Expandable Section for Password Change ──
+                    AnimatedVisibility(
+                        visible = biometricsType == "password",
+                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
+                        Column {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoListItem(
+                                headline = "Change Password",
+                                supporting = "Set a new unlock password",
+                                leadingIcon = Icons.Default.Edit,
+                                iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    activeSetupType = "password"
+                                }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                // 4. Pattern Option (with expandable visibility toggle)
+                Column(modifier = Modifier.animateContentSize()) {
+                    RivoListItem(
+                        headline = "Pattern",
+                        supporting = if (biometricsType == "pattern") "Active pattern lock" else "Draw a 3x3 pattern lock",
+                        leadingIcon = Icons.Default.Pattern,
+                        iconContainerColor = Color(0xFFFF9800),
+                        trailingIcon = if (biometricsType == "pattern") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                        modifier = Modifier.settingsSearchHighlight("auth_method_pattern", highlightedKey) { highlightedKey = null },
+                        onClick = {
+                            val hasPattern = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()
+                            if (hasPattern && biometricsType != "pattern") {
+                                biometricsType = "pattern"
+                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pattern")
+                                if (!appLockEnabled) {
+                                    appLockEnabled = true
+                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                                }
+                            } else {
+                                activeSetupType = "pattern"
+                            }
+                        }
+                    )
+
+                    // ── Inline Expandable Section for Pattern Visibility ──
+                    AnimatedVisibility(
+                        visible = biometricsType == "pattern",
+                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
+                        Column {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoSwitchListItem(
+                                headline = "Visible Pattern",
+                                supporting = "Make pattern line visible when drawing",
+                                leadingIcon = if (patternVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.7f),
+                                checked = patternVisible,
+                                onCheckedChange = { isChecked ->
+                                    patternVisible = isChecked
+                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_PATTERN_VISIBLE, isChecked)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            RivoListItem(
+                                headline = "Change Pattern",
+                                supporting = "Redraw a new unlock pattern",
+                                leadingIcon = Icons.Default.Edit,
+                                iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = {
+                                    activeSetupType = "pattern"
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Option to Remove Lock when one is set
+                if (biometricsType.isNotEmpty()) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoListItem(
+                        headline = "Remove Lock",
+                        supporting = "Turn off app lock and passwords",
+                        leadingIcon = Icons.Default.LockOpen,
+                        iconContainerColor = MaterialTheme.colorScheme.error,
+                        trailingIcon = null,
+                        onClick = {
                             biometricsType = ""
                             prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "")
                             prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, "")
                             prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "")
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "")
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, "")
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
                             appLockEnabled = false
                             callLockEnabled = false
                         }
-                    }
-                )
-                CardDivider()
-                // System Biometrics
-                RivoListItem(
-                    headline = "System Biometrics",
-                    supporting = if (systemBiometricsAvailable) "Fingerprint, face unlock, or device credentials"
-                                 else "Not available on this device",
-                    leadingIcon = Icons.Default.Fingerprint,
-                    iconContainerColor = Color(0xFF6750A4),
-                    trailingIcon = if (biometricsType == "system") Icons.Default.Check else null,
-                    trailingIconTint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.settingsSearchHighlight("auth_method_system", highlightedKey) { highlightedKey = null },
-                    onClick = {
-                        if (systemBiometricsAvailable) {
-                            biometricsType = "system"
-                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "system")
-                            if (!appLockEnabled) {
-                                appLockEnabled = true
-                                prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
-                            }
-                        }
-                    }
-                )
-                CardDivider()
-                // Custom PIN
-                RivoListItem(
-                    headline = "Custom PIN",
-                    supporting = if (biometricsType == "pin") "Active · Tap to change PIN" else "Set a numeric PIN of any length",
-                    leadingIcon = Icons.Default.Pin,
-                    iconContainerColor = Color(0xFF2196F3),
-                    trailingIcon = if (biometricsType == "pin") Icons.Default.Check else null,
-                    trailingIconTint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.settingsSearchHighlight("auth_method_pin", highlightedKey) { highlightedKey = null },
-                    onClick = {
-                        showPinSetup = true
-                    }
-                )
-                CardDivider()
-                // Custom Password
-                RivoListItem(
-                    headline = "Custom Password",
-                    supporting = if (biometricsType == "password") "Active · Tap to change password" else "Set a custom alphanumeric password",
-                    leadingIcon = Icons.Default.Key,
-                    iconContainerColor = Color(0xFF4CAF50),
-                    trailingIcon = if (biometricsType == "password") Icons.Default.Check else null,
-                    trailingIconTint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.settingsSearchHighlight("auth_method_password", highlightedKey) { highlightedKey = null },
-                    onClick = {
-                        showPasswordSetup = true
-                    }
-                )
+                    )
+                }
             }
 
-            // ── Toggles — only visible when a method is configured ─────────
+            // ── Toggles: Visible & Enabled only when a lock method is configured ──
             AnimatedVisibility(
                 visible = biometricsType.isNotEmpty(),
                 enter = fadeIn(tween(300)) + expandVertically(tween(300)),
                 exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SectionLabel("Authentication")
+                    Text(
+                        text = "Protection Scope",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                    )
                     RivoExpressiveCard {
                         RivoSwitchListItem(
                             headline = "Lock App on Open",
-                            supporting = "Require authentication when opening Ever Dialer",
-                            leadingIcon = Icons.Default.LockOpen,
+                            supporting = "Require authentication when opening The Dialer",
+                            leadingIcon = Icons.Default.Lock,
                             iconContainerColor = Color(0xFF2196F3),
                             checked = appLockEnabled,
                             modifier = Modifier.settingsSearchHighlight("lock_app_open", highlightedKey) { highlightedKey = null },
@@ -231,7 +418,10 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, it)
                             }
                         )
-                        CardDivider()
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
                         RivoSwitchListItem(
                             headline = "Lock Call Actions",
                             supporting = "Require authentication to answer or reject incoming calls",
@@ -253,9 +443,14 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                         exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            SectionLabel("Lock Scope")
+                            Text(
+                                text = "Lock Scope",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                            )
 
-                            // Modern segmented control
+                            // Segmented control
                             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                                 SegmentedButton(
                                     selected = callLockMode == "all",
@@ -318,13 +513,13 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                         }
                                         Text(
                                             text = when (mode) {
-                                                "all" -> "Biometric required for every incoming call"
+                                                "all" -> "Lock required for every incoming call"
                                                 "specified" -> if (selectedContactCount > 0)
-                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} will require biometric to answer"
-                                                else "Choose contacts that require biometric to answer"
+                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} will require authentication to answer"
+                                                else "Choose contacts that require authentication to answer"
                                                 else -> if (selectedContactCount > 0)
-                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} excluded from biometric lock"
-                                                else "Choose contacts to skip the biometric lock"
+                                                    "$selectedContactCount contact${if (selectedContactCount != 1) "s" else ""} excluded from lock"
+                                                else "Choose contacts to skip the authentication lock"
                                             },
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -360,30 +555,58 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
         }
     }
 
-
-    if (showPinSetup) {
-        PinSetupDialog(
-            onConfirm = { pin ->
-                biometricsType = "pin"
-                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
-                prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, pin)
-                if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
-                showPinSetup = false
+    // ── Credential Setup Full-Screen Dialog ─────────────────────────────────
+    if (activeSetupType != null) {
+        CredentialSetupDialog(
+            type = activeSetupType!!,
+            isPatternVisible = patternVisible,
+            onConfirm = { credential ->
+                when (activeSetupType) {
+                    "pin" -> {
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_PIN, credential)
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, "pin")
+                        backupType = "pin"
+                        if (biometricsType != "system") {
+                            biometricsType = "pin"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
+                        }
+                        if (!appLockEnabled) {
+                            appLockEnabled = true
+                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                        }
+                    }
+                    "password" -> {
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, credential)
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, "password")
+                        backupType = "password"
+                        if (biometricsType != "system") {
+                            biometricsType = "password"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
+                        }
+                        if (!appLockEnabled) {
+                            appLockEnabled = true
+                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                        }
+                    }
+                    "pattern" -> {
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_PATTERN, credential)
+                        prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, "pattern")
+                        backupType = "pattern"
+                        if (biometricsType != "system") {
+                            biometricsType = "pattern"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pattern")
+                        }
+                        if (!appLockEnabled) {
+                            appLockEnabled = true
+                            prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
+                        }
+                    }
+                }
+                activeSetupType = null
             },
-            onDismiss = { showPinSetup = false }
-        )
-    }
-
-    if (showPasswordSetup) {
-        PasswordSetupDialog(
-            onConfirm = { password ->
-                biometricsType = "password"
-                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
-                prefs.setString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, password)
-                if (!appLockEnabled) { appLockEnabled = true; prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true) }
-                showPasswordSetup = false
-            },
-            onDismiss = { showPasswordSetup = false }
+            onDismiss = {
+                activeSetupType = null
+            }
         )
     }
 
@@ -412,7 +635,6 @@ private fun ContactPickerDialog(
     onDone: (Set<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // working copy — normalised to last-10-digit strings for matching
     var selectedNumbers by remember {
         mutableStateOf(initialSelectedNumbers.map { it.filter(Char::isDigit).takeLast(10) }.toSet())
     }
@@ -465,7 +687,6 @@ private fun ContactPickerDialog(
                             }
                         )
 
-                        // Search bar
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -569,7 +790,6 @@ private fun ContactPickerDialog(
                         }
                     }
 
-                    // ── Floating Done pill ─────────────────────────────────
                     AnimatedVisibility(
                         visible = selectedContactCount > 0,
                         enter = slideInVertically { it } + fadeIn(tween(200)),
@@ -609,463 +829,3 @@ private fun ContactPickerDialog(
         }
     }
 }
-
-// ─── PIN Setup Dialog ────────────────────────────────────────────────────────
-
-@Composable
-fun PinDialogContent(
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-    title: String = "Set PIN",
-    isVerify: Boolean = false,
-    expectedPin: String = "",
-    showCloseButton: Boolean = true
-) {
-    var phase by remember { mutableIntStateOf(if (isVerify) 2 else 0) }
-    var pin by remember { mutableStateOf("") }
-    var firstPin by remember { mutableStateOf("") }
-    var shakeState by remember { mutableIntStateOf(0) }
-    val context = LocalContext.current
-
-    val shake by animateDpAsState(
-        targetValue = 0.dp,
-        animationSpec = keyframes {
-            durationMillis = 400
-            0.dp at 0; (-12).dp at 60; 12.dp at 120; (-8).dp at 200; 8.dp at 280; 0.dp at 400
-        },
-        label = "shake",
-        finishedListener = { shakeState = 0 }
-    )
-
-    fun vibError() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(80, 180))
-            } else {
-                @Suppress("DEPRECATION")
-                (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
-                    .vibrate(VibrationEffect.createOneShot(80, 180))
-            }
-        } catch (_: Exception) {}
-    }
-
-    fun vibSuccess() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(40, 120))
-            } else {
-                @Suppress("DEPRECATION")
-                (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
-                    .vibrate(VibrationEffect.createOneShot(40, 120))
-            }
-        } catch (_: Exception) {}
-    }
-
-    fun onDigit(d: String) { if (pin.length < 12) pin += d }
-    fun onBackspace() { if (pin.isNotEmpty()) pin = pin.dropLast(1) }
-    fun onSubmit() {
-        when {
-            pin.length < 4 -> { shakeState++; vibError() }
-            isVerify -> {
-                if (pin == expectedPin) { vibSuccess(); onConfirm(pin) }
-                else { pin = ""; shakeState++; vibError() }
-            }
-            phase == 0 -> { firstPin = pin; pin = ""; phase = 1 }
-            phase == 1 -> {
-                if (pin == firstPin) { vibSuccess(); onConfirm(pin) }
-                else { pin = ""; firstPin = ""; phase = 0; shakeState++; vibError() }
-            }
-        }
-    }
-
-    Column(
-        Modifier.padding(horizontal = 20.dp, vertical = 24.dp).fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(0.dp)
-    ) {
-        // ── Header ──────────────────────────────────────────────────────────
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-                Column {
-                    Text(
-                        text = when {
-                            isVerify -> title
-                            phase == 0 -> "Set PIN"
-                            else -> "Confirm PIN"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when {
-                            isVerify -> "Enter your PIN to verify"
-                            phase == 0 -> "At least 4 digits"
-                            else -> "Re-enter to confirm"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (showCloseButton) {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // ── PIN dots ────────────────────────────────────────────────────────
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.offset(x = if (shakeState > 0) shake else 0.dp)
-        ) {
-            val maxDots = pin.length.coerceAtLeast(4).coerceAtMost(12)
-            repeat(maxDots) { i ->
-                val filled = i < pin.length
-                val dotScale by animateFloatAsState(
-                    targetValue = if (filled) 1f else 0.4f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "dot$i"
-                )
-                val dotColor by animateColorAsState(
-                    targetValue = if (filled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outlineVariant,
-                    animationSpec = tween(150),
-                    label = "dotColor$i"
-                )
-                Box(
-                    Modifier
-                        .size(20.dp)
-                        .scale(dotScale)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(44.dp))
-
-        // ── Numpad ──────────────────────────────────────────────────────────
-        PinNumpad(
-            onDigit = ::onDigit,
-            onBackspace = ::onBackspace,
-            onSubmit = ::onSubmit,
-            onDismiss = onDismiss
-        )
-    }
-}
-
-@Composable
-fun PinSetupDialog(
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-    title: String = "Set PIN",
-    isVerify: Boolean = false,
-    expectedPin: String = "",
-    showCloseButton: Boolean = true
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(
-            dismissOnBackPress = showCloseButton,
-            dismissOnClickOutside = showCloseButton
-        )
-    ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        ) {
-            PinDialogContent(
-                onConfirm = onConfirm,
-                onDismiss = onDismiss,
-                title = title,
-                isVerify = isVerify,
-                expectedPin = expectedPin,
-                showCloseButton = showCloseButton
-            )
-        }
-    }
-}
-
-@Composable
-private fun PinNumpad(
-    onDigit: (String) -> Unit,
-    onBackspace: () -> Unit,
-    onSubmit: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val keys = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("⌫", "0", "→")
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        keys.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                row.forEach { key ->
-                    val interaction = remember { MutableInteractionSource() }
-                    val isPressed by interaction.collectIsPressedAsState()
-                    val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.85f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "ks_$key"
-                    )
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when (key) {
-                            "⌫" -> Surface(
-                                onClick = onBackspace,
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(64.dp).scale(scale),
-                                interactionSource = interaction
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.Backspace,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(22.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                            "→" -> Surface(
-                                onClick = onSubmit,
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(64.dp).scale(scale),
-                                interactionSource = interaction
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Confirm",
-                                        modifier = Modifier.size(24.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            }
-                            else -> Surface(
-                                onClick = { onDigit(key) },
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(64.dp).scale(scale),
-                                interactionSource = interaction
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = key,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ─── Password Setup Dialog ───────────────────────────────────────────────────
-
-@Composable
-fun PasswordDialogContent(
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-    title: String = "Set Password",
-    isVerify: Boolean = false,
-    expectedPassword: String = "",
-    showCloseButton: Boolean = true
-) {
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-    var showConfirm by remember { mutableStateOf(false) }
-    var errorText by remember { mutableStateOf("") }
-
-    Column(
-        Modifier.padding(24.dp).fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Key,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-                Column {
-                    Text(
-                        text = if (isVerify) title else "Set Password",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = if (isVerify) "Enter your password to verify" else "Letters, numbers & symbols",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (showCloseButton) {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it; errorText = "" },
-            label = { Text(if (isVerify) "Password" else "Enter Password") },
-            singleLine = true,
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = {
-                IconButton(onClick = { showPassword = !showPassword }) {
-                    Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            isError = errorText.isNotEmpty()
-        )
-
-        if (!isVerify) {
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it; errorText = "" },
-                label = { Text("Confirm Password") },
-                singleLine = true,
-                visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { showConfirm = !showConfirm }) {
-                        Icon(if (showConfirm) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                isError = errorText.isNotEmpty()
-            )
-        }
-
-        AnimatedVisibility(visible = errorText.isNotEmpty()) {
-            Text(errorText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (showCloseButton) {
-                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
-            }
-            Button(
-                onClick = {
-                    when {
-                        isVerify -> {
-                            if (password == expectedPassword) onConfirm(password)
-                            else errorText = "Incorrect password"
-                        }
-                        password.length < 4 -> errorText = "Password must be at least 4 characters"
-                        password != confirmPassword -> errorText = "Passwords don't match"
-                        else -> onConfirm(password)
-                    }
-                },
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Confirm", fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-@Composable
-fun PasswordSetupDialog(
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-    title: String = "Set Password",
-    isVerify: Boolean = false,
-    expectedPassword: String = "",
-    showCloseButton: Boolean = true
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(
-            dismissOnBackPress = showCloseButton,
-            dismissOnClickOutside = showCloseButton
-        )
-    ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        ) {
-            PasswordDialogContent(
-                onConfirm = onConfirm,
-                onDismiss = onDismiss,
-                title = title,
-                isVerify = isVerify,
-                expectedPassword = expectedPassword,
-                showCloseButton = showCloseButton
-            )
-        }
-    }
-}
-

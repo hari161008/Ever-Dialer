@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -1776,9 +1777,11 @@ fun DialPadContent(
                     val keyHeight = calculatedKeyH.dp
                     val scaleFactor = (calculatedKeyH / 46f).coerceIn(0.75f, 1.15f)
 
-                    val isCircleButtons = remember(settingsState) {
-                        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+                    val buttonStyle = remember(settingsState) {
+                        prefs.getDialpadButtonStyle()
                     }
+                    val isCircleButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE
+                    val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
 
                     // 3 columns: 2 horizontal gaps
                     val colSpacing: Dp = if (isCircleButtons) {
@@ -2388,9 +2391,11 @@ fun DialPadContent(
         ) {
             val availableWidth = maxWidth.value
             val availableRowWidth = (availableWidth - 12f).coerceAtLeast(160f)
-            val isCircleButtons = remember(settingsState) {
-                prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+            val buttonStyle = remember(settingsState) {
+                prefs.getDialpadButtonStyle()
             }
+            val isCircleButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE
+            val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
             val heightScalePref = remember(settingsState) {
                 prefs.getFloat(PreferenceManager.KEY_DIALPAD_HEIGHT_SCALE, 1.0f).coerceIn(0.80f, 1.30f)
             }
@@ -2419,7 +2424,7 @@ fun DialPadContent(
 
             // Dynamic key width for 3 keys in a row
             val maxAllowedKeyW = ((availableRowWidth - standardKeySpacing.value * 2f) / 3f).coerceAtLeast(40f).dp
-            val standardKeyWidth: Dp = (maxAllowedKeyW * 0.90f).coerceIn(80.dp, 112.dp)
+            val standardKeyWidth: Dp = if (isGridButtons) (availableRowWidth / 3f).dp else (maxAllowedKeyW * 0.90f).coerceIn(80.dp, 112.dp)
 
             // For circle buttons: balanced circular touch targets
             val circleSpacingV: Dp = ((8.dp * scaleFactor).coerceIn(6.dp, 10.dp) * heightScalePref)
@@ -2431,11 +2436,11 @@ fun DialPadContent(
                 (remainingForGaps / 2f).coerceIn(16f, 32f).dp
             }
 
-            val effectiveKeySpacingV: Dp = if (isCircleButtons) circleSpacingV else standardKeySpacing
-            val effectiveKeySpacingH: Dp = if (isCircleButtons) circleSpacingH else standardKeySpacing
+            val effectiveKeySpacingV: Dp = if (isGridButtons) 0.dp else if (isCircleButtons) circleSpacingV else standardKeySpacing
+            val effectiveKeySpacingH: Dp = if (isGridButtons) 0.dp else if (isCircleButtons) circleSpacingH else standardKeySpacing
             val keyWidth: Dp = if (isCircleButtons) circleDiameter else standardKeyWidth
             val keyHeight: Dp = if (isCircleButtons) circleDiameter else baseKeyHeight
-            val callH: Dp = keyHeight
+            val callH: Dp = if (isCircleButtons || isGridButtons) minOf(keyWidth, keyHeight) else keyHeight
 
             // Digit row total width
             val digitRowWidth = keyWidth * 3 + effectiveKeySpacingH * 2
@@ -2456,8 +2461,9 @@ fun DialPadContent(
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(32.dp),
-            color = if (hasCustomBg) {
+            shape = if (isGridButtons) RectangleShape else RoundedCornerShape(32.dp),
+            color = if (isGridButtons && hasCustomBg) Color.Transparent
+            else if (hasCustomBg) {
                 if (isDark) Color.Black.copy(alpha = if (isBrightBg) 0.50f else 0.35f)
                 else Color.White.copy(alpha = if (isBrightBg) 0.60f else 0.45f)
             } else MaterialTheme.colorScheme.surfaceContainerLow
@@ -2627,41 +2633,102 @@ fun DialPadContent(
                         )
                     }
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
-                    ) {
-                        keys.forEach { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                row.forEach { key ->
-                                    DialPadKey(
-                                        number = key,
-                                        letters = subKeys[key] ?: "",
-                                        soundPool = soundPool,
-                                        context = context,
-                                        onClick = { digit ->
-                                            insertAtCursor(digit)
-                                        },
-                                        onLongClick = when (key) {
-                                            "0" -> ({ insertAtCursor("+") })
-                                            "1", "2", "3", "4", "5", "6", "7", "8", "9" -> ({ handleSpeedDial(key) })
-                                            else -> null
-                                        },
-                                        overrideWidth = keyWidth,
-                                        overrideHeight = keyHeight,
-                                        scaleFactor = scaleFactor,
-                                        hasCustomBg = hasCustomBg,
-                                        isBrightBg = isBrightBg,
-                                        liquidGlassBackdrop = if (needDialpadBackdrop) dialpadBackdrop else null,
-                                        liquidGlassEnabled = lgDialpadEnabled,
-                                        blurEnabled = blurDialpadEnabled,
-                                        lgConfig = lgDialpadConfig,
-                                        blurConfig = blurDialpadConfig
-                                    )
+                    val gridDividerColor = if (!isDark) Color(0xFFE2E5EA) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (hasCustomBg) 0.20f else 0.35f)
+
+                    if (isGridButtons) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                            keys.forEachIndexed { rowIndex, row ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(baseKeyHeight),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    row.forEachIndexed { colIndex, key ->
+                                        if (colIndex > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(0.5.dp)
+                                                    .fillMaxHeight()
+                                                    .background(gridDividerColor)
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            DialPadKey(
+                                                number = key,
+                                                letters = subKeys[key] ?: "",
+                                                soundPool = soundPool,
+                                                context = context,
+                                                onClick = { digit -> insertAtCursor(digit) },
+                                                onLongClick = when (key) {
+                                                    "0" -> ({ insertAtCursor("+") })
+                                                    "1", "2", "3", "4", "5", "6", "7", "8", "9" -> ({ handleSpeedDial(key) })
+                                                    else -> null
+                                                },
+                                                overrideWidth = null,
+                                                overrideHeight = baseKeyHeight,
+                                                scaleFactor = scaleFactor,
+                                                hasCustomBg = hasCustomBg,
+                                                isBrightBg = isBrightBg,
+                                                liquidGlassBackdrop = if (needDialpadBackdrop) dialpadBackdrop else null,
+                                                liquidGlassEnabled = lgDialpadEnabled,
+                                                blurEnabled = blurDialpadEnabled,
+                                                lgConfig = lgDialpadConfig,
+                                                blurConfig = blurDialpadConfig
+                                            )
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(effectiveKeySpacingV)
+                        ) {
+                            keys.forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    row.forEach { key ->
+                                        DialPadKey(
+                                            number = key,
+                                            letters = subKeys[key] ?: "",
+                                            soundPool = soundPool,
+                                            context = context,
+                                            onClick = { digit ->
+                                                insertAtCursor(digit)
+                                            },
+                                            onLongClick = when (key) {
+                                                "0" -> ({ insertAtCursor("+") })
+                                                "1", "2", "3", "4", "5", "6", "7", "8", "9" -> ({ handleSpeedDial(key) })
+                                                else -> null
+                                            },
+                                            overrideWidth = keyWidth,
+                                            overrideHeight = keyHeight,
+                                            scaleFactor = scaleFactor,
+                                            hasCustomBg = hasCustomBg,
+                                            isBrightBg = isBrightBg,
+                                            liquidGlassBackdrop = if (needDialpadBackdrop) dialpadBackdrop else null,
+                                            liquidGlassEnabled = lgDialpadEnabled,
+                                            blurEnabled = blurDialpadEnabled,
+                                            lgConfig = lgDialpadConfig,
+                                            blurConfig = blurDialpadConfig
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2672,7 +2739,7 @@ fun DialPadContent(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(simRowSpacingH, Alignment.CenterHorizontally)
+                        horizontalArrangement = if (isGridButtons) Arrangement.SpaceEvenly else Arrangement.spacedBy(simRowSpacingH, Alignment.CenterHorizontally)
                     ) {
                         DialerActionExpressive(
                             onClick = {
@@ -2680,8 +2747,9 @@ fun DialPadContent(
                             },
                             icon = Icons.Default.PersonAdd,
                             contentDescription = "Add Contact",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
+                            containerColor = if (isGridButtons) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = if (isGridButtons) (if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface) else MaterialTheme.colorScheme.onSurface,
+                            modifier = if (isGridButtons) Modifier.size(effectiveSimCallH) else Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true
                         )
 
@@ -2703,7 +2771,7 @@ fun DialPadContent(
                             containerColor = sim1Color,
                             customColor = sim1Color,
                             contentColor = Color.White,
-                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
+                            modifier = if (isGridButtons) Modifier.size(effectiveSimCallH) else Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
@@ -2729,7 +2797,7 @@ fun DialPadContent(
                             containerColor = sim2Color,
                             customColor = sim2Color,
                             contentColor = Color.White,
-                            modifier = Modifier.width(simBtnW).height(effectiveSimCallH),
+                            modifier = if (isGridButtons) Modifier.size(effectiveSimCallH) else Modifier.width(simBtnW).height(effectiveSimCallH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
@@ -2737,13 +2805,25 @@ fun DialPadContent(
                             isCallButton = true
                         )
 
-                        Spacer(modifier = Modifier.width(simBtnW))
+                        if (isGridButtons) {
+                            DialerActionExpressive(
+                                onClick = { showOverflowMenu = true },
+                                icon = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                containerColor = Color.Transparent,
+                                contentColor = if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(effectiveSimCallH),
+                                isLarge = true
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(simBtnW))
+                        }
                     }
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally)
+                        horizontalArrangement = if (isGridButtons) Arrangement.SpaceEvenly else Arrangement.spacedBy(effectiveKeySpacingH, Alignment.CenterHorizontally)
                     ) {
                         DialerActionExpressive(
                             onClick = {
@@ -2751,8 +2831,9 @@ fun DialPadContent(
                             },
                             icon = Icons.Default.PersonAdd,
                             contentDescription = "Add Contact",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.width(keyWidth).height(callH),
+                            containerColor = if (isGridButtons) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = if (isGridButtons) (if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface) else MaterialTheme.colorScheme.onSurface,
+                            modifier = if (isGridButtons) Modifier.size(callH) else Modifier.width(keyWidth).height(callH),
                             isLarge = true
                         )
 
@@ -2770,9 +2851,9 @@ fun DialPadContent(
                             onLongClick = if (number.isNotEmpty()) ({ showAppPicker = true }) else null,
                             icon = Icons.Default.Call,
                             contentDescription = "Call",
-                            containerColor = Color(0xFF34A853),
+                            containerColor = if (isGridButtons && hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.35f)) else Color(0xFF34A853),
                             contentColor = Color.White,
-                            modifier = Modifier.width(keyWidth).height(callH),
+                            modifier = if (isGridButtons) Modifier.size(callH) else Modifier.width(keyWidth).height(callH),
                             isLarge = true,
                             liquidGlassBackdrop = dialpadBackdrop,
                             liquidGlassEnabled = lgDialpadEnabled,
@@ -2780,7 +2861,19 @@ fun DialPadContent(
                             isCallButton = true
                         )
 
-                        Spacer(modifier = Modifier.width(keyWidth))
+                        if (isGridButtons) {
+                            DialerActionExpressive(
+                                onClick = { showOverflowMenu = true },
+                                icon = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                containerColor = Color.Transparent,
+                                contentColor = if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(callH),
+                                isLarge = true
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(keyWidth))
+                        }
                     }
                 }
                 }
@@ -2931,10 +3024,14 @@ fun DialerActionExpressive(
 
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
-    val isCircleButtons = remember(settingsState) {
-        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    val buttonStyle = remember(settingsState) {
+        prefs.getDialpadButtonStyle()
     }
-    val buttonShape = if (isCircleButtons) {
+    val isCircleButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE
+    val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
+    val buttonShape = if (isCircleButtons || (isGridButtons && isCallButton)) {
+        CircleShape
+    } else if (isGridButtons) {
         CircleShape
     } else if (isExpressive) {
         if (isCallButton) {
@@ -3087,9 +3184,11 @@ fun DialPadKey(
 
     val keyWidth = overrideWidth ?: if (compact) 82.dp else 100.dp
     val keyHeight = overrideHeight ?: if (compact) 52.dp else 68.dp
-    val isCircleButtons = remember(settingsState) {
-        prefs.getBoolean(PreferenceManager.KEY_DIALPAD_CIRCLE_BUTTONS, false)
+    val buttonStyle = remember(settingsState) {
+        prefs.getDialpadButtonStyle()
     }
+    val isCircleButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_CIRCLE
+    val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
     val buttonWidth = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyWidth
     val buttonHeight = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyHeight
     val isStarKey = number == "*"
@@ -3101,7 +3200,9 @@ fun DialPadKey(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "ButtonShapeAnimation"
     )
-    val buttonShape = if (isCircleButtons) {
+    val buttonShape = if (isGridButtons) {
+        RectangleShape
+    } else if (isCircleButtons) {
         CircleShape
     } else if (com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()) {
         if (isVisuallyPressed) com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.Cookie4Sided.toShape()
@@ -3110,7 +3211,7 @@ fun DialPadKey(
         RoundedCornerShape(cornerRadius)
     }
     val scale by animateFloatAsState(
-        targetValue = if (isVisuallyPressed) 0.88f else 1f,
+        targetValue = if (isGridButtons) 1f else (if (isVisuallyPressed) 0.88f else 1f),
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "DialKeyScale"
     )
@@ -3121,7 +3222,9 @@ fun DialPadKey(
         MaterialTheme.colorScheme.primaryContainer
     }
 
-    val restingBgColor = if (hasCustomBg) {
+    val restingBgColor = if (isGridButtons) {
+        Color.Transparent
+    } else if (hasCustomBg) {
         if (isDark) {
             baseContainer
         } else if (isBrightBg) {
@@ -3134,7 +3237,13 @@ fun DialPadKey(
         baseContainer
     }
 
-    val targetBgColor = if (isVisuallyPressed) MaterialTheme.colorScheme.primary else restingBgColor
+    val targetBgColor = if (isVisuallyPressed) {
+        if (isGridButtons) {
+            if (!isDark) Color(0xFFF2F3F5).copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+    } else restingBgColor
     val bgColor by animateColorAsState(targetBgColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyColor")
 
     val buttonBgLuminance = remember(restingBgColor) {
@@ -3145,8 +3254,15 @@ fun DialPadKey(
     val pressedTextColor = if (isPrimaryBright) Color(0xFF1C1B1F) else Color.White
 
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
-    val restingMainTextColor = remember(restingBgColor, onPrimaryContainer) {
-        if (buttonBgLuminance > 0.45) {
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val restingMainTextColor = remember(restingBgColor, onPrimaryContainer, onSurfaceColor, hasCustomBg, isGridButtons, isDark, isBrightBg) {
+        if (isGridButtons) {
+            if (hasCustomBg) {
+                if (isBrightBg) Color(0xFF1A1A1C) else Color.White
+            } else {
+                if (isDark) onSurfaceColor else Color(0xFF1A1A1C)
+            }
+        } else if (buttonBgLuminance > 0.45) {
             if (androidx.core.graphics.ColorUtils.calculateLuminance(onPrimaryContainer.toArgb()) < 0.45) onPrimaryContainer
             else Color(0xFF1C1B1F)
         } else {
@@ -3154,7 +3270,7 @@ fun DialPadKey(
             else Color.White
         }
     }
-    val targetMainTextColor = if (isVisuallyPressed) pressedTextColor else restingMainTextColor
+    val targetMainTextColor = if (isVisuallyPressed) (if (isGridButtons) restingMainTextColor else pressedTextColor) else restingMainTextColor
     val mainTextColor by animateColorAsState(targetMainTextColor, spring(stiffness = Spring.StiffnessMedium), "DialKeyTextColor")
 
     val restingSubTextColor = remember(restingMainTextColor) {
@@ -3170,13 +3286,17 @@ fun DialPadKey(
 
     // Base font sizes in sp - numbers font size safely increased alone
     val baseMainSize = if (isStarKey) {
-        if (isCircleButtons) {
+        if (isGridButtons) {
+            if (compact) 26f else 32f
+        } else if (isCircleButtons) {
             if (compact) 26f else 32f
         } else {
             if (compact) 23f else 28f
         }
     } else {
-        if (isCircleButtons) {
+        if (isGridButtons) {
+            if (compact) 26f else 32f
+        } else if (isCircleButtons) {
             if (compact) 23f else 28f
         } else {
             if (compact) 20f else 25f
@@ -3193,12 +3313,12 @@ fun DialPadKey(
     val maxContentHeight = (buttonHeightVal - 14f).coerceAtLeast(14f)
 
     // Gap between digit and letters (0 in compact to save space, 1dp in normal)
-    val gapHeight = if (hasLetters) (if (compact) 0f else 1f) else 0f
+    val gapHeight = if (hasLetters && !isGridButtons) (if (compact) 0f else 1f) else 0f
 
     // Total raw text height scaled by scaleFactor and user appearance font settings
     val targetMainH = baseMainSize * scaleFactor * userFontFactor
     val targetSubH = baseSubSize * scaleFactor * userFontFactor
-    val renderedTotalH = (targetMainH + (if (hasLetters) targetSubH else 0f)) * currentFontScale + gapHeight
+    val renderedTotalH = (targetMainH + (if (hasLetters && !isGridButtons) targetSubH else 0f)) * currentFontScale + gapHeight
 
     // If rendered text exceeds safe button height budget, scale down smoothly so it NEVER touches or crosses the button edge
     val fitRatio = if (renderedTotalH > maxContentHeight) {
@@ -3221,10 +3341,7 @@ fun DialPadKey(
 
     val useLiquidGlass = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
     val useBackdropBlur = blurEnabled && !useLiquidGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liquidGlassBackdrop != null
-    val btnBorder = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
-        0.5.dp,
-        if (buttonBgLuminance > 0.45) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.15f)
-    ) else null
+    val btnBorder: androidx.compose.foundation.BorderStroke? = null
 
     val wrappedOnClick = {
         triggerTapPulse()
@@ -3262,7 +3379,7 @@ fun DialPadKey(
                 maxLines = 1,
                 softWrap = false
             )
-            if (hasLetters) {
+            if (hasLetters && !isGridButtons) {
                 if (gapHeight > 0f) {
                     Spacer(modifier = Modifier.height(gapHeight.dp))
                 }
@@ -3287,17 +3404,19 @@ fun DialPadKey(
         }
     }
 
+    val keyBoxModifier = if (isGridButtons && overrideWidth == null) Modifier.fillMaxSize() else Modifier.size(
+        width = if (isCircleButtons) buttonWidth else keyWidth,
+        height = if (isCircleButtons) buttonHeight else keyHeight
+    )
+    val btnSizeModifier = if (isGridButtons && overrideWidth == null) Modifier.fillMaxSize() else Modifier.size(width = buttonWidth, height = buttonHeight)
+
     Box(
-        modifier = Modifier.size(
-            width = if (isCircleButtons) buttonWidth else keyWidth,
-            height = if (isCircleButtons) buttonHeight else keyHeight
-        ),
+        modifier = keyBoxModifier,
         contentAlignment = Alignment.Center
     ) {
         if (useLiquidGlass && liquidGlassBackdrop != null) {
             Box(
-                modifier = Modifier
-                    .size(width = buttonWidth, height = buttonHeight)
+                modifier = btnSizeModifier
                     .scale(scale)
                     .drawBackdrop(
                         backdrop = liquidGlassBackdrop,
@@ -3334,8 +3453,7 @@ fun DialPadKey(
             }
         } else if (useBackdropBlur && liquidGlassBackdrop != null) {
             Box(
-                modifier = Modifier
-                    .size(width = buttonWidth, height = buttonHeight)
+                modifier = btnSizeModifier
                     .scale(scale)
                     .drawBackdrop(
                         backdrop = liquidGlassBackdrop,
@@ -3366,8 +3484,7 @@ fun DialPadKey(
             }
         } else {
             Surface(
-                modifier = Modifier
-                    .size(width = buttonWidth, height = buttonHeight)
+                modifier = btnSizeModifier
                     .scale(scale)
                     .combinedClickable(
                         interactionSource = interactionSource,

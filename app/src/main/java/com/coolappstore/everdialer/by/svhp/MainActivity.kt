@@ -941,7 +941,6 @@ class MainActivity : FragmentActivity() {
                     // ── Biometric overlay (above blur, inside Box) ─────────
                     val showAuthOverlay = !isAppUnlocked || callAuthRequired
                     if (showAuthOverlay) {
-                        val activity = this@MainActivity
                         LaunchedEffect(biometricType, callAuthRequired) {
                             if (biometricType.isEmpty()) {
                                 isAppUnlocked = true
@@ -949,62 +948,13 @@ class MainActivity : FragmentActivity() {
                                 val action = pendingDirectCallAction
                                 pendingDirectCallAction = null
                                 action?.invoke()
-                                return@LaunchedEffect
-                            }
-                            if (biometricType == "system") {
-                                val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
-                                val prompt = androidx.biometric.BiometricPrompt(
-                                    activity, executor,
-                                    object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                                        override fun onAuthenticationSucceeded(r: androidx.biometric.BiometricPrompt.AuthenticationResult) {
-                                            isAppUnlocked = true
-                                            callAuthRequired = false
-                                            val action = pendingDirectCallAction
-                                            pendingDirectCallAction = null
-                                            action?.invoke()
-                                        }
-                                        override fun onAuthenticationError(code: Int, msg: CharSequence) {
-                                            pendingDirectCallAction = null
-                                            callAuthRequired = false
-                                            finish()
-                                        }
-                                        override fun onAuthenticationFailed() {}
-                                    }
-                                )
-                                prompt.authenticate(
-                                    androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                                        .setTitle("Ever Dialer")
-                                        .setSubtitle(if (callAuthRequired) "Verify your identity to place call" else "Verify your identity to continue")
-                                        .setNegativeButtonText("Cancel")
-                                        .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
-                                        .build()
-                                )
                             }
                         }
-                        if (biometricType == "pin") {
-                            com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
-                                title = if (callAuthRequired) "Verify PIN to Call" else "Enter PIN",
-                                isVerify = true,
-                                expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
-                                onConfirm = {
-                                    isAppUnlocked = true
-                                    callAuthRequired = false
-                                    val action = pendingDirectCallAction
-                                    pendingDirectCallAction = null
-                                    action?.invoke()
-                                },
-                                onDismiss = {
-                                    pendingDirectCallAction = null
-                                    callAuthRequired = false
-                                    finish()
-                                }
-                            )
-                        } else if (biometricType == "password") {
-                            com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
-                                title = if (callAuthRequired) "Verify Password to Call" else "Enter Password",
-                                isVerify = true,
-                                expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
-                                onConfirm = {
+                        if (biometricType.isNotEmpty()) {
+                            com.coolappstore.everdialer.by.svhp.view.screen.auth.AuthLockScreen(
+                                title = if (callAuthRequired) "Place Call" else "Ever Dialer",
+                                subtitle = if (callAuthRequired) "Verify your identity to place call" else "Verify your identity to continue",
+                                onSuccess = {
                                     isAppUnlocked = true
                                     callAuthRequired = false
                                     val action = pendingDirectCallAction

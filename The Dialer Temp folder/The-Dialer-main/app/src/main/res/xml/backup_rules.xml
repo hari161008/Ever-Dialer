@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+         Bug fix: an empty <full-backup-content> backs up EVERYTHING by default, including the
+         call recorder's private-storage folder (files/call_recordings/). That meant a recording
+         the user had deleted could come back from a stale backup after uninstalling/reinstalling
+         the app (or restoring on a new device), making deletion look broken/unreliable. Excluded
+         explicitly so recordings only ever exist where the user currently has them.
+    -->
+    <exclude domain="file" path="call_recordings/" />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

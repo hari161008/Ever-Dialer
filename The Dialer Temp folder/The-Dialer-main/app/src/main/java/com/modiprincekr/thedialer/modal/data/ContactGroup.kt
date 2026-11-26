@@ -1,0 +1,13 @@
+package com.modiprincekr.thedialer.modal.data
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ContactGroup(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val contactIds: List<String> = emptyList(),
+    val accountType: String? = null,
+    val accountName: String? = null,
+    val targetLabel: String? = null
+)

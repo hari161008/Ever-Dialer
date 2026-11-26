@@ -1,0 +1,47 @@
+package com.modiprincekr.thedialer.modal.`interface`
+
+import com.modiprincekr.thedialer.modal.data.Contact
+import com.modiprincekr.thedialer.modal.data.ContactAccount
+import com.modiprincekr.thedialer.modal.data.ContactAccountInfo
+import com.modiprincekr.thedialer.modal.data.ContactSaveTarget
+
+interface IContactsRepository {
+    fun getContacts(): List<Contact>
+    fun getContacts(enabledAccountKeys: Set<String>): List<Contact>
+    fun getContactById(contactId: String): Contact?
+    fun getContactByNumber(number: String): Contact?
+    fun toggleFavorite(contactId: String, isFavorite: Boolean)
+    fun saveContact(
+        contact: Contact,
+        accountType: String? = null,
+        accountName: String? = null,
+        updateAllAccounts: Boolean = false,
+        originalContact: Contact? = null
+    )
+    fun getContactAccounts(contactId: String): List<ContactAccountInfo>
+    fun updateContactNote(contactId: String, note: String?, targetRawContactId: Long? = null, updateAllAccounts: Boolean = false, oldNote: String? = null)
+    fun deleteContact(contactId: String)
+    fun deleteRawContact(rawContactId: Long)
+    fun deletePhoneNumberFromContact(contactId: String, phoneNumber: String): Boolean
+    fun getAvailableAccounts(excludedContactIds: Set<String> = emptySet()): List<ContactAccount>
+    /** Destinations the user can save a brand-new contact to (Device, Google accounts, SIM cards, etc). */
+    fun getSaveTargets(): List<ContactSaveTarget>
+    /** Saves a contact's name + first phone number directly to a SIM card's contact storage. */
+    fun saveContactToSim(contact: Contact, simSlotIndex: Int): Boolean
+    /** Moves an existing contact to a different storage/account: creates it at the destination
+     *  and removes only the raw contact(s) tied to its current account(s), leaving any other
+     *  raw contacts merged into the same aggregate (e.g. from a different account) untouched. */
+    fun moveContact(contact: Contact, target: ContactSaveTarget): Boolean
+    /** Retrieves contact groups/labels from the system Contacts provider (Gmail, Exchange, etc.) */
+    fun getSystemContactGroups(): List<com.modiprincekr.thedialer.modal.data.ContactGroup>
+    /** Retrieves the member contact IDs for the specified system group row IDs without importing all groups */
+    fun getSystemGroupMembers(groupRowIds: Set<Long>): Map<Long, List<String>>
+    /** Returns the subset of groupRowIds that currently exist and are not deleted (DELETED = 0) in ContactsContract.Groups */
+    fun getActiveSystemGroupIds(groupRowIds: Set<Long>): Set<Long>
+    /** Finds the system group row ID for a group title and optional account */
+    fun findSystemGroupId(groupName: String, accountType: String?, accountName: String?): Long?
+    /** Creates or updates a contact group/label in the system Contacts provider with members */
+    fun saveSystemContactGroup(group: com.modiprincekr.thedialer.modal.data.ContactGroup): String?
+    /** Deletes a contact group/label and its memberships from the system Contacts provider */
+    fun deleteSystemContactGroup(groupId: String): Boolean
+}

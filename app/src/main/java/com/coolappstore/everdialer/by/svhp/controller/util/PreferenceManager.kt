@@ -117,6 +117,38 @@ class PreferenceManager(context: Context) {
         return if (mode == "specified") match else !match
     }
 
+    fun isPatternVisible(): Boolean = getBoolean(KEY_BIOMETRICS_PATTERN_VISIBLE, true)
+
+    fun isPinPadScramble(): Boolean = getBoolean(KEY_PIN_PAD_SCRAMBLE, false)
+    fun setPinPadScramble(enabled: Boolean) = setBoolean(KEY_PIN_PAD_SCRAMBLE, enabled)
+
+    fun getBiometricsBackupType(): String {
+        val stored = getString(KEY_BIOMETRICS_BACKUP_TYPE, "") ?: ""
+        if (stored == "pattern" && (getString(KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()) return "pattern"
+        if (stored == "password" && (getString(KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()) return "password"
+        if (stored == "pin" && (getString(KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()) return "pin"
+
+        if ((getString(KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()) return "pattern"
+        if ((getString(KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()) return "password"
+        if ((getString(KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()) return "pin"
+        return "pin"
+    }
+
+    fun getDialpadButtonStyle(): String {
+        val stored = getString(KEY_DIALPAD_BUTTON_STYLE, null)
+        if (!stored.isNullOrBlank()) {
+            return if (stored == "squircle") DIALPAD_BUTTON_STYLE_SQUIRCLE else stored
+        }
+        val legacyCircle = getBoolean(KEY_DIALPAD_CIRCLE_BUTTONS, false)
+        return if (legacyCircle) DIALPAD_BUTTON_STYLE_CIRCLE else DIALPAD_BUTTON_STYLE_SQUIRCLE
+    }
+
+    fun setDialpadButtonStyle(style: String) {
+        val normalized = if (style == "squircle") DIALPAD_BUTTON_STYLE_SQUIRCLE else style
+        setString(KEY_DIALPAD_BUTTON_STYLE, normalized)
+        setBoolean(KEY_DIALPAD_CIRCLE_BUTTONS, normalized == DIALPAD_BUTTON_STYLE_CIRCLE)
+    }
+
     fun getContactSimChoice(contactKey: String, fallbackNumber: String? = null): String {
         val choice = getString(KEY_CONTACT_SIM_CHOICE_PREFIX + contactKey, SIM_CHOICE_SETTINGS) ?: SIM_CHOICE_SETTINGS
         if (choice != SIM_CHOICE_SETTINGS) return choice
@@ -1032,6 +1064,10 @@ class PreferenceManager(context: Context) {
         const val KEY_BLOCK_HIDDEN          = "block_hidden_callers"
         const val KEY_OPEN_DIALPAD_DEFAULT  = "open_dialpad_default"
         const val KEY_DIALPAD_CIRCLE_BUTTONS = "dialpad_circle_buttons"
+        const val KEY_DIALPAD_BUTTON_STYLE  = "dialpad_button_style"
+        const val DIALPAD_BUTTON_STYLE_CIRCLE   = "circle"
+        const val DIALPAD_BUTTON_STYLE_SQUIRCLE = "default"
+        const val DIALPAD_BUTTON_STYLE_GRID     = "grid"
         const val KEY_HIDE_RATE_AND_REVIEW  = "hide_rate_and_review"
         const val KEY_RATE_REVIEW_HIDDEN_SECRET = "rate_review_hidden_secret"
         // Written by the bundled Ever Call Recorder module (:recorder) directly into this same
@@ -1259,10 +1295,14 @@ class PreferenceManager(context: Context) {
         const val KEY_NEW_CALL_LOGS_LOGIC      = "new_call_logs_logic"
         const val KEY_NEW_CONTACTS_LOGIC       = "new_contacts_logic"
         const val DEFAULT_TAB_ORDER            = "favorites,calls,contacts,sms,groups,recordings,notes,dialpad"
-        // Biometrics
-        const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | ""
+        // Passwords & Security / Biometrics
+        const val KEY_BIOMETRICS_TYPE          = "biometrics_type"         // "system" | "pin" | "password" | "pattern" | ""
         const val KEY_BIOMETRICS_PIN           = "biometrics_pin"
         const val KEY_BIOMETRICS_PASSWORD      = "biometrics_password"
+        const val KEY_BIOMETRICS_PATTERN       = "biometrics_pattern"
+        const val KEY_BIOMETRICS_PATTERN_VISIBLE = "biometrics_pattern_visible"
+        const val KEY_PIN_PAD_SCRAMBLE         = "pin_pad_scramble"
+        const val KEY_BIOMETRICS_BACKUP_TYPE   = "biometrics_backup_type" // "pin" | "pattern" | "password"
         const val KEY_BIOMETRICS_APP_LOCK      = "biometrics_app_lock"
         const val KEY_BIOMETRICS_CALL_LOCK     = "biometrics_call_lock"
         const val KEY_BIOMETRICS_CALL_LOCK_MODE    = "biometrics_call_lock_mode"    // "all" | "specified" | "skip_specified"

@@ -3079,70 +3079,24 @@ fun ExpressiveCallScreen(
                 }
             }
 
-        // ── Call biometric — direct prompt, no overlay ────────────────────
+        // ── Call lock — modern AuthLockScreen with smart fallback ─────────
         if (showCallBiometricUnlock && prefs != null) {
-            val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
-            val callActivity   = LocalContext.current as? FragmentActivity
-            fun onBiometricFail() {
-                showCallBiometricUnlock = false
-                pendingAction = null
-                // Don't disconnect — let the call keep ringing so the user can retry
-            }
-            when (biometricType) {
-                "system" -> {
-                    LaunchedEffect(showCallBiometricUnlock) {
-                        val activity = callActivity ?: run { onBiometricFail(); return@LaunchedEffect }
-                        val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
-                        val prompt = androidx.biometric.BiometricPrompt(
-                            activity, executor,
-                            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                                override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
-                                    callBiometricUnlocked = true
-                                    biometricGatesScreen = false
-                                    showCallBiometricUnlock = false
-                                    pendingAction?.invoke(); pendingAction = null
-                                }
-                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { onBiometricFail() }
-                                override fun onAuthenticationFailed() { /* keep prompt open */ }
-                            }
-                        )
-                        prompt.authenticate(
-                            androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                                .setTitle("Ever Dialer")
-                                .setSubtitle("Verify your identity to access this call")
-                                .setNegativeButtonText("Cancel")
-                                .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
-                                .build()
-                        )
-                    }
+            com.coolappstore.everdialer.by.svhp.view.screen.auth.AuthLockScreen(
+                title = "Ever Dialer",
+                subtitle = "Verify your identity to access this call",
+                canDismiss = !biometricGatesScreen,
+                onSuccess = {
+                    callBiometricUnlocked = true
+                    biometricGatesScreen = false
+                    showCallBiometricUnlock = false
+                    pendingAction?.invoke()
+                    pendingAction = null
+                },
+                onDismiss = {
+                    showCallBiometricUnlock = false
+                    pendingAction = null
                 }
-                "pin" -> {
-                    com.coolappstore.everdialer.by.svhp.view.screen.settings.PinSetupDialog(
-                        title = "Enter PIN", isVerify = true,
-                        expectedPin = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "",
-                        showCloseButton = !biometricGatesScreen,
-                        onConfirm = {
-                            callBiometricUnlocked = true; biometricGatesScreen = false
-                            showCallBiometricUnlock = false
-                            pendingAction?.invoke(); pendingAction = null
-                        },
-                        onDismiss = { onBiometricFail() }
-                    )
-                }
-                "password" -> {
-                    com.coolappstore.everdialer.by.svhp.view.screen.settings.PasswordSetupDialog(
-                        title = "Enter Password", isVerify = true,
-                        expectedPassword = prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "",
-                        showCloseButton = !biometricGatesScreen,
-                        onConfirm = {
-                            callBiometricUnlocked = true; biometricGatesScreen = false
-                            showCallBiometricUnlock = false
-                            pendingAction?.invoke(); pendingAction = null
-                        },
-                        onDismiss = { onBiometricFail() }
-                    )
-                }
-            }
+            )
         }
 
         // ── Auto-redial dialog ────────────────────────────────────────────────

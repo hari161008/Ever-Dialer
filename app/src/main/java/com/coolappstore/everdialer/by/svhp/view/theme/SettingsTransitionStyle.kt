@@ -76,7 +76,8 @@ val ContactDetailsSmoothEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 val ContactDetailsSmoothEaseExit = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 fun animDuration(baseMillis: Int): Int {
-    return (baseMillis * PreferenceManager.currentAnimationScale).roundToInt().coerceAtLeast(10)
+    val speed = PreferenceManager.currentAnimationScale.coerceIn(0.1f, 10.0f)
+    return (baseMillis / speed).roundToInt().coerceAtLeast(10)
 }
 
 const val SETTINGS_SCALE_ENTER_FROM = 0.88f

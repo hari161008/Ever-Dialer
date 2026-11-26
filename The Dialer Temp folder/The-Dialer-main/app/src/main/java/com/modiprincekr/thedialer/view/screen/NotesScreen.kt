@@ -1,0 +1,756 @@
+package com.modiprincekr.thedialer.view.screen
+
+import android.content.Intent
+import com.modiprincekr.thedialer.view.theme.TabTransitionStyle
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import kotlin.math.abs
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.modiprincekr.thedialer.controller.ContactsViewModel
+import com.modiprincekr.thedialer.controller.util.NoteEntry
+import com.modiprincekr.thedialer.controller.util.NoteManager
+import com.modiprincekr.thedialer.controller.util.PreferenceManager
+import com.modiprincekr.thedialer.view.components.SwipeableItemContainer
+import com.modiprincekr.thedialer.controller.util.SwipeActionHelper
+import com.modiprincekr.thedialer.view.components.RivoAvatar
+import com.modiprincekr.thedialer.view.components.RivoDropdownMenu
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.modiprincekr.thedialer.view.components.RivoDropdownMenuItem
+import com.modiprincekr.thedialer.view.components.RivoScrollAnimatedItem
+import com.modiprincekr.thedialer.view.components.ScrollHapticsEffect
+import com.modiprincekr.thedialer.view.components.TopBar
+import com.ramcosta.composedestinations.annotation.Destination
+import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.ContactScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.FavoritesScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.NotesScreenDestination
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinActivityViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Destination<RootGraph>(style = TabTransitionStyle::class)
+@Composable
+fun NotesScreen(navController: NavController, navigator: DestinationsNavigator, highlightQuery: String? = null) {
+    val context = LocalContext.current
+    val prefs = koinInject<PreferenceManager>()
+    val haptic = LocalHapticFeedback.current
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val contactsVM: ContactsViewModel = koinActivityViewModel()
+    val allContacts by contactsVM.allContacts.collectAsState()
+
+    // Build phone→photoUri lookup map
+    val phoneToPhotoUri = remember(allContacts) {
+        buildMap {
+            allContacts.forEach { c ->
+                c.phoneNumbers.forEach { num ->
+                    put(num.filter { it.isDigit() || it == '+' }, c.photoUri)
+                }
+            }
+        }
+    }
+
+    var notes by remember { mutableStateOf(NoteManager.getAllNotes(context)) }
+    // Keep the bottom pill hidden (and the in-screen search bar hidden below) only while this
+    // screen is showing one highlighted match opened from unified Search. Normal entry into this
+    // tab (tab tap, nav rail, swipe) always goes through `NavController.enterNotesTab()`, which
+    // guarantees a brand new instance of this screen with `highlightQuery = null` — so the only
+    // time this can legitimately start "true" is when Search itself navigated here with a real
+    // query. `isSearchResultView` stays independently mutable (rather than just a derived value)
+    // so the BackHandler below can clear it without needing to touch navigation/back-stack state.
+    var isSearchResultView by remember { mutableStateOf(!highlightQuery.isNullOrBlank()) }
+    val effectiveHighlightQuery = if (isSearchResultView) highlightQuery else null
+    // Set when this screen was opened by tapping a note in the unified search results — scrolls
+    // to and visually highlights the matched word/phrase within that specific note.
+    val matchedNote = remember(notes, effectiveHighlightQuery) {
+        if (effectiveHighlightQuery.isNullOrBlank()) null
+        else notes.firstOrNull {
+            it.contactName.contains(effectiveHighlightQuery, ignoreCase = true) ||
+                    it.phoneNumber.contains(effectiveHighlightQuery, ignoreCase = true) ||
+                    it.content.contains(effectiveHighlightQuery, ignoreCase = true)
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(isSearchResultView) {
+        com.modiprincekr.thedialer.view.components.NavBarVisibilityState.hideForSearchResult = isSearchResultView
+        onDispose { com.modiprincekr.thedialer.view.components.NavBarVisibilityState.hideForSearchResult = false }
+    }
+    // If this same screen instance is re-targeted with a new highlightQuery (e.g. the user opens
+    // another note straight from Search while already here), re-enter search-result mode.
+    androidx.compose.runtime.LaunchedEffect(highlightQuery) {
+        if (!highlightQuery.isNullOrBlank()) isSearchResultView = true
+    }
+
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedNotes by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showNotesSelectionMenu by remember { mutableStateOf(false) }
+    var showNotesDeleteConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedNotes = emptySet()
+    }
+
+    if (showNotesDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showNotesDeleteConfirm = false },
+            title = { Text("Delete ${selectedNotes.size} notes?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotesDeleteConfirm = false
+                        notes.filter { selectedNotes.contains(it.file.absolutePath) }.forEach { it.file.delete() }
+                        selectedNotes = emptySet(); selectionMode = false
+                        notes = NoteManager.getAllNotes(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showNotesDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
+    var selectedNote by remember { mutableStateOf<NoteEntry?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
+    var editorNote by remember { mutableStateOf<NoteEntry?>(null) }
+    var editorHighlightQuery by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var noteToDelete by remember { mutableStateOf<NoteEntry?>(null) }
+
+    fun refreshNotes() { notes = NoteManager.getAllNotes(context) }
+
+    val colorScheme = MaterialTheme.colorScheme
+    val settingsVer by prefs.settingsChanged.collectAsState(initial = 0)
+    val rightSwipeKey = remember(settingsVer) { prefs.getSwipeAction("notes", "right") }
+    val leftSwipeKey = remember(settingsVer) { prefs.getSwipeAction("notes", "left") }
+    val rightSwipeAction = remember(rightSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(rightSwipeKey, colorScheme) }
+    val leftSwipeAction = remember(leftSwipeKey, colorScheme) { SwipeActionHelper.resolveActionItem(leftSwipeKey, colorScheme) }
+
+    fun executeNoteAction(actionKey: String, note: NoteEntry) {
+        when (actionKey) {
+            "share" -> {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "Note: ${note.contactName}")
+                    putExtra(Intent.EXTRA_TEXT, note.content)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Note"))
+            }
+            "delete", "delete_call_log", "delete_contact" -> {
+                noteToDelete = note
+                showDeleteConfirm = true
+            }
+            "select" -> {
+                selectionMode = true
+                selectedNotes = setOf(note.file.absolutePath)
+            }
+            "call", "call_back" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val dialIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(note.phoneNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(dialIntent)
+                    } catch (e: Exception) {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(note.phoneNumber)}")).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                }
+            }
+            "send_text" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${Uri.encode(note.phoneNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(smsIntent)
+                    } catch (e: Exception) {}
+                }
+            }
+            "copy_number" -> {
+                if (note.phoneNumber.isNotBlank()) {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Phone Number", note.phoneNumber))
+                    android.widget.Toast.makeText(context, "Number copied", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    if (showEditor && editorNote != null) {
+        NoteEditorDialog(
+            contactName = editorNote!!.contactName,
+            phoneNumber = editorNote!!.phoneNumber,
+            highlightQuery = editorHighlightQuery,
+            onDismiss = { showEditor = false; editorNote = null; editorHighlightQuery = null; refreshNotes() }
+        )
+    }
+
+    if (showDeleteConfirm && noteToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Note") },
+            text = { Text("Delete note for ${noteToDelete!!.contactName}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    NoteManager.deleteNoteFile(noteToDelete!!.file)
+                    showDeleteConfirm = false
+                    refreshNotes()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    val pillNav = remember { prefs.getBoolean(PreferenceManager.KEY_PILL_NAV, true) }
+    val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isRtl) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull() ?: continue
+                        if (!down.pressed) continue
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        val startTime = System.currentTimeMillis()
+                        var triggered = false
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val change = event.changes.firstOrNull() ?: break
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+                            val elapsed = System.currentTimeMillis() - startTime
+                            if (!triggered && elapsed >= 150L && !change.isConsumed && abs(dx) > 700f && abs(dx) > abs(dy) * 5.5f) {
+                                triggered = true
+                                coroutineScope.launch {
+                                    com.modiprincekr.thedialer.view.components.TabNavigationHelper.navigateAdjacentTab(
+                                        navController = navController,
+                                        currentRoute = NotesScreenDestination.route,
+                                        goForward = dx < 0,
+                                        prefs = prefs,
+                                        isRtl = isRtl
+                                    )
+                                }
+                            }
+                            if (!change.pressed) break
+                        }
+                    }
+                }
+            },
+        topBar = {
+            // Same shared top bar (search pill + settings button) used on the Calls tab, so the
+            // settings button matches its size and placement exactly.
+            com.modiprincekr.thedialer.view.components.TopBar(navController, navigator)
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0)
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+            if (notes.isEmpty()) {
+                if (isLandscape && !isSearchResultView) {
+                    com.modiprincekr.thedialer.view.components.SearchBarPill(
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.Note,
+                        null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "No Notes Yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Notes taken during calls appear here",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            } else {
+                val listState = rememberLazyListState()
+                ScrollHapticsEffect(listState = listState)
+                val listHeaderOffset = if (isLandscape) 1 else 0
+                LaunchedEffect(matchedNote) {
+                    matchedNote?.let { target ->
+                        val index = notes.indexOfFirst { it.file.absolutePath == target.file.absolutePath }
+                        if (index >= 0) listState.animateScrollToItem(index + listHeaderOffset)
+                    }
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (isLandscape && !isSearchResultView) {
+                        item(key = "search_bar_pill", contentType = "searchBar") {
+                            com.modiprincekr.thedialer.view.components.SearchBarPill(
+                                navigator = navigator,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                            )
+                        }
+                    }
+                    items(notes, key = { it.file.absolutePath }) { note ->
+                        val safePhone = note.phoneNumber.filter { it.isDigit() || it == '+' }
+                        val photoUri = phoneToPhotoUri[safePhone]
+                        val isHighlighted = matchedNote?.file?.absolutePath == note.file.absolutePath
+                        RivoScrollAnimatedItem {
+                            SwipeableItemContainer(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                enabled = !selectionMode,
+                                leftAction = leftSwipeAction,
+                                rightAction = rightSwipeAction,
+                                onSwipeLeft = { executeNoteAction(leftSwipeKey, note) },
+                                onSwipeRight = { executeNoteAction(rightSwipeKey, note) }
+                            ) {
+                                NoteCard(
+                                    note = note,
+                                    photoUri = photoUri,
+                                    isSelected = selectedNotes.contains(note.file.absolutePath),
+                                    selectionMode = selectionMode,
+                                    highlightQuery = if (isHighlighted) highlightQuery else null,
+                                    onClick = {
+                                        if (selectionMode) {
+                                            val key = note.file.absolutePath
+                                            selectedNotes = if (selectedNotes.contains(key)) selectedNotes - key else selectedNotes + key
+                                        } else {
+                                            editorNote = note
+                                            editorHighlightQuery = if (isHighlighted) highlightQuery else null
+                                            showEditor = true
+                                        }
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        selectedNote = note
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(80.dp)) }
+                }
+            }
+
+            } // end Column
+
+            // Long-press context menu
+            if (selectedNote != null) {
+                RivoDropdownMenu(
+                    expanded         = true,
+                    onDismissRequest = { selectedNote = null }
+                ) {
+                    RivoDropdownMenuItem(
+                        text     = "Select",
+                        icon     = Icons.Default.CheckBox,
+                        iconTint = androidx.compose.ui.graphics.Color(0xFF9C27B0),
+                        onClick  = {
+                            selectionMode = true
+                            selectedNote?.let { selectedNotes = setOf(it.file.absolutePath) }
+                            selectedNote = null
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    RivoDropdownMenuItem(
+                        text     = "Share",
+                        icon     = Icons.Default.Share,
+                        iconTint = androidx.compose.ui.graphics.Color(0xFF2196F3),
+                        onClick  = {
+                            val note = selectedNote!!
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Note: ${note.contactName}")
+                                putExtra(Intent.EXTRA_TEXT, note.content)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share Note"))
+                            selectedNote = null
+                        }
+                    )
+                    RivoDropdownMenuItem(
+                        text          = "Delete",
+                        icon          = Icons.Default.Delete,
+                        isDestructive = true,
+                        onClick       = {
+                            noteToDelete = selectedNote
+                            selectedNote = null
+                            showDeleteConfirm = true
+                        }
+                    )
+                }
+            }
+        } // end inner Box
+    } // end Scaffold
+
+    // Selection bar at screen root level (outside Scaffold — overlays TopAppBar)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopStart)
+            .zIndex(10f)
+    ) {
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(320, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+                    exit  = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(420, easing = FastOutLinearInEasing)) + fadeOut(animationSpec = tween(380, easing = FastOutLinearInEasing))
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { selectionMode = false; selectedNotes = emptySet() }) {
+                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text(
+                                "${selectedNotes.size} selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { showNotesSelectionMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                DropdownMenu(expanded = showNotesSelectionMenu, onDismissRequest = { showNotesSelectionMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete") },
+                                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { showNotesSelectionMenu = false; if (selectedNotes.isNotEmpty()) showNotesDeleteConfirm = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share") },
+                                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                                        onClick = {
+                                            showNotesSelectionMenu = false
+                                            val text = notes.filter { selectedNotes.contains(it.file.absolutePath) }.joinToString("\n\n") { "${it.contactName}: ${it.content}" }
+                                            val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+                                            context.startActivity(Intent.createChooser(intent, "Share Notes"))
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Select All") },
+                                        leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                                        onClick = { showNotesSelectionMenu = false; selectedNotes = notes.map { it.file.absolutePath }.toSet() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    } // end outer Box
+}
+
+/** Highlights every case-insensitive occurrence of [query] with a tinted background span inside
+ *  the note editor's text field, so the word that matched a search is visible while editing —
+ *  not just on the note card in the list. Character offsets are unchanged, so identity mapping
+ *  is used. */
+private class NoteHighlightTransformation(
+    private val query: String,
+    private val highlightColor: androidx.compose.ui.graphics.Color
+) : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val annotated = androidx.compose.ui.text.buildAnnotatedString {
+            append(text.text)
+            if (query.isNotBlank()) {
+                val lowerText = text.text.lowercase()
+                val lowerQuery = query.lowercase()
+                var startIndex = 0
+                while (startIndex <= text.text.length) {
+                    val matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+                    if (matchIndex < 0) break
+                    addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            background = highlightColor.copy(alpha = 0.35f),
+                            fontWeight = FontWeight.Bold
+                        ),
+                        matchIndex,
+                        matchIndex + query.length
+                    )
+                    startIndex = matchIndex + query.length
+                }
+            }
+        }
+        return androidx.compose.ui.text.input.TransformedText(
+            annotated,
+            androidx.compose.ui.text.input.OffsetMapping.Identity
+        )
+    }
+}
+
+/** Wraps every case-insensitive occurrence of [query] in [text] with a highlighted span — used
+ *  to show at a glance which word matched when a note was opened from search results. */
+@Composable
+private fun highlightedText(text: String, query: String?): androidx.compose.ui.text.AnnotatedString {
+    if (query.isNullOrBlank()) return androidx.compose.ui.text.AnnotatedString(text)
+    return androidx.compose.ui.text.buildAnnotatedString {
+        var startIndex = 0
+        val lowerText = text.lowercase()
+        val lowerQuery = query.lowercase()
+        while (startIndex <= text.length) {
+            val matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+            if (matchIndex < 0) {
+                append(text.substring(startIndex))
+                break
+            }
+            append(text.substring(startIndex, matchIndex))
+            withStyle(
+                androidx.compose.ui.text.SpanStyle(
+                    background = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                append(text.substring(matchIndex, matchIndex + query.length))
+            }
+            startIndex = matchIndex + query.length
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NoteCard(note: NoteEntry, photoUri: String? = null, isSelected: Boolean = false, selectionMode: Boolean = false, highlightQuery: String? = null, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val dateStr = remember(note.lastModified) {
+        SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(note.lastModified))
+    }
+
+    // Briefly (and then persistently, while this note is the search-result match) tints the
+    // card so it's obvious at a glance which note matched, in addition to the inline word
+    // highlight below.
+    val cardBgColor by animateColorAsState(
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            highlightQuery != null -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = tween(200), label = "noteBg"
+    )
+    Box(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .pointerInput(onLongClick) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            onLongClick()
+                        }
+                    }
+                }
+            },
+        shape = RoundedCornerShape(20.dp),
+        color = cardBgColor
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+                exit  = fadeOut(tween(300)) + shrinkHorizontally(tween(300))
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp)
+                )
+            }
+            RivoAvatar(
+                name = note.contactName,
+                photoUri = photoUri,
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        note.contactName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        dateStr,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (note.phoneNumber.isNotEmpty()) {
+                    Text(
+                        note.phoneNumber,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = highlightedText(note.content, highlightQuery),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NoteEditorDialog(
+    contactName: String,
+    phoneNumber: String,
+    highlightQuery: String? = null,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var text by remember {
+        mutableStateOf(NoteManager.readNote(context, contactName, phoneNumber))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            NoteManager.writeNote(context, contactName, phoneNumber, text)
+            onDismiss()
+        },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        com.modiprincekr.thedialer.view.theme.ProvideScaledDensity {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            contactName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (phoneNumber.isNotEmpty()) {
+                            Text(
+                                phoneNumber,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            NoteManager.writeNote(context, contactName, phoneNumber, text)
+                            onDismiss()
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Save") }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp),
+                    placeholder = { Text("Type your note here...") },
+                    shape = RoundedCornerShape(16.dp),
+                    minLines = 8,
+                    visualTransformation = if (!highlightQuery.isNullOrBlank())
+                        NoteHighlightTransformation(highlightQuery, MaterialTheme.colorScheme.tertiary)
+                    else
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                )
+            }
+        }
+    }
+}
