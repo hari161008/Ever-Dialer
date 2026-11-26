@@ -343,14 +343,14 @@ fun DialPadScreen(
     val closeProgress = remember { Animatable(0f) }
     val openAlpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        openAlpha.animateTo(1f, tween(durationMillis = 400, easing = FastOutSlowInEasing))
+        openAlpha.animateTo(1f, tween(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(400), easing = FastOutSlowInEasing))
     }
     LaunchedEffect(dialpadClosing) {
         if (dialpadClosing && closeProgress.value < 1f && !closeProgress.isRunning) {
-            closeProgress.animateTo(1f, tween(durationMillis = 280, easing = FastOutLinearInEasing))
+            closeProgress.animateTo(1f, tween(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(280), easing = FastOutLinearInEasing))
         }
     }
-    val slowSlideSpec = tween<Float>(durationMillis = 650, easing = FastOutSlowInEasing)
+    val slowSlideSpec = tween<Float>(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(650), easing = FastOutSlowInEasing)
     // Fixed dp offsets don't clear the screen on taller devices, so the sheet gets torn down
     // mid-slide and appears to vanish abruptly. Basing it on the actual screen height (plus a
     // buffer for the status/nav bars) guarantees it's fully off-screen before removal.
@@ -2460,11 +2460,7 @@ fun DialPadContent(
             color = if (hasCustomBg) {
                 if (isDark) Color.Black.copy(alpha = if (isBrightBg) 0.50f else 0.35f)
                 else Color.White.copy(alpha = if (isBrightBg) 0.60f else 0.45f)
-            } else MaterialTheme.colorScheme.surfaceContainerLow,
-            border = if (hasCustomBg) androidx.compose.foundation.BorderStroke(
-                0.5.dp,
-                if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)
-            ) else null
+            } else MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column(
                 modifier = Modifier.padding(
@@ -2500,13 +2496,6 @@ fun DialPadContent(
                                     if (number.isNotEmpty())
                                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (hasCustomBg) 0.50f else 0.30f)
                                     else Color.Transparent
-                                )
-                                .then(
-                                    if (hasCustomBg && number.isNotEmpty()) Modifier.border(
-                                        0.5.dp,
-                                        if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f),
-                                        RoundedCornerShape(24.dp)
-                                    ) else Modifier
                                 )
                                 .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy))
                                 .combinedClickable(

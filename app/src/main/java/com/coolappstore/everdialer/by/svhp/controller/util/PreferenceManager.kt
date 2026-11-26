@@ -2,6 +2,7 @@ package com.coolappstore.everdialer.by.svhp.controller.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,11 +50,17 @@ class PreferenceManager(context: Context) {
     private val _settingsChanged = MutableStateFlow(0)
     val settingsChanged: StateFlow<Int> = _settingsChanged.asStateFlow()
 
-    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_ANIMATION_SCALE) {
+            currentAnimationScale = prefs.getFloat(KEY_ANIMATION_SCALE, DEFAULT_ANIMATION_SCALE).coerceIn(0.2f, 2.0f)
+        }
         _settingsChanged.value += 1
     }
 
-    init { prefs.registerOnSharedPreferenceChangeListener(listener) }
+    init {
+        currentAnimationScale = prefs.getFloat(KEY_ANIMATION_SCALE, DEFAULT_ANIMATION_SCALE).coerceIn(0.2f, 2.0f)
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+    }
 
     fun getBoolean(key: String, defaultValue: Boolean) = prefs.getBoolean(key, defaultValue)
     fun setBoolean(key: String, value: Boolean)        { prefs.edit().putBoolean(key, value).apply(); _settingsChanged.value += 1 }
@@ -568,6 +575,15 @@ class PreferenceManager(context: Context) {
 
     fun setAnimationStyle(style: String) =
         setString(KEY_ANIMATION_STYLE, style)
+
+    fun getAnimationScale(): Float = prefs.getFloat(KEY_ANIMATION_SCALE, DEFAULT_ANIMATION_SCALE).coerceIn(0.2f, 2.0f)
+
+    fun setAnimationScale(scale: Float) {
+        val rounded = ((scale * 10f).roundToInt() / 10f).coerceIn(0.2f, 2.0f)
+        prefs.edit().putFloat(KEY_ANIMATION_SCALE, rounded).apply()
+        currentAnimationScale = rounded
+        _settingsChanged.value += 1
+    }
 
     fun getSaturatedModesSet(): Set<String> {
         val raw = getString(KEY_SATURATED_MODES, DEFAULT_SATURATED_MODES) ?: DEFAULT_SATURATED_MODES
@@ -1175,6 +1191,13 @@ class PreferenceManager(context: Context) {
         const val ANIMATION_STYLE_ZOOM      = "zoom"
         const val ANIMATION_STYLE_CARDS     = "cards"
         const val ANIMATION_STYLE_WINDOWS_PHONE = "windows_phone"
+        const val KEY_ANIMATION_SCALE       = "animation_scale"
+        const val DEFAULT_ANIMATION_SCALE   = 1.0f
+
+        @Volatile
+        var currentAnimationScale: Float = DEFAULT_ANIMATION_SCALE
+            internal set
+
         const val KEY_MOTION_BLUR_ANIMATION = "motion_blur_animation_enabled"
         const val KEY_PREDICTIVE_BACK_GESTURE = "predictive_back_gesture_enabled"
         const val KEY_SCROLL_ANIMATION      = "scroll_animation_enabled"

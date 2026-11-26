@@ -483,7 +483,6 @@ fun DialpadCustomisationScreen(
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
                                     color = previewContainerBg,
-                                    border = previewBorder,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
@@ -511,8 +510,7 @@ fun DialpadCustomisationScreen(
                                                     .background(
                                                         if (hasCustomBg) (if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.65f))
                                                         else MaterialTheme.colorScheme.surfaceContainer
-                                                    )
-                                                    .border(0.5.dp, if (hasCustomBg) (if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.15f)) else Color.Transparent, RoundedCornerShape(16.dp)),
+                                                    ),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {

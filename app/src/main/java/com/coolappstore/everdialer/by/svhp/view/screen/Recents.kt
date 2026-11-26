@@ -148,7 +148,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             dialpadProgress.snapTo(0f)
             dialpadProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 680, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f))
+                animationSpec = tween(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(680), easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f))
             )
         } else {
             dialpadProgress.snapTo(0f)
@@ -168,7 +168,7 @@ fun RecentScreen(navController: NavController, navigator: DestinationsNavigator)
             scope.launch {
                 dialpadProgress.animateTo(
                     targetValue = 0f,
-                    animationSpec = tween(durationMillis = 520, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
+                    animationSpec = tween(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(520), easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
                 )
                 showDialpad = false
                 dialpadClosing = false

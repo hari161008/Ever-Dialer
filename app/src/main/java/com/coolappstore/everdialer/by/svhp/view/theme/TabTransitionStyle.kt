@@ -87,11 +87,11 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val fromSettings = isSettingsRoute(initialState)
         val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
         val isContact = isContactDetailsRoute(targetState.destination.route) || isContactDetailsRoute(initialState.destination.route)
-        val enterDuration = when {
+        val enterDuration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
             isChat -> CHAT_ANIM_DURATION_ENTER
             else -> SETTINGS_ANIM_DURATION_ENTER
-        }
+        })
         val enterEasing = when {
             isContact -> ContactDetailsSmoothEase
             isChat -> ChatSmoothEase
@@ -109,7 +109,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             isRecordingsFromSettings(targetState) -> {
                 if (isWindowsPhoneAnimation()) {
                     TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
-                    fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+                    fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
                         animationSpec = tween(enterDuration, easing = enterEasing),
@@ -121,7 +121,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             toSettings -> {
                 if (isWindowsPhoneAnimation()) {
                     TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
-                    fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+                    fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
                         animationSpec = tween(enterDuration, easing = enterEasing),
@@ -133,7 +133,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromSettings -> {
                 if (isWindowsPhoneAnimation()) {
                     TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
-                    fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+                    fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
                         animationSpec = tween(enterDuration, easing = enterEasing),
@@ -148,17 +148,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideInHorizontally(
-                    animationSpec = tween(550, easing = EaseOutQuart),
+                    animationSpec = tween(animDuration(550), easing = EaseOutQuart),
                     initialOffsetX = { if (goRight) (it * 0.25f).toInt() else -(it * 0.25f).toInt() }
-                ) + fadeIn(tween(400, easing = EaseOutQuart))
+                ) + fadeIn(tween(animDuration(400), easing = EaseOutQuart))
             }
             !toTab && !isLandscapeMode -> {
                 slideInHorizontally(
-                    animationSpec = tween(600, easing = EaseOutExpo),
+                    animationSpec = tween(animDuration(600), easing = EaseOutExpo),
                     initialOffsetX = { (it * 0.35f).toInt() }
-                ) + fadeIn(tween(500, easing = EaseOutExpo))
+                ) + fadeIn(tween(animDuration(500), easing = EaseOutExpo))
             }
-            else -> fadeIn(tween(450, easing = EaseOutQuart))
+            else -> fadeIn(tween(animDuration(450), easing = EaseOutQuart))
         }
     }
 
@@ -171,11 +171,11 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toSettings   = isSettingsRoute(targetState)
         val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
         val isContact = isContactDetailsRoute(targetState.destination.route) || isContactDetailsRoute(initialState.destination.route)
-        val exitDuration = when {
+        val exitDuration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
             isChat -> CHAT_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
-        }
+        })
         val exitEasing = when {
             isContact -> ContactDetailsSmoothEase
             isChat -> ChatSmoothEase
@@ -190,7 +190,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         when {
             isRecordingsFromSettings(initialState) && toSettings -> {
                 if (isWindowsPhoneAnimation()) {
-                    fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+                    fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
                 } else {
                     scaleOut(
                         animationSpec = tween(exitDuration, easing = exitEasing),
@@ -201,7 +201,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             }
             fromSettings || toSettings -> {
                 if (isWindowsPhoneAnimation()) {
-                    fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+                    fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
                 } else {
                     scaleOut(
                         animationSpec = tween(exitDuration, easing = exitEasing),
@@ -213,17 +213,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideOutHorizontally(
-                    animationSpec = tween(550, easing = EaseOutQuart),
+                    animationSpec = tween(animDuration(550), easing = EaseOutQuart),
                     targetOffsetX = { if (goRight) -(it * 0.25f).toInt() else (it * 0.25f).toInt() }
-                ) + fadeOut(tween(350, easing = EaseOutQuart))
+                ) + fadeOut(tween(animDuration(350), easing = EaseOutQuart))
             }
             !toTab && !isLandscapeMode -> {
                 slideOutHorizontally(
-                    animationSpec = tween(600, easing = EaseOutExpo),
+                    animationSpec = tween(animDuration(600), easing = EaseOutExpo),
                     targetOffsetX = { -(it * 0.12f).toInt() }
-                ) + fadeOut(tween(400, easing = EaseOutExpo))
+                ) + fadeOut(tween(animDuration(400), easing = EaseOutExpo))
             }
-            else -> fadeOut(tween(380, easing = EaseOutQuart))
+            else -> fadeOut(tween(animDuration(380), easing = EaseOutQuart))
         }
     }
 
@@ -242,12 +242,12 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toSettings   = isSettingsRoute(targetState)
         val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
         val isContact = isContactDetailsRoute(targetState.destination.route) || isContactDetailsRoute(initialState.destination.route)
-        val enterDuration = when {
+        val enterDuration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
             isChat -> CHAT_ANIM_DURATION_ENTER
             fromSettings -> SETTINGS_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_ENTER
-        }
+        })
         val enterEasing = when {
             isContact -> ContactDetailsSmoothEaseExit
             isChat -> ChatSmoothEase
@@ -263,7 +263,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             isRecordingsFromSettings(targetState) && fromSettings -> {
                 if (isWindowsPhoneAnimation()) {
                     TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
-                    fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+                    fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
                         animationSpec = tween(enterDuration, easing = enterEasing),
@@ -278,7 +278,7 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromSettings || toSettings -> {
                 if (isWindowsPhoneAnimation()) {
                     TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
-                    fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+                    fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
                 } else {
                     scaleIn(
                         animationSpec = tween(enterDuration, easing = enterEasing),
@@ -293,17 +293,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideInHorizontally(
-                    animationSpec = tween(550, easing = EaseOutQuart),
+                    animationSpec = tween(animDuration(550), easing = EaseOutQuart),
                     initialOffsetX = { if (goRight) (it * 0.25f).toInt() else -(it * 0.25f).toInt() }
-                ) + fadeIn(tween(400, easing = EaseOutQuart))
+                ) + fadeIn(tween(animDuration(400), easing = EaseOutQuart))
             }
             toTab && !isLandscapeMode -> {
                 slideInHorizontally(
-                    animationSpec = tween(600, easing = EaseOutExpo),
+                    animationSpec = tween(animDuration(600), easing = EaseOutExpo),
                     initialOffsetX = { -(it * 0.12f).toInt() }
-                ) + fadeIn(tween(450, easing = EaseOutExpo))
+                ) + fadeIn(tween(animDuration(450), easing = EaseOutExpo))
             }
-            else -> fadeIn(tween(450, easing = EaseOutQuart))
+            else -> fadeIn(tween(animDuration(450), easing = EaseOutQuart))
         }
     }
 
@@ -316,11 +316,11 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
         val toSettings   = isSettingsRoute(targetState)
         val isChat = isSmsChatRoute(targetState.destination.route) || isSmsChatRoute(initialState.destination.route)
         val isContact = isContactDetailsRoute(targetState.destination.route) || isContactDetailsRoute(initialState.destination.route)
-        val exitDuration = when {
+        val exitDuration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
             isChat -> CHAT_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
-        }
+        })
         val exitEasing = when {
             isContact -> ContactDetailsSmoothEaseExit
             isChat -> ChatSmoothEase
@@ -336,9 +336,9 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             isRecordingsFromSettings(initialState) -> {
                 if (isWindowsPhoneAnimation()) {
                     slideOutHorizontally(
-                        animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
+                        animationSpec = tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing),
                         targetOffsetX = { full -> full / 6 }
-                    ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+                    ) + fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
                 } else {
                     val fadeEasing = CubicBezierEasing(0.15f, 0.15f, 0.35f, 1f)
                     scaleOut(
@@ -351,9 +351,9 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromSettings || toSettings -> {
                 if (isWindowsPhoneAnimation()) {
                     slideOutHorizontally(
-                        animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
+                        animationSpec = tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing),
                         targetOffsetX = { full -> full / 6 }
-                    ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+                    ) + fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
                 } else {
                     scaleOut(
                         animationSpec = tween(exitDuration, easing = exitEasing),
@@ -365,17 +365,17 @@ object TabTransitionStyle : NavHostAnimatedDestinationStyle() {
             fromTab && toTab && !isLandscapeMode -> {
                 val goRight = toIdx > fromIdx
                 slideOutHorizontally(
-                    animationSpec = tween(550, easing = EaseOutQuart),
+                    animationSpec = tween(animDuration(550), easing = EaseOutQuart),
                     targetOffsetX = { if (goRight) -(it * 0.25f).toInt() else (it * 0.25f).toInt() }
-                ) + fadeOut(tween(350, easing = EaseOutQuart))
+                ) + fadeOut(tween(animDuration(350), easing = EaseOutQuart))
             }
             fromTab && !isLandscapeMode -> {
                 slideOutHorizontally(
-                    animationSpec = tween(600, easing = EaseOutExpo),
+                    animationSpec = tween(animDuration(600), easing = EaseOutExpo),
                     targetOffsetX = { (it * 0.35f).toInt() }
-                ) + fadeOut(tween(450, easing = EaseOutExpo))
+                ) + fadeOut(tween(animDuration(450), easing = EaseOutExpo))
             }
-            else -> fadeOut(tween(380, easing = EaseOutQuart))
+            else -> fadeOut(tween(animDuration(380), easing = EaseOutQuart))
         }
     }
 }

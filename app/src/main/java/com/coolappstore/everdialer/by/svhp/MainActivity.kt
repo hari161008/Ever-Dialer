@@ -655,7 +655,7 @@ class MainActivity : FragmentActivity() {
 
                     val scaffoldBgColor by animateColorAsState(
                         targetValue = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
-                        animationSpec = tween(durationMillis = 350),
+                        animationSpec = tween(durationMillis = com.coolappstore.everdialer.by.svhp.view.theme.animDuration(350)),
                         label = "scaffoldBgColor"
                     )
 

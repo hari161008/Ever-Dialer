@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.navigation.NavBackStackEntry
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
@@ -73,6 +74,10 @@ const val CONTACT_DETAILS_ANIM_DURATION_ENTER = 800
 const val CONTACT_DETAILS_ANIM_DURATION_EXIT = 800
 val ContactDetailsSmoothEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 val ContactDetailsSmoothEaseExit = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+fun animDuration(baseMillis: Int): Int {
+    return (baseMillis * PreferenceManager.currentAnimationScale).roundToInt().coerceAtLeast(10)
+}
 
 const val SETTINGS_SCALE_ENTER_FROM = 0.88f
 const val SETTINGS_SCALE_EXIT_TO = 0.96f
@@ -360,10 +365,10 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         val isContact = isContactOrChatRoute(targetState.destination.route)
         val isExpanding = isExpandingRoute(targetState)
-        val duration = when {
+        val duration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
             else -> 600
-        }
+        })
         val easing = when {
             isContact -> ContactDetailsSmoothEase
             else -> SettingsSmoothEase
@@ -389,14 +394,15 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = false, targetState.destination.route)
-            fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+            fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
         } else if (isCardsAnimation()) {
+            val cardsPushDur = animDuration(CARDS_PUSH_DURATION)
             slideInHorizontally(
                 initialOffsetX = { full -> full },
-                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+                animationSpec = tween(cardsPushDur, easing = PetalPopSlideEasing)
             ) + scaleIn(
                 initialScale = 0.91f,
-                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+                animationSpec = tween(cardsPushDur, easing = PetalPopSlideEasing)
             )
         } else {
             scaleIn(
@@ -409,10 +415,10 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         val isContact = isContactOrChatRoute(initialState.destination.route)
-        val duration = when {
+        val duration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
-        }
+        })
         val easing = when {
             isContact -> ContactDetailsSmoothEaseExit
             else -> SettingsSmoothEase
@@ -423,15 +429,16 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
         }
 
         if (isWindowsPhoneAnimation()) {
-            fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+            fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
         } else if (isCardsAnimation()) {
+            val cardsPushDur = animDuration(CARDS_PUSH_DURATION)
             slideOutHorizontally(
                 targetOffsetX = { full -> -full / 8 },
-                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing)
+                animationSpec = tween(cardsPushDur, easing = PetalPopSlideEasing)
             ) + scaleOut(
-                animationSpec = tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing),
+                animationSpec = tween(cardsPushDur, easing = PetalPopSlideEasing),
                 targetScale = 0.95f
-            ) + fadeOut(tween(CARDS_PUSH_DURATION, easing = PetalPopSlideEasing), targetAlpha = 0.70f)
+            ) + fadeOut(tween(cardsPushDur, easing = PetalPopSlideEasing), targetAlpha = 0.70f)
         } else {
             scaleOut(
                 animationSpec = tween(duration, easing = easing),
@@ -443,10 +450,10 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         val isContact = isContactOrChatRoute(targetState.destination.route)
-        val duration = when {
+        val duration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_ENTER
             else -> SETTINGS_ANIM_DURATION_EXIT
-        }
+        })
         val easing = when {
             isContact -> ContactDetailsSmoothEase
             else -> SettingsSmoothEase
@@ -463,15 +470,16 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
         if (isWindowsPhoneAnimation()) {
             TurnstileNavigationTracker.recordEnter(isBack = true, targetState.destination.route)
-            fadeIn(tween(SETTINGS_WP_ANIM_DURATION_ENTER, easing = LinearOutSlowInEasing))
+            fadeIn(tween(animDuration(SETTINGS_WP_ANIM_DURATION_ENTER), easing = LinearOutSlowInEasing))
         } else if (isCardsAnimation()) {
+            val cardsPopDur = animDuration(CARDS_POP_DURATION)
             slideInHorizontally(
                 initialOffsetX = { full -> -full / 8 },
-                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing)
+                animationSpec = tween(cardsPopDur, easing = PetalPopSlideEasing)
             ) + scaleIn(
-                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                animationSpec = tween(cardsPopDur, easing = PetalPopSlideEasing),
                 initialScale = 0.95f
-            ) + fadeIn(tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing), initialAlpha = 0.70f)
+            ) + fadeIn(tween(cardsPopDur, easing = PetalPopSlideEasing), initialAlpha = 0.70f)
         } else {
             scaleIn(
                 animationSpec = tween(duration, easing = easing),
@@ -487,10 +495,10 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         val isContact = isContactOrChatRoute(initialState.destination.route)
         val isExpanding = isExpandingRoute(initialState)
-        val duration = when {
+        val duration = animDuration(when {
             isContact -> CONTACT_DETAILS_ANIM_DURATION_EXIT
             else -> SETTINGS_ANIM_DURATION_EXIT
-        }
+        })
         val easing = when {
             isContact -> ContactDetailsSmoothEaseExit
             else -> SettingsSmoothEase
@@ -516,18 +524,19 @@ object SettingsTransitionStyle : NavHostAnimatedDestinationStyle() {
 
         if (isWindowsPhoneAnimation()) {
             slideOutHorizontally(
-                animationSpec = tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing),
+                animationSpec = tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing),
                 targetOffsetX = { full -> full / 6 }
-            ) + fadeOut(tween(SETTINGS_WP_ANIM_DURATION_EXIT, easing = FastOutLinearInEasing))
+            ) + fadeOut(tween(animDuration(SETTINGS_WP_ANIM_DURATION_EXIT), easing = FastOutLinearInEasing))
         } else if (isCardsAnimation()) {
+            val cardsPopDur = animDuration(CARDS_POP_DURATION)
             slideOutHorizontally(
-                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                animationSpec = tween(cardsPopDur, easing = PetalPopSlideEasing),
                 targetOffsetX = { full -> full }
             ) + scaleOut(
-                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                animationSpec = tween(cardsPopDur, easing = PetalPopSlideEasing),
                 targetScale = 0.85f
             ) + fadeOut(
-                animationSpec = tween(CARDS_POP_DURATION, easing = PetalPopSlideEasing),
+                animationSpec = tween(cardsPopDur, easing = PetalPopSlideEasing),
                 targetAlpha = 0.85f
             )
         } else {
@@ -602,7 +611,7 @@ fun Modifier.settingsMotionBlur(maxBlurDp: Float = 10f): Modifier {
         }
         val blurFactor by animateFloatAsState(
             targetValue = if (isSettled) 0f else 1f,
-            animationSpec = tween(durationMillis = SETTINGS_ANIM_DURATION_ENTER, easing = SettingsSmoothEase),
+            animationSpec = tween(durationMillis = animDuration(SETTINGS_ANIM_DURATION_ENTER), easing = SettingsSmoothEase),
             label = "settingsMotionBlur"
         )
         val blurRadius = (blurFactor * maxBlurDp).dp
@@ -618,7 +627,7 @@ fun Modifier.settingsMotionBlur(maxBlurDp: Float = 10f): Modifier {
         }
         val cardProgress by animateFloatAsState(
             targetValue = if (isSettled) 0f else 1f,
-            animationSpec = tween(durationMillis = CARDS_PUSH_DURATION, easing = PetalPopSlideEasing),
+            animationSpec = tween(durationMillis = animDuration(CARDS_PUSH_DURATION), easing = PetalPopSlideEasing),
             label = "cardsCornerProgress"
         )
         val corner = 32.dp * cardProgress

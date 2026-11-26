@@ -198,6 +198,7 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var materialThemeStyle  by remember { mutableStateOf(prefs.getMaterialTheme()) }
     var animationStyle      by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_ANIMATION_STYLE, PreferenceManager.ANIMATION_STYLE_ZOOM) ?: PreferenceManager.ANIMATION_STYLE_ZOOM) }
     var showAnimationStyleDialog by remember { mutableStateOf(false) }
+    var animationScale      by remember { mutableStateOf(prefs.getAnimationScale()) }
     var motionBlurAnimation by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_MOTION_BLUR_ANIMATION, false)) }
     val liquidGlass = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_LIQUID_GLASS, false) }
     val blurEffects = remember(rateReviewToggleSettingsVersion) { prefs.getBoolean(PreferenceManager.KEY_BLUR_EFFECTS, false) }
@@ -1613,6 +1614,76 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     modifier = Modifier.settingsSearchHighlight("animation_style", highlightedKey) { highlightedKey = null },
                                     onClick = { showAnimationStyleDialog = true }
                                 )
+                            }
+                            Spacer(Modifier.height(12.dp))
+
+                            // ── App Animations Scale Slider ───────────────────────
+                            RivoExpressiveCard {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .settingsSearchHighlight("animation_scale", highlightedKey) { highlightedKey = null }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(ColorTeal),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.Speed,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    "App Animations",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    "Adjust animation speed across the whole app",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        val displayScaleText = if (animationScale == 1.0f || animationScale == 2.0f) "${animationScale.toInt()}x" else String.format(java.util.Locale.US, "%.1fx", animationScale)
+                                        Text(
+                                            displayScaleText,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Spacer(Modifier.height(10.dp))
+                                    Slider(
+                                        value = animationScale,
+                                        onValueChange = {
+                                            val snapped = ((it * 10f).roundToInt() / 10f).coerceIn(0.2f, 2.0f)
+                                            animationScale = snapped
+                                            prefs.setAnimationScale(snapped)
+                                        },
+                                        valueRange = 0.2f..2.0f,
+                                        steps = 17,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                             Spacer(Modifier.height(12.dp))
                             RivoExpressiveCard {
