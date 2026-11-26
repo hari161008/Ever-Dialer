@@ -40,6 +40,19 @@ import org.koin.compose.koinInject
 
 internal const val KEY_SELECTED_APP_ICON = "selected_app_icon"
 
+@DrawableRes
+fun getAppIconPhoneVectorRes(iconKey: String): Int {
+    return when (iconKey) {
+        "phone"              -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_phone
+        "custom_phone"       -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_custom_phone
+        "radium_green_phone" -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_phone
+        "google"             -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_google
+        "nothing"            -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_nothing
+        "lineageos"          -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_lineageos
+        else                 -> com.coolappstore.everdialer.by.svhp.R.drawable.ic_notif_call_default
+    }
+}
+
 data class AppIconEntry(
     val key: String,
     val label: String,

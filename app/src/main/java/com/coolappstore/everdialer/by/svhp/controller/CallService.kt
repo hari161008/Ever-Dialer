@@ -334,13 +334,8 @@ class CallService : InCallService() {
      * variant already ships a monochrome adaptive-icon layer designed for exactly this purpose.
      */
     private fun currentCallSmallIcon(): Int {
-        return when (prefs.getString(KEY_SELECTED_APP_ICON, "default")) {
-            "phone"        -> R.drawable.ic_notif_call_phone
-            "custom_phone" -> R.drawable.ic_notif_call_custom_phone
-            "google"       -> R.drawable.ic_notif_call_google
-            "nothing"      -> R.drawable.ic_notif_call_nothing
-            else           -> R.drawable.ic_notif_call_default
-        }
+        val iconKey = prefs.getString(com.coolappstore.everdialer.by.svhp.view.screen.settings.KEY_SELECTED_APP_ICON, "default") ?: "default"
+        return com.coolappstore.everdialer.by.svhp.view.screen.settings.getAppIconPhoneVectorRes(iconKey)
     }
 
     /** Loads the contact's photo (if any) as a square bitmap suitable for a Person/large icon. */

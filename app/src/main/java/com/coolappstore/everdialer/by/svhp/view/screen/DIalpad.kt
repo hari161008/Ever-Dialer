@@ -341,6 +341,15 @@ fun DialPadScreen(
     // just translating the content) avoids the dim background cutting out abruptly the instant
     // the Dialog is torn down at the end, leaving the same (quicker) swipe-to-dismiss untouched.
     val closeProgress = remember { Animatable(0f) }
+    val openAlpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        openAlpha.animateTo(1f, tween(durationMillis = 400, easing = FastOutSlowInEasing))
+    }
+    LaunchedEffect(dialpadClosing) {
+        if (dialpadClosing && closeProgress.value < 1f && !closeProgress.isRunning) {
+            closeProgress.animateTo(1f, tween(durationMillis = 280, easing = FastOutLinearInEasing))
+        }
+    }
     val slowSlideSpec = tween<Float>(durationMillis = 650, easing = FastOutSlowInEasing)
     // Fixed dp offsets don't clear the screen on taller devices, so the sheet gets torn down
     // mid-slide and appears to vanish abruptly. Basing it on the actual screen height (plus a
@@ -462,6 +471,8 @@ fun DialPadScreen(
             }
         }
 
+        val wallpaperDisplayAlpha = (openAlpha.value * (1f - closeProgress.value)).coerceIn(0f, 1f)
+
         com.coolappstore.everdialer.by.svhp.view.theme.ProvideScaledDensity(prefs = prefs) {
             Surface(
                 modifier = Modifier
@@ -474,11 +485,19 @@ fun DialPadScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (hasCustomBg) {
                         if (bgType == "wallpaper") {
+                            // Smoothly animate the live wallpaper reveal / dismiss so there is no abrupt popping
+                            if (wallpaperDisplayAlpha < 1f) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = (1f - wallpaperDisplayAlpha).coerceIn(0f, 1f)))
+                                )
+                            }
                             if (bgDim > 0f) {
                                 Box(
                                     modifier = Modifier
                                         .matchParentSize()
-                                        .background(Color.Black.copy(alpha = bgDim))
+                                        .background(Color.Black.copy(alpha = bgDim * wallpaperDisplayAlpha))
                                 )
                             }
                         } else if (bgFile != null) {
@@ -3114,16 +3133,13 @@ fun DialPadKey(
     }
 
     val restingBgColor = if (hasCustomBg) {
-        if (isBrightBg) {
+        if (isDark) {
+            baseContainer
+        } else if (isBrightBg) {
             // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
             androidx.compose.ui.graphics.lerp(baseContainer, Color.Black, 0.16f)
         } else {
-            // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseContainer already pops out
-            if (isDark) {
-                androidx.compose.ui.graphics.lerp(baseContainer, Color.White, 0.18f)
-            } else {
-                baseContainer
-            }
+            baseContainer
         }
     } else {
         baseContainer

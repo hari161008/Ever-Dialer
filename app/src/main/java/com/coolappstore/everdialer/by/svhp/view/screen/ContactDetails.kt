@@ -42,6 +42,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -237,6 +238,12 @@ fun ContactDetailsScreen(
         if (pfpShapeSetting == "square") RoundedCornerShape((28 * (pfpSizeFraction / 0.60f).coerceIn(0.5f, 1.5f)).dp) else CircleShape
     }
     val pfpSizeDp = (400 * pfpSizeFraction).dp
+    val selectedAppIcon = remember(settingsVer) {
+        prefs.getString(com.coolappstore.everdialer.by.svhp.view.screen.settings.KEY_SELECTED_APP_ICON, "default") ?: "default"
+    }
+    val callIconRes = remember(selectedAppIcon) {
+        com.coolappstore.everdialer.by.svhp.view.screen.settings.getAppIconPhoneVectorRes(selectedAppIcon)
+    }
     val sim1Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
     val sim2Color = remember(settingsVer) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
     val hasTwoSims = remember(settingsVer) {
@@ -1325,7 +1332,7 @@ fun ContactDetailsScreen(
                                                 horizontalArrangement = Arrangement.Center,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(26.dp))
+                                                Icon(painter = painterResource(callIconRes), contentDescription = "Call", modifier = Modifier.size(26.dp))
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text("Call", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
                                             }
@@ -2636,7 +2643,7 @@ fun ContactDetailsScreen(
                                                 modifier = Modifier.size(28.dp)
                                             ) {
                                                 Icon(
-                                                    Icons.Default.Call,
+                                                    painter = painterResource(callIconRes),
                                                     contentDescription = "Call",
                                                     tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(20.dp)

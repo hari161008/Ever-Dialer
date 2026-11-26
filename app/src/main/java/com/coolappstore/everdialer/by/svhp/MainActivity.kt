@@ -653,6 +653,12 @@ class MainActivity : FragmentActivity() {
                             (isContactDetailsActive && (contactInfoBgType == "wallpaper" || contactHeaderBgType == "wallpaper")) ||
                             (isDialpadCustomiseActive && dialpadBgType == "wallpaper")
 
+                    val scaffoldBgColor by animateColorAsState(
+                        targetValue = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
+                        animationSpec = tween(durationMillis = 350),
+                        label = "scaffoldBgColor"
+                    )
+
                     android.util.Log.d("WALLPAPER_TEST", "MainActivity: route='$currentRoute', isContactDetailsActive=$isContactDetailsActive, contactInfoBgType='$contactInfoBgType', isWallpaperActive=$isWallpaperActive")
 
                     DisposableEffect(isWallpaperActive) {
@@ -890,7 +896,7 @@ class MainActivity : FragmentActivity() {
                             }
                             // ── Main content fills the rest, edge-to-edge ──────────────────────
                             Surface(
-                                color = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                color = scaffoldBgColor,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
@@ -905,7 +911,7 @@ class MainActivity : FragmentActivity() {
                         CompositionLocalProvider(LocalLiquidGlassBackdrop provides liquidGlassBackdrop) {
                             Scaffold(
                                 bottomBar = { BottomBar(navController) },
-                                containerColor = if (isWallpaperActive) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                containerColor = scaffoldBgColor,
                                 contentWindowInsets = WindowInsets(0)
                             ) { scaffoldPadding ->
                                 Box(

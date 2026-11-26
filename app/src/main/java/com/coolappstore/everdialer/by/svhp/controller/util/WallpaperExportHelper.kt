@@ -18,6 +18,28 @@ import java.io.FileOutputStream
  */
 object WallpaperExportHelper {
     @SuppressLint("MissingPermission")
+    fun getWallpaperDrawable(context: Context): Drawable? {
+        val wallpaperManager = WallpaperManager.getInstance(context)
+        var drawable: Drawable? = null
+        try {
+            drawable = wallpaperManager.drawable
+        } catch (_: Throwable) {}
+
+        if (drawable == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                drawable = wallpaperManager.getDrawable(WallpaperManager.FLAG_SYSTEM)
+            } catch (_: Throwable) {}
+        }
+
+        if (drawable == null) {
+            try {
+                drawable = wallpaperManager.getBuiltInDrawable(30000, 30000, false, 0.5f, 0.5f)
+            } catch (_: Throwable) {}
+        }
+        return drawable
+    }
+
+    @SuppressLint("MissingPermission")
     fun extractWallpaperToFile(context: Context): File? {
         return try {
             val wallpaperManager = WallpaperManager.getInstance(context)

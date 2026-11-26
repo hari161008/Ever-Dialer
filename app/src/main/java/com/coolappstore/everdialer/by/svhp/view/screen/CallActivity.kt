@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.core.view.WindowCompat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.PhoneCallback
@@ -2030,11 +2031,22 @@ fun ExpressiveCallScreen(
         else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
 
+    val currentBgLuminance = remember(currentBgConfig, settingsVersion) {
+        if (currentBgConfig.bgType == "wallpaper") {
+            com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.getWallpaperLuminance(context, currentBgConfig.bgDim)
+        } else if (currentBgConfig.hasCustomBg && currentBgConfig.bgFile != null) {
+            com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManager.calculateMediaLuminance(currentBgConfig.bgFile, currentBgConfig.bgType == "video", currentBgConfig.bgDim)
+        } else {
+            if (isDark) 0.1f else 0.9f
+        }
+    }
+    val isStatusBgBright = currentBgLuminance > 0.48f
+
     val effectiveOnBgColor = if (fontColorMode == "custom") Color(customFontColorInt)
-        else if (hasCustomBg) Color.White
+        else if (hasCustomBg) (if (isStatusBgBright) Color(0xFF1C1B1F) else Color.White)
         else MaterialTheme.colorScheme.onSurface
     val effectiveSubtleColor = if (fontColorMode == "custom") Color(customFontColorInt).copy(alpha = 0.85f)
-        else if (hasCustomBg) Color.White.copy(alpha = 0.85f)
+        else if (hasCustomBg) (if (isStatusBgBright) Color(0xFF1C1B1F).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.85f))
         else MaterialTheme.colorScheme.onSurfaceVariant
     val textShadow = if (currentBgConfig.fontShadow) androidx.compose.ui.graphics.Shadow(
         color = Color.Black.copy(alpha = 0.80f),
@@ -2050,6 +2062,18 @@ fun ExpressiveCallScreen(
             c = c.baseContext
         }
         c as? Activity
+    }
+
+    SideEffect {
+        val win = callActivity?.window ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(win, win.decorView)
+        if (hasCustomBg) {
+            controller.isAppearanceLightStatusBars = isStatusBgBright
+            controller.isAppearanceLightNavigationBars = isStatusBgBright
+        } else {
+            controller.isAppearanceLightStatusBars = !isDark
+            controller.isAppearanceLightNavigationBars = !isDark
+        }
     }
     DisposableEffect(isWallpaperMode) {
         val win = callActivity?.window
@@ -2371,6 +2395,23 @@ fun ExpressiveCallScreen(
                             )
                     )
                 }
+            }
+
+            if (hasCustomBg) {
+                val scrimColor = if (isStatusBgBright) Color.White.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.38f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() + 16.dp })
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    scrimColor,
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
             }
 
             if (isLandscape) {

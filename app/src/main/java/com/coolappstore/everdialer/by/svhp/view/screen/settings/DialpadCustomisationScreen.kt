@@ -111,16 +111,13 @@ fun DialpadCustomisationScreen(
     }
 
     val previewKeyBg = if (hasCustomBg) {
-        if (isBrightBg) {
+        if (isDark) {
+            baseKeyContainer
+        } else if (isBrightBg) {
             // Bright wallpaper: darken button slightly (by 16%) so it pops out clearly without changing its hue
             androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.Black, 0.16f)
         } else {
-            // Dark wallpaper: in dark theme, lighten slightly (by 18%) so it stands out; in light theme baseKeyContainer already pops out
-            if (isDark) {
-                androidx.compose.ui.graphics.lerp(baseKeyContainer, Color.White, 0.18f)
-            } else {
-                baseKeyContainer
-            }
+            baseKeyContainer
         }
     } else {
         baseKeyContainer
