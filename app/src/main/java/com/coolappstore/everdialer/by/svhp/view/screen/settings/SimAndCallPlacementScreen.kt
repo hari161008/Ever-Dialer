@@ -35,6 +35,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.generated.destinations.SpeedDialScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SoundVibrationScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.UssdCodesScreenDestination
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -401,6 +402,18 @@ fun SimAndCallPlacementScreen(
                                     }
                                 }
                             }
+                        )
+                        HorizontalDivider(
+                            Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoListItem(
+                            headline = "USSD & Secret Codes",
+                            supporting = "Carrier codes, network settings, and hardware diagnostics",
+                            leadingIcon = Icons.Outlined.Key,
+                            iconContainerColor = ColorTeal,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(UssdCodesScreenDestination()) }
                         )
                     }
                 }

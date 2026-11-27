@@ -352,7 +352,22 @@ class CallActivity : FragmentActivity() {
 
         setContent {
             Rivo4Theme {
-                val session by CallService.currentCallSession.collectAsState()
+                val infiniteTransition = rememberInfiniteTransition(label = "globalCallPfpRotation")
+                val rot = infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 12000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "callPfpAngle"
+                )
+                val globalPfpRotationAngle: () -> Float = remember(rot) { { rot.value } }
+
+                CompositionLocalProvider(
+                    com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle provides globalPfpRotationAngle
+                ) {
+                    val session by CallService.currentCallSession.collectAsState()
                 val heldSession by CallService.heldCallSession.collectAsState()
                 val incomingSession by CallService.incomingCallSession.collectAsState()
                 val audioState by CallService.audioState.collectAsState()
@@ -675,6 +690,7 @@ class CallActivity : FragmentActivity() {
                     }
                 }
             }
+            }
         }
     }
 
@@ -900,7 +916,8 @@ private data class CallBackgroundConfig(
     val pfpExceptPfp: Boolean = true,
     val pfpShowForNoPfp: Boolean = true,
     val pfpSize: Float = 0.5f,
-    val pfpShape: String = "circle"
+    val pfpShape: String = "circle",
+    val animatePfpShape: Boolean = false
 )
 
 @Composable
@@ -920,14 +937,32 @@ private fun CallAvatar(
     isMultiCall: Boolean = false,
     overlayContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
-    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
-    val isCircle = config.pfpShape != "square"
-    val avatarShape = if (isExpressive) {
-        val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
+    val shapeKeys = remember(config.pfpShape) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(config.pfpShape)
+    }
+    val effectiveShapeKey = if (shapeKeys.size <= 1) {
+        shapeKeys.firstOrNull() ?: "circle"
+    } else {
         val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
-        val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
-        avatarShapeList[idx].toShape()
-    } else if (isCircle) CircleShape else RoundedCornerShape(if (config.pfpSize >= 0.95f) 0.dp else 14.dp)
+        shapeKeys[kotlin.math.abs(key.hashCode()) % shapeKeys.size]
+    }
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val isCircle = effectiveShapeKey != "square" && effectiveShapeKey != "diamond"
+    val avatarShape = when {
+        effectiveShapeKey == "square" -> RoundedCornerShape(if (config.pfpSize >= 0.95f) 0.dp else 14.dp)
+        effectiveShapeKey != "circle" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.getShape(effectiveShapeKey)
+        isExpressive -> {
+            val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
+            val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+            val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
+            avatarShapeList[idx].toShape()
+        }
+        else -> CircleShape
+    }
+
+    val isExpressivePfp = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.isExpressive(effectiveShapeKey) && effectiveShapeKey != "circle" && effectiveShapeKey != "square"
+    val shouldAnimateRotation = config.animatePfpShape && isExpressivePfp
+    val rotationAngleProvider = com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle.current
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val firstDisplayName = remember(contactName, isMultiCall) {
@@ -954,6 +989,7 @@ private fun CallAvatar(
     Box(
         modifier = modifier
             .size(avatarSize)
+            .then(if (shouldAnimateRotation) Modifier.graphicsLayer { rotationZ = rotationAngleProvider() } else Modifier)
             .clip(avatarShape)
             .then(
                 if (hasCustomBg) Modifier.background(controlBtnColor)
@@ -968,6 +1004,18 @@ private fun CallAvatar(
             ),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (shouldAnimateRotation) Modifier.graphicsLayer {
+                        rotationZ = -rotationAngleProvider()
+                        scaleX = 1.18f
+                        scaleY = 1.18f
+                    } else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
         if (isMultiCall && (!secondPhoneNumber.isNullOrBlank() || !secondContactName.isNullOrBlank())) {
             Row(modifier = Modifier.fillMaxSize()) {
                 // Left Half - Person 1
@@ -1132,9 +1180,16 @@ private fun CallAvatar(
                 tint = if (hasCustomBg) Color.White.copy(alpha = 0.85f) else callerIconTint
             )
         }
+        }
 
         if (overlayContent != null) {
-            overlayContent()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (shouldAnimateRotation) Modifier.graphicsLayer { rotationZ = -rotationAngleProvider() } else Modifier)
+            ) {
+                overlayContent()
+            }
         }
     }
 }
@@ -1932,6 +1987,7 @@ fun ExpressiveCallScreen(
         val defaultPfpShowForNoPfp = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
         val defaultPfpSize = if (isForIncoming) prefs?.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs?.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)
         val defaultPfpShape = if (isForIncoming) prefs?.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs?.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")
+        val defaultPfpShapeAnimate = if (isForIncoming) prefs?.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, false) ?: false else prefs?.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE, false) ?: false
 
         val isContactSpecific = prefix.startsWith("contact_")
 
@@ -1948,6 +2004,7 @@ fun ExpressiveCallScreen(
         val pfpShowForNoPfp = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_show_for_no_pfp") == true) prefs.getBoolean("${prefix}_custom_pfp_show_for_no_pfp", defaultPfpShowForNoPfp ?: true) else (defaultPfpShowForNoPfp ?: true)
         val pfpSize = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_size") == true) prefs.getFloat("${prefix}_custom_pfp_size", defaultPfpSize ?: 0.5f) else (defaultPfpSize ?: 0.5f)
         val pfpShape = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_shape") == true) prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape ?: "circle") ?: (defaultPfpShape ?: "circle") else (defaultPfpShape ?: "circle")
+        val pfpShapeAnimate = if (isContactSpecific && prefs?.contains("${prefix}_custom_pfp_shape_animate") == true) prefs.getBoolean("${prefix}_custom_pfp_shape_animate", defaultPfpShapeAnimate) else defaultPfpShapeAnimate
 
         val bgFile = if (bgPath.isNotEmpty()) java.io.File(bgPath) else null
         val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
@@ -1987,7 +2044,8 @@ fun ExpressiveCallScreen(
             pfpExceptPfp = pfpExceptPfp,
             pfpShowForNoPfp = pfpShowForNoPfp,
             pfpSize = pfpSize,
-            pfpShape = pfpShape
+            pfpShape = pfpShape,
+            animatePfpShape = pfpShapeAnimate
         )
     }
 
@@ -2733,7 +2791,15 @@ fun ExpressiveCallScreen(
                         )
 
                         val isPfpLarge = pfpFraction >= 0.85f
-                        val isCircleShape = currentBgConfig.pfpShape != "square"
+                        val effectiveCallShapeKey = remember(currentBgConfig.pfpShape, contactName, phoneNumber) {
+                            val keys = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(currentBgConfig.pfpShape)
+                            if (keys.size <= 1) keys.firstOrNull() ?: "circle"
+                            else {
+                                val key = contactName.ifBlank { phoneNumber }.ifBlank { "unknown" }
+                                keys[kotlin.math.abs(key.hashCode()) % keys.size]
+                            }
+                        }
+                        val isCircleShape = effectiveCallShapeKey != "square" && effectiveCallShapeKey != "diamond"
                         val shouldShowAvatar = showContactPfp && (!photoUri.isNullOrEmpty() || currentBgConfig.pfpShowForNoPfp || currentBgConfig.hasCustomPfp || isMultiCallDisplay)
                         if (shouldShowAvatar) {
                             CallAvatar(

@@ -126,6 +126,8 @@ import com.ramcosta.composedestinations.generated.destinations.ContactEditScreen
 import com.coolappstore.everdialer.by.svhp.view.components.CallChatViaOverlay
 import com.coolappstore.everdialer.by.svhp.controller.UssdRepository
 import com.coolappstore.everdialer.by.svhp.modal.data.RecordingItem
+import com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig
+import com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig
 import com.coolappstore.everdialer.by.svhp.modal.data.CallLogEntry
 import com.coolappstore.everdialer.by.svhp.view.components.CallLogTile
 import com.coolappstore.everdialer.by.svhp.view.components.SimCardNotchShape
@@ -910,10 +912,8 @@ fun DialPadContent(
     val sim1Color = remember(settingsState) { Color(prefs.getInt(PreferenceManager.KEY_SIM1_COLOR, PreferenceManager.DEFAULT_SIM1_COLOR)) }
     val sim2Color = remember(settingsState) { Color(prefs.getInt(PreferenceManager.KEY_SIM2_COLOR, PreferenceManager.DEFAULT_SIM2_COLOR)) }
 
-    val clipText = remember {
-        clipboard.getText()?.text?.filter { it.isDigit() || it == '+' || it == '*' || it == '#' } ?: ""
-    }
-    var showClipboardBanner by remember { mutableStateOf(clipText.length in 7..15) }
+    val clipText = ""
+    var showClipboardBanner by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     // "Call/Chat Via" app picker (WhatsApp/Telegram), shown from the call button's long-press
     // and the long-press overflow menu — see CallChatViaOverlay for what happens after a pick.
@@ -1410,7 +1410,17 @@ fun DialPadContent(
         )
     }
 
-    CompositionLocalProvider(LocalDensity provides dialpadDensity) {
+    val dialpadAvatarConfig = rememberAvatarDisplayConfig(
+        prefs,
+        settingsState,
+        PreferenceManager.KEY_DIALPAD_PFP_SHAPE,
+        PreferenceManager.KEY_DIALPAD_PFP_SHAPE_ANIMATE
+    )
+
+    CompositionLocalProvider(
+        LocalDensity provides dialpadDensity,
+        LocalAvatarDisplayConfig provides dialpadAvatarConfig
+    ) {
         if (isLandscape) {
             // Landscape: side-by-side layout — left=search+search results, right=dialpad keys+number+actions
             Row(
@@ -2633,7 +2643,13 @@ fun DialPadContent(
                         )
                     }
 
-                    val gridDividerColor = if (!isDark) Color(0xFFE2E5EA) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (hasCustomBg) 0.20f else 0.35f)
+                    val gridDividerColor = if (hasCustomBg) {
+                        if (isBrightBg) Color.Black.copy(alpha = 0.50f)
+                        else Color.White.copy(alpha = 0.50f)
+                    } else {
+                        if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.70f)
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+                    }
 
                     if (isGridButtons) {
                         Column(
@@ -2641,7 +2657,7 @@ fun DialPadContent(
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp)
                         ) {
-                            HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                            HorizontalDivider(color = gridDividerColor, thickness = 1.5.dp)
                             keys.forEachIndexed { rowIndex, row ->
                                 Row(
                                     modifier = Modifier
@@ -2653,7 +2669,7 @@ fun DialPadContent(
                                         if (colIndex > 0) {
                                             Box(
                                                 modifier = Modifier
-                                                    .width(0.5.dp)
+                                                    .width(1.5.dp)
                                                     .fillMaxHeight()
                                                     .background(gridDividerColor)
                                             )
@@ -2689,7 +2705,7 @@ fun DialPadContent(
                                         }
                                     }
                                 }
-                                HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                                HorizontalDivider(color = gridDividerColor, thickness = 1.5.dp)
                             }
                         }
                     } else {
@@ -2733,6 +2749,10 @@ fun DialPadContent(
                             }
                         }
                     }
+                }
+
+                if (isGridButtons) {
+                    Spacer(modifier = Modifier.height((16.dp * scaleFactor).coerceIn(12.dp, 24.dp)))
                 }
 
                 if (showSimButtons) {
@@ -2806,15 +2826,7 @@ fun DialPadContent(
                         )
 
                         if (isGridButtons) {
-                            DialerActionExpressive(
-                                onClick = { showOverflowMenu = true },
-                                icon = Icons.Default.MoreVert,
-                                contentDescription = "More options",
-                                containerColor = Color.Transparent,
-                                contentColor = if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(effectiveSimCallH),
-                                isLarge = true
-                            )
+                            Spacer(modifier = Modifier.size(effectiveSimCallH))
                         } else {
                             Spacer(modifier = Modifier.width(simBtnW))
                         }
@@ -2862,15 +2874,7 @@ fun DialPadContent(
                         )
 
                         if (isGridButtons) {
-                            DialerActionExpressive(
-                                onClick = { showOverflowMenu = true },
-                                icon = Icons.Default.MoreVert,
-                                contentDescription = "More options",
-                                containerColor = Color.Transparent,
-                                contentColor = if (hasCustomBg) (if (isDark) Color.White else Color(0xFF1A1A1C)) else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(callH),
-                                isLarge = true
-                            )
+                            Spacer(modifier = Modifier.size(callH))
                         } else {
                             Spacer(modifier = Modifier.width(keyWidth))
                         }
@@ -3191,9 +3195,12 @@ fun DialPadKey(
     val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
     val buttonWidth = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyWidth
     val buttonHeight = if (isCircleButtons) minOf(keyWidth, keyHeight) else keyHeight
+    val showAlphabets = remember(settingsState) { prefs.isDialpadShowAlphabets() }
     val isStarKey = number == "*"
     val isPlusSubKey = letters.trim() == "+"
     val hasLetters = letters.isNotBlank()
+    val showLetters = hasLetters && (showAlphabets || isPlusSubKey)
+    val showSubInKey = showLetters && (!isGridButtons || isPlusSubKey || showAlphabets)
 
     val cornerRadius by animateDpAsState(
         targetValue = if (isVisuallyPressed) 10.dp else minOf(keyHeight / 2, if (compact) 22.dp else 26.dp),
@@ -3284,22 +3291,22 @@ fun DialPadKey(
     val appFontHeightScale = remember(settingsState) { prefs.getFloat(PreferenceManager.KEY_FONT_HEIGHT_SCALE, 1.0f) }
     val userFontFactor = appFontHeightScale.coerceIn(0.7f, 1.3f)
 
-    // Base font sizes in sp - numbers font size safely increased alone
+    // Base font sizes in sp - numbers font size safely increased alone when letters are hidden
     val baseMainSize = if (isStarKey) {
         if (isGridButtons) {
-            if (compact) 26f else 32f
+            if (showSubInKey) (if (compact) 26f else 32f) else (if (compact) 30f else 38f)
         } else if (isCircleButtons) {
-            if (compact) 26f else 32f
+            if (showLetters) (if (compact) 26f else 32f) else (if (compact) 30f else 38f)
         } else {
-            if (compact) 23f else 28f
+            if (showLetters) (if (compact) 23f else 28f) else (if (compact) 28f else 35f)
         }
     } else {
         if (isGridButtons) {
-            if (compact) 26f else 32f
+            if (showSubInKey) (if (compact) 26f else 32f) else (if (compact) 30f else 38f)
         } else if (isCircleButtons) {
-            if (compact) 23f else 28f
+            if (showLetters) (if (compact) 23f else 28f) else (if (compact) 29f else 36f)
         } else {
-            if (compact) 20f else 25f
+            if (showLetters) (if (compact) 20f else 25f) else (if (compact) 27f else 34f)
         }
     }
     val baseSubSize = if (isPlusSubKey) {
@@ -3313,12 +3320,12 @@ fun DialPadKey(
     val maxContentHeight = (buttonHeightVal - 14f).coerceAtLeast(14f)
 
     // Gap between digit and letters (0 in compact to save space, 1dp in normal)
-    val gapHeight = if (hasLetters && !isGridButtons) (if (compact) 0f else 1f) else 0f
+    val gapHeight = if (showSubInKey) (if (compact) 0f else 1f) else 0f
 
     // Total raw text height scaled by scaleFactor and user appearance font settings
     val targetMainH = baseMainSize * scaleFactor * userFontFactor
     val targetSubH = baseSubSize * scaleFactor * userFontFactor
-    val renderedTotalH = (targetMainH + (if (hasLetters && !isGridButtons) targetSubH else 0f)) * currentFontScale + gapHeight
+    val renderedTotalH = (targetMainH + (if (showSubInKey) targetSubH else 0f)) * currentFontScale + gapHeight
 
     // If rendered text exceeds safe button height budget, scale down smoothly so it NEVER touches or crosses the button edge
     val fitRatio = if (renderedTotalH > maxContentHeight) {
@@ -3375,11 +3382,11 @@ fun DialPadKey(
                     platformStyle = PlatformTextStyle(includeFontPadding = false)
                 ),
                 color = mainTextColor,
-                fontWeight = if (isStarKey) FontWeight.SemiBold else FontWeight.Medium,
+                fontWeight = if (isStarKey) FontWeight.SemiBold else (if (!showSubInKey) FontWeight.Normal else FontWeight.Medium),
                 maxLines = 1,
                 softWrap = false
             )
-            if (hasLetters && !isGridButtons) {
+            if (showSubInKey) {
                 if (gapHeight > 0f) {
                     Spacer(modifier = Modifier.height(gapHeight.dp))
                 }

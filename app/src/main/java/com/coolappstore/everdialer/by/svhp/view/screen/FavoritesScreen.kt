@@ -307,7 +307,16 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+            prefs,
+            settingsVer,
+            PreferenceManager.KEY_FAVORITES_PFP_SHAPE,
+            PreferenceManager.KEY_FAVORITES_PFP_SHAPE_ANIMATE
+        )
+        CompositionLocalProvider(
+            com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides avatarConfig
+        ) {
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (favorites.isEmpty()) {
                 if (isLandscape) {
@@ -527,6 +536,7 @@ fun FavoritesScreen(navController: NavController, navigator: DestinationsNavigat
                     }
                 }
             }
+        }
     }
 }
 
@@ -832,8 +842,7 @@ private fun FavoriteContactCard(
                         RivoAvatar(
                             name = contact.name,
                             photoUri = contact.photoUri,
-                            modifier = Modifier.fillMaxSize(),
-                            shape = CircleShape
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

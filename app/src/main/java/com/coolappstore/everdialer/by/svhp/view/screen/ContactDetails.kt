@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
@@ -232,10 +233,23 @@ fun ContactDetailsScreen(
         prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_PFP_SIZE, 0.60f).coerceIn(0.10f, 1.0f)
     }
     val pfpShapeSetting = remember(settingsVer) {
-        prefs.getString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, "circle") ?: "circle"
+        prefs.getSelectedPfpShape()
     }
-    val pfpShape = remember(pfpShapeSetting, pfpSizeFraction) {
-        if (pfpShapeSetting == "square") RoundedCornerShape((28 * (pfpSizeFraction / 0.60f).coerceIn(0.5f, 1.5f)).dp) else CircleShape
+    val pfpShapeKeys = remember(pfpShapeSetting) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(pfpShapeSetting)
+    }
+    val effectivePfpShapeKey = remember(pfpShapeKeys, displayName) {
+        if (pfpShapeKeys.size <= 1) pfpShapeKeys.firstOrNull() ?: "circle"
+        else pfpShapeKeys[kotlin.math.abs(displayName.hashCode()) % pfpShapeKeys.size]
+    }
+    val isFullWidthSquare = effectivePfpShapeKey == "square" && pfpSizeFraction >= 0.99f
+    val pfpShape = remember(effectivePfpShapeKey, pfpSizeFraction, isFullWidthSquare) {
+        when {
+            isFullWidthSquare -> RoundedCornerShape(0.dp)
+            effectivePfpShapeKey == "circle" -> CircleShape
+            effectivePfpShapeKey == "square" -> RoundedCornerShape((28 * (pfpSizeFraction / 0.60f).coerceIn(0.5f, 1.5f)).dp)
+            else -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.getShape(effectivePfpShapeKey)
+        }
     }
     val pfpSizeDp = (400 * pfpSizeFraction).dp
     val selectedAppIcon = remember(settingsVer) {
@@ -1289,27 +1303,50 @@ fun ContactDetailsScreen(
                             com.coolappstore.everdialer.by.svhp.view.components.avatarColors[kotlin.math.abs(displayName.hashCode()) % com.coolappstore.everdialer.by.svhp.view.components.avatarColors.size]
                         }
                         Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(modifier = Modifier.size(400.dp), contentAlignment = Alignment.Center) {
-                                Box(
-                                    modifier = Modifier
-                                        .size((pfpSizeDp * 1.35f).coerceAtMost(420.dp))
-                                        .background(
-                                            brush = Brush.radialGradient(
-                                                colors = listOf(
-                                                    avatarGlowColor.copy(alpha = 0.35f),
-                                                    avatarGlowColor.copy(alpha = 0.12f),
-                                                    Color.Transparent
+                            Box(
+                                modifier = if (isFullWidthSquare) {
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .layout { measurable, constraints ->
+                                            val extraPx = 32.dp.roundToPx()
+                                            val targetWidth = constraints.maxWidth + extraPx
+                                            val placeable = measurable.measure(
+                                                constraints.copy(
+                                                    minWidth = targetWidth,
+                                                    maxWidth = targetWidth,
+                                                    minHeight = targetWidth,
+                                                    maxHeight = targetWidth
                                                 )
                                             )
-                                        )
-                                )
+                                            layout(constraints.maxWidth, targetWidth) {
+                                                placeable.place(-16.dp.roundToPx(), 0)
+                                            }
+                                        }
+                                } else {
+                                    Modifier.size(400.dp)
+                                },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!isFullWidthSquare) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size((pfpSizeDp * 1.35f).coerceAtMost(420.dp))
+                                            .background(
+                                                brush = Brush.radialGradient(
+                                                    colors = listOf(
+                                                        avatarGlowColor.copy(alpha = 0.35f),
+                                                        avatarGlowColor.copy(alpha = 0.12f),
+                                                        Color.Transparent
+                                                    )
+                                                )
+                                            )
+                                    )
+                                }
                                 RivoAvatar(
                                     name = displayName,
                                     photoUri = contact?.photoUri,
                                     forcePersonIcon = true,
-                                    modifier = Modifier
-                                        .size(pfpSizeDp)
-                                        .clip(pfpShape)
+                                    modifier = (if (isFullWidthSquare) Modifier.fillMaxSize() else Modifier.size(pfpSizeDp))
                                         .onGloballyPositioned { coordinates ->
                                             val root = coordinates.findRootCoordinates()
                                             val rootSize = root.size

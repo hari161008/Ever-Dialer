@@ -53,6 +53,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
@@ -208,6 +210,9 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
     val sendDelaySeconds = remember(settingsVer) {
         prefs.getInt(PreferenceManager.KEY_SMS_SEND_DELAY_SECONDS, 0)
     }
+    val showSimInChat = remember(settingsVer) {
+        prefs.isShowSimInChat(context)
+    }
     val deliveryReports = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_DELIVERY_REPORTS, false)
     }
@@ -237,6 +242,29 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
     }
     val showAvatar = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_AVATAR, true)
+    }
+    var smsPfpShape by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_PFP_SHAPE, "circle") ?: "circle")
+    }
+    var animateSmsShapeRotation by remember(settingsVer) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE, false))
+    }
+    var showPfpShapeDialog by remember { mutableStateOf(false) }
+
+    if (showPfpShapeDialog) {
+        PfpShapeChooserDialog(
+            currentShapeKey = smsPfpShape,
+            animateRotation = animateSmsShapeRotation,
+            onAnimateRotationChange = {
+                animateSmsShapeRotation = it
+                prefs.setBoolean(PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE, it)
+            },
+            onSelectShape = {
+                smsPfpShape = it
+                prefs.setString(PreferenceManager.KEY_SMS_PFP_SHAPE, it)
+            },
+            onDismiss = { showPfpShapeDialog = false }
+        )
     }
     val showStt = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
@@ -457,6 +485,17 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
+                                // PFP Shape
+                                RivoListItem(
+                                    headline = "PFP Shape",
+                                    supporting = PfpShapeRegistry.getDisplayLabel(smsPfpShape),
+                                    leadingIcon = if (smsPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                                    iconContainerColor = ColorPurple,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { showPfpShapeDialog = true }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
                                 // Speech to text button
                                 RivoSwitchListItem(
                                     headline = "Show Speech-to-Text button",
@@ -581,6 +620,17 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                                     iconContainerColor = ColorBlue,
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showSendDelayDialog = true }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                                // Show SIM in Chat
+                                RivoSwitchListItem(
+                                    headline = "Show SIM in Chat",
+                                    supporting = "Show SIM 1 or SIM 2 icon beside message time",
+                                    leadingIcon = Icons.Outlined.SimCard,
+                                    iconContainerColor = ColorIndigo,
+                                    checked = showSimInChat,
+                                    onCheckedChange = { prefs.setShowSimInChat(it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 

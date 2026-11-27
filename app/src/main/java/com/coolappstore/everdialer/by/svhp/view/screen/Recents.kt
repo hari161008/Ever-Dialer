@@ -918,7 +918,12 @@ fun CallLogFullContent(
             map
         }
 
-        val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(prefs, settingsVersion)
+        val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+            prefs,
+            settingsVersion,
+            PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE,
+            PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE_ANIMATE
+        )
         val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
         val isSaturatedActive = remember(settingsVersion, isDark) { prefs.isSaturatedForTheme(isDark) }
         val colorScheme = MaterialTheme.colorScheme

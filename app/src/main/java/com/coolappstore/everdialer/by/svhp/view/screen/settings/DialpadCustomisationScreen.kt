@@ -95,6 +95,10 @@ fun DialpadCustomisationScreen(
     val isGridButtons = buttonStyle == PreferenceManager.DIALPAD_BUTTON_STYLE_GRID
     var showButtonStyleDialog by remember { mutableStateOf(false) }
 
+    var showAlphabetsBelowNumbers by remember(settingsVersion) {
+        mutableStateOf(prefs.isDialpadShowAlphabets())
+    }
+
     val bgFile = remember(bgPath) { if (bgPath.isNotEmpty()) File(bgPath) else null }
     val hasCustomBg = (bgType == "wallpaper") || ((bgType == "picture" || bgType == "video") && bgFile != null && bgFile.exists())
 
@@ -563,41 +567,63 @@ fun DialpadCustomisationScreen(
                                         val keyShape = if (isCircleButtons) CircleShape else RoundedCornerShape(13.dp)
 
                                         if (isGridButtons) {
-                                            val gridDividerColor = if (!isDark) Color(0xFFE2E5EA) else Color.White.copy(alpha = 0.20f)
+                                            val gridDividerColor = if (hasCustomBg) {
+                                                if (isDark) Color.White.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.45f)
+                                            } else {
+                                                if (isDark) Color.White.copy(alpha = 0.45f) else Color(0xFF8E9299)
+                                            }
                                             Column(
                                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                                             ) {
-                                                HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                                                HorizontalDivider(color = gridDividerColor, thickness = 1.5.dp)
                                                 for (row in keyData) {
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth().height(keyH),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        row.forEachIndexed { colIndex, (digit, _) ->
+                                                        row.forEachIndexed { colIndex, (digit, sub) ->
                                                             if (colIndex > 0) {
                                                                 Box(
                                                                     modifier = Modifier
-                                                                        .width(0.5.dp)
+                                                                        .width(1.5.dp)
                                                                         .fillMaxHeight()
                                                                         .background(gridDividerColor)
                                                                 )
                                                             }
+                                                            val showSub = sub.isNotBlank() && (showAlphabetsBelowNumbers || sub == "+")
                                                             Box(
                                                                 modifier = Modifier
                                                                     .weight(1f)
                                                                     .fillMaxHeight(),
                                                                 contentAlignment = Alignment.Center
                                                             ) {
-                                                                Text(
-                                                                    text = digit,
-                                                                    fontSize = 13.sp,
-                                                                    fontWeight = FontWeight.Normal,
-                                                                    color = previewKeyText
-                                                                )
+                                                                Column(
+                                                                    modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp),
+                                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                                    verticalArrangement = Arrangement.Center
+                                                                ) {
+                                                                    Text(
+                                                                        text = digit,
+                                                                        fontSize = if (showSub) 12.sp else 16.sp,
+                                                                        fontWeight = if (showSub) FontWeight.SemiBold else FontWeight.Normal,
+                                                                        color = previewKeyText,
+                                                                        lineHeight = if (showSub) 12.sp else 16.sp
+                                                                    )
+                                                                    if (showSub) {
+                                                                        Text(
+                                                                            text = sub,
+                                                                            fontSize = 5.5.sp,
+                                                                            fontWeight = FontWeight.SemiBold,
+                                                                            letterSpacing = 0.4.sp,
+                                                                            color = previewKeySubText,
+                                                                            lineHeight = 6.sp
+                                                                        )
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
-                                                    HorizontalDivider(color = gridDividerColor, thickness = 0.5.dp)
+                                                    HorizontalDivider(color = gridDividerColor, thickness = 1.5.dp)
                                                 }
                                             }
                                         } else {
@@ -616,19 +642,20 @@ fun DialpadCustomisationScreen(
                                                                 .width(keyW)
                                                                 .height(keyH)
                                                         ) {
+                                                            val showSub = sub.isNotBlank() && (showAlphabetsBelowNumbers || sub == "+")
                                                             Column(
-                                                                modifier = Modifier.fillMaxSize(),
+                                                                modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp),
                                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                                 verticalArrangement = Arrangement.Center
                                                             ) {
                                                                 Text(
                                                                     text = digit,
-                                                                    fontSize = 11.5.sp,
-                                                                    fontWeight = FontWeight.Bold,
+                                                                    fontSize = if (showSub) 11.5.sp else 16.sp,
+                                                                    fontWeight = if (showSub) FontWeight.Bold else FontWeight.SemiBold,
                                                                     color = previewKeyText,
-                                                                    lineHeight = 12.sp
+                                                                    lineHeight = if (showSub) 12.sp else 16.sp
                                                                 )
-                                                                if (sub.isNotBlank()) {
+                                                                if (showSub) {
                                                                     Text(
                                                                         text = sub,
                                                                         fontSize = 5.5.sp,
@@ -645,7 +672,7 @@ fun DialpadCustomisationScreen(
                                             }
                                         }
 
-                                        Spacer(modifier = Modifier.height((2 * heightScale).dp))
+                                        Spacer(modifier = Modifier.height((if (isGridButtons) 6 else 2 * heightScale.toInt()).dp))
 
                                         // Action Row (Add Contact, Call Button, Options/Spacer)
                                         Row(
@@ -705,19 +732,9 @@ fun DialpadCustomisationScreen(
                                                 }
                                             }
 
-                                            // Right item: More options icon for Grid, or Spacer
+                                            // Right item: Spacer for Grid (no 3 dots menu!), or Spacer
                                             if (isGridButtons) {
-                                                Box(
-                                                    modifier = Modifier.size(keyH),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.MoreVert,
-                                                        contentDescription = null,
-                                                        tint = previewIconTint,
-                                                        modifier = Modifier.size(15.dp)
-                                                    )
-                                                }
+                                                Spacer(modifier = Modifier.size(keyH))
                                             } else {
                                                 Box(
                                                     modifier = Modifier
@@ -892,6 +909,18 @@ fun DialpadCustomisationScreen(
                             iconContainerColor = Color(0xFF9C27B0),
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { showButtonStyleDialog = true }
+                        )
+                        CardDivider()
+                        RivoSwitchListItem(
+                            headline = "Alphabets Below Numbers",
+                            supporting = "Show alphabet letters (ABC, DEF...) below numbers on dialpad",
+                            leadingIcon = Icons.Default.TextFields,
+                            iconContainerColor = Color(0xFF673AB7),
+                            checked = showAlphabetsBelowNumbers,
+                            onCheckedChange = {
+                                showAlphabetsBelowNumbers = it
+                                prefs.setDialpadShowAlphabets(it)
+                            }
                         )
                     }
                 }

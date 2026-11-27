@@ -37,13 +37,23 @@ object ScheduledSmsManager {
         loadEntries(prefs).find { it.id == id }
 
     fun getEntriesForThreadOrAddress(prefs: PreferenceManager, threadId: Long, address: String): List<ScheduledSmsEntry> {
-        return loadEntries(prefs).filter {
-            (threadId > 0 && it.threadId == threadId) ||
-            (it.address.isNotBlank() && it.address == address)
+        val cleanAddr = address.filter { it.isDigit() || it == '+' }
+        return loadEntries(prefs).filter { entry ->
+            val entryClean = entry.address.filter { it.isDigit() || it == '+' }
+            (threadId > 0 && entry.threadId > 0 && entry.threadId == threadId) ||
+            (cleanAddr.isNotBlank() && entryClean.isNotBlank() && (cleanAddr == entryClean || numbersLikelyMatch(cleanAddr, entryClean))) ||
+            (entry.address.isNotBlank() && entry.address == address)
         }.sortedBy { it.scheduledTime }
     }
 
     fun addEntry(context: Context, prefs: PreferenceManager, entry: ScheduledSmsEntry) {
+        val current = loadEntries(prefs).filterNot { it.id == entry.id }
+        saveEntries(prefs, current + entry)
+        scheduleAlarm(context, entry)
+    }
+
+    fun updateEntry(context: Context, prefs: PreferenceManager, entry: ScheduledSmsEntry) {
+        cancelAlarm(context, entry.id)
         val current = loadEntries(prefs).filterNot { it.id == entry.id }
         saveEntries(prefs, current + entry)
         scheduleAlarm(context, entry)

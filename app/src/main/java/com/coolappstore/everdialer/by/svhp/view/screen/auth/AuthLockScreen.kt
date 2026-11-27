@@ -68,14 +68,26 @@ fun AuthLockScreen(
         if (pinPadScramble) (0..9).shuffled() else null
     }
 
-    // Active credential state: null means showing biometric prompt / fallback view;
-    // "pin", "pattern", "password" means displaying the respective credential UI.
+    val fallbackCredential = remember {
+        when {
+            backupType.isNotEmpty() -> backupType
+            expectedPin.isNotEmpty() -> "pin"
+            expectedPattern.isNotEmpty() -> "pattern"
+            expectedPassword.isNotEmpty() -> "password"
+            else -> "pin"
+        }
+    }
+
+    // Active credential state:
+    // If biometricType == "system", start with fallbackCredential so the PIN/Pattern/Password UI
+    // is directly on screen, while BiometricPrompt triggers simultaneously with primary priority.
     var activeCredential by remember {
         mutableStateOf(
             when (biometricType) {
                 "pin" -> "pin"
                 "pattern" -> "pattern"
                 "password" -> "password"
+                "system" -> fallbackCredential
                 else -> null
             }
         )
@@ -84,8 +96,8 @@ fun AuthLockScreen(
     var biometricPromptTrigger by remember { mutableIntStateOf(0) }
     var biometricFailedOrCancelled by remember { mutableStateOf(false) }
 
-    // Automatic trigger for System Biometrics
-    if (biometricType == "system" && activeCredential == null) {
+    // Automatic trigger for System Biometrics with primary priority
+    if (biometricType == "system") {
         LaunchedEffect(biometricPromptTrigger) {
             val act = activity ?: return@LaunchedEffect
             val executor = ContextCompat.getMainExecutor(act)
@@ -111,7 +123,7 @@ fun AuthLockScreen(
             val promptInfo = BiometricPrompt.PromptInfo.Builder()
                 .setTitle(title)
                 .setSubtitle(subtitle)
-                .setNegativeButtonText("Cancel")
+                .setNegativeButtonText("Use ${activeCredential?.replaceFirstChar { it.uppercase() } ?: "Backup"}")
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
                 .build()
 
@@ -120,6 +132,18 @@ fun AuthLockScreen(
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val view = androidx.compose.ui.platform.LocalView.current
+    val window = activity?.window ?: (view.context as? android.app.Activity)?.window
+    if (window != null) {
+        DisposableEffect(isDark) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+            val prev = insetsController.isAppearanceLightStatusBars
+            insetsController.isAppearanceLightStatusBars = !isDark
+            onDispose {
+                insetsController.isAppearanceLightStatusBars = prev
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -170,21 +194,12 @@ fun AuthLockScreen(
                             showCloseButton = canDismiss,
                             scrambledDigits = scrambledDigits,
                             onConfirm = { onSuccess() },
-                            onDismiss = {
-                                if (biometricType == "system") {
-                                    activeCredential = null
-                                } else {
-                                    onDismiss()
-                                }
-                            }
+                            onDismiss = { onDismiss() }
                         )
 
                         if (biometricType == "system") {
                             TextButton(
-                                onClick = {
-                                    activeCredential = null
-                                    biometricPromptTrigger++
-                                },
+                                onClick = { biometricPromptTrigger++ },
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(bottom = 20.dp)
@@ -211,21 +226,12 @@ fun AuthLockScreen(
                             title = "Draw Pattern",
                             showCloseButton = canDismiss,
                             onConfirm = { onSuccess() },
-                            onDismiss = {
-                                if (biometricType == "system") {
-                                    activeCredential = null
-                                } else {
-                                    onDismiss()
-                                }
-                            }
+                            onDismiss = { onDismiss() }
                         )
 
                         if (biometricType == "system") {
                             TextButton(
-                                onClick = {
-                                    activeCredential = null
-                                    biometricPromptTrigger++
-                                },
+                                onClick = { biometricPromptTrigger++ },
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(bottom = 20.dp)
@@ -251,21 +257,12 @@ fun AuthLockScreen(
                             title = "Enter Password",
                             showCloseButton = canDismiss,
                             onConfirm = { onSuccess() },
-                            onDismiss = {
-                                if (biometricType == "system") {
-                                    activeCredential = null
-                                } else {
-                                    onDismiss()
-                                }
-                            }
+                            onDismiss = { onDismiss() }
                         )
 
                         if (biometricType == "system") {
                             TextButton(
-                                onClick = {
-                                    activeCredential = null
-                                    biometricPromptTrigger++
-                                },
+                                onClick = { biometricPromptTrigger++ },
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(bottom = 20.dp)

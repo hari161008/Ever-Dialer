@@ -1,5 +1,6 @@
 package com.coolappstore.everdialer.by.svhp.view.screen.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,8 @@ import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +30,9 @@ import com.coolappstore.everdialer.by.svhp.controller.util.BackgroundMediaManage
 import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundOptionsPopup
 import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEditorDialog
 import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.RotatingPfpShapeContainer
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -111,8 +117,11 @@ fun ContactInfoSettingsScreen(
     var contactInfoPfpSize by remember {
         mutableFloatStateOf(prefs.getFloat(PreferenceManager.KEY_CONTACT_INFO_PFP_SIZE, 0.60f).coerceIn(0.10f, 1.0f))
     }
-    var contactInfoPfpShape by remember {
+    var contactInfoPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, "circle") ?: "circle")
+    }
+    var animateShapeRotation by remember(settingsVer) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, false))
     }
     var showPfpShapeDialog by remember { mutableStateOf(false) }
 
@@ -319,64 +328,18 @@ fun ContactInfoSettingsScreen(
     }
 
     if (showPfpShapeDialog) {
-        AlertDialog(
-            onDismissRequest = { showPfpShapeDialog = false },
-            title = { Text("Choose PFP Shape", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        Pair("circle", "Circle (Default)"),
-                        Pair("square", "Square")
-                    ).forEach { (shapeKey, shapeLabel) ->
-                        val isSelected = contactInfoPfpShape == shapeKey
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    contactInfoPfpShape = shapeKey
-                                    prefs.setString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, shapeKey)
-                                    showPfpShapeDialog = false
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        if (shapeKey == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
-                                        contentDescription = null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        shapeLabel,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                    }
-                }
+        PfpShapeChooserDialog(
+            currentShapeKey = contactInfoPfpShape,
+            animateRotation = animateShapeRotation,
+            onAnimateRotationChange = {
+                animateShapeRotation = it
+                prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, it)
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showPfpShapeDialog = false }) { Text("Cancel") }
-            }
+            onSelectShape = {
+                contactInfoPfpShape = it
+                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, it)
+            },
+            onDismiss = { showPfpShapeDialog = false }
         )
     }
 
@@ -505,8 +468,8 @@ fun ContactInfoSettingsScreen(
                         // PFP Shape Chooser
                         RivoListItem(
                             headline = "PFP Shape",
-                            supporting = if (contactInfoPfpShape == "square") "Square" else "Circle (Default)",
-                            leadingIcon = if (contactInfoPfpShape == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                            supporting = PfpShapeRegistry.getDisplayLabel(contactInfoPfpShape),
+                            leadingIcon = if (contactInfoPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
                             iconContainerColor = Color(0xFF673AB7),
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { showPfpShapeDialog = true }

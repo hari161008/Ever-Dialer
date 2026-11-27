@@ -4,6 +4,7 @@ import com.ramcosta.composedestinations.generated.destinations.CustomFontScreenD
 import com.ramcosta.composedestinations.generated.destinations.CallLogsSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DialpadSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ContactInfoSettingsScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.ContactsSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.FavouritesSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NotesSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.NavigationSettingsScreenDestination
@@ -1791,6 +1792,17 @@ fun InterfaceScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier.settingsSearchHighlight("contact_info_settings_link", highlightedKey) { highlightedKey = null },
                                     onClick = { navigator.navigate(ContactInfoSettingsScreenDestination()) }
+                                )
+                                HorizontalDivider(Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                RivoListItem(
+                                    headline = "Contacts",
+                                    supporting = "Customize contacts to display and profile picture shape",
+                                    leadingIcon = Icons.Outlined.Contacts,
+                                    iconContainerColor = ColorTeal,
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    modifier = Modifier.settingsSearchHighlight("contacts_settings_link", highlightedKey) { highlightedKey = null },
+                                    onClick = { navigator.navigate(ContactsSettingsScreenDestination()) }
                                 )
                                 HorizontalDivider(Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

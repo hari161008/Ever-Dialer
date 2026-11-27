@@ -118,6 +118,7 @@ fun CustomBackgroundPickerScreen(
     val defaultPfpShowForNoPfp = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP, true)
     val defaultPfpSize = (if (isIncoming) prefs.getFloat(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SIZE, 0.5f) else prefs.getFloat(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SIZE, 0.5f)).coerceIn(0.1f, 1.0f)
     val defaultPfpShape = (if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") else prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle")) ?: "circle"
+    val defaultPfpShapeAnimate = if (isIncoming) prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, false) else prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE, false)
 
     val defaultFontColorMode = if (isIncoming) prefs.getString(PreferenceManager.KEY_INCOMING_FONT_COLOR_MODE, "default") ?: "default" else prefs.getString(PreferenceManager.KEY_ONGOING_FONT_COLOR_MODE, "default") ?: "default"
     val defaultFontColorInt = if (isIncoming) prefs.getInt(PreferenceManager.KEY_INCOMING_FONT_COLOR, android.graphics.Color.WHITE) else prefs.getInt(PreferenceManager.KEY_ONGOING_FONT_COLOR, android.graphics.Color.WHITE)
@@ -289,14 +290,28 @@ fun CustomBackgroundPickerScreen(
             else prefs.getString("${prefix}_custom_pfp_shape", defaultPfpShape) ?: defaultPfpShape
         )
     }
+    var pfpShapeAnimate by remember(settingsVersion) {
+        mutableStateOf(
+            if (isContactSpecific && prefs.contains("${prefix}_custom_pfp_shape_animate")) prefs.getBoolean("${prefix}_custom_pfp_shape_animate", defaultPfpShapeAnimate)
+            else if (isContactSpecific) defaultPfpShapeAnimate
+            else prefs.getBoolean("${prefix}_custom_pfp_shape_animate", defaultPfpShapeAnimate)
+        )
+    }
     val previewAvatarSize = if (pfpSize <= 0.50f) {
         (80.dp * (pfpSize / 0.50f)).coerceAtLeast(14.dp)
     } else {
         80.dp + (185.dp - 80.dp) * ((pfpSize - 0.50f) / 0.50f)
     }
     val previewIconSize = (previewAvatarSize * 0.50f).coerceAtLeast(12.dp)
-    val isPfpCircle = pfpShape != "square"
-    val pfpAvatarShape = if (isPfpCircle) CircleShape else RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)
+    val previewShapeKey = remember(pfpShape) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(pfpShape).firstOrNull() ?: "circle"
+    }
+    val isPfpCircle = previewShapeKey != "square" && previewShapeKey != "diamond"
+    val pfpAvatarShape = when {
+        previewShapeKey == "square" -> RoundedCornerShape(if (pfpSize >= 0.95f) 0.dp else 10.dp)
+        previewShapeKey != "circle" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.getShape(previewShapeKey)
+        else -> CircleShape
+    }
     val pfpFile = remember(pfpPath) { if (pfpPath.isNotEmpty()) File(pfpPath) else null }
     val customPfpFile = pfpFile
     val hasCustomPfp = (pfpType == "wallpaper" || pfpType == "picture" || pfpType == "video") && pfpFile != null && pfpFile.exists()
@@ -599,6 +614,7 @@ fun CustomBackgroundPickerScreen(
                                     "${prefix}_custom_pfp_show_for_no_pfp",
                                     "${prefix}_custom_pfp_size",
                                     "${prefix}_custom_pfp_shape",
+                                    "${prefix}_custom_pfp_shape_animate",
                                     "${prefix}_font_color_mode",
                                     "${prefix}_font_color",
                                     "${prefix}_font_shadow",
@@ -629,6 +645,7 @@ fun CustomBackgroundPickerScreen(
                                 showForNoPfp = defaultPfpShowForNoPfp
                                 pfpSize = defaultPfpSize
                                 pfpShape = defaultPfpShape
+                                pfpShapeAnimate = defaultPfpShapeAnimate
 
                                 fontColorMode = defaultFontColorMode
                                 customFontColorInt = defaultFontColorInt
@@ -2154,8 +2171,8 @@ fun CustomBackgroundPickerScreen(
                                 // Feature 4: PFP Shape Chooser
                                 RivoListItem(
                                     headline = "PFP Shape",
-                                    supporting = if (pfpShape == "square") "Square" else "Circle (Default)",
-                                    leadingIcon = if (pfpShape == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                                    supporting = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.getDisplayLabel(pfpShape),
+                                    leadingIcon = if (pfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
                                     iconContainerColor = Color(0xFF673AB7),
                                     trailingIcon = Icons.Default.ChevronRight,
                                     onClick = { showShapeDialog = true }
@@ -2249,61 +2266,18 @@ fun CustomBackgroundPickerScreen(
     }
 
     if (showShapeDialog) {
-        AlertDialog(
-            onDismissRequest = { showShapeDialog = false },
-            title = { Text("Choose PFP Shape", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        Pair("circle", "Circle (Default)"),
-                        Pair("square", "Square")
-                    ).forEach { (shapeKey, shapeLabel) ->
-                        val isSelected = pfpShape == shapeKey
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    pfpShape = shapeKey
-                                    prefs.setString("${prefix}_custom_pfp_shape", shapeKey)
-                                    showShapeDialog = false
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Icon(
-                                        if (shapeKey == "square") Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
-                                        null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        shapeLabel,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                    }
-                }
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog(
+            currentShapeKey = pfpShape,
+            animateRotation = pfpShapeAnimate,
+            onAnimateRotationChange = {
+                pfpShapeAnimate = it
+                prefs.setBoolean("${prefix}_custom_pfp_shape_animate", it)
             },
-            confirmButton = {
-                TextButton(onClick = { showShapeDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onSelectShape = {
+                pfpShape = it
+                prefs.setString("${prefix}_custom_pfp_shape", it)
+            },
+            onDismiss = { showShapeDialog = false }
         )
     }
 

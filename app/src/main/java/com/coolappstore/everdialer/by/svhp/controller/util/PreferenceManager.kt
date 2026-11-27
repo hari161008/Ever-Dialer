@@ -134,6 +134,112 @@ class PreferenceManager(context: Context) {
         return "pin"
     }
 
+    fun isDialpadShowAlphabets(): Boolean = getBoolean(KEY_DIALPAD_SHOW_ALPHABETS, true)
+    fun setDialpadShowAlphabets(show: Boolean) = setBoolean(KEY_DIALPAD_SHOW_ALPHABETS, show)
+
+    fun getSelectedPfpShape(): String = getString(KEY_CONTACT_INFO_PFP_SHAPE, "circle") ?: "circle"
+    fun setSelectedPfpShape(shape: String) = setString(KEY_CONTACT_INFO_PFP_SHAPE, shape)
+
+    fun isAnimatePfpShapeRotation(): Boolean = getBoolean(KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, false)
+    fun setAnimatePfpShapeRotation(animate: Boolean) = setBoolean(KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, animate)
+
+    // USSD & Secret Codes
+    fun getSelectedUssdCountry(context: Context): String =
+        com.coolappstore.everdialer.by.svhp.controller.UssdRepository.getSelectedCountry(context, this)
+
+    fun setSelectedUssdCountry(countryCode: String) {
+        setString(KEY_USSD_COUNTRY, countryCode.uppercase())
+    }
+
+    fun getCustomUssdCodes(): List<com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem> {
+        val json = getString(KEY_USSD_CUSTOM_CODES, "[]") ?: "[]"
+        return try {
+            val array = org.json.JSONArray(json)
+            val list = mutableListOf<com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        title = obj.getString("title"),
+                        code = obj.getString("code"),
+                        category = com.coolappstore.everdialer.by.svhp.controller.UssdCategory.CUSTOM,
+                        countryCode = obj.optString("countryCode").takeIf { !it.isNullOrBlank() },
+                        brand = obj.optString("brand").takeIf { !it.isNullOrBlank() },
+                        isCustom = true,
+                        description = obj.optString("description").takeIf { !it.isNullOrBlank() }
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCustomUssdCodes(list: List<com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem>) {
+        val array = org.json.JSONArray()
+        list.forEach { item ->
+            val obj = org.json.JSONObject()
+            obj.put("id", item.id)
+            obj.put("title", item.title)
+            obj.put("code", item.code)
+            if (item.countryCode != null) obj.put("countryCode", item.countryCode)
+            if (item.brand != null) obj.put("brand", item.brand)
+            if (item.description != null) obj.put("description", item.description)
+            array.put(obj)
+        }
+        setString(KEY_USSD_CUSTOM_CODES, array.toString())
+    }
+
+    fun addCustomUssdCode(title: String, code: String, description: String? = null): com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem {
+        val current = getCustomUssdCodes().toMutableList()
+        val newItem = com.coolappstore.everdialer.by.svhp.controller.UssdCodeItem(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title.trim(),
+            code = code.trim(),
+            category = com.coolappstore.everdialer.by.svhp.controller.UssdCategory.CUSTOM,
+            isCustom = true,
+            description = description?.trim()?.ifBlank { null }
+        )
+        current.add(0, newItem)
+        saveCustomUssdCodes(current)
+        return newItem
+    }
+
+    fun updateCustomUssdCode(id: String, title: String, code: String, description: String? = null) {
+        val current = getCustomUssdCodes().map {
+            if (it.id == id) it.copy(title = title.trim(), code = code.trim(), description = description?.trim()?.ifBlank { null })
+            else it
+        }
+        saveCustomUssdCodes(current)
+    }
+
+    fun deleteCustomUssdCode(id: String) {
+        val current = getCustomUssdCodes().filter { it.id != id }
+        saveCustomUssdCodes(current)
+    }
+
+    fun isLockOutgoingCalls(): Boolean = getBoolean(KEY_BIOMETRICS_OUTGOING_CALL_LOCK, false)
+    fun setLockOutgoingCalls(enable: Boolean) = setBoolean(KEY_BIOMETRICS_OUTGOING_CALL_LOCK, enable)
+
+    /** Returns true if an outgoing call to [phoneNumber] should be gated behind biometric. */
+    fun shouldGateOutgoingCallWithBiometric(phoneNumber: String?): Boolean {
+        if (!getBoolean(KEY_BIOMETRICS_OUTGOING_CALL_LOCK, false)) return false
+        if ((getString(KEY_BIOMETRICS_TYPE, "") ?: "").isEmpty()) return false
+        val mode = getString(KEY_BIOMETRICS_CALL_LOCK_MODE, "all") ?: "all"
+        if (mode == "all") return true
+        if (phoneNumber.isNullOrBlank()) return mode == "skip_specified"
+        val stored = getString(KEY_BIOMETRICS_CALL_LOCK_NUMBERS, "") ?: ""
+        if (stored.isBlank()) return mode == "skip_specified"
+        val outgoing = phoneNumber.filter { it.isDigit() }.takeLast(10)
+        val match = stored.split(",").any { raw ->
+            val n = raw.trim().filter { it.isDigit() }.takeLast(10)
+            n.isNotEmpty() && (outgoing.endsWith(n) || n.endsWith(outgoing))
+        }
+        return if (mode == "specified") match else !match
+    }
+
     fun getDialpadButtonStyle(): String {
         val stored = getString(KEY_DIALPAD_BUTTON_STYLE, null)
         if (!stored.isNullOrBlank()) {
@@ -295,7 +401,13 @@ class PreferenceManager(context: Context) {
     fun getSmsCategoryOrder(): List<String> {
         val raw = getString(KEY_SMS_CATEGORY_ORDER, null)
         if (raw.isNullOrBlank()) return DEFAULT_SMS_CATEGORY_ORDER
-        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val list = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }.toMutableList()
+        if (!list.contains("scheduled")) {
+            val starredIdx = list.indexOf("starred")
+            if (starredIdx >= 0) list.add(starredIdx + 1, "scheduled")
+            else list.add("scheduled")
+        }
+        return list
     }
 
     fun setSmsCategoryOrder(order: List<String>) {
@@ -403,6 +515,7 @@ class PreferenceManager(context: Context) {
             "all" to "All",
             "favourites" to "Favourites",
             "starred" to "Starred",
+            "scheduled" to "Scheduled",
             "contacts" to "Contacts",
             "unknown" to "Unknown",
             "otp" to "OTP"
@@ -434,6 +547,52 @@ class PreferenceManager(context: Context) {
         setSmsCategoryOrder(DEFAULT_SMS_CATEGORY_ORDER)
         setString(KEY_SMS_CATEGORY_HIDDEN, "")
         setDefaultSmsCategory("all")
+    }
+
+    fun getSmsDraft(threadId: Long, address: String): String {
+        if (threadId > 0) {
+            val d = getString("sms_draft_t_$threadId", "") ?: ""
+            if (d.isNotBlank()) return d
+        }
+        val cleanAddr = address.filter { it.isLetterOrDigit() }
+        if (cleanAddr.isNotBlank()) {
+            return getString("sms_draft_a_$cleanAddr", "") ?: ""
+        }
+        return ""
+    }
+
+    fun saveSmsDraft(threadId: Long, address: String, text: String) {
+        val t = text.trim()
+        val editor = prefs.edit()
+        val cleanAddr = address.filter { it.isLetterOrDigit() }
+        if (t.isEmpty()) {
+            if (threadId > 0) editor.remove("sms_draft_t_$threadId")
+            if (cleanAddr.isNotBlank()) editor.remove("sms_draft_a_$cleanAddr")
+        } else {
+            if (threadId > 0) editor.putString("sms_draft_t_$threadId", t)
+            if (cleanAddr.isNotBlank()) editor.putString("sms_draft_a_$cleanAddr", t)
+        }
+        editor.apply()
+        _settingsChanged.value += 1
+    }
+
+    fun clearSmsDraft(threadId: Long, address: String) {
+        saveSmsDraft(threadId, address, "")
+    }
+
+    fun isShowSimInChat(context: Context): Boolean {
+        val subMgr = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+        val count = try {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                subMgr?.activeSubscriptionInfoCount ?: 0
+            } else 0
+        } catch (_: Exception) { 0 }
+        val defaultVal = count >= 2
+        return getBoolean(KEY_SHOW_SIM_IN_CHAT, defaultVal)
+    }
+
+    fun setShowSimInChat(value: Boolean) {
+        setBoolean(KEY_SHOW_SIM_IN_CHAT, value)
     }
 
     fun getCallCategoryOrder(): List<String> {
@@ -1377,6 +1536,7 @@ class PreferenceManager(context: Context) {
         // Quik SMS Settings Keys
         const val KEY_SMS_UNREAD_AT_TOP             = "sms_unread_at_top"
         const val KEY_SMS_SEND_DELAY_SECONDS        = "sms_send_delay_seconds" // 0, 3, 5, 10
+        const val KEY_SHOW_SIM_IN_CHAT              = "show_sim_in_sms_chat"
         const val KEY_SMS_DELIVERY_REPORTS          = "sms_delivery_reports"
         const val KEY_SMS_SIGNATURE                 = "sms_signature"
         const val KEY_SMS_SIGNATURE_ENABLED         = "sms_signature_enabled"
@@ -1387,6 +1547,8 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_DISABLE_SCREENSHOTS       = "sms_disable_screenshots"
         const val KEY_SMS_AUTO_COLOR_AVATARS        = "sms_auto_color_avatars"
         const val KEY_SMS_SHOW_AVATAR               = "sms_show_avatar"
+        const val KEY_SMS_PFP_SHAPE                 = "sms_pfp_shape"
+        const val KEY_SMS_PFP_SHAPE_ANIMATE         = "sms_pfp_shape_animate"
         const val KEY_SMS_SHOW_STT                  = "sms_show_stt"
         const val KEY_SMS_SWIPE_RIGHT_ACTION        = "sms_swipe_right_action" // "call", "read", "delete", "none" (default: "none")
         const val KEY_SMS_SWIPE_LEFT_ACTION         = "sms_swipe_left_action" // "delete", "read", "none" (default: "none")
@@ -1475,7 +1637,8 @@ class PreferenceManager(context: Context) {
         const val KEY_INCOMING_CUSTOM_PFP_EXCEPT_PFP        = "incoming_custom_pfp_except_pfp"
         const val KEY_INCOMING_CUSTOM_PFP_SHOW_FOR_NO_PFP   = "incoming_custom_pfp_show_for_no_pfp"
         const val KEY_INCOMING_CUSTOM_PFP_SIZE              = "incoming_custom_pfp_size"         // Float 0.1f..1.0f, default 0.5f (50%)
-        const val KEY_INCOMING_CUSTOM_PFP_SHAPE             = "incoming_custom_pfp_shape"        // "circle" | "square"
+        const val KEY_INCOMING_CUSTOM_PFP_SHAPE             = "incoming_custom_pfp_shape"        // "circle" | "square" | expressive shape key, default "circle"
+        const val KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE     = "incoming_custom_pfp_shape_animate"// Boolean, default false
 
         const val KEY_ONGOING_CUSTOM_PFP_TYPE               = "ongoing_custom_pfp_type"          // "none" | "wallpaper" | "picture" | "video"
         const val KEY_ONGOING_CUSTOM_PFP_PATH               = "ongoing_custom_pfp_path"
@@ -1489,11 +1652,33 @@ class PreferenceManager(context: Context) {
         const val KEY_ONGOING_CUSTOM_PFP_EXCEPT_PFP         = "ongoing_custom_pfp_except_pfp"
         const val KEY_ONGOING_CUSTOM_PFP_SHOW_FOR_NO_PFP    = "ongoing_custom_pfp_show_for_no_pfp"
         const val KEY_ONGOING_CUSTOM_PFP_SIZE               = "ongoing_custom_pfp_size"          // Float 0.1f..1.0f, default 0.5f (50%)
-        const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square"
+        const val KEY_ONGOING_CUSTOM_PFP_SHAPE              = "ongoing_custom_pfp_shape"         // "circle" | "square" | expressive shape key, default "circle"
+        const val KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE      = "ongoing_custom_pfp_shape_animate" // Boolean, default false
 
         // Contact Info PFP Customization (Size & Shape)
         const val KEY_CONTACT_INFO_PFP_SIZE                 = "contact_info_pfp_size"            // Float 0.1f..1.0f, default 0.60f (60%)
-        const val KEY_CONTACT_INFO_PFP_SHAPE                = "contact_info_pfp_shape"           // "circle" | "square", default "circle"
+        const val KEY_CONTACT_INFO_PFP_SHAPE                = "contact_info_pfp_shape"           // "circle" | "square" | expressive shape key, default "circle"
+        const val KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE        = "contact_info_pfp_shape_animate"   // Boolean, default false
+
+        // Independent Per-Screen PFP Shapes & Animations (all default to false)
+        const val KEY_CONTACTS_PFP_SHAPE                    = "contacts_pfp_shape"
+        const val KEY_CONTACTS_PFP_SHAPE_ANIMATE            = "contacts_pfp_shape_animate"
+        const val KEY_CALL_LOGS_PFP_SHAPE                   = "call_logs_pfp_shape"
+        const val KEY_CALL_LOGS_PFP_SHAPE_ANIMATE           = "call_logs_pfp_shape_animate"
+        const val KEY_FAVORITES_PFP_SHAPE                   = "favorites_pfp_shape"
+        const val KEY_FAVORITES_PFP_SHAPE_ANIMATE           = "favorites_pfp_shape_animate"
+        const val KEY_DIALPAD_PFP_SHAPE                     = "dialpad_pfp_shape"
+        const val KEY_DIALPAD_PFP_SHAPE_ANIMATE             = "dialpad_pfp_shape_animate"
+
+        // USSD & Secret Codes
+        const val KEY_USSD_COUNTRY                          = "ussd_selected_country"
+        const val KEY_USSD_CUSTOM_CODES                     = "ussd_custom_codes_json"
+
+        // Dialpad alphabets toggle
+        const val KEY_DIALPAD_SHOW_ALPHABETS                = "dialpad_show_alphabets"           // Boolean, default true
+
+        // Outgoing call lock
+        const val KEY_BIOMETRICS_OUTGOING_CALL_LOCK         = "biometrics_outgoing_call_lock"    // Boolean, default false
 
         // Volume DND — toggle system DND via volume button sequence using Accessibility
         const val KEY_VOLUME_DND_ENABLED           = "volume_dnd_enabled"
@@ -1553,7 +1738,7 @@ class PreferenceManager(context: Context) {
         const val KEY_SMS_CATEGORY_HIDDEN          = "sms_category_hidden"
         const val KEY_SMS_CUSTOM_CATEGORIES        = "sms_custom_categories"
         const val KEY_DEFAULT_SMS_CATEGORY         = "default_sms_category"
-        val DEFAULT_SMS_CATEGORY_ORDER             = listOf("all", "favourites", "starred", "contacts", "unknown", "otp")
+        val DEFAULT_SMS_CATEGORY_ORDER             = listOf("all", "favourites", "starred", "scheduled", "contacts", "unknown", "otp")
 
         // Call Categories
         const val KEY_CALL_CATEGORY_ORDER          = "call_category_order"

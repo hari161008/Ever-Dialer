@@ -13,10 +13,12 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -377,6 +379,19 @@ fun PatternCredentialView(
         contentAlignment = Alignment.Center
     ) {
         val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val view = androidx.compose.ui.platform.LocalView.current
+        val window = (context as? android.app.Activity)?.window ?: (view.context as? android.app.Activity)?.window
+        if (window != null) {
+            DisposableEffect(isDark) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                val prev = insetsController.isAppearanceLightStatusBars
+                insetsController.isAppearanceLightStatusBars = !isDark
+                onDispose {
+                    insetsController.isAppearanceLightStatusBars = prev
+                }
+            }
+        }
         val textPrimary = if (!isDark) Color(0xFF111318) else MaterialTheme.colorScheme.onSurface
         val textSecondary = if (!isDark) Color(0xFF44474E) else MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -940,7 +955,9 @@ fun PasswordCredentialView(
     }
 
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .imePadding(),
         contentAlignment = Alignment.Center
     ) {
         if (showCloseButton) {
@@ -964,7 +981,8 @@ fun PasswordCredentialView(
                 .align(Alignment.Center)
                 .widthIn(max = 380.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -1117,6 +1135,19 @@ fun CredentialSetupDialog(
         )
     ) {
         val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val view = androidx.compose.ui.platform.LocalView.current
+        val window = (context as? android.app.Activity)?.window ?: (view.context as? android.app.Activity)?.window
+        if (window != null) {
+            DisposableEffect(isDark) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                val prev = insetsController.isAppearanceLightStatusBars
+                insetsController.isAppearanceLightStatusBars = !isDark
+                onDispose {
+                    insetsController.isAppearanceLightStatusBars = prev
+                }
+            }
+        }
 
         Box(
             modifier = Modifier

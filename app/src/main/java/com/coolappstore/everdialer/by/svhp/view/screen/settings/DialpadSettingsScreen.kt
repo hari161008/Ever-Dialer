@@ -5,8 +5,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.CropSquare
 import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lens
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
@@ -23,10 +26,13 @@ import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DialpadCustomisationScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.UssdCodesScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -43,11 +49,36 @@ fun DialpadSettingsScreen(
     highlightKey: String? = null
 ) {
     val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     var dialpadMemory by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_MEMORY, true)) }
     var showCallLogsInDialpadSearchList by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SHOW_CALL_LOGS_IN_DIALPAD_SEARCH_LIST, true)) }
     var openDialpadDefault by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_OPEN_DIALPAD_DEFAULT, false)) }
+
+    var dialpadPfpShape by remember(settingsVer) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_DIALPAD_PFP_SHAPE, "circle") ?: "circle")
+    }
+    var animateDialpadShapeRotation by remember(settingsVer) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_DIALPAD_PFP_SHAPE_ANIMATE, false))
+    }
+    var showPfpShapeDialog by remember { mutableStateOf(false) }
+
+    if (showPfpShapeDialog) {
+        PfpShapeChooserDialog(
+            currentShapeKey = dialpadPfpShape,
+            animateRotation = animateDialpadShapeRotation,
+            onAnimateRotationChange = {
+                animateDialpadShapeRotation = it
+                prefs.setBoolean(PreferenceManager.KEY_DIALPAD_PFP_SHAPE_ANIMATE, it)
+            },
+            onSelectShape = {
+                dialpadPfpShape = it
+                prefs.setString(PreferenceManager.KEY_DIALPAD_PFP_SHAPE, it)
+            },
+            onDismiss = { showPfpShapeDialog = false }
+        )
+    }
 
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
@@ -85,6 +116,40 @@ fun DialpadSettingsScreen(
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("dialpad_customise", highlightedKey) { highlightedKey = null },
                             onClick = { navigator.navigate(DialpadCustomisationScreenDestination) }
+                        )
+                        HorizontalDivider(
+                            Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoListItem(
+                            headline = "USSD & Secret Codes",
+                            supporting = "Carrier codes, network diagnostics, and secret codes",
+                            leadingIcon = Icons.Outlined.Key,
+                            iconContainerColor = ColorTeal,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            onClick = { navigator.navigate(UssdCodesScreenDestination()) }
+                        )
+                    }
+                }
+            }
+
+            RivoAnimatedSection(delayMs = 20L) {
+                Column {
+                    Text(
+                        "Profile Picture",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = rivoHeadingColor(),
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                    )
+                    RivoExpressiveCard {
+                        RivoListItem(
+                            headline = "PFP Shape",
+                            supporting = PfpShapeRegistry.getDisplayLabel(dialpadPfpShape),
+                            leadingIcon = if (dialpadPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                            iconContainerColor = ColorPurple,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("dialpad_pfp_shape", highlightedKey) { highlightedKey = null },
+                            onClick = { showPfpShapeDialog = true }
                         )
                     }
                 }

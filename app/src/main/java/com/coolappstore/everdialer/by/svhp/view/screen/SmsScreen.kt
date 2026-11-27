@@ -36,6 +36,7 @@ import com.coolappstore.everdialer.by.svhp.controller.sms.SmsEventBus
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,13 +90,19 @@ import com.ramcosta.composedestinations.generated.destinations.SmsSettingsScreen
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import com.coolappstore.everdialer.by.svhp.controller.util.ScheduledSmsManager
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDate
 import com.coolappstore.everdialer.by.svhp.controller.util.formatDateHeader
 import com.coolappstore.everdialer.by.svhp.controller.util.formatTimeOnly
 import com.coolappstore.everdialer.by.svhp.controller.util.numbersLikelyMatch
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
-import java.text.SimpleDateFormat
-import java.util.*
 
 private val OTP_REGEX = Regex(
     """\b(otp|passcode|one[- ]time (?:password|passcode|code)|(?:verification|authentication|auth|security|secret|login|access|confirmation)[- ](?:code|pin|password)|your\s+(?:\w+\s+)?code\s+is|is\s+your\s+(?:\w+\s+)?(?:code|pin)|\d{4,8}\s+is\s+your|use\s+code\s+\d{4,8}|enter\s+(?:this\s+)?otp)\b|(?:\b(?:code|pin|otp)\s*[:=]\s*\d{4,8}\b)""",
@@ -262,11 +269,15 @@ fun SmsScreen(
 
     val use24HourTime = remember(settingsVer) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
 
+    var previousFilter by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(selectedFilter) {
         if (selectedFilter == "starred") {
             smsVM.refreshStarredMessages(prefs.getStarredSmsMessages())
         }
-        listStates[selectedFilter]?.scrollToItem(0)
+        if (previousFilter != null && previousFilter != selectedFilter) {
+            listStates[selectedFilter]?.scrollToItem(0)
+        }
+        previousFilter = selectedFilter
     }
 
     // Selection mode (Quik multi-select action mode)
@@ -605,12 +616,21 @@ fun SmsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0)
     ) { paddingValues ->
-        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val smsAvatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+            prefs,
+            settingsVer,
+            PreferenceManager.KEY_SMS_PFP_SHAPE,
+            PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE
+        )
+        CompositionLocalProvider(
+            com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides smsAvatarConfig
+        ) {
+            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
         AnimatedContent(
             targetState = selectedFilter,
             transitionSpec = {
-                val filterKeys = listOf("all", "favourites", "starred", "contacts", "unknown", "otp")
+                val filterKeys = listOf("all", "favourites", "starred", "scheduled", "contacts", "unknown", "otp")
                 val fromIdx = filterKeys.indexOf(initialState).let { if (it == -1) 0 else it }
                 val toIdx = filterKeys.indexOf(targetState).let { if (it == -1) 0 else it }
                 val isForward = toIdx >= fromIdx
@@ -647,7 +667,10 @@ fun SmsScreen(
                 .padding(paddingValues),
             label = "SmsTabAnimatedContent"
         ) { currentFilter ->
-            val currentListState = listStates.getOrPut(currentFilter) { LazyListState() }
+            val currentListState = rememberSaveable(currentFilter, saver = LazyListState.Saver) {
+                listStates.getOrPut(currentFilter) { LazyListState() }
+            }
+            listStates[currentFilter] = currentListState
             ScrollHapticsEffect(currentListState)
             val currentConversations = remember(rawConversations, currentFilter, favoriteNumbers, favoriteNames, customCategories) {
                 filterConversations(currentFilter)
@@ -657,6 +680,11 @@ fun SmsScreen(
             }
             val currentGrouped = remember(unpinnedConvs, unreadAtTop) {
                 groupConversations(unpinnedConvs)
+            }
+            val allScheduled = remember(settingsVer, currentFilter) {
+                if (currentFilter == "scheduled") {
+                    ScheduledSmsManager.loadEntries(prefs).sortedBy { it.scheduledTime }
+                } else emptyList()
             }
 
             LazyColumn(
@@ -1030,6 +1058,209 @@ fun SmsScreen(
                                                 )
                                             }
                                         )
+                                    }
+                                }
+                            }
+                            if (isLast) Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                } else if (currentFilter == "scheduled") {
+                    if (allScheduled.isEmpty()) {
+                        item(key = "empty_state_scheduled") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 60.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.size(72.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.AccessTime,
+                                                contentDescription = null,
+                                                tint = Color(0xFF00ACC1),
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        "No scheduled messages",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        "Scheduled messages from all chats will appear here",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = allScheduled,
+                            key = { _, entry -> "all_sched_${entry.id}" }
+                        ) { index, entry ->
+                            val isFirst = index == 0
+                            val isLast = index == allScheduled.size - 1
+                            val cornerRadius = 28.dp
+                            val topStart = if (isFirst) cornerRadius else 0.dp
+                            val topEnd = if (isFirst) cornerRadius else 0.dp
+                            val bottomStart = if (isLast) cornerRadius else 0.dp
+                            val bottomEnd = if (isLast) cornerRadius else 0.dp
+                            val itemShape = RoundedCornerShape(
+                                topStart = topStart,
+                                topEnd = topEnd,
+                                bottomStart = bottomStart,
+                                bottomEnd = bottomEnd
+                            )
+                            val resolvedContact = remember(entry.address, allContacts) {
+                                allContacts.firstOrNull { c ->
+                                    c.phoneNumbers.any { p ->
+                                        android.telephony.PhoneNumberUtils.compare(context, p, entry.address)
+                                    }
+                                }
+                            }
+                            val targetName = resolvedContact?.name?.ifBlank { null } ?: entry.address
+                            val targetPhoto = resolvedContact?.photoUri
+                            val schedTimeStr = remember(entry.scheduledTime) {
+                                val cal = Calendar.getInstance().apply { timeInMillis = entry.scheduledTime }
+                                val today = Calendar.getInstance()
+                                val isToday = cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                                              cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+                                val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+                                val isTomorrow = cal.get(Calendar.YEAR) == tomorrow.get(Calendar.YEAR) &&
+                                                 cal.get(Calendar.DAY_OF_YEAR) == tomorrow.get(Calendar.DAY_OF_YEAR)
+                                val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(entry.scheduledTime))
+                                when {
+                                    isToday -> "Today at $timeStr"
+                                    isTomorrow -> "Tomorrow at $timeStr"
+                                    else -> SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(entry.scheduledTime))
+                                }
+                            }
+                            RivoScrollAnimatedItem(enabled = isScrollAnimEnabled) {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    Surface(
+                                        shape = itemShape,
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                navigator.navigate(
+                                                    SmsChatScreenDestination(
+                                                        threadId = entry.threadId,
+                                                        address = entry.address,
+                                                        contactName = targetName,
+                                                        photoUri = targetPhoto
+                                                    )
+                                                )
+                                            }
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (showAvatar) {
+                                                    RivoAvatar(
+                                                        name = targetName,
+                                                        photoUri = targetPhoto,
+                                                        autoColorAvatars = autoColor,
+                                                        obeySolidIcons = false,
+                                                        size = 46.dp
+                                                    )
+                                                    Spacer(Modifier.width(12.dp))
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = targetName,
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f, fill = false)
+                                                        )
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.AccessTime,
+                                                                contentDescription = null,
+                                                                tint = Color(0xFF00ACC1),
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                            Text(
+                                                                text = schedTimeStr,
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = Color(0xFF00ACC1),
+                                                                fontWeight = FontWeight.Medium
+                                                            )
+                                                        }
+                                                    }
+                                                    Spacer(Modifier.height(4.dp))
+                                                    Text(
+                                                        text = entry.body,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                TextButton(
+                                                    onClick = {
+                                                        ScheduledSmsManager.removeEntry(context, prefs, entry.id)
+                                                        Toast.makeText(context, "Cancelled scheduled message", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                ) {
+                                                    Text("Cancel", style = MaterialTheme.typography.labelMedium)
+                                                }
+                                                Spacer(Modifier.width(8.dp))
+                                                Button(
+                                                    onClick = {
+                                                        ScheduledSmsManager.removeEntry(context, prefs, entry.id)
+                                                        smsVM.sendMessage(entry.address, entry.body, entry.subId) { success ->
+                                                            if (success) {
+                                                                Toast.makeText(context, "Message sent", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Failed to send", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    },
+                                                    shape = RoundedCornerShape(50)
+                                                ) {
+                                                    Text("Send now", style = MaterialTheme.typography.labelMedium)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1771,6 +2002,7 @@ fun SmsScreen(
             }
         )
     }
+    }
 }
 
 @Composable
@@ -1823,6 +2055,12 @@ private fun ConversationItemRow(
     onLongClick: () -> Unit,
     onAvatarClick: () -> Unit
 ) {
+    val prefs = koinInject<PreferenceManager>()
+    val settingsVer by prefs.settingsChanged.collectAsState()
+    val draft = remember(conversation.threadId, conversation.address, settingsVer) {
+        prefs.getSmsDraft(conversation.threadId, conversation.address)
+    }
+
     val targetBgColor = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
         !conversation.isRead -> MaterialTheme.colorScheme.surfaceContainerHigh
@@ -1966,15 +2204,30 @@ private fun ConversationItemRow(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = conversation.snippet.ifBlank { "No message text" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (!conversation.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (!conversation.isRead) FontWeight.Medium else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (draft.isNotBlank()) {
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)) {
+                                    append("Draft: ")
+                                }
+                                append(draft)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Text(
+                            text = conversation.snippet.ifBlank { "No message text" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (!conversation.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (!conversation.isRead) FontWeight.Medium else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
                     if (!conversation.isRead) {
                         Spacer(Modifier.width(8.dp))

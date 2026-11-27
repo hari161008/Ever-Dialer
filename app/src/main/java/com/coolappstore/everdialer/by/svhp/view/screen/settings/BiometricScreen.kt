@@ -74,9 +74,11 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var pinPadScramble by remember { mutableStateOf(prefs.isPinPadScramble()) }
     var appLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)) }
     var callLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)) }
+    var outgoingCallLockEnabled by remember { mutableStateOf(prefs.isLockOutgoingCalls()) }
     var callLockMode by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_MODE, "all") ?: "all") }
     var callLockNumbers by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK_NUMBERS, "") ?: "") }
     var backupType by remember { mutableStateOf(prefs.getBiometricsBackupType()) }
+    var showBackupChoiceDialog by remember { mutableStateOf(false) }
 
     var showContactPicker by remember { mutableStateOf(false) }
     var allContacts by remember { mutableStateOf(emptyList<Contact>()) }
@@ -178,68 +180,27 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 )
 
                 // 2. PIN Option
-                Column(modifier = Modifier.animateContentSize()) {
-                    RivoListItem(
-                        headline = "PIN",
-                        supporting = if (biometricsType == "pin") "Active unlock PIN" else "Set a numeric PIN",
-                        leadingIcon = Icons.Default.Pin,
-                        iconContainerColor = Color(0xFF2196F3),
-                        trailingIcon = if (biometricsType == "pin") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
-                        modifier = Modifier.settingsSearchHighlight("auth_method_pin", highlightedKey) { highlightedKey = null },
-                        onClick = {
-                            val hasPin = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()
-                            if (hasPin && biometricsType != "pin") {
-                                biometricsType = "pin"
-                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
-                                if (!appLockEnabled) {
-                                    appLockEnabled = true
-                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
-                                }
-                            } else {
-                                activeSetupType = "pin"
+                RivoListItem(
+                    headline = "PIN",
+                    supporting = if (biometricsType == "pin") "Active unlock PIN" else "Set a numeric PIN",
+                    leadingIcon = Icons.Default.Pin,
+                    iconContainerColor = Color(0xFF2196F3),
+                    trailingIcon = if (biometricsType == "pin") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_pin", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        val hasPin = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()
+                        if (hasPin && biometricsType != "pin") {
+                            biometricsType = "pin"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pin")
+                            if (!appLockEnabled) {
+                                appLockEnabled = true
+                                prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
                             }
-                        }
-                    )
-
-                    // ── Inline Expandable Section for PIN (Scramble & Change) ──
-                    AnimatedVisibility(
-                        visible = biometricsType == "pin" || (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty(),
-                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
-                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
-                    ) {
-                        Column {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoSwitchListItem(
-                                headline = "PIN pad scramble",
-                                supporting = "Randomize digit positions on the PIN unlock screen",
-                                leadingIcon = Icons.Default.Shuffle,
-                                iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.7f),
-                                checked = pinPadScramble,
-                                onCheckedChange = { isChecked ->
-                                    pinPadScramble = isChecked
-                                    prefs.setPinPadScramble(isChecked)
-                                }
-                            )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoListItem(
-                                headline = "Change PIN",
-                                supporting = "Set a new unlock PIN",
-                                leadingIcon = Icons.Default.Edit,
-                                iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.5f),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    activeSetupType = "pin"
-                                }
-                            )
+                        } else {
+                            activeSetupType = "pin"
                         }
                     }
-                }
+                )
 
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -247,122 +208,55 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 )
 
                 // 3. Password Option
-                Column(modifier = Modifier.animateContentSize()) {
-                    RivoListItem(
-                        headline = "Password",
-                        supporting = if (biometricsType == "password") "Active unlock password" else "Set an alphanumeric password",
-                        leadingIcon = Icons.Default.Key,
-                        iconContainerColor = Color(0xFF4CAF50),
-                        trailingIcon = if (biometricsType == "password") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
-                        modifier = Modifier.settingsSearchHighlight("auth_method_password", highlightedKey) { highlightedKey = null },
-                        onClick = {
-                            val hasPass = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()
-                            if (hasPass && biometricsType != "password") {
-                                biometricsType = "password"
-                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
-                                if (!appLockEnabled) {
-                                    appLockEnabled = true
-                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
-                                }
-                            } else {
-                                activeSetupType = "password"
+                RivoListItem(
+                    headline = "Password",
+                    supporting = if (biometricsType == "password") "Active unlock password" else "Set an alphanumeric password",
+                    leadingIcon = Icons.Default.Key,
+                    iconContainerColor = Color(0xFF4CAF50),
+                    trailingIcon = if (biometricsType == "password") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_password", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        val hasPass = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()
+                        if (hasPass && biometricsType != "password") {
+                            biometricsType = "password"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "password")
+                            if (!appLockEnabled) {
+                                appLockEnabled = true
+                                prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
                             }
-                        }
-                    )
-
-                    // ── Inline Expandable Section for Password Change ──
-                    AnimatedVisibility(
-                        visible = biometricsType == "password",
-                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
-                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
-                    ) {
-                        Column {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoListItem(
-                                headline = "Change Password",
-                                supporting = "Set a new unlock password",
-                                leadingIcon = Icons.Default.Edit,
-                                iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    activeSetupType = "password"
-                                }
-                            )
+                        } else {
+                            activeSetupType = "password"
                         }
                     }
-                }
+                )
 
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 )
 
-                // 4. Pattern Option (with expandable visibility toggle)
-                Column(modifier = Modifier.animateContentSize()) {
-                    RivoListItem(
-                        headline = "Pattern",
-                        supporting = if (biometricsType == "pattern") "Active pattern lock" else "Draw a 3x3 pattern lock",
-                        leadingIcon = Icons.Default.Pattern,
-                        iconContainerColor = Color(0xFFFF9800),
-                        trailingIcon = if (biometricsType == "pattern") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
-                        modifier = Modifier.settingsSearchHighlight("auth_method_pattern", highlightedKey) { highlightedKey = null },
-                        onClick = {
-                            val hasPattern = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()
-                            if (hasPattern && biometricsType != "pattern") {
-                                biometricsType = "pattern"
-                                prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pattern")
-                                if (!appLockEnabled) {
-                                    appLockEnabled = true
-                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
-                                }
-                            } else {
-                                activeSetupType = "pattern"
+                // 4. Pattern Option
+                RivoListItem(
+                    headline = "Pattern",
+                    supporting = if (biometricsType == "pattern") "Active pattern lock" else "Draw a 3x3 pattern lock",
+                    leadingIcon = Icons.Default.Pattern,
+                    iconContainerColor = Color(0xFFFF9800),
+                    trailingIcon = if (biometricsType == "pattern") Icons.Default.CheckCircle else Icons.Default.ChevronRight,
+                    modifier = Modifier.settingsSearchHighlight("auth_method_pattern", highlightedKey) { highlightedKey = null },
+                    onClick = {
+                        val hasPattern = (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()
+                        if (hasPattern && biometricsType != "pattern") {
+                            biometricsType = "pattern"
+                            prefs.setString(PreferenceManager.KEY_BIOMETRICS_TYPE, "pattern")
+                            if (!appLockEnabled) {
+                                appLockEnabled = true
+                                prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, true)
                             }
-                        }
-                    )
-
-                    // ── Inline Expandable Section for Pattern Visibility ──
-                    AnimatedVisibility(
-                        visible = biometricsType == "pattern",
-                        enter = fadeIn(tween(250)) + expandVertically(tween(250)),
-                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
-                    ) {
-                        Column {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoSwitchListItem(
-                                headline = "Visible Pattern",
-                                supporting = "Make pattern line visible when drawing",
-                                leadingIcon = if (patternVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.7f),
-                                checked = patternVisible,
-                                onCheckedChange = { isChecked ->
-                                    patternVisible = isChecked
-                                    prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_PATTERN_VISIBLE, isChecked)
-                                }
-                            )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                            RivoListItem(
-                                headline = "Change Pattern",
-                                supporting = "Redraw a new unlock pattern",
-                                leadingIcon = Icons.Default.Edit,
-                                iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f),
-                                trailingIcon = Icons.Default.ChevronRight,
-                                onClick = {
-                                    activeSetupType = "pattern"
-                                }
-                            )
+                        } else {
+                            activeSetupType = "pattern"
                         }
                     }
-                }
+                )
 
                 // Option to Remove Lock when one is set
                 if (biometricsType.isNotEmpty()) {
@@ -385,10 +279,115 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, "")
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
+                            prefs.setLockOutgoingCalls(false)
                             appLockEnabled = false
                             callLockEnabled = false
+                            outgoingCallLockEnabled = false
                         }
                     )
+                }
+            }
+
+            // ── Separate Container for Credential Options ──
+            val activeMethod = if (biometricsType == "system") backupType.ifEmpty { "pin" } else biometricsType
+            AnimatedVisibility(
+                visible = biometricsType.isNotEmpty(),
+                enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val sectionTitle = when {
+                        biometricsType == "system" -> "Security Options"
+                        activeMethod == "pin" -> "PIN Options"
+                        activeMethod == "pattern" -> "Pattern Options"
+                        activeMethod == "password" -> "Password Options"
+                        else -> "Security Options"
+                    }
+                    Text(
+                        text = sectionTitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                    RivoExpressiveCard {
+                        if (biometricsType == "system") {
+                            RivoListItem(
+                                headline = "Backup Credential",
+                                supporting = "Active fallback: ${activeMethod.replaceFirstChar { it.uppercase() }}",
+                                leadingIcon = Icons.Default.Shield,
+                                iconContainerColor = Color(0xFF673AB7),
+                                trailingIcon = Icons.Default.ChevronRight,
+                                onClick = { showBackupChoiceDialog = true }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        when (activeMethod) {
+                            "pin" -> {
+                                RivoSwitchListItem(
+                                    headline = "PIN pad scramble",
+                                    supporting = "Randomize digit positions on the PIN unlock screen",
+                                    leadingIcon = Icons.Default.Shuffle,
+                                    iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.7f),
+                                    checked = pinPadScramble,
+                                    onCheckedChange = { isChecked ->
+                                        pinPadScramble = isChecked
+                                        prefs.setPinPadScramble(isChecked)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoListItem(
+                                    headline = "Change PIN",
+                                    supporting = "Set a new unlock PIN",
+                                    leadingIcon = Icons.Default.Edit,
+                                    iconContainerColor = Color(0xFF2196F3).copy(alpha = 0.5f),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { activeSetupType = "pin" }
+                                )
+                            }
+                            "pattern" -> {
+                                RivoSwitchListItem(
+                                    headline = "Visible Pattern",
+                                    supporting = "Make pattern line visible when drawing",
+                                    leadingIcon = if (patternVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.7f),
+                                    checked = patternVisible,
+                                    onCheckedChange = { isChecked ->
+                                        patternVisible = isChecked
+                                        prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_PATTERN_VISIBLE, isChecked)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoListItem(
+                                    headline = "Change Pattern",
+                                    supporting = "Redraw a new unlock pattern",
+                                    leadingIcon = Icons.Default.Edit,
+                                    iconContainerColor = Color(0xFFFF9800).copy(alpha = 0.5f),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { activeSetupType = "pattern" }
+                                )
+                            }
+                            "password" -> {
+                                RivoListItem(
+                                    headline = "Change Password",
+                                    supporting = "Set a new unlock password",
+                                    leadingIcon = Icons.Default.Edit,
+                                    iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                    trailingIcon = Icons.Default.ChevronRight,
+                                    onClick = { activeSetupType = "password" }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -423,7 +422,7 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         RivoSwitchListItem(
-                            headline = "Lock Call Actions",
+                            headline = "Lock incoming call actions",
                             supporting = "Require authentication to answer or reject incoming calls",
                             leadingIcon = Icons.Default.PhonePaused,
                             iconContainerColor = Color(0xFF4CAF50),
@@ -434,11 +433,26 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, it)
                             }
                         )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoSwitchListItem(
+                            headline = "Lock outgoing call actions",
+                            supporting = "Require authentication before placing an outgoing call",
+                            leadingIcon = Icons.Default.PhoneForwarded,
+                            iconContainerColor = Color(0xFF009688),
+                            checked = outgoingCallLockEnabled,
+                            onCheckedChange = {
+                                outgoingCallLockEnabled = it
+                                prefs.setLockOutgoingCalls(it)
+                            }
+                        )
                     }
 
                     // ── Call lock scope ────────────────────────────────────
                     AnimatedVisibility(
-                        visible = callLockEnabled,
+                        visible = callLockEnabled || outgoingCallLockEnabled,
                         enter = fadeIn(tween(250)) + expandVertically(tween(250)),
                         exit  = fadeOut(tween(200)) + shrinkVertically(tween(200))
                     ) {
@@ -553,6 +567,71 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 }
             }
         }
+    }
+
+    // ── Backup Credential Choice Dialog ─────────────────────────────────────
+    if (showBackupChoiceDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupChoiceDialog = false },
+            title = { Text("Choose Backup Credential", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Triple("pin", "PIN", Icons.Default.Pin),
+                        Triple("pattern", "Pattern", Icons.Default.Pattern),
+                        Triple("password", "Password", Icons.Default.Key)
+                    ).forEach { (typeKey, typeLabel, typeIcon) ->
+                        val isSelected = backupType == typeKey
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                val hasCred = when (typeKey) {
+                                    "pin" -> (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PIN, "") ?: "").isNotEmpty()
+                                    "pattern" -> (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()
+                                    "password" -> (prefs.getString(PreferenceManager.KEY_BIOMETRICS_PASSWORD, "") ?: "").isNotEmpty()
+                                    else -> false
+                                }
+                                if (hasCred) {
+                                    backupType = typeKey
+                                    prefs.setString(PreferenceManager.KEY_BIOMETRICS_BACKUP_TYPE, typeKey)
+                                    showBackupChoiceDialog = false
+                                } else {
+                                    showBackupChoiceDialog = false
+                                    activeSetupType = typeKey
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(typeIcon, contentDescription = null, tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        typeLabel,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showBackupChoiceDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     // ── Credential Setup Full-Screen Dialog ─────────────────────────────────

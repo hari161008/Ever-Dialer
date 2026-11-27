@@ -210,6 +210,8 @@ class SmsViewModel(
         }
     }
 
+    private var loadThreadJob: Job? = null
+
     fun prepareThread(threadId: Long, address: String? = null) {
         activeThreadId = if (threadId > 0) threadId else null
         val cached = (if (threadId > 0) SmsCache.getThreadMessages(threadId) else null)
@@ -236,28 +238,38 @@ class SmsViewModel(
             _isThreadLoading.value = true
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        loadThreadJob?.cancel()
+        loadThreadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val msgs = smsRepository.getMessagesForThread(threadId)
                 withContext(Dispatchers.Main) {
-                    if (_currentThreadMessages.value != msgs) {
-                        _currentThreadMessages.value = msgs
+                    if (activeThreadId == threadId) {
+                        if (_currentThreadMessages.value != msgs) {
+                            _currentThreadMessages.value = msgs
+                        }
+                        SmsCache.setThreadMessages(threadId, msgs, address)
+                        _isThreadLoading.value = false
                     }
-                    SmsCache.setThreadMessages(threadId, msgs, address)
-                    _isThreadLoading.value = false
                 }
                 smsRepository.markThreadAsRead(threadId)
             } catch (_: Exception) {
                 withContext(Dispatchers.Main) {
-                    _isThreadLoading.value = false
+                    if (activeThreadId == threadId) {
+                        _isThreadLoading.value = false
+                    }
                 }
             }
         }
     }
 
-    fun clearActiveThread() {
-        activeThreadId = null
-        _isThreadLoading.value = false
+    fun clearActiveThread(forThreadId: Long? = null) {
+        if (forThreadId == null || activeThreadId == forThreadId) {
+            loadThreadJob?.cancel()
+            loadThreadJob = null
+            activeThreadId = null
+            _currentThreadMessages.value = emptyList()
+            _isThreadLoading.value = false
+        }
     }
 
     suspend fun getOrCreateThreadId(address: String): Long {

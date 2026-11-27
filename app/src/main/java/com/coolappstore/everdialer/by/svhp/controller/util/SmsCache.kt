@@ -70,8 +70,13 @@ object SmsCache {
         addressThreadMap.clear()
     }
 
-    private fun normalizeAddress(address: String): String =
-        address.replace("[^0-9+]".toRegex(), "")
+    private fun normalizeAddress(address: String): String {
+        val digitsOnly = address.replace("[^0-9+]".toRegex(), "")
+        if (digitsOnly.length >= 7) {
+            return digitsOnly.takeLast(10)
+        }
+        return address.trim().lowercase()
+    }
 
     private fun cacheFile(context: Context): File =
         File(context.filesDir, CACHE_FILE_NAME)

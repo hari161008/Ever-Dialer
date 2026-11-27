@@ -312,7 +312,10 @@ val settingsRoutes = setOf(
     "new_message_screen",
     "blocked_numbers_screen",
     "blocked_sms_screen",
-    "notifications_settings_screen"
+    "notifications_settings_screen",
+    "ussd_codes_screen",
+    "contacts_settings_screen",
+    "scheduled_messages_screen"
 )
 
 fun isRecordingsFromSettings(entry: NavBackStackEntry?): Boolean {
@@ -328,7 +331,7 @@ fun isSettingsRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
     if (route.contains("recordings_screen", ignoreCase = true) && route.contains("openedFromSettings=true", ignoreCase = true)) return true
-    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("customis", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true)
+    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("customis", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true) || base.contains("ussd", ignoreCase = true) || base.contains("scheduled", ignoreCase = true)
 }
 
 fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {

@@ -392,6 +392,12 @@ fun ContactListItem(
     val showAvatarsInContacts = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SHOW_AVATARS_CONTACTS, true)
     }
+    val contactsAvatarConfig = rememberAvatarDisplayConfig(
+        prefs,
+        settingsVer,
+        PreferenceManager.KEY_CONTACTS_PFP_SHAPE,
+        PreferenceManager.KEY_CONTACTS_PFP_SHAPE_ANIMATE
+    )
     val fakeCallInContextMenu = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_FAKE_CALL_IN_CONTEXT_MENU, false)
     }
@@ -585,14 +591,16 @@ fun ContactListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (showAvatarsInContacts) {
-                    RivoAvatar(
-                        name = headline,
-                        photoUri = contact.photoUri,
-                        size = 48.dp,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .onGloballyPositioned { coords -> avatarCoords = coords }
-                    )
+                    CompositionLocalProvider(LocalAvatarDisplayConfig provides contactsAvatarConfig) {
+                        RivoAvatar(
+                            name = headline,
+                            photoUri = contact.photoUri,
+                            size = 48.dp,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .onGloballyPositioned { coords -> avatarCoords = coords }
+                        )
+                    }
                     Spacer(modifier = Modifier.width(16.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {

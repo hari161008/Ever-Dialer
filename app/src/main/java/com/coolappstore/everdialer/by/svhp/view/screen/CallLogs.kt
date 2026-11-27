@@ -212,7 +212,12 @@ fun CallLogFullScreen(
 
                     val groupedLogs = remember(finalLogs) { finalLogs.groupBy { formatDateHeader(it.date) } }
                     val use24HourTime = remember(settingsVersion) { prefs.getBoolean(PreferenceManager.KEY_CALL_TIME_FORMAT_24H, false) }
-                    val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(prefs, settingsVersion)
+                    val avatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+                        prefs,
+                        settingsVersion,
+                        PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE,
+                        PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE_ANIMATE
+                    )
 
                     ScrollHapticsEffect(listState = listState)
                     CompositionLocalProvider(com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides avatarConfig) {

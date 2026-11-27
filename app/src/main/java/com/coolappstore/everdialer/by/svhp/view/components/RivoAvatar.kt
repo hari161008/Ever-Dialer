@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import org.koin.compose.koinInject
+import org.koin.core.context.GlobalContext
 import kotlin.math.abs
 
 import androidx.compose.runtime.compositionLocalOf
@@ -45,20 +48,27 @@ data class AvatarDisplayConfig(
     val solidStyle: String,
     val isSaturatedActive: Boolean,
     val solidBgColor: Color,
-    val solidContentColor: Color
+    val solidContentColor: Color,
+    val pfpShapeKey: String = "circle",
+    val animatePfpShape: Boolean = false
 )
 
 val LocalAvatarDisplayConfig = compositionLocalOf<AvatarDisplayConfig?> { null }
 
 @Composable
-fun rememberAvatarDisplayConfig(prefs: PreferenceManager, settingsVersion: Int): AvatarDisplayConfig {
+fun rememberAvatarDisplayConfig(
+    prefs: PreferenceManager,
+    settingsVersion: Int,
+    shapeKeyPref: String = PreferenceManager.KEY_CONTACTS_PFP_SHAPE,
+    animateShapePref: String = PreferenceManager.KEY_CONTACTS_PFP_SHAPE_ANIMATE
+): AvatarDisplayConfig {
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
 
-    return remember(settingsVersion, isDark, surfaceColor, primaryColor, primaryContainer) {
+    return remember(settingsVersion, isDark, surfaceColor, primaryColor, primaryContainer, shapeKeyPref, animateShapePref) {
         val showPicture = prefs.getBoolean(PreferenceManager.KEY_SHOW_PICTURE, true)
         val showFirstLetter = prefs.getBoolean(PreferenceManager.KEY_SHOW_FIRST_LETTER, true)
         val colorfulAvatars = prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true)
@@ -66,6 +76,8 @@ fun rememberAvatarDisplayConfig(prefs: PreferenceManager, settingsVersion: Int):
         val solidIconsDynamic = prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false)
         val solidStyle = prefs.getSolidIconsStyle(isDark)
         val isSaturatedActive = prefs.isSaturatedForTheme(isDark)
+        val pfpShapeKey = prefs.getString(shapeKeyPref, "circle") ?: "circle"
+        val animatePfpShape = prefs.getBoolean(animateShapePref, false)
         val (solidBgColor, solidContentColor) = if (solidStyle == PreferenceManager.SOLID_ICONS_STYLE_BRIGHT) {
             val isPrimaryBright = androidx.core.graphics.ColorUtils.calculateLuminance(primaryColor.toArgb()) > 0.45
             if (isSaturatedActive && isDark) {
@@ -89,7 +101,9 @@ fun rememberAvatarDisplayConfig(prefs: PreferenceManager, settingsVersion: Int):
             solidStyle = solidStyle,
             isSaturatedActive = isSaturatedActive,
             solidBgColor = solidBgColor,
-            solidContentColor = solidContentColor
+            solidContentColor = solidContentColor,
+            pfpShapeKey = pfpShapeKey,
+            animatePfpShape = animatePfpShape
         )
     }
 }
@@ -208,14 +222,37 @@ fun RivoAvatar(
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
 
-    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
-    val resolvedShape = if (isExpressive && shape == CircleShape) {
-        val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
-        val key = if (hasName) name else (photoUri ?: "unknown_caller")
-        val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
-        avatarShapeList[idx].toShape()
+    val pfpShapeKey = localConfig?.pfpShapeKey ?: "circle"
+    val animatePfpShape = localConfig?.animatePfpShape ?: false
+    val disableRotation = com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalDisableAvatarRotation.current
+    val rotationAngleProvider = com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle.current
+
+    val shapeKeys = remember(pfpShapeKey) {
+        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(pfpShapeKey)
+    }
+    val effectiveShapeKey = if (shapeKeys.size <= 1) {
+        shapeKeys.firstOrNull() ?: "circle"
     } else {
-        shape
+        val hashKey = if (hasName) name else (photoUri ?: "unknown_caller")
+        val idx = abs(hashKey.hashCode()) % shapeKeys.size
+        shapeKeys[idx]
+    }
+
+    val isExpressivePfp = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.isExpressive(effectiveShapeKey) && effectiveShapeKey != "circle" && effectiveShapeKey != "square"
+    val shouldAnimateRotation = !disableRotation && animatePfpShape && isExpressivePfp
+
+    val isExpressive = com.coolappstore.everdialer.by.svhp.view.theme.isMaterialExpressive()
+    val resolvedShape = when {
+        shape != CircleShape -> shape
+        effectiveShapeKey == "square" -> RoundedCornerShape(if (size != null) (size.value * 0.35f).coerceIn(8f, 28f).dp else 16.dp)
+        effectiveShapeKey != "circle" -> com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.getShape(effectiveShapeKey)
+        isExpressive -> {
+            val avatarShapeList = com.coolappstore.everdialer.by.svhp.view.theme.expressive.PetalMaterialShapes.avatarShapes
+            val key = if (hasName) name else (photoUri ?: "unknown_caller")
+            val idx = (kotlin.math.abs(key.hashCode())) % avatarShapeList.size
+            avatarShapeList[idx].toShape()
+        }
+        else -> shape
     }
 
     if (size != null) {
@@ -225,39 +262,54 @@ fun RivoAvatar(
         Box(
             modifier = modifier
                 .size(size)
+                .then(if (shouldAnimateRotation) Modifier.graphicsLayer { rotationZ = rotationAngleProvider() } else Modifier)
                 .background(backgroundColor, resolvedShape)
                 .clip(resolvedShape),
             contentAlignment = Alignment.Center
         ) {
-            when {
-                showPicture && !photoUri.isNullOrEmpty() -> {
-                    AsyncImage(
-                        model = photoUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                icon != null -> {
-                    Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
-                }
-                !forcePersonIcon && showFirstLetter && hasName -> {
-                    Text(
-                        text = name.trim().take(1).uppercase(),
-                        fontSize = letterFontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor,
-                        lineHeight = letterFontSize
-                    )
-                }
-                else -> {
-                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (shouldAnimateRotation) Modifier.graphicsLayer {
+                            rotationZ = -rotationAngleProvider()
+                            scaleX = 1.18f
+                            scaleY = 1.18f
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    showPicture && !photoUri.isNullOrEmpty() -> {
+                        AsyncImage(
+                            model = photoUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    icon != null -> {
+                        Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+                    }
+                    !forcePersonIcon && showFirstLetter && hasName -> {
+                        Text(
+                            text = name.trim().take(1).uppercase(),
+                            fontSize = letterFontSize,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor,
+                            lineHeight = letterFontSize
+                        )
+                    }
+                    else -> {
+                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+                    }
                 }
             }
         }
     } else {
         BoxWithConstraints(
             modifier = modifier
+                .then(if (shouldAnimateRotation) Modifier.graphicsLayer { rotationZ = rotationAngleProvider() } else Modifier)
                 .background(backgroundColor, resolvedShape)
                 .clip(resolvedShape),
             contentAlignment = Alignment.Center
@@ -265,29 +317,42 @@ fun RivoAvatar(
             val letterFontSize = (maxWidth.value * 0.40f).coerceIn(14f, 72f).sp
             val iconSize       = (maxWidth.value * 0.55f).coerceIn(16f, 130f).dp
 
-            when {
-                showPicture && !photoUri.isNullOrEmpty() -> {
-                    AsyncImage(
-                        model = photoUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                icon != null -> {
-                    Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
-                }
-                !forcePersonIcon && showFirstLetter && hasName -> {
-                    Text(
-                        text = name.trim().take(1).uppercase(),
-                        fontSize = letterFontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor,
-                        lineHeight = letterFontSize
-                    )
-                }
-                else -> {
-                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (shouldAnimateRotation) Modifier.graphicsLayer {
+                            rotationZ = -rotationAngleProvider()
+                            scaleX = 1.18f
+                            scaleY = 1.18f
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    showPicture && !photoUri.isNullOrEmpty() -> {
+                        AsyncImage(
+                            model = photoUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    icon != null -> {
+                        Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+                    }
+                    !forcePersonIcon && showFirstLetter && hasName -> {
+                        Text(
+                            text = name.trim().take(1).uppercase(),
+                            fontSize = letterFontSize,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor,
+                            lineHeight = letterFontSize
+                        )
+                    }
+                    else -> {
+                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+                    }
                 }
             }
         }

@@ -1134,6 +1134,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityBluePhoneIcon"
+            android:targetActivity=".MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityCustomPhoneIcon"
             android:targetActivity=".MainActivity"
             android:label="@string/app_name"
@@ -1227,6 +1241,20 @@
             android:label="Call"
             android:icon="@mipmap/ic_launcher_phone"
             android:roundIcon="@mipmap/ic_launcher_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameCallBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="Call"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -1334,6 +1362,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNameDialBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="Dial"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNameDialCustomPhone"
             android:targetActivity=".MainActivity"
             android:label="Dial"
@@ -1423,6 +1465,20 @@
             android:label="True Phone"
             android:icon="@mipmap/ic_launcher_phone"
             android:roundIcon="@mipmap/ic_launcher_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameTruePhoneBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="True Phone"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -1530,6 +1586,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNamePhoneDialerBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="Phone Dialer"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNamePhoneDialerCustomPhone"
             android:targetActivity=".MainActivity"
             android:label="Phone Dialer"
@@ -1628,6 +1698,20 @@
         </activity-alias>
 
         <activity-alias
+            android:name=".MainActivityNamePhoneBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="Phone"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
             android:name=".MainActivityNamePhoneCustomPhone"
             android:targetActivity=".MainActivity"
             android:label="Phone"
@@ -1717,6 +1801,20 @@
             android:label="Dialer"
             android:icon="@mipmap/ic_launcher_phone"
             android:roundIcon="@mipmap/ic_launcher_phone_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityNameDialerBluePhone"
+            android:targetActivity=".MainActivity"
+            android:label="Dialer"
+            android:icon="@mipmap/ic_launcher_blue_phone"
+            android:roundIcon="@mipmap/ic_launcher_blue_phone_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

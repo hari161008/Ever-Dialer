@@ -23,6 +23,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
+import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
@@ -55,6 +57,30 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
     }
     var showPhoneNumber by remember {
         mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_SHOW_PHONE_NUMBER, true))
+    }
+
+    var incomingPfpShape by remember(settingsVersion) {
+        mutableStateOf(prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") ?: "circle")
+    }
+    var animateIncomingShapeRotation by remember(settingsVersion) {
+        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, false))
+    }
+    var showPfpShapeDialog by remember { mutableStateOf(false) }
+
+    if (showPfpShapeDialog) {
+        PfpShapeChooserDialog(
+            currentShapeKey = incomingPfpShape,
+            animateRotation = animateIncomingShapeRotation,
+            onAnimateRotationChange = {
+                animateIncomingShapeRotation = it
+                prefs.setBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, it)
+            },
+            onSelectShape = {
+                incomingPfpShape = it
+                prefs.setString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, it)
+            },
+            onDismiss = { showPfpShapeDialog = false }
+        )
     }
 
     val bgLabel = when (incomingBgType) {
@@ -190,6 +216,19 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                                 prefs.setBoolean(PreferenceManager.KEY_INCOMING_SHOW_CONTACT_PFP, it)
                             },
                             modifier = Modifier.settingsSearchHighlight("incoming_show_contact_pfp", highlightedKey) { highlightedKey = null }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        RivoListItem(
+                            headline = "PFP Shape",
+                            supporting = PfpShapeRegistry.getDisplayLabel(incomingPfpShape),
+                            leadingIcon = if (incomingPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                            iconContainerColor = Color(0xFF9C27B0),
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("incoming_pfp_shape", highlightedKey) { highlightedKey = null },
+                            onClick = { showPfpShapeDialog = true }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),

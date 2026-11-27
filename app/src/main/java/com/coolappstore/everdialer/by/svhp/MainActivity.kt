@@ -278,6 +278,33 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
+                val activePfpShape = remember(settingsVer) { prefs.getSelectedPfpShape() }
+                val animatePfpShape = remember(settingsVer) { prefs.isAnimatePfpShapeRotation() }
+                val isExpressivePfp = remember(activePfpShape) {
+                    activePfpShape != "circle" && activePfpShape != "square" && com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.isExpressive(activePfpShape)
+                }
+                val shouldAnimatePfp = animatePfpShape && isExpressivePfp
+
+                val rot = if (shouldAnimatePfp) {
+                    val transition = rememberInfiniteTransition(label = "globalPfpRotation")
+                    transition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 14000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "globalPfpAngle"
+                    )
+                } else null
+
+                val globalPfpRotationAngle: () -> Float = remember(rot) {
+                    if (rot != null) { { rot.value } } else { { 0f } }
+                }
+
+                CompositionLocalProvider(
+                    com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle provides globalPfpRotationAngle
+                ) {
                 // Pre-warm SMS ViewModel on launch so SMS tab is instant
                 val smsVM: com.coolappstore.everdialer.by.svhp.controller.SmsViewModel = org.koin.compose.viewmodel.koinActivityViewModel()
 
@@ -1003,6 +1030,7 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -1197,7 +1225,7 @@ class MainActivity : FragmentActivity() {
 
         val prefs = GlobalContext.get().get<PreferenceManager>()
         val biometricType = prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: ""
-        val isCallGated = biometricType.isNotEmpty() && prefs.shouldGateCallWithBiometric(cleanNumber)
+        val isCallGated = biometricType.isNotEmpty() && (prefs.shouldGateCallWithBiometric(cleanNumber) || prefs.shouldGateOutgoingCallWithBiometric(cleanNumber))
         val appLockEnabled = prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
         val isAppGated = biometricType.isNotEmpty() && appLockEnabled && !isAppUnlocked
 
