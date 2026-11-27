@@ -86,6 +86,17 @@
         <package android:name="org.telegram.messenger" />
         <package android:name="org.telegram.messenger.web" />
         <package android:name="com.truecaller" />
+        <!-- Same reason, for the video-call picker: without these, Android 11+ hides these apps
+             from getPackageInfo(), so they never appear as video call options even when installed. -->
+        <package android:name="com.google.android.apps.tachyon" />
+        <package android:name="com.google.android.apps.meetings" />
+        <package android:name="org.thoughtcrime.securesms" />
+        <package android:name="com.viber.voip" />
+        <package android:name="com.skype.raider" />
+        <package android:name="com.tencent.mm" />
+        <package android:name="jp.naver.line.android" />
+        <package android:name="com.imo.android.imoim" />
+        <package android:name="us.zoom.videomeetings" />
         <!-- Broader than the specific packages above: makes every installed app that can open
              a tg:// link visible to queryIntentActivities, so any Telegram client/fork shows up
              in the "contact through Telegram" chooser sheet, not just the official app. -->

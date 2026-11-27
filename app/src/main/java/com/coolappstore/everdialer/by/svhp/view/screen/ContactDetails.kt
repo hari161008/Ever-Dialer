@@ -374,6 +374,16 @@ fun ContactDetailsScreen(
     val meetIcon = remember(context, meetInstalled) { if (meetInstalled) getGoogleMeetIcon(context) else null }
     val truecallerIcon = remember(context, truecallerInstalled) { if (truecallerInstalled) getTruecallerIcon(context) else null }
 
+    // Video button in the quick-actions row: picks between the carrier video call and every
+    // installed app that can video call a phone number (WhatsApp, Meet, Telegram, Signal, Viber,
+    // Skype, WeChat, LINE, imo, Zoom), remembering the choice when asked to.
+    val videoCallLauncher = rememberVideoCallLauncher()
+    val videoCallTarget = contactDefaultNumber
+        ?: contactPhoneNumbers.firstOrNull()
+        ?: phoneNumber?.takeIf { it.isNotBlank() && it != "Unknown" }
+        ?: displayPhone.takeIf { it != "Unknown" }
+        ?: ""
+
     val isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
     val isSaturatedActive = remember(settingsVer, isDark) { prefs.isSaturatedForTheme(isDark) }
 
@@ -1427,6 +1437,20 @@ fun ContactDetailsScreen(
                                             expanded = showCallLongPressMenu,
                                             onDismissRequest = { showCallLongPressMenu = false }
                                         ) {
+                                            RivoDropdownMenuItem(
+                                                text = "Video call",
+                                                icon = Icons.Default.Videocam,
+                                                onClick = {
+                                                    showCallLongPressMenu = false
+                                                    if (videoCallTarget.isNotBlank()) {
+                                                        videoCallLauncher.chooseVideoApp(videoCallTarget, contact?.name)
+                                                    }
+                                                }
+                                            )
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -1516,6 +1540,37 @@ fun ContactDetailsScreen(
                                                         showCallLongPressMenu = false
                                                         chooseSocialApp("googlemeet")
                                                     }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Box(modifier = Modifier.width(64.dp)) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(64.dp)
+                                                .clip(RoundedCornerShape(50))
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (videoCallTarget.isNotBlank()) {
+                                                            videoCallLauncher.startVideoCall(videoCallTarget, contact?.name)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        if (videoCallTarget.isNotBlank()) {
+                                                            videoCallLauncher.chooseVideoApp(videoCallTarget, contact?.name)
+                                                        }
+                                                    }
+                                                ),
+                                            shape = RoundedCornerShape(50),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                Icon(
+                                                    Icons.Default.Videocam,
+                                                    contentDescription = "Video call",
+                                                    modifier = Modifier.size(26.dp)
                                                 )
                                             }
                                         }
