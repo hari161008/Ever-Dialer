@@ -20,12 +20,12 @@ import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ActionButtonsSettingsScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -59,26 +59,6 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
 
     var ongoingPfpShape by remember(settingsVersion) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateOngoingShapeRotation by remember(settingsVersion) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = ongoingPfpShape,
-            animateRotation = animateOngoingShapeRotation,
-            onAnimateRotationChange = {
-                animateOngoingShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                ongoingPfpShape = it
-                prefs.setString(PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
     }
 
     val bgLabel = when (ongoingBgType) {
@@ -205,7 +185,15 @@ fun CallerUIScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                                     iconContainerColor = Color(0xFF9C27B0),
                                     trailingIcon = Icons.Default.ChevronRight,
                                     modifier = Modifier.settingsSearchHighlight("ongoing_pfp_shape", highlightedKey) { highlightedKey = null },
-                                    onClick = { showPfpShapeDialog = true }
+                                    onClick = {
+                                        navigator.navigate(
+                                            PfpShapeChooserScreenDestination(
+                                                title = "Ongoing Call PFP Shape",
+                                                shapePrefKey = PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE,
+                                                animatePrefKey = PreferenceManager.KEY_ONGOING_CUSTOM_PFP_SHAPE_ANIMATE
+                                            )
+                                        )
+                                    }
                                 )
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),

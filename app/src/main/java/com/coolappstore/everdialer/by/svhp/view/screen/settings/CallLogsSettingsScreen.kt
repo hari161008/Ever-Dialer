@@ -52,10 +52,10 @@ import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -82,26 +82,6 @@ fun CallLogsSettingsScreen(
 
     var callLogsPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateCallLogsShapeRotation by remember(settingsVer) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = callLogsPfpShape,
-            animateRotation = animateCallLogsShapeRotation,
-            onAnimateRotationChange = {
-                animateCallLogsShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                callLogsPfpShape = it
-                prefs.setString(PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
     }
 
     var groupCallsByLatest by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_GROUP_CALLS_BY_LATEST, false)) }
@@ -466,6 +446,27 @@ fun CallLogsSettingsScreen(
                             modifier = Modifier.settingsSearchHighlight("call_default_category", highlightedKey) { highlightedKey = null },
                             onClick = { showDefaultCategoryDialog = true }
                         )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        RivoListItem(
+                            headline = "PFP Shape",
+                            supporting = PfpShapeRegistry.getDisplayLabel(callLogsPfpShape),
+                            leadingIcon = if (callLogsPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
+                            iconContainerColor = ColorPurple,
+                            trailingIcon = Icons.Default.ChevronRight,
+                            modifier = Modifier.settingsSearchHighlight("call_logs_pfp_shape", highlightedKey) { highlightedKey = null },
+                            onClick = {
+                                navigator.navigate(
+                                    PfpShapeChooserScreenDestination(
+                                        title = "Call Logs PFP Shape",
+                                        shapePrefKey = PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE,
+                                        animatePrefKey = PreferenceManager.KEY_CALL_LOGS_PFP_SHAPE_ANIMATE
+                                    )
+                                )
+                            }
+                        )
                     }
                 }
             }
@@ -808,28 +809,6 @@ fun CallLogsSettingsScreen(
                                 label = { Text("Hours") }
                             )
                         }
-                    }
-                }
-            }
-
-            RivoAnimatedSection(delayMs = 40L) {
-                Column {
-                    Text(
-                        "Profile Picture",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = rivoHeadingColor(),
-                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                    )
-                    RivoExpressiveCard {
-                        RivoListItem(
-                            headline = "PFP Shape",
-                            supporting = PfpShapeRegistry.getDisplayLabel(callLogsPfpShape),
-                            leadingIcon = if (callLogsPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
-                            iconContainerColor = ColorPurple,
-                            trailingIcon = Icons.Default.ChevronRight,
-                            modifier = Modifier.settingsSearchHighlight("call_logs_pfp_shape", highlightedKey) { highlightedKey = null },
-                            onClick = { showPfpShapeDialog = true }
-                        )
                     }
                 }
             }

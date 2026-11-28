@@ -320,7 +320,8 @@ class SmsRepository(
                 Telephony.Sms.DATE,
                 Telephony.Sms.TYPE,
                 Telephony.Sms.READ,
-                Telephony.Sms.STATUS
+                Telephony.Sms.STATUS,
+                Telephony.Sms.SUBSCRIPTION_ID
             )
 
             contentResolver.query(
@@ -338,8 +339,10 @@ class SmsRepository(
                 val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
                 val readCol = cursor.getColumnIndex(Telephony.Sms.READ)
                 val statusCol = cursor.getColumnIndex(Telephony.Sms.STATUS)
+                val subIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
 
                 while (cursor.moveToNext()) {
+                    val subId = if (subIdCol >= 0 && !cursor.isNull(subIdCol)) cursor.getInt(subIdCol) else null
                     messages.add(
                         SmsMessage(
                             id = cursor.getLong(idCol),
@@ -350,7 +353,8 @@ class SmsRepository(
                             type = cursor.getInt(typeCol),
                             isRead = cursor.getInt(readCol) == 1,
                             isMms = false,
-                            deliveryStatus = if (statusCol >= 0) cursor.getInt(statusCol) else -1
+                            deliveryStatus = if (statusCol >= 0) cursor.getInt(statusCol) else -1,
+                            subId = subId
                         )
                     )
                 }
@@ -365,7 +369,8 @@ class SmsRepository(
                 Telephony.Mms.DATE,
                 Telephony.Mms.MESSAGE_BOX,
                 Telephony.Mms.READ,
-                Telephony.Mms.SUBJECT
+                Telephony.Mms.SUBJECT,
+                Telephony.Mms.SUBSCRIPTION_ID
             )
 
             contentResolver.query(
@@ -381,6 +386,7 @@ class SmsRepository(
                 val boxCol = cursor.getColumnIndex(Telephony.Mms.MESSAGE_BOX)
                 val readCol = cursor.getColumnIndex(Telephony.Mms.READ)
                 val subjCol = cursor.getColumnIndex(Telephony.Mms.SUBJECT)
+                val mmsSubIdCol = cursor.getColumnIndex(Telephony.Mms.SUBSCRIPTION_ID)
 
                 while (cursor.moveToNext()) {
                     val mmsId = cursor.getLong(idCol)
@@ -390,6 +396,7 @@ class SmsRepository(
                     val box = cursor.getInt(boxCol)
                     val isRead = cursor.getInt(readCol) == 1
                     val subject = if (subjCol >= 0) cursor.getString(subjCol) else null
+                    val mmsSubId = if (mmsSubIdCol >= 0 && !cursor.isNull(mmsSubIdCol)) cursor.getInt(mmsSubIdCol) else null
 
                     // Type mapping: box 1 = inbox, box 2 = sent
                     val msgType = if (box == Telephony.Mms.MESSAGE_BOX_INBOX) {
@@ -417,7 +424,8 @@ class SmsRepository(
                             isRead = isRead,
                             isMms = true,
                             subject = subject,
-                            parts = parts
+                            parts = parts,
+                            subId = mmsSubId
                         )
                     )
                 }
@@ -759,7 +767,8 @@ class SmsRepository(
                 Telephony.Sms.DATE,
                 Telephony.Sms.TYPE,
                 Telephony.Sms.READ,
-                Telephony.Sms.STATUS
+                Telephony.Sms.STATUS,
+                Telephony.Sms.SUBSCRIPTION_ID
             )
             val inClause = messageIds.joinToString(",")
             contentResolver.query(
@@ -777,8 +786,10 @@ class SmsRepository(
                 val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
                 val readCol = cursor.getColumnIndex(Telephony.Sms.READ)
                 val statusCol = cursor.getColumnIndex(Telephony.Sms.STATUS)
+                val subIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
 
                 while (cursor.moveToNext()) {
+                    val subId = if (subIdCol >= 0 && !cursor.isNull(subIdCol)) cursor.getInt(subIdCol) else null
                     messages.add(
                         SmsMessage(
                             id = cursor.getLong(idCol),
@@ -789,7 +800,8 @@ class SmsRepository(
                             type = cursor.getInt(typeCol),
                             isRead = cursor.getInt(readCol) == 1,
                             isMms = false,
-                            deliveryStatus = if (statusCol >= 0) cursor.getInt(statusCol) else -1
+                            deliveryStatus = if (statusCol >= 0) cursor.getInt(statusCol) else -1,
+                            subId = subId
                         )
                     )
                 }

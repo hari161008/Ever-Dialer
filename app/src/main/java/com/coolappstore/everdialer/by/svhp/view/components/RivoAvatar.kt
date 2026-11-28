@@ -141,6 +141,8 @@ fun RivoAvatar(
     val isSaturatedActive: Boolean
     val solidBgColor: Color
     val solidContentColor: Color
+    val fallbackPfpShape: String
+    val fallbackAnimatePfp: Boolean
 
     if (localConfig != null) {
         showPicture = localConfig.showPicture
@@ -153,6 +155,8 @@ fun RivoAvatar(
         isSaturatedActive = localConfig.isSaturatedActive
         solidBgColor = localConfig.solidBgColor
         solidContentColor = localConfig.solidContentColor
+        fallbackPfpShape = "circle"
+        fallbackAnimatePfp = false
     } else {
         val prefs = koinInject<PreferenceManager>()
         val settingsState by prefs.settingsChanged.collectAsState()
@@ -162,6 +166,8 @@ fun RivoAvatar(
         colorfulAvatars = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_COLORFUL_AVATARS, true) }
         solidIcons      = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS, false) }
         solidIconsDynamic = remember(settingsState) { prefs.getBoolean(PreferenceManager.KEY_SOLID_ICONS_DYNAMIC, false) }
+        fallbackPfpShape = remember(settingsState) { prefs.getSelectedPfpShape() }
+        fallbackAnimatePfp = remember(settingsState) { prefs.isAnimatePfpShapeRotation() }
         isDark = androidx.core.graphics.ColorUtils.calculateLuminance(MaterialTheme.colorScheme.surface.toArgb()) < 0.5
         solidStyle = remember(settingsState, isDark) { prefs.getSolidIconsStyle(isDark) }
 
@@ -222,8 +228,8 @@ fun RivoAvatar(
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
 
-    val pfpShapeKey = localConfig?.pfpShapeKey ?: "circle"
-    val animatePfpShape = localConfig?.animatePfpShape ?: false
+    val pfpShapeKey = localConfig?.pfpShapeKey ?: fallbackPfpShape
+    val animatePfpShape = localConfig?.animatePfpShape ?: fallbackAnimatePfp
     val disableRotation = com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalDisableAvatarRotation.current
     val rotationAngleProvider = com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle.current
 

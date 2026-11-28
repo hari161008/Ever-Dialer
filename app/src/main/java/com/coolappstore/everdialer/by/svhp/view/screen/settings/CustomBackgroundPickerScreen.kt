@@ -324,7 +324,6 @@ fun CustomBackgroundPickerScreen(
     }
 
     var showPfpOptionsPopup by remember { mutableStateOf(false) }
-    var showShapeDialog by remember { mutableStateOf(false) }
 
     var elementsThemeMode by remember(settingsVersion) {
         mutableStateOf(
@@ -2175,7 +2174,15 @@ fun CustomBackgroundPickerScreen(
                                     leadingIcon = if (pfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
                                     iconContainerColor = Color(0xFF673AB7),
                                     trailingIcon = Icons.Default.ChevronRight,
-                                    onClick = { showShapeDialog = true }
+                                    onClick = {
+                                        navigator.navigate(
+                                            com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination(
+                                                title = "PFP Shape",
+                                                shapePrefKey = "${prefix}_custom_pfp_shape",
+                                                animatePrefKey = "${prefix}_custom_pfp_shape_animate"
+                                            )
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -2262,22 +2269,6 @@ fun CustomBackgroundPickerScreen(
                 editorMediaState = Triple(file, isVideo, type)
                 showPfpOptionsPopup = false
             }
-        )
-    }
-
-    if (showShapeDialog) {
-        com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog(
-            currentShapeKey = pfpShape,
-            animateRotation = pfpShapeAnimate,
-            onAnimateRotationChange = {
-                pfpShapeAnimate = it
-                prefs.setBoolean("${prefix}_custom_pfp_shape_animate", it)
-            },
-            onSelectShape = {
-                pfpShape = it
-                prefs.setString("${prefix}_custom_pfp_shape", it)
-            },
-            onDismiss = { showShapeDialog = false }
         )
     }
 

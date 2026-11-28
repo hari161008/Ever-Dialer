@@ -284,6 +284,7 @@ val settingsRoutes = setOf(
     "contacts_hider_screen",
     "custom_background_picker_screen",
     "contact_pfp_customization_screen",
+    "pfp_shape_chooser_screen",
     "liquid_glass_elements_screen",
     "blur_effects_elements_screen",
     "backup_settings_screen",
@@ -331,7 +332,7 @@ fun isSettingsRoute(route: String?): Boolean {
     if (route == null) return false
     val base = route.substringBefore("?").substringBefore("/")
     if (route.contains("recordings_screen", ignoreCase = true) && route.contains("openedFromSettings=true", ignoreCase = true)) return true
-    return base in settingsRoutes || base.contains("settings", ignoreCase = true) || base.contains("customis", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true) || base.contains("ussd", ignoreCase = true) || base.contains("scheduled", ignoreCase = true)
+    return base in settingsRoutes || base.contains("pfp_shape", ignoreCase = true) || base.contains("settings", ignoreCase = true) || base.contains("customis", ignoreCase = true) || base.contains("about", ignoreCase = true) || base.contains("contact_details", ignoreCase = true) || base.contains("call_log_detail", ignoreCase = true) || base.contains("search", ignoreCase = true) || base.contains("contact_edit", ignoreCase = true) || base.contains("sms_chat", ignoreCase = true) || base.contains("new_message", ignoreCase = true) || base.contains("blocked", ignoreCase = true) || base.contains("ussd", ignoreCase = true) || base.contains("scheduled", ignoreCase = true)
 }
 
 fun isSettingsRoute(entry: NavBackStackEntry?): Boolean {

@@ -32,7 +32,7 @@ import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundEdito
 import com.coolappstore.everdialer.by.svhp.view.components.CustomBackgroundTarget
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.RotatingPfpShapeContainer
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -120,10 +120,6 @@ fun ContactInfoSettingsScreen(
     var contactInfoPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, "circle") ?: "circle")
     }
-    var animateShapeRotation by remember(settingsVer) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
 
     var showContactInfoElementsDialog by remember { mutableStateOf(false) }
     var contactInfoShowQuickActions        by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACT_INFO_SHOW_QUICK_ACTIONS, true)) }
@@ -327,22 +323,6 @@ fun ContactInfoSettingsScreen(
         )
     }
 
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = contactInfoPfpShape,
-            animateRotation = animateShapeRotation,
-            onAnimateRotationChange = {
-                animateShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                contactInfoPfpShape = it
-                prefs.setString(PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
-    }
-
     Scaffold(
         modifier = Modifier.settingsMotionBlur(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -472,7 +452,16 @@ fun ContactInfoSettingsScreen(
                             leadingIcon = if (contactInfoPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
                             iconContainerColor = Color(0xFF673AB7),
                             trailingIcon = Icons.Default.ChevronRight,
-                            onClick = { showPfpShapeDialog = true }
+                            modifier = Modifier.settingsSearchHighlight("contact_info_pfp_shape", highlightedKey) { highlightedKey = null },
+                            onClick = {
+                                navigator.navigate(
+                                    PfpShapeChooserScreenDestination(
+                                        title = "Contact Info PFP Shape",
+                                        shapePrefKey = PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE,
+                                        animatePrefKey = PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE
+                                    )
+                                )
+                            }
                         )
 
                         CardDivider()

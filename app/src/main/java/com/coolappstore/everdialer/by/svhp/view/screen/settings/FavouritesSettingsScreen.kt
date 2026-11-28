@@ -22,8 +22,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -47,26 +47,6 @@ fun FavouritesSettingsScreen(
 
     var favoritesPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_FAVORITES_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateFavoritesShapeRotation by remember(settingsVer) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_FAVORITES_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = favoritesPfpShape,
-            animateRotation = animateFavoritesShapeRotation,
-            onAnimateRotationChange = {
-                animateFavoritesShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_FAVORITES_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                favoritesPfpShape = it
-                prefs.setString(PreferenceManager.KEY_FAVORITES_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
     }
 
     Scaffold(
@@ -129,7 +109,15 @@ fun FavouritesSettingsScreen(
                             iconContainerColor = Color(0xFF9C27B0),
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("favorites_pfp_shape", highlightedKey) { highlightedKey = null },
-                            onClick = { showPfpShapeDialog = true }
+                            onClick = {
+                                navigator.navigate(
+                                    PfpShapeChooserScreenDestination(
+                                        title = "Favourites PFP Shape",
+                                        shapePrefKey = PreferenceManager.KEY_FAVORITES_PFP_SHAPE,
+                                        animatePrefKey = PreferenceManager.KEY_FAVORITES_PFP_SHAPE_ANIMATE
+                                    )
+                                )
+                            }
                         )
                     }
                 }

@@ -135,14 +135,15 @@ private fun getIntermediateDot(dot1: Int, dot2: Int): Int? {
 @Composable
 fun PatternLockCanvas(
     modifier: Modifier = Modifier,
+    clearTrigger: Int = 0,
     isPatternVisible: Boolean = true,
     isError: Boolean = false,
     enabled: Boolean = true,
     onPatternComplete: (String) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    var selectedDots by remember { mutableStateOf(listOf<Int>()) }
-    var currentDragOffset by remember { mutableStateOf<Offset?>(null) }
+    var selectedDots by remember(clearTrigger) { mutableStateOf(listOf<Int>()) }
+    var currentDragOffset by remember(clearTrigger) { mutableStateOf<Offset?>(null) }
     var dotCenters by remember { mutableStateOf(List(9) { Offset.Zero }) }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -156,12 +157,12 @@ fun PatternLockCanvas(
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .pointerInput(enabled, isError) {
+            .pointerInput(enabled, isError, clearTrigger) {
                 if (!enabled || isError) return@pointerInput
                 detectDragGestures(
                     onDragStart = { startOffset ->
                         val hitIndex = dotCenters.indexOfFirst { center ->
-                            hypot(center.x - startOffset.x, center.y - startOffset.y) < 48.dp.toPx()
+                            hypot(center.x - startOffset.x, center.y - startOffset.y) < 54.dp.toPx()
                         }
                         if (hitIndex != -1) {
                             selectedDots = listOf(hitIndex)
@@ -177,7 +178,7 @@ fun PatternLockCanvas(
                         currentDragOffset = pos
 
                         val hitIndex = dotCenters.indexOfFirst { center ->
-                            hypot(center.x - pos.x, center.y - pos.y) < 40.dp.toPx()
+                            hypot(center.x - pos.x, center.y - pos.y) < 46.dp.toPx()
                         }
                         if (hitIndex != -1 && !selectedDots.contains(hitIndex)) {
                             val newDots = selectedDots.toMutableList()
@@ -209,7 +210,7 @@ fun PatternLockCanvas(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val minDim = size.minDimension
-            val padding = minDim * 0.16f
+            val padding = minDim * 0.12f
             val spacing = (minDim - 2 * padding) / 2f
 
             // Calculate dot centers
@@ -234,7 +235,7 @@ fun PatternLockCanvas(
                     path = path,
                     color = activePathColor,
                     style = Stroke(
-                        width = 5.dp.toPx(),
+                        width = 6.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round
                     )
@@ -248,7 +249,7 @@ fun PatternLockCanvas(
                     color = activePathColor.copy(alpha = 0.7f),
                     start = lastCenter,
                     end = currentDragOffset!!,
-                    strokeWidth = 4.dp.toPx(),
+                    strokeWidth = 5.dp.toPx(),
                     cap = StrokeCap.Round
                 )
             }
@@ -261,13 +262,13 @@ fun PatternLockCanvas(
                         // Outer halo/ring
                         drawCircle(
                             color = ringColor,
-                            radius = 24.dp.toPx(),
+                            radius = 26.dp.toPx(),
                             center = center
                         )
                         // Inner circle
                         drawCircle(
                             color = activePathColor,
-                            radius = 9.dp.toPx(),
+                            radius = 10.dp.toPx(),
                             center = center
                         )
                     } else {
@@ -282,7 +283,7 @@ fun PatternLockCanvas(
                     // Resting unselected dot
                     drawCircle(
                         color = dotInactiveColor,
-                        radius = 6.dp.toPx(),
+                        radius = 7.dp.toPx(),
                         center = center
                     )
                 }
@@ -307,6 +308,7 @@ fun PatternCredentialView(
     var phase by remember { mutableIntStateOf(if (isVerify) 2 else 0) }
     var firstPattern by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
+    var clearTrigger by remember { mutableIntStateOf(0) }
     var statusText by remember {
         mutableStateOf(
             if (isVerify) "Draw your pattern to unlock"
@@ -325,6 +327,7 @@ fun PatternCredentialView(
             scope.launch {
                 delay(600)
                 isError = false
+                clearTrigger++
                 statusText = if (phase == 0) "Connect at least 4 dots" else "Draw pattern again to confirm"
             }
             return
@@ -343,6 +346,7 @@ fun PatternCredentialView(
                     scope.launch {
                         delay(650)
                         isError = false
+                        clearTrigger++
                         statusText = "Draw your pattern to unlock"
                     }
                 }
@@ -350,6 +354,7 @@ fun PatternCredentialView(
             phase == 0 -> {
                 firstPattern = pattern
                 phase = 1
+                clearTrigger++
                 statusText = "Draw pattern again to confirm"
                 triggerHapticSuccess(context)
             }
@@ -367,6 +372,7 @@ fun PatternCredentialView(
                         isError = false
                         phase = 0
                         firstPattern = ""
+                        clearTrigger++
                         statusText = "Connect at least 4 dots"
                     }
                 }
@@ -385,10 +391,11 @@ fun PatternCredentialView(
         if (window != null) {
             DisposableEffect(isDark) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
-                val prev = insetsController.isAppearanceLightStatusBars
                 insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
                 onDispose {
-                    insetsController.isAppearanceLightStatusBars = prev
+                    insetsController.isAppearanceLightStatusBars = !isDark
+                    insetsController.isAppearanceLightNavigationBars = !isDark
                 }
             }
         }
@@ -462,14 +469,15 @@ fun PatternCredentialView(
             // 3x3 Canvas Grid
             Box(
                 modifier = Modifier
-                    .sizeIn(maxWidth = 320.dp, maxHeight = 320.dp)
-                    .fillMaxWidth(0.85f)
+                    .sizeIn(maxWidth = 360.dp, maxHeight = 360.dp)
+                    .fillMaxWidth(0.92f)
                     .aspectRatio(1f)
                     .offset(x = shakeOffset.dp),
                 contentAlignment = Alignment.Center
             ) {
                 PatternLockCanvas(
                     modifier = Modifier.fillMaxSize(),
+                    clearTrigger = clearTrigger,
                     isPatternVisible = isPatternVisible,
                     isError = isError,
                     enabled = !isError,
@@ -485,6 +493,7 @@ fun PatternCredentialView(
                     onClick = {
                         phase = 0
                         firstPattern = ""
+                        clearTrigger++
                         statusText = "Connect at least 4 dots"
                     }
                 ) {
@@ -507,18 +516,14 @@ fun PinDotsRow(
     isError: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val unfilledDotColor = if (!isDark) Color(0xFFDDE2EA) else MaterialTheme.colorScheme.surfaceContainerHighest
-    val totalDots = pinLength.coerceAtLeast(4).coerceAtMost(8)
     Row(
-        modifier = modifier,
+        modifier = modifier.height(24.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(totalDots) { index ->
-            val filled = index < pinLength
+        repeat(pinLength) { index ->
             val scale by animateFloatAsState(
-                targetValue = if (filled) 1f else 0.42f,
+                targetValue = 1f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium
@@ -526,18 +531,14 @@ fun PinDotsRow(
                 label = "dotScale$index"
             )
             val color by animateColorAsState(
-                targetValue = when {
-                    isError -> MaterialTheme.colorScheme.error
-                    filled -> MaterialTheme.colorScheme.primary
-                    else -> unfilledDotColor
-                },
+                targetValue = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 animationSpec = tween(140),
                 label = "dotColor$index"
             )
 
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(18.dp)
                     .scale(scale)
                     .clip(CircleShape)
                     .background(color)
@@ -552,6 +553,7 @@ fun PinNumpad(
     onBackspace: () -> Unit,
     onSubmit: () -> Unit,
     scrambledDigits: List<Int>? = null,
+    showSubmitButton: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -632,22 +634,28 @@ fun PinNumpad(
                                 )
                             }
                         }
-                        "✓" -> Surface(
-                            onClick = onSubmit,
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(78.dp)
-                                .scale(scale),
-                            interactionSource = interaction
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = "Confirm",
-                                    modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
+                        "✓" -> {
+                            if (showSubmitButton) {
+                                Surface(
+                                    onClick = onSubmit,
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(78.dp)
+                                        .scale(scale),
+                                    interactionSource = interaction
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Confirm",
+                                            modifier = Modifier.size(28.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                            } else {
+                                Box(modifier = Modifier.size(78.dp))
                             }
                         }
                         else -> Surface(
@@ -698,10 +706,12 @@ fun PinCredentialView(
     title: String = if (isVerify) "Enter PIN" else "Set PIN",
     showCloseButton: Boolean = true,
     scrambledDigits: List<Int>? = null,
+    autoVerify: Boolean = false,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val textPrimary = if (!isDark) Color(0xFF111318) else MaterialTheme.colorScheme.onSurface
     val textSecondary = if (!isDark) Color(0xFF44474E) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -720,8 +730,26 @@ fun PinCredentialView(
 
     fun onDigit(d: String) {
         if (pin.length < 12) {
-            pin += d
+            val newPin = pin + d
+            pin = newPin
             isError = false
+            if (isVerify && autoVerify && expectedPin.isNotEmpty() && newPin.length == expectedPin.length) {
+                if (newPin == expectedPin) {
+                    triggerHapticSuccess(context)
+                    onConfirm(newPin)
+                } else {
+                    pin = ""
+                    isError = true
+                    subtitleText = "Incorrect PIN. Try again."
+                    triggerShake()
+                    triggerHapticError(context)
+                    scope.launch {
+                        delay(700)
+                        isError = false
+                        subtitleText = "Enter your PIN to verify"
+                    }
+                }
+            }
         }
     }
 
@@ -735,10 +763,16 @@ fun PinCredentialView(
     fun onSubmit() {
         when {
             pin.length < 4 -> {
+                pin = ""
                 isError = true
                 subtitleText = "PIN must be at least 4 digits"
                 triggerShake()
                 triggerHapticError(context)
+                scope.launch {
+                    delay(700)
+                    isError = false
+                    subtitleText = if (isVerify) "Enter your PIN to verify" else if (phase == 0) "At least 4 digits" else "Re-enter your PIN to confirm"
+                }
             }
             isVerify -> {
                 if (pin == expectedPin) {
@@ -750,6 +784,11 @@ fun PinCredentialView(
                     subtitleText = "Incorrect PIN. Try again."
                     triggerShake()
                     triggerHapticError(context)
+                    scope.launch {
+                        delay(700)
+                        isError = false
+                        subtitleText = "Enter your PIN to verify"
+                    }
                 }
             }
             phase == 0 -> {
@@ -771,6 +810,11 @@ fun PinCredentialView(
                     subtitleText = "PINs did not match. Try again."
                     triggerShake()
                     triggerHapticError(context)
+                    scope.launch {
+                        delay(700)
+                        isError = false
+                        subtitleText = "At least 4 digits"
+                    }
                 }
             }
         }
@@ -865,7 +909,8 @@ fun PinCredentialView(
                     onDigit = ::onDigit,
                     onBackspace = ::onBackspace,
                     onSubmit = ::onSubmit,
-                    scrambledDigits = scrambledDigits
+                    scrambledDigits = scrambledDigits,
+                    showSubmitButton = !(isVerify && autoVerify)
                 )
             }
         }
@@ -883,6 +928,7 @@ fun PasswordCredentialView(
     expectedPassword: String = "",
     title: String = if (isVerify) "Enter Password" else "Set Password",
     showCloseButton: Boolean = true,
+    autoVerify: Boolean = false,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -932,17 +978,22 @@ fun PasswordCredentialView(
                     triggerHapticSuccess(context)
                     onConfirm(password)
                 } else {
+                    password = ""
                     errorText = "Incorrect password"
                     triggerShake()
                     triggerHapticError(context)
                 }
             }
             password.length < 4 -> {
+                password = ""
+                confirmPassword = ""
                 errorText = "Password must be at least 4 characters"
                 triggerShake()
                 triggerHapticError(context)
             }
             password != confirmPassword -> {
+                password = ""
+                confirmPassword = ""
                 errorText = "Passwords do not match"
                 triggerShake()
                 triggerHapticError(context)
@@ -1031,7 +1082,21 @@ fun PasswordCredentialView(
             ) {
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it; errorText = "" },
+                    onValueChange = {
+                        password = it
+                        errorText = ""
+                        if (isVerify && autoVerify && expectedPassword.isNotEmpty() && it.length == expectedPassword.length) {
+                            if (it == expectedPassword) {
+                                triggerHapticSuccess(context)
+                                onConfirm(it)
+                            } else {
+                                password = ""
+                                errorText = "Incorrect password"
+                                triggerShake()
+                                triggerHapticError(context)
+                            }
+                        }
+                    },
                     label = { Text(if (isVerify) "Password" else "New Password") },
                     singleLine = true,
                     colors = textFieldColors,
@@ -1088,27 +1153,32 @@ fun PasswordCredentialView(
 
                 Spacer(Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (showCloseButton) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("Cancel", color = textPrimary)
-                        }
-                    }
-                    Button(
-                        onClick = ::validateAndSubmit,
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        shape = RoundedCornerShape(14.dp)
+                val hideConfirmButton = isVerify && autoVerify
+                if (!hideConfirmButton || showCloseButton) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (isVerify) "Unlock" else "Confirm", fontWeight = FontWeight.SemiBold)
+                        if (showCloseButton) {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text("Cancel", color = textPrimary)
+                            }
+                        }
+                        if (!hideConfirmButton) {
+                            Button(
+                                onClick = ::validateAndSubmit,
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (isVerify) "Unlock" else "Confirm", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }
@@ -1141,10 +1211,11 @@ fun CredentialSetupDialog(
         if (window != null) {
             DisposableEffect(isDark) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
-                val prev = insetsController.isAppearanceLightStatusBars
                 insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
                 onDispose {
-                    insetsController.isAppearanceLightStatusBars = prev
+                    insetsController.isAppearanceLightStatusBars = !isDark
+                    insetsController.isAppearanceLightNavigationBars = !isDark
                 }
             }
         }

@@ -274,25 +274,10 @@ object PfpShapeRegistry {
 
     // 19. Pixel Square (stepped corners)
     val PixelSquare = PfpShapeItem("pixel_square", "Pixel Square") {
-        GenericShape { size, _ ->
-            val w = size.width
-            val h = size.height
-            val step = w * 0.14f
-            reset()
-            moveTo(step, 0f)
-            lineTo(w - step, 0f)
-            lineTo(w - step, step)
-            lineTo(w, step)
-            lineTo(w, h - step)
-            lineTo(w - step, h - step)
-            lineTo(w - step, h)
-            lineTo(step, h)
-            lineTo(step, h - step)
-            lineTo(0f, h - step)
-            lineTo(0f, step)
-            lineTo(step, step)
-            close()
-        }
+        RoundedPolygon(
+            numVertices = 8,
+            rounding = CornerRounding(0.08f, 0.20f)
+        ).toPfpShape(rotationDegrees = 22.5f)
     }
 
     // 20. Sharp Star (12-Point)
@@ -502,24 +487,11 @@ fun RotatingPfpShapeContainer(
     val isExpressive = PfpShapeRegistry.isExpressive(shapeKey) || (shape != null && shape != CircleShape && shapeKey != "square" && shapeKey != "circle")
     val effectiveShape = shape ?: PfpShapeRegistry.getShape(shapeKey)
     val shouldAnimate = isExpressive && animateRotation
-
-    val angle = if (shouldAnimate) {
-        val transition = rememberInfiniteTransition(label = "pfpShapeRotation")
-        val rot by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 14000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "pfpRotationAngle"
-        )
-        rot
-    } else 0f
+    val rotationAngleProvider = LocalPfpRotationAngle.current
 
     Box(
         modifier = modifier
-            .then(if (shouldAnimate) Modifier.graphicsLayer { rotationZ = angle } else Modifier)
+            .then(if (shouldAnimate) Modifier.graphicsLayer { rotationZ = rotationAngleProvider() } else Modifier)
             .clip(effectiveShape),
         contentAlignment = Alignment.Center
     ) {
@@ -528,7 +500,7 @@ fun RotatingPfpShapeContainer(
                 .fillMaxSize()
                 .then(
                     if (shouldAnimate) Modifier.graphicsLayer {
-                        rotationZ = -angle
+                        rotationZ = -rotationAngleProvider()
                         scaleX = 1.18f
                         scaleY = 1.18f
                     } else Modifier
@@ -566,6 +538,7 @@ fun PfpShapeChooserDialog(
     var selectedKeys by remember(currentShapeKey) {
         mutableStateOf(PfpShapeRegistry.parseShapeKeys(currentShapeKey).toSet())
     }
+    var chooseMultipleShapes by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -620,6 +593,50 @@ fun PfpShapeChooserDialog(
                     }
                 }
 
+                // Choose Multiple Shapes Toggle
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val next = !chooseMultipleShapes
+                                chooseMultipleShapes = next
+                                if (!next && selectedKeys.size > 1) {
+                                    selectedKeys = setOf(selectedKeys.first())
+                                }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                "Choose Multiple Shapes",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Select multiple designs (randomizes per contact)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = chooseMultipleShapes,
+                            onCheckedChange = { isChecked ->
+                                chooseMultipleShapes = isChecked
+                                if (!isChecked && selectedKeys.size > 1) {
+                                    selectedKeys = setOf(selectedKeys.first())
+                                }
+                            }
+                        )
+                    }
+                }
+
                 // 32 Shapes Scrollable Grid
                 Box(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
                     LazyVerticalGrid(
@@ -641,10 +658,14 @@ fun PfpShapeChooserDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        selectedKeys = if (isSelected) {
-                                            if (selectedKeys.size > 1) selectedKeys - item.key else selectedKeys
+                                        if (chooseMultipleShapes) {
+                                            selectedKeys = if (isSelected) {
+                                                if (selectedKeys.size > 1) selectedKeys - item.key else selectedKeys
+                                            } else {
+                                                selectedKeys + item.key
+                                            }
                                         } else {
-                                            selectedKeys + item.key
+                                            selectedKeys = setOf(item.key)
                                         }
                                     }
                             ) {

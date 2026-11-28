@@ -1,3 +1,18 @@
+/*
+ * Ever Dialer - An open-source Material You Phone and SMS replacement app.
+ *
+ * Based on / Forked from RivoPhoneApp by Grinch_ (https://github.com/user-grinch/RivoPhoneApp)
+ * Copyright (C) 2025-2026 RivoPhone Project.
+ * Copyright (C) 2026 Hari Prabhu and Ever Dialer contributors (https://github.com/hari161008/Ever-Dialer)
+ *
+ * Modified from RivoPhoneApp (initial fork July 2026; modified 2026).
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package com.coolappstore.everdialer.by.svhp
 
 import android.Manifest
@@ -278,29 +293,17 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                val activePfpShape = remember(settingsVer) { prefs.getSelectedPfpShape() }
-                val animatePfpShape = remember(settingsVer) { prefs.isAnimatePfpShapeRotation() }
-                val isExpressivePfp = remember(activePfpShape) {
-                    activePfpShape != "circle" && activePfpShape != "square" && com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.isExpressive(activePfpShape)
-                }
-                val shouldAnimatePfp = animatePfpShape && isExpressivePfp
-
-                val rot = if (shouldAnimatePfp) {
-                    val transition = rememberInfiniteTransition(label = "globalPfpRotation")
-                    transition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 360f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 14000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "globalPfpAngle"
-                    )
-                } else null
-
-                val globalPfpRotationAngle: () -> Float = remember(rot) {
-                    if (rot != null) { { rot.value } } else { { 0f } }
-                }
+                val infiniteTransition = rememberInfiniteTransition(label = "globalPfpRotation")
+                val rot = infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 14000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "globalPfpAngle"
+                )
+                val globalPfpRotationAngle: () -> Float = remember(rot) { { rot.value } }
 
                 CompositionLocalProvider(
                     com.coolappstore.everdialer.by.svhp.view.theme.expressive.LocalPfpRotationAngle provides globalPfpRotationAngle

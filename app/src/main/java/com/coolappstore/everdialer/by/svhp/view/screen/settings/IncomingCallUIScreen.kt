@@ -23,12 +23,12 @@ import com.coolappstore.everdialer.by.svhp.view.components.rivoHeadingColor
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.CustomBackgroundPickerScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.DefaultMessageAppScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.compose.koinInject
 
@@ -61,26 +61,6 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
 
     var incomingPfpShape by remember(settingsVersion) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateIncomingShapeRotation by remember(settingsVersion) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = incomingPfpShape,
-            animateRotation = animateIncomingShapeRotation,
-            onAnimateRotationChange = {
-                animateIncomingShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                incomingPfpShape = it
-                prefs.setString(PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
     }
 
     val bgLabel = when (incomingBgType) {
@@ -228,7 +208,15 @@ fun IncomingCallUIScreen(navigator: DestinationsNavigator, highlightKey: String?
                             iconContainerColor = Color(0xFF9C27B0),
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("incoming_pfp_shape", highlightedKey) { highlightedKey = null },
-                            onClick = { showPfpShapeDialog = true }
+                            onClick = {
+                                navigator.navigate(
+                                    PfpShapeChooserScreenDestination(
+                                        title = "Incoming Call PFP Shape",
+                                        shapePrefKey = PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE,
+                                        animatePrefKey = PreferenceManager.KEY_INCOMING_CUSTOM_PFP_SHAPE_ANIMATE
+                                    )
+                                )
+                            }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),

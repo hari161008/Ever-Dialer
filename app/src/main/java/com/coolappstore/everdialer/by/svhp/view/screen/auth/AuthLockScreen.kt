@@ -64,6 +64,7 @@ fun AuthLockScreen(
     val expectedPattern = remember { prefs.getString(PreferenceManager.KEY_BIOMETRICS_PATTERN, "") ?: "" }
     val isPatternVisible = remember { prefs.isPatternVisible() }
     val pinPadScramble = remember { prefs.isPinPadScramble() }
+    val autoVerify = remember { prefs.isAutoVerify() }
     val scrambledDigits = remember(pinPadScramble) {
         if (pinPadScramble) (0..9).shuffled() else null
     }
@@ -137,10 +138,11 @@ fun AuthLockScreen(
     if (window != null) {
         DisposableEffect(isDark) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
-            val prev = insetsController.isAppearanceLightStatusBars
             insetsController.isAppearanceLightStatusBars = !isDark
+            insetsController.isAppearanceLightNavigationBars = !isDark
             onDispose {
-                insetsController.isAppearanceLightStatusBars = prev
+                insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
             }
         }
     }
@@ -193,6 +195,7 @@ fun AuthLockScreen(
                             title = "Enter PIN",
                             showCloseButton = canDismiss,
                             scrambledDigits = scrambledDigits,
+                            autoVerify = autoVerify,
                             onConfirm = { onSuccess() },
                             onDismiss = { onDismiss() }
                         )
@@ -256,6 +259,7 @@ fun AuthLockScreen(
                             expectedPassword = expectedPassword,
                             title = "Enter Password",
                             showCloseButton = canDismiss,
+                            autoVerify = autoVerify,
                             onConfirm = { onSuccess() },
                             onDismiss = { onDismiss() }
                         )

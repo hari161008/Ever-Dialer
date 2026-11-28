@@ -53,8 +53,8 @@ import com.coolappstore.everdialer.by.svhp.view.components.RivoSectionHeader
 import com.coolappstore.everdialer.by.svhp.view.components.RivoSwitchListItem
 import com.coolappstore.everdialer.by.svhp.view.components.SettingsPillTopAppBar
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.coolappstore.everdialer.by.svhp.view.components.settingsSearchHighlight
 import com.ramcosta.composedestinations.annotation.Destination
@@ -245,26 +245,6 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
     }
     var smsPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_SMS_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateSmsShapeRotation by remember(settingsVer) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE, false))
-    }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = smsPfpShape,
-            animateRotation = animateSmsShapeRotation,
-            onAnimateRotationChange = {
-                animateSmsShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                smsPfpShape = it
-                prefs.setString(PreferenceManager.KEY_SMS_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
-        )
     }
     val showStt = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_SHOW_STT, true)
@@ -492,7 +472,16 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                                     leadingIcon = if (smsPfpShape.contains("square")) Icons.Outlined.CropSquare else Icons.Outlined.AccountCircle,
                                     iconContainerColor = ColorPurple,
                                     trailingIcon = Icons.Default.ChevronRight,
-                                    onClick = { showPfpShapeDialog = true }
+                                    modifier = Modifier.settingsSearchHighlight("sms_pfp_shape", highlightedKey) { highlightedKey = null },
+                                    onClick = {
+                                        navigator.navigate(
+                                            PfpShapeChooserScreenDestination(
+                                                title = "SMS PFP Shape",
+                                                shapePrefKey = PreferenceManager.KEY_SMS_PFP_SHAPE,
+                                                animatePrefKey = PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE
+                                            )
+                                        )
+                                    }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
@@ -630,6 +619,7 @@ fun SmsSettingsScreen(navigator: DestinationsNavigator, highlightKey: String? = 
                                     leadingIcon = Icons.Outlined.SimCard,
                                     iconContainerColor = ColorIndigo,
                                     checked = showSimInChat,
+                                    modifier = Modifier.settingsSearchHighlight("sms_show_sim_in_chat", highlightedKey) { highlightedKey = null },
                                     onCheckedChange = { prefs.setShowSimInChat(it) }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))

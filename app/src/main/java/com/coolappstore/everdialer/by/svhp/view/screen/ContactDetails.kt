@@ -235,6 +235,12 @@ fun ContactDetailsScreen(
     val pfpShapeSetting = remember(settingsVer) {
         prefs.getSelectedPfpShape()
     }
+    val contactAvatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+        prefs,
+        settingsVer,
+        PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE,
+        PreferenceManager.KEY_CONTACT_INFO_PFP_SHAPE_ANIMATE
+    )
     val pfpShapeKeys = remember(pfpShapeSetting) {
         com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry.parseShapeKeys(pfpShapeSetting)
     }
@@ -1342,26 +1348,30 @@ fun ContactDetailsScreen(
                                             )
                                     )
                                 }
-                                RivoAvatar(
-                                    name = displayName,
-                                    photoUri = contact?.photoUri,
-                                    forcePersonIcon = true,
-                                    modifier = (if (isFullWidthSquare) Modifier.fillMaxSize() else Modifier.size(pfpSizeDp))
-                                        .onGloballyPositioned { coordinates ->
-                                            val root = coordinates.findRootCoordinates()
-                                            val rootSize = root.size
-                                            if (rootSize.width > 0 && rootSize.height > 0) {
-                                                val pos = coordinates.positionInRoot()
-                                                val cx = (pos.x + coordinates.size.width / 2f) / rootSize.width.toFloat()
-                                                val cy = (pos.y + coordinates.size.height / 2f) / rootSize.height.toFloat()
-                                                pfpTransformOrigin = TransformOrigin(cx.coerceIn(0f, 1f), cy.coerceIn(0f, 1f))
+                                CompositionLocalProvider(
+                                    com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides contactAvatarConfig
+                                ) {
+                                    RivoAvatar(
+                                        name = displayName,
+                                        photoUri = contact?.photoUri,
+                                        forcePersonIcon = true,
+                                        modifier = (if (isFullWidthSquare) Modifier.fillMaxSize() else Modifier.size(pfpSizeDp))
+                                            .onGloballyPositioned { coordinates ->
+                                                val root = coordinates.findRootCoordinates()
+                                                val rootSize = root.size
+                                                if (rootSize.width > 0 && rootSize.height > 0) {
+                                                    val pos = coordinates.positionInRoot()
+                                                    val cx = (pos.x + coordinates.size.width / 2f) / rootSize.width.toFloat()
+                                                    val cy = (pos.y + coordinates.size.height / 2f) / rootSize.height.toFloat()
+                                                    pfpTransformOrigin = TransformOrigin(cx.coerceIn(0f, 1f), cy.coerceIn(0f, 1f))
+                                                }
                                             }
-                                        }
-                                        .clickable {
-                                            showPfpPreview = true
-                                        },
-                                    shape = pfpShape
-                                )
+                                            .clickable {
+                                                showPfpPreview = true
+                                            },
+                                        shape = if (isFullWidthSquare) RoundedCornerShape(0.dp) else CircleShape
+                                    )
+                                }
                             }
                             val contactNameColor = if (hasCustomBg) {
                                 if (isCustomBgBright) Color(0xFF1C1B1F) else Color.White

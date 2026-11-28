@@ -295,7 +295,7 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoExpressiveCard {
                         RivoListItem(
                             headline = "Made By Hari :)",
-                            supporting = "Project Lead & Maintainer · Derived from RivoPhone & Open Source",
+                            supporting = "Project Lead & Maintainer · Forked & modified from RivoPhoneApp by Grinch_ · GNU GPLv3",
                             leadingIcon = Icons.Outlined.Person,
                             iconContainerColor = ColorBlue,
                             modifier = Modifier.settingsSearchHighlight("made_by_hari", highlightedKey) { highlightedKey = null },
@@ -413,12 +413,12 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                     RivoExpressiveCard {
                         // 1. RivoPhone / Revo Dialer
                         RivoListItem(
-                            headline = "RivoPhone / Revo Dialer",
-                            supporting = "Core Dialer & UI Components · By user-grinch (GPL-3.0)",
+                            headline = "RivoPhone (Upstream Base)",
+                            supporting = "Based on / Forked from RivoPhoneApp by Grinch_ (https://github.com/user-grinch/RivoPhoneApp)\nCopyright (C) 2025-2026 RivoPhone Project · GNU GPLv3 Section 7",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF673AB7),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
-                            onClick = { openLink(context, "https://github.com/user-grinch/RivoPhone") }
+                            onClick = { openLink(context, "https://github.com/user-grinch/RivoPhoneApp") }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -450,10 +450,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 3. ShizuCallRecorder
+                        // 4. ShizuCallRecorder
                         RivoListItem(
                             headline = "ShizuCallRecorder",
-                            supporting = "Non-root call recording engine · By kitsumed",
+                            supporting = "Non-root call recording engine · By kitsumed (GPL-3.0 Section 7)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFFE91E63),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -463,10 +463,23 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 4. Liquid Glass
+                        // 5. scrcpy-server
+                        RivoListItem(
+                            headline = "scrcpy-server",
+                            supporting = "Audio & device bridge · By Genymobile & Romain Vimont (Apache-2.0)",
+                            leadingIcon = Icons.Outlined.Code,
+                            iconContainerColor = Color(0xFF607D8B),
+                            trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                            onClick = { openLink(context, "https://github.com/Genymobile/scrcpy") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+                        // 6. Liquid Glass
                         RivoListItem(
                             headline = "Liquid Glass",
-                            supporting = "Dynamic liquid glass blur effects · By Kyant0",
+                            supporting = "Dynamic liquid glass blur effects · By Kyant0 (Apache-2.0)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF00BCD4),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -476,10 +489,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 5. Quik SMS
+                        // 7. Quik SMS
                         RivoListItem(
                             headline = "Quik SMS",
-                            supporting = "SMS & MMS messaging client · By quik-sms",
+                            supporting = "SMS & MMS messaging client · By quik-sms (GPL-3.0)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFFFF9800),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -489,10 +502,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 6. Network Switch
+                        // 8. Network Switch
                         RivoListItem(
                             headline = "Network Switch",
-                            supporting = "Network mode & SIM switching · By aunchagaonkar",
+                            supporting = "Network mode & SIM switching · By aunchagaonkar (GPL-3.0)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF4CAF50),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -502,10 +515,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 7. Raise To Answer
+                        // 9. Raise To Answer
                         RivoListItem(
                             headline = "Raise To Answer",
-                            supporting = "Sensor-based call gestures · By TheLastProject",
+                            supporting = "Sensor-based call gestures · By Sylvia van Os / TheLastProject (MIT)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF009688),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -515,12 +528,12 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 8. Wallpaper Export
+                        // 10. Wallpaper Export
                         RivoListItem(
                             headline = "Wallpaper Export",
-                            supporting = "Device wallpaper export helper · By cvzi",
+                            supporting = "Device wallpaper export helper · By cvzi (GPL-3.0)",
                             leadingIcon = Icons.Outlined.Code,
-                            iconContainerColor = Color(0xFF607D8B),
+                            iconContainerColor = Color(0xFF795548),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
                             onClick = { openLink(context, "https://github.com/cvzi/WallpaperExport") }
                         )
@@ -528,10 +541,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 9. LineageOS Dialer
+                        // 11. LineageOS Dialer
                         RivoListItem(
                             headline = "LineageOS Dialer",
-                            supporting = "Dialer & Telecom utilities · By LineageOS",
+                            supporting = "Dialer & Telecom utilities · By LineageOS (Apache-2.0)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF3F51B5),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -541,10 +554,10 @@ fun AboutAppScreen(navigator: DestinationsNavigator, highlightKey: String? = nul
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         )
-                        // 10. LineageOS Messaging
+                        // 12. LineageOS Messaging
                         RivoListItem(
                             headline = "LineageOS Messaging",
-                            supporting = "Messaging utilities · By LineageOS",
+                            supporting = "Messaging utilities · By LineageOS (Apache-2.0)",
                             leadingIcon = Icons.Outlined.Code,
                             iconContainerColor = Color(0xFF795548),
                             trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,

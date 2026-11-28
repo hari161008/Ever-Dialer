@@ -72,6 +72,7 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
     var biometricsType by remember { mutableStateOf(prefs.getString(PreferenceManager.KEY_BIOMETRICS_TYPE, "") ?: "") }
     var patternVisible by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_PATTERN_VISIBLE, true)) }
     var pinPadScramble by remember { mutableStateOf(prefs.isPinPadScramble()) }
+    var autoVerify by remember { mutableStateOf(prefs.isAutoVerify()) }
     var appLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)) }
     var callLockEnabled by remember { mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)) }
     var outgoingCallLockEnabled by remember { mutableStateOf(prefs.isLockOutgoingCalls()) }
@@ -280,9 +281,11 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_APP_LOCK, false)
                             prefs.setBoolean(PreferenceManager.KEY_BIOMETRICS_CALL_LOCK, false)
                             prefs.setLockOutgoingCalls(false)
+                            prefs.setAutoVerify(false)
                             appLockEnabled = false
                             callLockEnabled = false
                             outgoingCallLockEnabled = false
+                            autoVerify = false
                         }
                     )
                 }
@@ -296,13 +299,7 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                 exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val sectionTitle = when {
-                        biometricsType == "system" -> "Security Options"
-                        activeMethod == "pin" -> "PIN Options"
-                        activeMethod == "pattern" -> "Pattern Options"
-                        activeMethod == "password" -> "Password Options"
-                        else -> "Security Options"
-                    }
+                    val sectionTitle = "Security Options"
                     Text(
                         text = sectionTitle,
                         style = MaterialTheme.typography.titleSmall,
@@ -336,6 +333,22 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                     onCheckedChange = { isChecked ->
                                         pinPadScramble = isChecked
                                         prefs.setPinPadScramble(isChecked)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                RivoSwitchListItem(
+                                    headline = "Verify without clicking enter",
+                                    supporting = "Automatically verify when the correct PIN is entered without clicking confirm",
+                                    leadingIcon = Icons.Default.CheckCircle,
+                                    iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.7f),
+                                    checked = autoVerify,
+                                    modifier = Modifier.settingsSearchHighlight("auth_auto_verify", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { isChecked ->
+                                        autoVerify = isChecked
+                                        prefs.setAutoVerify(isChecked)
                                     }
                                 )
                                 HorizontalDivider(
@@ -377,6 +390,22 @@ fun BiometricScreen(navigator: DestinationsNavigator, highlightKey: String? = nu
                                 )
                             }
                             "password" -> {
+                                RivoSwitchListItem(
+                                    headline = "Verify without clicking enter",
+                                    supporting = "Automatically verify when the correct password is typed without pressing enter",
+                                    leadingIcon = Icons.Default.CheckCircle,
+                                    iconContainerColor = Color(0xFF4CAF50).copy(alpha = 0.7f),
+                                    checked = autoVerify,
+                                    modifier = Modifier.settingsSearchHighlight("auth_auto_verify", highlightedKey) { highlightedKey = null },
+                                    onCheckedChange = { isChecked ->
+                                        autoVerify = isChecked
+                                        prefs.setAutoVerify(isChecked)
+                                    }
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
                                 RivoListItem(
                                     headline = "Change Password",
                                     supporting = "Set a new unlock password",

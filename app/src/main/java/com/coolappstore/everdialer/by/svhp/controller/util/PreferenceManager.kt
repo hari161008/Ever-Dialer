@@ -122,6 +122,9 @@ class PreferenceManager(context: Context) {
     fun isPinPadScramble(): Boolean = getBoolean(KEY_PIN_PAD_SCRAMBLE, false)
     fun setPinPadScramble(enabled: Boolean) = setBoolean(KEY_PIN_PAD_SCRAMBLE, enabled)
 
+    fun isAutoVerify(): Boolean = getBoolean(KEY_BIOMETRICS_AUTO_VERIFY, false)
+    fun setAutoVerify(enabled: Boolean) = setBoolean(KEY_BIOMETRICS_AUTO_VERIFY, enabled)
+
     fun getBiometricsBackupType(): String {
         val stored = getString(KEY_BIOMETRICS_BACKUP_TYPE, "") ?: ""
         if (stored == "pattern" && (getString(KEY_BIOMETRICS_PATTERN, "") ?: "").isNotEmpty()) return "pattern"
@@ -1461,6 +1464,7 @@ class PreferenceManager(context: Context) {
         const val KEY_BIOMETRICS_PATTERN       = "biometrics_pattern"
         const val KEY_BIOMETRICS_PATTERN_VISIBLE = "biometrics_pattern_visible"
         const val KEY_PIN_PAD_SCRAMBLE         = "pin_pad_scramble"
+        const val KEY_BIOMETRICS_AUTO_VERIFY   = "biometrics_auto_verify"
         const val KEY_BIOMETRICS_BACKUP_TYPE   = "biometrics_backup_type" // "pin" | "pattern" | "password"
         const val KEY_BIOMETRICS_APP_LOCK      = "biometrics_app_lock"
         const val KEY_BIOMETRICS_CALL_LOCK     = "biometrics_call_lock"

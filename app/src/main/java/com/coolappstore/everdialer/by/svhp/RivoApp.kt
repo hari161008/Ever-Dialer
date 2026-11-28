@@ -1,3 +1,18 @@
+/*
+ * Ever Dialer - An open-source Material You Phone and SMS replacement app.
+ *
+ * Based on / Forked from RivoPhoneApp by Grinch_ (https://github.com/user-grinch/RivoPhoneApp)
+ * Copyright (C) 2025-2026 RivoPhone Project.
+ * Copyright (C) 2026 Hari Prabhu and Ever Dialer contributors (https://github.com/hari161008/Ever-Dialer)
+ *
+ * Modified from RivoPhoneApp (initial fork July 2026; modified 2026).
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package com.coolappstore.everdialer.by.svhp
 
 import android.app.Application

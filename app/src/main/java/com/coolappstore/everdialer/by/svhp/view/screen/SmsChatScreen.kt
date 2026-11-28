@@ -209,6 +209,12 @@ fun SmsChatScreen(
     val autoColor = remember(settingsVer) {
         prefs.getBoolean(PreferenceManager.KEY_SMS_AUTO_COLOR_AVATARS, true)
     }
+    val smsAvatarConfig = com.coolappstore.everdialer.by.svhp.view.components.rememberAvatarDisplayConfig(
+        prefs,
+        settingsVer,
+        PreferenceManager.KEY_SMS_PFP_SHAPE,
+        PreferenceManager.KEY_SMS_PFP_SHAPE_ANIMATE
+    )
 
     val sendButtonScale = remember { Animatable(1f) }
     val sendIconOffset = remember { Animatable(0f) }
@@ -658,13 +664,17 @@ fun SmsChatScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                RivoAvatar(
-                                    name = contactName ?: address,
-                                    photoUri = resolvedPhotoUri,
-                                    autoColorAvatars = autoColor,
-                                    obeySolidIcons = false,
-                                    size = 44.dp
-                                )
+                                androidx.compose.runtime.CompositionLocalProvider(
+                                    com.coolappstore.everdialer.by.svhp.view.components.LocalAvatarDisplayConfig provides smsAvatarConfig
+                                ) {
+                                    RivoAvatar(
+                                        name = contactName ?: address,
+                                        photoUri = resolvedPhotoUri,
+                                        autoColorAvatars = autoColor,
+                                        obeySolidIcons = false,
+                                        size = 44.dp
+                                    )
+                                }
                                 Column(modifier = Modifier.padding(end = 12.dp)) {
                                     Text(
                                         text = contactName ?: address,
@@ -1915,10 +1925,10 @@ private fun ChatBubble(
                             modifier = Modifier.size(12.dp)
                         )
                     }
-                    if (hasTwoSims && showSimInChat) {
+                    if (showSimInChat) {
                         val simSlot = if (message.subId != null) {
                             sortedSims.firstOrNull { it.subscriptionId == message.subId }?.simSlotIndex
-                                ?: if (message.subId == 1) 0 else if (message.subId == 2) 1 else 0
+                                ?: if (message.subId == 1) 0 else if (message.subId == 2) 1 else (message.subId - 1).coerceAtLeast(0)
                         } else 0
                         SimSlotBadge(
                             slot = simSlot,

@@ -1,6 +1,7 @@
 Ever Dialer
-Copyright (C) 2025-2026 RivoPhone Project / user-grinch (https://github.com/user-grinch/RivoPhone)
+Copyright (C) 2025-2026 RivoPhone Project / user-grinch (https://github.com/user-grinch/RivoPhoneApp)
 Copyright (C) 2025-2026 Pdialer contributors / MoHamed-B-M (https://github.com/MoHamed-B-M/Pdialer)
+Copyright (C) 2025-2026 modiprincekr-07 (https://github.com/modiprincekr-07/Ever-Dialer)
 Copyright (C) 2026 Hari Prabhu and contributors (https://github.com/hari161008/Ever-Dialer)
 
 This program is free software: you can redistribute it and/or modify
@@ -8,17 +9,38 @@ it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-This project incorporates and builds upon code from the following upstream projects:
-- RivoPhoneApp / Revo Dialer (https://github.com/user-grinch/RivoPhone), licensed under GNU GPLv3.
-- The Dialer (https://github.com/modiprincekr-07/Ever-Dialer), licensed under GNU GPLv3.
-- Pdialer (https://github.com/MoHamed-B-M/Pdialer), licensed under GNU GPLv3.
-- Quik SMS (https://github.com/quik-sms/quik), licensed under GNU GPLv3.
-- ShizuCallRecorder (https://github.com/kitsumed/ShizuCallRecorder), licensed under GNU GPLv3.
-- AndroidLiquidGlass (https://github.com/Kyant0/AndroidLiquidGlass), licensed under Apache 2.0.
-- NetworkSwitch (https://github.com/aunchagaonkar/NetworkSwitch), licensed under Apache 2.0.
-- RaiseToAnswer (https://github.com/TheLastProject/RaiseToAnswer), licensed under GNU GPLv3.
-- WallpaperExport (https://github.com/cvzi/WallpaperExport), licensed under GNU GPLv3.
-- LineageOS Dialer and Messaging (https://github.com/LineageOS), licensed under Apache 2.0.
+Modification and Derivative Notice (GNU GPLv3 Section 5(a)):
+This work is a modified derivative work that incorporates, refactors, and builds upon
+code from the upstream projects listed below. Modifications, feature additions,
+and ongoing maintenance were performed by Hari Prabhu and contributors starting
+July 2026 through 2026.
+
+Upstream Projects and Licenses:
+- RivoPhoneApp / Revo Dialer (https://github.com/user-grinch/RivoPhoneApp):
+  Based on / Forked from RivoPhoneApp by Grinch_ (https://github.com/user-grinch/RivoPhoneApp)
+  Copyright (C) 2025-2026 RivoPhone Project.
+  Licensed under GNU GPLv3 with Section 7 terms.
+- The Dialer (https://github.com/modiprincekr-07/Ever-Dialer):
+  Copyright (C) 2025-2026 modiprincekr-07, licensed under GNU GPLv3.
+- Pdialer (https://github.com/MoHamed-B-M/Pdialer):
+  Copyright (C) 2025-2026 MoHamed-B-M and contributors, licensed under GNU GPLv3.
+- Quik SMS (https://github.com/quik-sms/quik):
+  Copyright (C) 2023-2026 quik-sms contributors, licensed under GNU GPLv3.
+- ShizuCallRecorder (https://github.com/kitsumed/ShizuCallRecorder):
+  Copyright (C) 2026 kitsumed (Med), licensed under GNU GPLv3 with Section 7 terms.
+- scrcpy-server (https://github.com/Genymobile/scrcpy):
+  Copyright (C) 2018-2026 Genymobile, Romain Vimont.
+  Licensed under Apache 2.0 (see THIRD_PARTY_LICENSES/Apache-2.0.txt).
+- AndroidLiquidGlass (https://github.com/Kyant0/AndroidLiquidGlass):
+  Copyright (C) 2025 Kyant, licensed under Apache 2.0 (see THIRD_PARTY_LICENSES/Apache-2.0.txt).
+- NetworkSwitch (https://github.com/aunchagaonkar/NetworkSwitch):
+  Copyright (C) 2023 aunchagaonkar, licensed under GNU GPLv3.
+- RaiseToAnswer (https://github.com/TheLastProject/RaiseToAnswer):
+  Copyright (C) 2020 Sylvia van Os, licensed under the MIT License (see THIRD_PARTY_LICENSES/MIT.txt).
+- WallpaperExport (https://github.com/cvzi/WallpaperExport):
+  Copyright (C) 2021-2026 cvzi, licensed under GNU GPLv3.
+- LineageOS Dialer and Messaging (https://github.com/LineageOS):
+  Copyright (C) 2014-2026 The LineageOS Project, licensed under Apache 2.0 (see THIRD_PARTY_LICENSES/Apache-2.0.txt).
 
 --------------------------------------------------------------------------------
 Third-Party Fonts and Licenses

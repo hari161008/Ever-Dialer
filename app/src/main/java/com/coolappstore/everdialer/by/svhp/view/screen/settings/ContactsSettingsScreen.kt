@@ -17,8 +17,8 @@ import com.coolappstore.everdialer.by.svhp.controller.ContactsViewModel
 import com.coolappstore.everdialer.by.svhp.controller.util.PreferenceManager
 import com.coolappstore.everdialer.by.svhp.view.components.*
 import com.coolappstore.everdialer.by.svhp.view.theme.SettingsTransitionStyle
-import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeChooserDialog
 import com.coolappstore.everdialer.by.svhp.view.theme.expressive.PfpShapeRegistry
+import com.ramcosta.composedestinations.generated.destinations.PfpShapeChooserScreenDestination
 import com.coolappstore.everdialer.by.svhp.view.theme.settingsMotionBlur
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -41,13 +41,9 @@ fun ContactsSettingsScreen(
     var highlightedKey by remember { mutableStateOf(highlightKey) }
 
     var showContactsToDisplayDialog by remember { mutableStateOf(false) }
-    var showPfpShapeDialog by remember { mutableStateOf(false) }
 
     var contactsPfpShape by remember(settingsVer) {
         mutableStateOf(prefs.getString(PreferenceManager.KEY_CONTACTS_PFP_SHAPE, "circle") ?: "circle")
-    }
-    var animateShapeRotation by remember(settingsVer) {
-        mutableStateOf(prefs.getBoolean(PreferenceManager.KEY_CONTACTS_PFP_SHAPE_ANIMATE, false))
     }
 
     if (showContactsToDisplayDialog) {
@@ -79,22 +75,6 @@ fun ContactsSettingsScreen(
             },
             onDismiss = { showContactsToDisplayDialog = false },
             contactsVM = contactsVM
-        )
-    }
-
-    if (showPfpShapeDialog) {
-        PfpShapeChooserDialog(
-            currentShapeKey = contactsPfpShape,
-            animateRotation = animateShapeRotation,
-            onAnimateRotationChange = {
-                animateShapeRotation = it
-                prefs.setBoolean(PreferenceManager.KEY_CONTACTS_PFP_SHAPE_ANIMATE, it)
-            },
-            onSelectShape = {
-                contactsPfpShape = it
-                prefs.setString(PreferenceManager.KEY_CONTACTS_PFP_SHAPE, it)
-            },
-            onDismiss = { showPfpShapeDialog = false }
         )
     }
 
@@ -155,7 +135,15 @@ fun ContactsSettingsScreen(
                             iconContainerColor = ColorPurple,
                             trailingIcon = Icons.Default.ChevronRight,
                             modifier = Modifier.settingsSearchHighlight("contacts_pfp_shape", highlightedKey) { highlightedKey = null },
-                            onClick = { showPfpShapeDialog = true }
+                            onClick = {
+                                navigator.navigate(
+                                    PfpShapeChooserScreenDestination(
+                                        title = "Contacts PFP Shape",
+                                        shapePrefKey = PreferenceManager.KEY_CONTACTS_PFP_SHAPE,
+                                        animatePrefKey = PreferenceManager.KEY_CONTACTS_PFP_SHAPE_ANIMATE
+                                    )
+                                )
+                            }
                         )
                     }
                 }

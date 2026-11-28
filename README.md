@@ -534,19 +534,25 @@ GitHub: [Download](https://github.com/hari161008/Ever-Dialer/releases) ⬇️
    <br><br>
    The source code of Rate and Review are open, Check it out: [Click Here](https://github.com/hari161008/Website-For-Everlasting-Android-Tweak)
 
-# Used App As The Base And Their Licenses Available In Their Respective Repository
+# Upstream Base Projects & Licenses
 
-┈➤ [RivoPhone / Revo Dialer](https://github.com/user-grinch/RivoPhone)<br><br>
-┈➤ [The Dialer](https://github.com/modiprincekr-07/Ever-Dialer)<br><br>
-┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer)<br><br>
-┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder)<br><br>
-┈➤ [Liquid Glass](https://github.com/Kyant0/AndroidLiquidGlass)<br><br>
-┈➤ [Quik SMS](https://github.com/quik-sms/quik)<br><br>
-┈➤ [Network Switch](https://github.com/aunchagaonkar/NetworkSwitch)<br><br>
-┈➤ [Raise To Answer](https://github.com/TheLastProject/RaiseToAnswer)<br><br>
-┈➤ [Wallpaper Export](https://github.com/cvzi/WallpaperExport)<br><br>
-┈➤ [LineageOS Dialer](https://github.com/Lineageos/android_packages_apps_Dialer)<br><br>
-┈➤ [LineageOS Messaging](https://github.com/LineageOS/android_packages_apps_Messaging)
+> **Upstream Attribution & Modification Notice (GNU GPLv3 Section 5 & 7 Compliance):**  
+> **Based on / Forked from RivoPhoneApp by Grinch_ (https://github.com/user-grinch/RivoPhoneApp)**  
+> **Copyright (C) 2025-2026 RivoPhone Project.**  
+> This application is a modified derivative work that incorporates, refactors, and builds upon code from RivoPhoneApp and the open-source projects listed below. Modified and maintained by Hari Prabhu and contributors (modifications began July 2026 through the present) under the GNU General Public License v3.0.
+
+### Upstream Projects:
+┈➤ [RivoPhoneApp / Revo Dialer](https://github.com/user-grinch/RivoPhoneApp) — GNU GPLv3 with Section 7 terms  
+┈➤ [The Dialer](https://github.com/modiprincekr-07/Ever-Dialer) — GNU GPLv3  
+┈➤ [P Dialer](https://github.com/MoHamed-B-M/Pdialer) — GNU GPLv3  
+┈➤ [ShizuCallRecorder](https://github.com/kitsumed/ShizuCallRecorder) — GNU GPLv3 with Section 7 terms  
+┈➤ [scrcpy-server](https://github.com/Genymobile/scrcpy) — Apache License 2.0  
+┈➤ [Liquid Glass](https://github.com/Kyant0/AndroidLiquidGlass) — Apache License 2.0  
+┈➤ [Quik SMS](https://github.com/quik-sms/quik) — GNU GPLv3  
+┈➤ [Network Switch](https://github.com/aunchagaonkar/NetworkSwitch) — GNU GPLv3  
+┈➤ [Raise To Answer](https://github.com/TheLastProject/RaiseToAnswer) — MIT License (Copyright 2020 Sylvia van Os)  
+┈➤ [Wallpaper Export](https://github.com/cvzi/WallpaperExport) — GNU GPLv3  
+┈➤ [LineageOS Dialer & Messaging](https://github.com/LineageOS) — Apache License 2.0  
 
 # Fonts Used And Their Licenses Available In Their Respective Website
 
